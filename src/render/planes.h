@@ -25,9 +25,9 @@ struct SplitOptions {
 };
 
 // Splits the frame into planes. In interlace mode 2 only the even field is used, so
-// the planes keep the normal height. The sky is always full: the backdrop (plus all of
-// plane B with flatB), with the gaps behind plane B filled from the nearest sky pixel
-// on the line. Plane A takes the low-priority tiles of plane A and the window, Priority
+// the planes keep the normal height. The sky is always full: the backdrop or the 32X's
+// picture (plus all of plane B with flatB), with the gaps behind plane B filled from
+// the nearest sky pixel on the line. Plane A takes the low-priority tiles of plane A and the window, Priority
 // the high-priority ones, and Sprites every sprite (operator sprites of shadow/highlight
 // mode only change colours, so they are not in any plane).
 //

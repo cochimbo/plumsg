@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <memory>
 #include <random>
@@ -16,6 +17,7 @@
 #include <filesystem>
 
 #include "megadrive.h"
+#include "sh2.h"
 #include "system.h"
 #include "miniz.h"
 #include "render/planes.h"
@@ -23,6 +25,7 @@
 #include "rewind.h"
 #include "test_rom.h"
 #include "frontend/library_names.h"
+#include "mars/mars_program.h"
 
 using namespace plumsg;
 
@@ -417,6 +420,275 @@ void testPal() {
     check((md.peek(0xA10001) & 0xC0) == 0xC0, "PAL: version register says overseas and PAL");
 }
 
+// The SH-2 on a flat 64 KB of big-endian RAM: loops, delayed branches (with a
+// PC-relative load in the slot), the step division, interrupts, the division unit,
+// the DMA controller and the serial link between two CPUs.
+struct FlatSh2Bus : Sh2Bus {
+    std::vector<uint8_t> ram = std::vector<uint8_t>(0x10000);
+    uint32_t sh2Read(Sh2&, uint32_t addr, int size) override {
+        uint32_t v = 0;
+        for (int i = 0; i < size; ++i) v = v << 8 | ram[(addr + static_cast<uint32_t>(i)) & 0xFFFF];
+        return v;
+    }
+    void sh2Write(Sh2&, uint32_t addr, uint32_t value, int size) override {
+        for (int i = 0; i < size; ++i)
+            ram[(addr + static_cast<uint32_t>(i)) & 0xFFFF] = static_cast<uint8_t>(value >> (8 * (size - 1 - i)));
+    }
+    void put16(uint32_t a, std::initializer_list<uint16_t> ops) {
+        for (uint16_t op : ops) {
+            ram[a & 0xFFFF] = static_cast<uint8_t>(op >> 8);
+            ram[(a + 1) & 0xFFFF] = static_cast<uint8_t>(op);
+            a += 2;
+        }
+    }
+    void put32(uint32_t a, uint32_t v) { put16(a, {static_cast<uint16_t>(v >> 16), static_cast<uint16_t>(v)}); }
+};
+
+void testSh2() {
+    FlatSh2Bus bus;
+    Sh2 cpu(bus, 0);
+    bus.put32(0, 0x100);
+    bus.put32(4, 0x1000);
+    bus.put16(0x100, {0xE00A, 0xE100,  // MOV #10,R0; MOV #0,R1
+                      0x310C, 0x4010,  // loop: ADD R0,R1; DT R0
+                      0x8BFC,          // BF loop
+                      0xB011,          // BSR sub
+                      0xE207,          // (slot) MOV #7,R2
+                      0xD304,          // MOV.L @(0x120),R3
+                      0x001B});        // SLEEP
+    bus.put32(0x120, 0x12345678);
+    bus.put16(0x130, {0x7201, 0x000B, 0xC701});  // sub: ADD #1,R2; RTS; (slot) MOVA @(4,PC),R0
+    cpu.reset();
+    for (int i = 0; i < 200 && !cpu.sleeping(); ++i) cpu.step();
+    check(cpu.sleeping() && cpu.reg(1) == 55, "SH-2: bucle con DT y BF");
+    check(cpu.reg(2) == 8, "SH-2: BSR y RTS con sus huecos de retardo");
+    check(cpu.reg(0) == 0x114, "SH-2: MOVA en un hueco de retardo usa el destino del salto");
+    check(cpu.reg(3) == 0x12345678, "SH-2: MOV.L relativo al PC");
+
+    // 1000 / 7 with the step division of the manual.
+    bus.put32(0, 0x200);
+    {
+        uint32_t a = 0x200;
+        bus.put16(a, {0x9116, 0xE007, 0x4028, 0x0019});  // MOV.W @(0x230),R1; MOV #7,R0; SHLL16 R0; DIV0U
+        a += 8;
+        for (int i = 0; i < 16; ++i, a += 2) bus.put16(a, {0x3104});  // DIV1 R0,R1
+        bus.put16(a, {0x4124, 0x611D, 0x001B});  // ROTCL R1; EXTU.W R1,R1; SLEEP
+        bus.put16(0x230, {1000});                // the word MOV.W reads
+    }
+    cpu.reset();
+    for (int i = 0; i < 200 && !cpu.sleeping(); ++i) cpu.step();
+    check(cpu.reg(1) == 142, "SH-2: división paso a paso con DIV0U y DIV1");
+
+    // An external interrupt at level 12 takes vector 70 and RTE comes back.
+    bus.put32(0, 0x300);
+    bus.put32(70 * 4, 0x380);
+    bus.put16(0x300, {0xE000, 0x400E, 0xAFFE, 0x0009});  // MOV #0,R0; LDC R0,SR; loop: BRA loop; NOP
+    bus.put16(0x380, {0xE501, 0x002B, 0x0009});          // MOV #1,R5; RTE; NOP
+    cpu.reset();
+    for (int i = 0; i < 4; ++i) cpu.step();
+    cpu.setIrl(12);
+    cpu.step();
+    const bool entered = cpu.pc() == 0x380 && ((cpu.sr() >> 4) & 15) == 12;
+    cpu.setIrl(0);
+    cpu.step();
+    cpu.step();
+    check(entered && cpu.reg(5) == 1 && cpu.pc() == 0x304 && ((cpu.sr() >> 4) & 15) == 0,
+          "SH-2: interrupción externa y vuelta con RTE");
+
+    // The division unit.
+    cpu.write(0xFFFFFF00, 7, 4);
+    cpu.write(0xFFFFFF04, static_cast<uint32_t>(-100), 4);
+    check(static_cast<int32_t>(cpu.read(0xFFFFFF04, 4)) == -14 && static_cast<int32_t>(cpu.read(0xFFFFFF10, 4)) == -2,
+          "SH-2: unidad de división de 32 bits");
+
+    // A DMA copy of eight words, requested by the controller itself.
+    for (int i = 0; i < 16; ++i) bus.ram[0x400 + i] = static_cast<uint8_t>(i + 1);
+    cpu.write(0xFFFFFF80, 0x400, 4);
+    cpu.write(0xFFFFFF84, 0x500, 4);
+    cpu.write(0xFFFFFF88, 8, 4);
+    cpu.write(0xFFFFFF8C, 0x5601, 4);
+    cpu.write(0xFFFFFFB0, 1, 4);
+    cpu.step();
+    check(std::equal(bus.ram.begin() + 0x400, bus.ram.begin() + 0x410, bus.ram.begin() + 0x500) &&
+              (cpu.read(0xFFFFFF8C, 4) & 2),
+          "SH-2: copia por DMA");
+
+    // A byte through the serial link to the other CPU.
+    Sh2 other(bus, 1);
+    cpu.setPeer(&other);
+    other.setPeer(&cpu);
+    other.write(0xFFFFFE02, 0x10, 1);  // receiver on
+    cpu.write(0xFFFFFE02, 0x20, 1);    // transmitter on
+    cpu.write(0xFFFFFE03, 0x42, 1);
+    cpu.write(0xFFFFFE04, 0x7F, 1);  // clear TDRE: send
+    cpu.write(0xFFFFFFB0, 0, 4);
+    cpu.step();
+    check(other.read(0xFFFFFE05, 1) == 0x42 && (other.read(0xFFFFFE04, 1) & 0x40), "SH-2: puerto serie entre las dos CPU");
+}
+
+// A 32X program built by hand: the 68000 turns the adapter on and waits for both SH-2s
+// to say they are ready; then the master SH-2 draws a gradient in direct colour mode
+// and swaps the frame buffers. Checks the boot without a BIOS, the communication
+// words, the frame buffer, the VDP and the layer drawn over the Mega Drive's picture.
+// A 32X cartridge around an SH-2 program loaded at 0x06000000: the 68000 turns the
+// adapter on, waits for both SH-2s to say they are ready and writes 1 in the seventh
+// communication word.
+std::vector<uint8_t> marsRom(const uint8_t* program, size_t size, uint32_t masterEntry, uint32_t slaveEntry) {
+    std::vector<uint8_t> rom(0x800 + ((size + 3) & ~size_t{3}), 0);
+    std::copy(program, program + size, rom.begin() + 0x800);
+    auto put16 = [&](uint32_t a, std::initializer_list<uint16_t> words) {
+        for (uint16_t w : words) {
+            rom[a] = static_cast<uint8_t>(w >> 8);
+            rom[a + 1] = static_cast<uint8_t>(w);
+            a += 2;
+        }
+    };
+    auto put32 = [&](uint32_t a, uint32_t v) { put16(a, {static_cast<uint16_t>(v >> 16), static_cast<uint16_t>(v)}); };
+    put32(0, 0xFFFF00);
+    put32(4, 0x3F0);
+    const char* system = "SEGA 32X        ";
+    std::copy(system, system + 16, rom.begin() + 0x100);
+    put32(0x3D4, 0x800);  // SH-2 program in the ROM
+    put32(0x3D8, 0);      // to the start of SDRAM
+    put32(0x3DC, static_cast<uint32_t>((size + 3) & ~size_t{3}));
+    put32(0x3E0, masterEntry);
+    put32(0x3E4, slaveEntry);
+    put32(0x3E8, 0x06000000);  // VBRs
+    put32(0x3EC, 0x06000000);
+    put16(0x3F0, {0x33FC, 0x0003, 0x00A1, 0x5100,          // move.w #3,$a15100   adapter on, SH-2s running
+                  0x0CB9, 0x4D5F, 0x4F4B, 0x00A1, 0x5120,  // cmp.l #'M_OK',$a15120
+                  0x66F4,                                  // bne.s *-10
+                  0x0CB9, 0x535F, 0x4F4B, 0x00A1, 0x5124,  // cmp.l #'S_OK',$a15124
+                  0x66F4,                                  // bne.s *-10
+                  0x33FC, 0x0001, 0x00A1, 0x512C,          // move.w #1,$a1512c   tell the master to go
+                  0x60FE});                                // bra.s *
+    return rom;
+}
+
+void testMars() {
+    std::vector<uint8_t> program(0x200, 0);
+    auto put16 = [&](uint32_t a, std::initializer_list<uint16_t> words) {
+        for (uint16_t w : words) {
+            program[a] = static_cast<uint8_t>(w >> 8);
+            program[a + 1] = static_cast<uint8_t>(w);
+            a += 2;
+        }
+    };
+    auto put32 = [&](uint32_t a, uint32_t v) { put16(a, {static_cast<uint16_t>(v >> 16), static_cast<uint16_t>(v)}); };
+    const uint32_t m = 0;  // SDRAM 0x06000000
+    put16(m + 0x100, {0xD117,           // mov.l #$20004000,r1
+                      0xD218,           // mov.l #$8000,r2
+                      0x2121,           // mov.w r2,@r1        FM: the SH-2s get the VDP
+                      0xD318,           // mov.l #$2000402c,r3
+                      0x6031,           // wait: mov.w @r3,r0
+                      0x8801, 0x8BFC,   // cmp/eq #1,r0; bf wait
+                      0xD417,           // mov.l #$24000000,r4  frame buffer
+                      0xD519,           // mov.l #224,r5
+                      0xE601, 0x4618,   // mov #1,r6; shll8 r6  every line starts at word $100
+                      0x2461, 0x7402,   // lines: mov.w r6,@r4; add #2,r4
+                      0x4510, 0x8BFB,   // dt r5; bf lines
+                      0xD414,           // mov.l #$24000200,r4
+                      0xD516,           // mov.l #320,r5
+                      0xE700,           // mov #0,r7
+                      0x2471, 0x7402,   // pixels: mov.w r7,@r4; add #2,r4
+                      0x7701,           // add #1,r7
+                      0x4510, 0x8BFA,   // dt r5; bf pixels
+                      0xD811,           // mov.l #$20004100,r8
+                      0xE002, 0x2801,   // mov #2,r0; mov.w r0,@r8   direct colour
+                      0xE001, 0x8185,   // mov #1,r0; mov.w r0,@(10,r8)  show the other buffer
+                      0xAFFE, 0x0009});
+    put32(m + 0x160, 0x20004000);
+    put32(m + 0x164, 0x8000);
+    put32(m + 0x168, 0x2000402C);
+    put32(m + 0x16C, 0x24000000);
+    put32(m + 0x170, 0x24000200);
+    put32(m + 0x174, 0x20004100);
+    put32(m + 0x178, 224);
+    put32(m + 0x17C, 320);
+    put16(m + 0x180, {0xAFFE, 0x0009});  // the slave just waits
+
+    MegaDrive md;
+    md.loadRomData(marsRom(program.data(), program.size(), 0x06000100, 0x06000180));
+    check(md.is32x(), "32X: se reconoce el cartucho por su cabecera");
+    for (int i = 0; i < 6; ++i) md.runFrame();
+    const auto& comm = md.mars()->comm();
+    check(comm[0] == 0x4D5F && comm[1] == 0x4F4B && comm[2] == 0x535F && comm[3] == 0x4F4B,
+          "32X: las dos SH-2 arrancan sin BIOS y dicen M_OK y S_OK");
+    const VideoFrameMd& f = md.frame();
+    bool drawn = true;
+    for (int x : {0, 1, 31, 32, 200, f.width - 1}) {  // the VDP was left in H32: 256 pixels
+        const int i = 100 * VideoFrameMd::kMaxWidth + x;
+        auto expand = [](uint32_t v) { return (v << 3) | (v >> 2); };
+        const uint32_t want = 0xFF000000u | expand(x & 31) << 16 | expand((x >> 5) & 31) << 8 | expand((x >> 10) & 31);
+        if (f.info[i].layer != MdLayer::Mars || f.rgba[i] != want || f.mars[i] != want) drawn = false;
+    }
+    check(drawn, "32X: la SH-2 dibuja en el frame buffer y se ve sobre el fondo de la Mega Drive");
+
+    // Savestates keep the 32X: the next frame is the same after a round trip.
+    std::vector<uint8_t> state;
+    md.saveState(state);
+    md.runFrame();
+    const uint32_t a = frameHash(md.frame());
+    std::string error;
+    check(md.loadState(state, &error), "32X: carga su estado");
+    md.runFrame();
+    check(frameHash(md.frame()) == a && md.mars()->comm()[0] == 0x4D5F, "32X: el estado guarda y recupera la 32X");
+}
+
+// The C program in tests/mars, compiled for the SH-2: both CPUs run the same checks
+// (libgcc's division, 64-bit and floating point arithmetic, jump tables...) and must
+// get what this machine gets; then VBlank interrupts, packed pixels through the
+// palette, and a square wave on the PWM.
+namespace marschecks {
+#include "mars/checks.inc"
+}
+
+void testMarsProgram() {
+    MegaDrive md;
+    md.setSampleRate(44100);
+    md.loadRomData(marsRom(kMarsProgram, sizeof(kMarsProgram), 0x06000200, 0x06000220));
+    for (int i = 0; i < 30 && md.mars()->comm()[7] != 0xD0; ++i) md.runFrame();
+    uint32_t want[16];
+    marschecks::runChecks(want);
+    const auto& sdram = md.mars()->sdram();
+    auto result = [&](int i) {
+        const size_t a = 0x3F000 + static_cast<size_t>(i) * 4;
+        return static_cast<uint32_t>(sdram[a] << 24 | sdram[a + 1] << 16 | sdram[a + 2] << 8 | sdram[a + 3]);
+    };
+    int masterOk = 0, slaveOk = 0;
+    for (int i = 0; i < 16; ++i) {
+        if (result(i) == want[i]) ++masterOk;
+        else std::printf("     maestra[%d] = %08x, debería ser %08x\n", i, result(i), want[i]);
+        if (result(16 + i) == want[i]) ++slaveOk;
+    }
+    check(masterOk == 16, "32X: la SH-2 maestra calcula lo mismo que este ordenador (programa en C)");
+    check(slaveOk == 16, "32X: la SH-2 esclava también");
+    check(result(32) >= 3, "32X: interrupciones de VBlank con su manejador y RTE");
+    check(md.mars()->comm()[7] == 0xD0, "32X: el programa termina");
+
+    md.runFrame();
+    md.runFrame();
+    const VideoFrameMd& f = md.frame();
+    bool packed = true;
+    for (int x : {0, 7, 8, 100, f.width - 1}) {
+        const uint32_t i = static_cast<uint32_t>(50 * VideoFrameMd::kMaxWidth + x);
+        const uint32_t level = static_cast<uint32_t>(x) >> 3;
+        const uint32_t c = (level << 3) | (level >> 2);
+        if (f.info[i].layer != MdLayer::Mars || f.rgba[i] != (0xFF000000u | c << 16 | c << 8 | c)) packed = false;
+    }
+    check(packed, "32X: píxeles empaquetados a través de la paleta");
+
+    md.audio().clearSamples();
+    for (int i = 0; i < 5; ++i) md.runFrame();
+    const auto& out = md.audio().samples();
+    int lo = 0, hi = 0;
+    for (size_t i = 0; i < out.size(); i += 2) {
+        lo = std::min<int>(lo, out[i]);
+        hi = std::max<int>(hi, out[i]);
+    }
+    check(out.size() > 2 * 3000 && hi - lo > 10000, "32X: el PWM suena");
+}
+
 }  // namespace
 
 void testRewindBuffer() {
@@ -718,6 +990,9 @@ int main() {
     testCheats();
     testLibraryNames();
     testSystems();
+    testSh2();
+    testMars();
+    testMarsProgram();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

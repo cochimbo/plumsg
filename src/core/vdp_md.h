@@ -58,6 +58,7 @@ public:
     bool z80Irq() const { return z80Irq_; }
 
     const VideoFrameMd& frame() const { return *frame_; }
+    VideoFrameMd& frame() { return *frame_; }  // for the 32X, which draws over it
     bool displayEnabled() const { return (regs_[1] & 0x40) != 0; }
     bool h40() const { return (regs_[12] & 0x01) != 0; }
     uint8_t reg(int r) const { return regs_[r]; }

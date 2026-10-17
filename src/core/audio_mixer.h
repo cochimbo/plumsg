@@ -5,7 +5,7 @@
 
 namespace plumsg {
 
-// Mixes the two sound chips into one stream at the frontend's rate. The YM2612 runs at
+// Mixes the sound chips into one stream at the frontend's rate. The YM2612 runs at
 // its own rate (about 53.3 kHz) and is resampled here with linear interpolation; the
 // PSG already produces samples at the output rate. Each frame the console hands over
 // what both produced; whatever one has more of waits for the next frame.
@@ -20,8 +20,9 @@ public:
         psgGain_ = psg;
     }
 
-    // Consumes (and clears) interleaved stereo samples from both chips.
-    void mix(std::vector<int16_t>& fm, std::vector<int16_t>& psg);
+    // Consumes (and clears) interleaved stereo samples from both chips, and from the
+    // 32X's PWM when there is one (already at the output rate, like the PSG).
+    void mix(std::vector<int16_t>& fm, std::vector<int16_t>& psg, std::vector<int16_t>* pwm = nullptr);
     void reset();
 
     // Interleaved stereo samples at outputRate() produced since clearSamples().
@@ -41,7 +42,7 @@ private:
     int fmGain_ = 100, psgGain_ = 50;
     double pos_ = 0;  // position in FM input samples after prev_
     int16_t prevL_ = 0, prevR_ = 0;
-    std::vector<int16_t> fmQueue_, psgQueue_, out_;
+    std::vector<int16_t> fmQueue_, psgQueue_, pwmQueue_, out_;
 };
 
 }  // namespace plumsg

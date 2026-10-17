@@ -394,12 +394,11 @@ int main(int argc, char** argv) {
     };
     auto load = [&](const std::string& path) {
         const ConsoleSystem system = detectSystem(path);
-        if (system != ConsoleSystem::MegaDrive) {
-            // The 32X and the Mega CD come in the next versions; the game is kept in the
-            // library and the recent list.
+        if (system == ConsoleSystem::MegaCD) {
+            // The Mega CD comes in the next version; the game is kept in the library and
+            // the recent list.
             const std::string message = std::string("Los juegos de ") + systemName(system) +
-                                        " todavía no funcionan en plumsg: llegarán en la versión " +
-                                        (system == ConsoleSystem::Mega32X ? "0.0.6." : "0.0.7.");
+                                        " todavía no funcionan en plumsg: llegarán en la versión 0.0.7.";
             if (capturing) std::fprintf(stderr, "%s\n", message.c_str());
             else ui->notify(message);
             return;

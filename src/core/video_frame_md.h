@@ -6,8 +6,8 @@
 namespace plumsg {
 
 // Which hardware layer produced a pixel. The pseudo-3D renderer pushes each one to a
-// different depth instead of flattening them.
-enum class MdLayer : uint8_t { Backdrop = 0, PlaneB = 1, PlaneA = 2, Window = 3, Sprite = 4 };
+// different depth instead of flattening them. Mars is the 32X's bitmap.
+enum class MdLayer : uint8_t { Backdrop = 0, PlaneB = 1, PlaneA = 2, Window = 3, Sprite = 4, Mars = 5 };
 
 // Shadow/highlight state of a pixel (VDP register 12 bit 3).
 enum class MdShade : uint8_t { Normal = 0, Shadow = 1, Highlight = 2 };
@@ -46,6 +46,9 @@ struct VideoFrameMd {
     std::array<MdPixel, kPixels> planeAInfo{};
     std::array<MdPixel, kPixels> spriteInfo{};
     std::array<uint32_t, kMaxHeight> backdrop{};  // backdrop colour of each line
+    // The 32X's picture of each line (alpha 0 where it draws nothing), whether or not
+    // it is in front of the Mega Drive's. Indexed by line, not by interlaced row.
+    std::array<uint32_t, kPixels> mars{};
 
     struct Line {
         int16_t hscrollA = 0, hscrollB = 0;

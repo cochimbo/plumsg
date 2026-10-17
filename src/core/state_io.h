@@ -9,6 +9,11 @@
 
 namespace plumsg {
 
+template <class T>
+struct IsByteArray : std::false_type {};
+template <size_t N>
+struct IsByteArray<std::array<uint8_t, N>> : std::true_type {};
+
 // Every component describes its state once, in a single function used both to save and
 // to load, so the two can never drift apart:
 //
@@ -57,6 +62,8 @@ private:
             uint32_t n = static_cast<uint32_t>(v.size());
             put(n);
             for (auto& e : v) put(e);
+        } else if constexpr (IsByteArray<T>::value) {
+            raw(v.data(), v.size());  // memory: no need to go byte by byte
         } else {
             for (auto& e : v) put(e);  // std::array and C arrays
         }
@@ -134,6 +141,8 @@ private:
             }
             v.resize(n);
             for (auto& e : v) get(e);
+        } else if constexpr (IsByteArray<T>::value) {
+            raw(v.data(), v.size());
         } else {
             for (auto& e : v) get(e);
         }
