@@ -64,6 +64,9 @@ public:
     void render();
 
     void openRom() { openRequested_ = true; }
+    // The states menu: a list of the slots that the pad (or the keyboard) can drive.
+    void toggleStateMenu();
+    bool stateMenuOpen() const { return stateMenu_.open; }
     void notify(std::string message);
 
 private:
@@ -78,6 +81,8 @@ private:
     void drawControls(UiActions& out);
     void drawVideo(const UiState& state, UiActions& out);
     void drawAbout();
+    void drawStateMenu(const UiState& state);
+    bool handleStateMenu(const SDL_Event& e);
     void drawOverlays(const UiState& state);
     void finishCapture(int keyOrButton);
 
@@ -94,6 +99,13 @@ private:
     bool peekMenu_ = false;  // menu bar hidden but shown while the mouse is at the top
     int menuHeight_ = 0;
     Capture capture_;
+    struct StateMenu {
+        bool open = false;
+        int selected = 0;
+        int slots = 0;
+        bool scroll = false;  // bring the selected row into view on the next frame
+        int load = -1, save = -1;  // chosen this frame, handed over by frame()
+    } stateMenu_;
     std::string toast_;
     Uint32 toastUntil_ = 0;
 };

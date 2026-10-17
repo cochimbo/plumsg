@@ -204,6 +204,7 @@ struct CommandLine {
     int pseudo3d = -1;    // --3d / --2d override the setting
     std::string view;     // --vista name
     float tilt = -1000, yaw = -1000;
+    bool stateMenu = false;  // --menu-estados: start with the states menu open
 };
 
 CommandLine parse(int argc, char** argv) {
@@ -218,6 +219,7 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--vista") c.view = next();
         else if (a == "--inclinacion") c.tilt = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--giro") c.yaw = static_cast<float>(std::atof(next().c_str()));
+        else if (a == "--menu-estados") c.stateMenu = true;
         else c.rom = a;
     }
     return c;
@@ -308,6 +310,7 @@ int main(int argc, char** argv) {
     auto setFullscreen = [&] { SDL_SetWindowFullscreen(window, settings.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0); };
     if (settings.fullscreen) setFullscreen();
     if (!cmd.rom.empty()) load(cmd.rom);
+    bool openStateMenu = cmd.stateMenu;
     bool sizedForMenu = false;
 
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -361,6 +364,7 @@ int main(int argc, char** argv) {
                 case Hotkey::LoadState: loadState(settings.stateSlot); break;
                 case Hotkey::PrevSlot: selectSlot(-1); break;
                 case Hotkey::NextSlot: selectSlot(1); break;
+                case Hotkey::StateMenu: ui->toggleStateMenu(); break;
                 default: break;
             }
             // The pseudo-3D camera: drag to turn it, wheel to zoom, double click to centre it.
@@ -416,6 +420,11 @@ int main(int argc, char** argv) {
             }
         }
 
+        // For screenshots, open it once a few frames have run.
+        if (openStateMenu && (framesRun >= cmd.frames - 1 || !capturing)) {
+            ui->toggleStateMenu();
+            openStateMenu = false;
+        }
         uiState.romLoaded = app->romLoaded;
         uiState.paused = paused;
         uiState.slots = app->slots;
@@ -450,7 +459,8 @@ int main(int argc, char** argv) {
             cam.tilt = std::clamp(cam.tilt + sy * step, kMinTilt, kMaxTilt);
         }
 
-        if (app->romLoaded && !paused) {
+        // The game waits while the states menu is open.
+        if (app->romLoaded && !paused && !ui->stateMenuOpen()) {
             const bool keyboard = !ui->keyboardBusy();
             app->console.setPads(input->poll(0, keyboard), input->poll(1, keyboard));
             app->console.setSampleRate(audio->rate());
@@ -471,7 +481,7 @@ int main(int argc, char** argv) {
         view.setOptions(settings.render);
         view.draw(app->console.frame(), game);
         ui->render();
-        if (capturing && (framesRun >= cmd.frames || !app->romLoaded)) {
+        if (capturing && (framesRun >= cmd.frames || !app->romLoaded || (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {
             const bool ok = captureWindow(window, cmd.capture);
             std::printf("%s %s\n", ok ? "captura guardada en" : "no se pudo guardar", cmd.capture.c_str());
             running = false;

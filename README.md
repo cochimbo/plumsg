@@ -47,6 +47,7 @@ Arrastra una ROM a la ventana o usa **Archivo > Abrir ROM**.
 | Mayús derecha | Mode |
 | F3 | Efecto 3D |
 | F5 / F8 | Guardar / cargar estado en la ranura actual |
+| F4 (mando: clic del stick izquierdo) | Menú de estados |
 | F6 / F7 | Ranura anterior / siguiente |
 | F1 | Reiniciar |
 | F2 | Cambiar de vista (2D / capas de depuración) |
@@ -59,7 +60,9 @@ Todo se puede cambiar en **Opciones > Controles**. El primer mando conectado es 
 jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por defecto.
 
 - **Estado**: guardar, cargar y elegir ranura; al pasar el ratón sobre una ranura se ve su
-  miniatura. Los estados están en `%APPDATA%\plumsg\plumsg\states\` (o en `states\` junto
+  miniatura. El **menú de estados** (F4, o el clic del stick izquierdo del mando) pausa el
+  juego y muestra las 10 ranuras con su miniatura: arriba y abajo para elegir, A (o Intro)
+  para cargar, Y (o Espacio) para guardar y B (o Esc) para cerrar. Los estados están en `%APPDATA%\plumsg\plumsg\states\` (o en `states\` junto
   al ejecutable si hay un `plumsg.ini` a su lado, modo portátil). Un estado de otra ROM o
   dañado se rechaza sin tocar la partida. Cargar un estado restaura también la SRAM en
   memoria; el `.sav` se sigue escribiendo al salir o al cambiar de ROM.
