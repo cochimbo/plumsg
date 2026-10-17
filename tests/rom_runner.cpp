@@ -4,12 +4,14 @@
 //
 //   rom_runner <rom|--test-rom> [--frames N] [--png out.png] [--layers prefix]
 //              [--pal] [--write-test-rom out.bin] [--wav out.wav] [--save-state out]
+//              [--bios cd_bios.bin]   (Mega CD discs: the BIOS to boot them with)
 
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -75,7 +77,7 @@ uint32_t frameHash(const VideoFrameMd& f) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string rom, png, layers, wav, writeRom, stateOut;
+    std::string rom, png, layers, wav, writeRom, stateOut, bios;
     int frames = 120;
     bool pal = false;
     for (int i = 1; i < argc; ++i) {
@@ -88,6 +90,7 @@ int main(int argc, char** argv) {
         else if (a == "--pal") pal = true;
         else if (a == "--save-state") stateOut = next();
         else if (a == "--write-test-rom") writeRom = next();
+        else if (a == "--bios") bios = next();
         else rom = a;
     }
     if (!writeRom.empty()) {
@@ -103,6 +106,12 @@ int main(int argc, char** argv) {
 
     MegaDrive md;
     if (pal) md.setRegion(Region::EuropePal);
+    if (!bios.empty()) {
+        // The one BIOS for whatever region the disc is.
+        std::ifstream in(bios, std::ios::binary);
+        std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        for (Region r : {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal}) md.setCdBios(r, data);
+    }
     if (rom == "--test-rom") {
         md.loadRomData(testrom::build());
     } else {
@@ -127,6 +136,7 @@ int main(int argc, char** argv) {
     std::printf("title: %s\nframes: %d  size: %dx%d  hash: %08x\naudio: %zu samples  rms: %.1f\npc: %06x\n",
                 md.cartridge().header().title.c_str(), frames, f.width, f.height, frameHash(f), sound.size() / 2, rms,
                 md.cpu().pc);
+    if (md.isMegaCd()) std::printf("sub pc: %06x\n", md.megaCd()->sub().pc);
     if (!png.empty() && !writePng(png, f.rgba.data(), f.width, f.height, VideoFrameMd::kMaxWidth)) return 1;
     if (!layers.empty()) {
         writePng(layers + "_planeB.png", f.planeB.data(), f.width, f.height, VideoFrameMd::kMaxWidth);

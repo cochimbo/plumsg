@@ -13,6 +13,7 @@
 #include "io.h"
 #include "m68k.h"
 #include "mars.h"
+#include "megacd.h"
 #include "psg.h"
 #include "vdp_md.h"
 #include "ym2612.h"
@@ -22,7 +23,8 @@ namespace plumsg {
 
 // The whole console: 68000 and Z80 with their buses and memory maps, VDP, YM2612, PSG,
 // I/O and cartridge, plus the scheduler that interleaves them line by line. With a 32X
-// game it also has the 32X, whose two SH-2s run alongside the 68000. It knows
+// game it also has the 32X, whose two SH-2s run alongside the 68000, and with a disc
+// the Mega CD, whose BIOS and memory take the cartridge's place. It knows
 // nothing about windows, rendering or audio devices: frontends call runFrame(), then
 // read frame() and audio().samples(), and feed the pads in.
 class MegaDrive : private M68kBus, private Z80Bus {
@@ -35,8 +37,14 @@ public:
     MegaDrive(const MegaDrive&) = delete;
     MegaDrive& operator=(const MegaDrive&) = delete;
 
-    bool loadRom(const std::string& path, std::string* error);  // .bin/.md/.gen/.smd/.32x/.zip
+    bool loadRom(const std::string& path, std::string* error);  // .bin/.md/.gen/.smd/.32x/.zip, or a disc
     void loadRomData(std::vector<uint8_t> rom);                 // for tests and tools
+    // Mega CD discs (.cue, .iso, .chd, or a .bin with one data track) need the BIOS of
+    // their region, handed over first (128 KB each; empty for none).
+    void setCdBios(Region region, std::vector<uint8_t> bios);
+    bool loadDisc(const std::string& path, std::string* error);
+    // A disc already open (tests and tools); false without a BIOS for its region.
+    bool loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error);
     void reset();       // the console's reset button: CPUs, VDP and sound; RAM is kept
     void powerCycle();  // also clears memory
 
@@ -83,6 +91,8 @@ public:
     Psg& psg() { return psg_; }
     Mars* mars() { return mars_.get(); }  // null unless the game is a 32X one
     bool is32x() const { return mars_ != nullptr; }
+    MegaCd* megaCd() { return mcd_.get(); }  // null unless a disc is loaded
+    bool isMegaCd() const { return mcd_ != nullptr; }
     // CPU view of memory, for tools and tests.
     uint8_t peek(uint32_t addr) { return read8(addr); }
     uint16_t peek16(uint32_t addr) { return read16(addr & ~1u); }
@@ -115,6 +125,7 @@ private:
     void applyRegion();
     void configureFor(Region r);  // clocks, PAL/NTSC and version register
     void setUpMars();             // adds or removes the 32X to suit the cartridge
+    std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
 
     template <class Ar>
@@ -129,6 +140,9 @@ private:
     Cartridge cart_;
     AudioMixer mixer_;
     std::unique_ptr<Mars> mars_;
+    std::unique_ptr<CdImage> disc_;
+    std::unique_ptr<MegaCd> mcd_;
+    std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe
 
     std::array<uint8_t, 0x10000> ram_{};
     std::array<uint8_t, 0x2000> zram_{};

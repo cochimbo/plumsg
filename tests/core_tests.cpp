@@ -26,6 +26,8 @@
 #include "test_rom.h"
 #include "frontend/library_names.h"
 #include "mars/mars_program.h"
+#include "megacd/megacd_program.h"
+#include "cd_image.h"
 
 using namespace plumsg;
 
@@ -689,6 +691,182 @@ void testMarsProgram() {
     check(out.size() > 2 * 3000 && hi - lo > 10000, "32X: el PWM suena");
 }
 
+void testCdImage() {
+    std::vector<CdImage::Track> t;
+    std::string error;
+    const std::string one =
+        "FILE \"game.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+        "  TRACK 02 AUDIO\n    INDEX 00 00:10:00\n    INDEX 01 00:12:00\n";
+    bool ok = CdImage::parseCue(one, {1200ull * 2352}, t, &error) && t.size() == 2;
+    ok = ok && t[0].begin == -150 && t[0].start == 0 && t[0].end == 749 && t[0].dataBegin == 0 && !t[0].audio;
+    ok = ok && t[1].begin == 750 && t[1].start == 900 && t[1].end == 1199 && t[1].dataBegin == 750 &&
+         t[1].offset == 750ull * 2352 && t[1].audio;
+    check(ok, "CD: hoja .cue de un archivo, con INDEX 00 en la pista de audio");
+
+    const std::string two =
+        "REM una pista por archivo\nFILE \"t1.bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n"
+        "FILE \"t2.bin\" BINARY\n  TRACK 02 AUDIO\n    PREGAP 00:02:00\n    INDEX 01 00:00:00\n";
+    ok = CdImage::parseCue(two, {100ull * 2048, 50ull * 2352}, t, &error) && t.size() == 2;
+    ok = ok && t[0].end == 99 && t[0].sectorBytes == 2048 && t[1].file == 1 && t[1].begin == 100 &&
+         t[1].start == 250 && t[1].dataBegin == 250 && t[1].end == 299 && t[1].offset == 0;
+    check(ok, "CD: hoja .cue de varios archivos, con PREGAP");
+    check(!CdImage::parseCue("FILE \"a.bin\" BINARY\n  TRACK 01 MODE2/2336\n    INDEX 01 00:00:00\n", {2336}, t,
+                             &error),
+          "CD: un tipo de pista que no se lee se dice");
+
+    // The same two-file disc on disk, read back.
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "plumsg_cd_test";
+    std::filesystem::create_directories(dir);
+    std::vector<uint8_t> data(100 * 2048), audio(50 * 2352);
+    for (size_t i = 0; i < data.size(); ++i) data[i] = static_cast<uint8_t>(i / 2048 + i);
+    for (size_t i = 0; i < audio.size(); ++i) audio[i] = static_cast<uint8_t>(i * 7);
+    std::ofstream(dir / "t1.bin", std::ios::binary).write(reinterpret_cast<const char*>(data.data()), data.size());
+    std::ofstream(dir / "t2.bin", std::ios::binary).write(reinterpret_cast<const char*>(audio.data()), audio.size());
+    std::ofstream(dir / "disco.cue") << two;
+    CdImage disc;
+    ok = disc.open((dir / "disco.cue").u8string(), &error);
+    check(ok, "CD: abre una hoja .cue con sus archivos");
+    if (ok) {
+        uint8_t sector[2352];
+        disc.readSector(5, sector);
+        const bool header = sector[0] == 0 && sector[1] == 0xFF && sector[11] == 0 && sector[12] == 0 &&
+                            sector[13] == 0x02 && sector[14] == 0x05 && sector[15] == 1;
+        check(header && std::memcmp(sector + 16, &data[5 * 2048], 2048) == 0,
+              "CD: un sector de datos de 2048 bytes sale con su cabecera");
+        disc.readSector(251, sector);
+        check(std::memcmp(sector, &audio[2352], 2352) == 0, "CD: un sector de audio sale tal cual");
+        disc.readSector(120, sector);
+        check(std::all_of(sector, sector + 2352, [](uint8_t b) { return b == 0; }), "CD: el PREGAP es silencio");
+        check(disc.trackAt(-150) == 0 && disc.trackAt(100) == 1 && disc.trackAt(300) == -1 && disc.leadOut() == 300,
+              "CD: pistas y final del disco");
+    }
+    disc.close();
+    std::filesystem::remove_all(dir);
+
+    // A .chd made with chdman from a data track and an audio track whose pregap is in
+    // the file (tests/megacd/disco.chd; the bytes follow the formulas below).
+    ok = disc.open(std::string(PLUMSG_TEST_DIR) + "/megacd/disco.chd", &error);
+    check(ok, "CD: abre un .chd");
+    if (ok) {
+        const auto& tr = disc.tracks();
+        check(tr.size() == 2 && tr[0].end == 49 && !tr[0].audio && tr[1].begin == 50 && tr[1].start == 200 &&
+                  tr[1].end == 299 && tr[1].audio,
+              "CD: las pistas del .chd, con el pregap guardado");
+        bool same = true;
+        uint8_t sector[2352];
+        for (int32_t lba = 0; lba < 50 && same; ++lba) {
+            disc.readSector(lba, sector);
+            for (int j = 0; j < 2048; ++j) same = same && sector[16 + j] == static_cast<uint8_t>(lba * 7 + j);
+            same = same && sector[15] == 1 && sector[14] == static_cast<uint8_t>((lba + 150) % 75 / 10 << 4 | (lba + 150) % 75 % 10);
+        }
+        for (int32_t lba = 50; lba < 300 && same; ++lba) {
+            disc.readSector(lba, sector);
+            const int i = lba - 50;
+            for (int j = 0; j < 2352; ++j) same = same && sector[j] == static_cast<uint8_t>(i * 13 + j * 3);
+        }
+        check(same, "CD: los sectores del .chd salen como los del .bin original");
+    }
+}
+
+// A disc made in memory for the Mega CD program: a data track whose sector 0 is a
+// disc header, and a second, audio track with a loud square wave.
+std::unique_ptr<CdImage> testDisc() {
+    std::vector<CdImage::Track> tracks(2);
+    tracks[0].number = 1;
+    tracks[0].begin = -150;
+    tracks[0].start = tracks[0].dataBegin = 0;
+    tracks[0].end = tracks[0].dataEnd = 39;
+    tracks[0].sectorBytes = 2048;
+    tracks[1].number = 2;
+    tracks[1].audio = true;
+    tracks[1].begin = 40;
+    tracks[1].start = tracks[1].dataBegin = 190;
+    tracks[1].end = tracks[1].dataEnd = 389;
+    tracks[1].offset = 40 * 2048;
+    std::vector<uint8_t> data(40 * 2048 + 200 * 2352);
+    std::memcpy(data.data(), "SEGADISCSYSTEM  ", 16);
+    std::memcpy(&data[0x100], "SEGA MEGA DRIVE ", 16);
+    data[0x1F0] = 'U';
+    for (size_t i = 40 * 2048; i < data.size(); i += 4) {
+        const int16_t v = ((i / 400) & 1) ? 12000 : -12000;
+        for (int c = 0; c < 2; ++c) {
+            data[i + c * 2] = static_cast<uint8_t>(v);
+            data[i + c * 2 + 1] = static_cast<uint8_t>(v >> 8);
+        }
+    }
+    auto disc = std::make_unique<CdImage>();
+    disc->openTracks(tracks, data);
+    return disc;
+}
+
+void testMegaCd() {
+    MegaDrive md;
+    md.setSampleRate(44100);
+    std::string error;
+    check(!md.loadDiscImage(testDisc(), &error) && error.find("BIOS") != std::string::npos,
+          "Mega CD: sin BIOS, dice cuál falta");
+    std::vector<uint8_t> bios(kMegaCdProgram, kMegaCdProgram + sizeof kMegaCdProgram);
+    bios.resize(0x20000);
+    md.setCdBios(Region::UsaNtsc, bios);
+    check(md.loadDiscImage(testDisc(), &error) && md.isMegaCd(), "Mega CD: carga un disco con la BIOS de su región");
+    MegaCd& cd = *md.megaCd();
+    auto result = [&](int i) {
+        const auto& prg = cd.programRam();
+        const size_t a = 0x7F000 + static_cast<size_t>(i) * 2;
+        return static_cast<uint16_t>(prg[a] << 8 | prg[a + 1]);
+    };
+    // Run until the PCM plays, measure it, then until the program ends.
+    int pcmLo = 0, pcmHi = 0, frames = 0;
+    for (; frames < 600 && cd.status()[7] != 0xD0; ++frames) {
+        md.audio().clearSamples();
+        md.runFrame();
+        if (cd.status()[6] == 0x9C)
+            for (size_t i = 0; i < md.audio().samples().size(); i += 2) {
+                pcmLo = std::min<int>(pcmLo, md.audio().samples()[i]);
+                pcmHi = std::max<int>(pcmHi, md.audio().samples()[i]);
+            }
+    }
+    check(cd.status()[0] == 0x1234 && result(0) == 1, "Mega CD: la CPU secundaria arranca y habla con la principal");
+    check(result(1) >= 3, "Mega CD: interrupciones del temporizador");
+    check(result(2) == 1, "Mega CD: interrupción de nivel 2 desde la CPU principal");
+    check(result(9) == 0x5A, "Mega CD: memoria de guardado");
+    check(result(3) == 0x0102, "Mega CD: la unidad dice la primera y la última pista");
+    check(result(4) == 0x5345 && result(5) == 0x4741 && result(10) > 0,
+          "Mega CD: lee el sector 0 del disco por el controlador");
+    check(result(6) == 0x8000, "Mega CD: la transferencia termina");
+    check(result(7) == 0x5345, "Mega CD: DMA del controlador a la memoria de palabras");
+    check(result(8) == 0x5555 && result(11) == 1, "Mega CD: el chip gráfico dibuja un sello");
+    check(md.workRam()[0] == 0x60 && md.workRam()[1] == 0x0D && md.workRam()[2] == 0x55 && md.workRam()[3] == 0x55,
+          "Mega CD: la memoria de palabras vuelve a la CPU principal");
+    check(pcmHi - pcmLo > 4000, "Mega CD: el chip PCM suena");
+    check(cd.status()[7] == 0xD0, "Mega CD: el programa termina");
+
+    // CD audio: track 2 plays once the drive has got there.
+    int lo = 0, hi = 0;
+    for (int i = 0; i < 150; ++i) {
+        md.audio().clearSamples();
+        md.runFrame();
+        for (size_t j = 0; j < md.audio().samples().size(); j += 2) {
+            lo = std::min<int>(lo, md.audio().samples()[j]);
+            hi = std::max<int>(hi, md.audio().samples()[j]);
+        }
+    }
+    check(hi - lo > 8000, "Mega CD: suena el audio de la pista 2");
+
+    // Savestates with the Mega CD in them come back exactly.
+    std::vector<uint8_t> state;
+    check(md.saveState(state), "Mega CD: guarda el estado");
+    md.audio().clearSamples();
+    md.runFrame();
+    const uint32_t sound = soundHash(md.audio().samples());
+    const uint32_t pc = cd.sub().pc;
+    std::string err;
+    check(md.loadState(state, &err), "Mega CD: carga el estado");
+    md.audio().clearSamples();
+    md.runFrame();
+    check(soundHash(md.audio().samples()) == sound && cd.sub().pc == pc, "Mega CD: tras cargar el estado sigue igual");
+}
+
 }  // namespace
 
 void testRewindBuffer() {
@@ -993,6 +1171,8 @@ int main() {
     testSh2();
     testMars();
     testMarsProgram();
+    testCdImage();
+    testMegaCd();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
