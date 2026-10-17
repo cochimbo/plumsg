@@ -3,7 +3,7 @@
 // the sound. Used for regression checks and to get screenshots out of CI.
 //
 //   rom_runner <rom|--test-rom> [--frames N] [--png out.png] [--layers prefix]
-//              [--pal] [--write-test-rom out.bin] [--wav out.wav]
+//              [--pal] [--write-test-rom out.bin] [--wav out.wav] [--save-state out]
 
 #include <cmath>
 #include <cstdio>
@@ -75,7 +75,7 @@ uint32_t frameHash(const VideoFrameMd& f) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string rom, png, layers, wav, writeRom;
+    std::string rom, png, layers, wav, writeRom, stateOut;
     int frames = 120;
     bool pal = false;
     for (int i = 1; i < argc; ++i) {
@@ -86,6 +86,7 @@ int main(int argc, char** argv) {
         else if (a == "--layers") layers = next();
         else if (a == "--wav") wav = next();
         else if (a == "--pal") pal = true;
+        else if (a == "--save-state") stateOut = next();
         else if (a == "--write-test-rom") writeRom = next();
         else rom = a;
     }
@@ -133,5 +134,10 @@ int main(int argc, char** argv) {
         writePng(layers + "_sprites.png", f.sprites.data(), f.width, f.height, VideoFrameMd::kMaxWidth);
     }
     if (!wav.empty()) writeWav(wav, sound, 44100);
+    if (!stateOut.empty()) {
+        std::vector<uint8_t> state;
+        if (!md.saveState(state)) return 1;
+        std::ofstream(stateOut, std::ios::binary).write(reinterpret_cast<const char*>(state.data()), static_cast<std::streamsize>(state.size()));
+    }
     return 0;
 }

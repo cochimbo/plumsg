@@ -14,7 +14,7 @@ namespace plumsg {
 enum class MdButton { Up, Down, Left, Right, A, B, C, Start, X, Y, Z, Mode, Count };
 
 // Emulator actions that can be bound like console buttons but fire once per press.
-enum class Hotkey { Toggle3D, SaveState, LoadState, PrevSlot, NextSlot, Count };
+enum class Hotkey { Toggle3D, SaveState, LoadState, PrevSlot, NextSlot, StateMenu, Count };
 
 // Keyboard and gamepad bindings, read from and written to a plain-text .ini file.
 // The keyboard can drive both players ([teclado] and [teclado2]); the first gamepad

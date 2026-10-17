@@ -13,8 +13,8 @@ namespace {
 constexpr int kRows = InputConfig::kButtons + InputConfig::kHotkeys;
 constexpr const char* kRowNames[kRows] = {"Arriba", "Abajo", "Izquierda", "Derecha", "A", "B", "C", "Start",
                                           "X", "Y", "Z", "Mode", "Efecto 3D", "Guardar estado", "Cargar estado",
-                                          "Ranura anterior", "Ranura siguiente"};
-static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 5, "update kRowNames");
+                                          "Ranura anterior", "Ranura siguiente", "Menú de estados"};
+static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 6, "update kRowNames");
 
 std::vector<SDL_Scancode>& keysOf(InputConfig& c, int row, int player) {
     if (row >= InputConfig::kButtons) return c.hotkeyKeys[row - InputConfig::kButtons];
@@ -72,11 +72,65 @@ bool Ui::handleEvent(const SDL_Event& e) {
         }
         if (e.type == SDL_CONTROLLERBUTTONUP) return true;
     }
+    if (stateMenu_.open && handleStateMenu(e)) return true;
     ImGui_ImplSDL2_ProcessEvent(&e);
     return false;
 }
 
-bool Ui::keyboardBusy() const { return capture_.active || ImGui::GetIO().WantCaptureKeyboard; }
+void Ui::toggleStateMenu() {
+    stateMenu_.open = !stateMenu_.open;
+    stateMenu_.selected = settings_.stateSlot;
+    stateMenu_.scroll = true;
+}
+
+// While the states menu is open it owns the pad and the keyboard: up and down pick a
+// slot, A (or Enter) loads it, Y (or Space) saves to it, B (or Esc) closes the menu.
+bool Ui::handleStateMenu(const SDL_Event& e) {
+    if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_KEYUP &&
+        e.type != SDL_CONTROLLERBUTTONUP && e.type != SDL_TEXTINPUT)
+        return false;
+    if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN) return true;
+    if (input_.hotkeyFor(e) == Hotkey::StateMenu) {
+        stateMenu_.open = false;
+        return true;
+    }
+    enum { None, Up, Down, Load, Save, Close } action = None;
+    if (e.type == SDL_KEYDOWN) {
+        switch (e.key.keysym.scancode) {
+            case SDL_SCANCODE_UP: action = Up; break;
+            case SDL_SCANCODE_DOWN: action = Down; break;
+            case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: action = Load; break;
+            case SDL_SCANCODE_SPACE: action = Save; break;
+            case SDL_SCANCODE_ESCAPE: action = Close; break;
+            default: break;
+        }
+    } else {
+        switch (e.cbutton.button) {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP: action = Up; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN: action = Down; break;
+            case SDL_CONTROLLER_BUTTON_A: action = Load; break;
+            case SDL_CONTROLLER_BUTTON_Y: action = Save; break;
+            case SDL_CONTROLLER_BUTTON_B: action = Close; break;
+            default: break;
+        }
+    }
+    const int count = std::max(1, stateMenu_.slots);
+    switch (action) {
+        case Up: stateMenu_.selected = (stateMenu_.selected + count - 1) % count; stateMenu_.scroll = true; break;
+        case Down: stateMenu_.selected = (stateMenu_.selected + 1) % count; stateMenu_.scroll = true; break;
+        case Load: stateMenu_.load = stateMenu_.selected; stateMenu_.open = false; break;
+        case Save: stateMenu_.save = stateMenu_.selected; stateMenu_.open = false; break;
+        case Close: stateMenu_.open = false; break;
+        case None: break;
+    }
+    if (action == Load || action == Save) {
+        settings_.stateSlot = stateMenu_.selected;
+        pendingSave_ = true;
+    }
+    return true;
+}
+
+bool Ui::keyboardBusy() const { return capture_.active || stateMenu_.open || ImGui::GetIO().WantCaptureKeyboard; }
 
 bool Ui::mouseBusy() const { return ImGui::GetIO().WantCaptureMouse; }
 
@@ -126,6 +180,11 @@ UiActions Ui::frame(const UiState& state) {
     if (showControls_) drawControls(out);
     if (showVideo_) drawVideo(state, out);
     if (showAbout_) drawAbout();
+    stateMenu_.slots = static_cast<int>(state.slots.size());
+    if (stateMenu_.load >= 0) out.loadState = stateMenu_.load;
+    if (stateMenu_.save >= 0) out.saveState = stateMenu_.save;
+    stateMenu_.load = stateMenu_.save = -1;
+    if (stateMenu_.open) drawStateMenu(state);
     std::string picked;
     if (browser_.draw(&picked)) out.load = picked;
     drawOverlays(state);
@@ -180,6 +239,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
                           state.slots[static_cast<size_t>(settings_.stateSlot)].used;
         if (ImGui::MenuItem(("Cargar estado" + slot).c_str(), "F8", false, state.romLoaded && used))
             out.loadState = settings_.stateSlot;
+        if (ImGui::MenuItem("Menú de estados...", "F4")) toggleStateMenu();
         ImGui::SeparatorText("Ranura (F6 / F7)");
         for (int i = 0; i < static_cast<int>(state.slots.size()); ++i) {
             const SlotInfo& info = state.slots[static_cast<size_t>(i)];
@@ -460,6 +520,58 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     ImGui::End();
 }
 
+void Ui::drawStateMenu(const UiState& state) {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Always,
+                            ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(470, std::min(vp->Size.y - 40.0f, 520.0f)), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.92f);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav;
+    if (!ImGui::Begin("Estados", &stateMenu_.open, flags)) {
+        ImGui::End();
+        return;
+    }
+    if (!state.romLoaded) ImGui::TextDisabled("Abre una ROM para guardar estados.");
+    ImGui::TextDisabled("A / Intro: cargar   Y / Espacio: guardar   B / Esc: cerrar");
+    ImGui::Separator();
+    ImGui::BeginChild("ranuras");
+    const float thumbH = 56.0f;
+    for (int i = 0; i < static_cast<int>(state.slots.size()); ++i) {
+        const SlotInfo& info = state.slots[static_cast<size_t>(i)];
+        ImGui::PushID(i);
+        const bool selected = i == stateMenu_.selected;
+        const ImVec2 start = ImGui::GetCursorPos();
+        // The whole row is clickable with the mouse too: a click selects, a double click loads.
+        if (ImGui::Selectable("##fila", selected, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, thumbH))) {
+            stateMenu_.selected = i;
+            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && info.used && state.romLoaded) {
+                stateMenu_.load = i;
+                stateMenu_.open = false;
+                settings_.stateSlot = i;
+                pendingSave_ = true;
+            }
+        }
+        if (selected && stateMenu_.scroll) {
+            ImGui::SetScrollHereY(0.5f);
+            stateMenu_.scroll = false;
+        }
+        ImGui::SetCursorPos(start);
+        const float thumbW = info.height ? thumbH * static_cast<float>(info.width) / static_cast<float>(info.height) : thumbH * 1.43f;
+        if (info.texture) ImGui::Image(static_cast<ImTextureID>(info.texture), ImVec2(thumbW, thumbH));
+        else ImGui::Dummy(ImVec2(thumbW, thumbH));
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::Text("Ranura %d%s", i, i == settings_.stateSlot ? "  (actual)" : "");
+        if (info.used) ImGui::TextUnformatted(info.when.c_str());
+        else ImGui::TextDisabled("vacía");
+        ImGui::EndGroup();
+        ImGui::PopID();
+    }
+    ImGui::EndChild();
+    ImGui::End();
+}
+
 void Ui::drawAbout() {
     if (!ImGui::Begin("Acerca de plumsg", &showAbout_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
@@ -478,6 +590,7 @@ void Ui::drawAbout() {
     ImGui::BulletText("Esc  mostrar u ocultar la barra de menús");
     ImGui::BulletText("F3  efecto 3D (se puede cambiar en Opciones > Controles)");
     ImGui::BulletText("F5 / F8  guardar / cargar estado; F6 / F7  cambiar de ranura");
+    ImGui::BulletText("F4 o clic del stick izquierdo  menú de estados, manejable con el mando");
     ImGui::SeparatorText("Mando (teclado)");
     ImGui::BulletText("Flechas  cruceta;  A S D  botones A B C;  Q W E  botones X Y Z");
     ImGui::BulletText("Intro  Start;  Mayús derecha  Mode");

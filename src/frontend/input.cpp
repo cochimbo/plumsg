@@ -14,7 +14,7 @@ namespace {
 constexpr const char* kButtonNames[InputConfig::kButtons] = {"arriba", "abajo", "izquierda", "derecha", "a", "b",
                                                              "c", "start", "x", "y", "z", "mode"};
 constexpr const char* kHotkeyNames[InputConfig::kHotkeys] = {"efecto_3d", "guardar_estado", "cargar_estado",
-                                                             "ranura_anterior", "ranura_siguiente"};
+                                                             "ranura_anterior", "ranura_siguiente", "menu_estados"};
 
 std::string trim(const std::string& s) {
     size_t b = s.find_first_not_of(" \t\r\n");
@@ -76,6 +76,8 @@ InputConfig InputConfig::defaults() {
     c.hotkeyKeys[static_cast<int>(Hotkey::LoadState)] = {SDL_SCANCODE_F8};
     c.hotkeyKeys[static_cast<int>(Hotkey::PrevSlot)] = {SDL_SCANCODE_F6};
     c.hotkeyKeys[static_cast<int>(Hotkey::NextSlot)] = {SDL_SCANCODE_F7};
+    c.hotkeyKeys[static_cast<int>(Hotkey::StateMenu)] = {SDL_SCANCODE_F4};
+    c.hotkeyPad[static_cast<int>(Hotkey::StateMenu)] = {SDL_CONTROLLER_BUTTON_LEFTSTICK};
     return c;
 }
 
@@ -161,7 +163,8 @@ void InputConfig::write(std::ostream& out) const {
            "# Botones de mando: a, b, x, y, back, guide, start, leftstick, rightstick,\n"
            "# leftshoulder, rightshoulder, dpup, dpdown, dpleft, dpright.\n"
            "# efecto_3d activa y desactiva el efecto pseudo-3D; guardar_estado, cargar_estado,\n"
-           "# ranura_anterior y ranura_siguiente manejan los estados guardados.\n\n[teclado]\n";
+           "# ranura_anterior y ranura_siguiente manejan los estados guardados; menu_estados\n"
+           "# abre un menú para elegir ranura, guardar y cargar con el mando.\n\n[teclado]\n";
     for (int i = 0; i < kButtons; ++i) keyList(kButtonNames[i], keys[i]);
     for (int i = 0; i < kHotkeys; ++i) keyList(kHotkeyNames[i], hotkeyKeys[i]);
     out << "\n[teclado2]\n";
