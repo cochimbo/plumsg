@@ -40,6 +40,8 @@ OutputBaseFilename={#AppName}-{#AppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; La marquesina en la columna izquierda de las páginas de bienvenida y final (100% y 200%).
+WizardImageFile=wizard.bmp,wizard-2x.bmp
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Permite instalar sin permisos de administrador (en el perfil del usuario).

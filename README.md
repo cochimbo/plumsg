@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/marquesina.png" alt="PLUMSG" width="640"></p>
+
 # plumsg
 
 Emulador de **Sega Mega Drive / Genesis**, **32X** y **Mega CD** para Windows (y Linux) con un efecto

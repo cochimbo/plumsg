@@ -125,12 +125,15 @@ private:
     bool handleStateMenu(const SDL_Event& e);
     void drawOverlays(const UiState& state);
     void finishCapture(int keyOrButton);
+    void loadLogo();
 
     SDL_Window* window_;
     Settings& settings_;
     Input& input_;
     FileBrowser browser_;
     Library library_;
+    unsigned int logoTexture_ = 0;  // the PLUMSG marquee, 0 if it could not be decoded
+    int logoWidth_ = 0, logoHeight_ = 0;
 
     bool showControls_ = false;
     bool showVideo_ = false;
