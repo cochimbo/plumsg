@@ -53,4 +53,12 @@ void markEdgeDistance(std::vector<uint32_t>& plane, int width, int height);
 // outlines are not. The voxel view extrudes solid tiles far back, like 3DNES does.
 void markSolidTiles(const VideoFrameMd& frame, const Planes& planes, std::vector<uint32_t>& solid);
 
+// Clears plane B wherever plane A has a solid tile. Extruded solid tiles reach back past
+// plane B, so whatever plane B has there would sit inside the block; and since every
+// plane is scaled to line up with the 2D picture as seen straight on, plane B is a
+// little larger than plane A and those hidden pixels would poke out of the block's
+// sides when the camera tilts (water showing through the ground in front of it). With
+// the camera straight on nothing changes: plane A covers those pixels.
+void clearBehindSolid(const std::vector<uint32_t>& solid, Planes& planes);
+
 }  // namespace plumsg
