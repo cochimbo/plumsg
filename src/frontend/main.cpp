@@ -275,7 +275,28 @@ struct CommandLine {
     int filter = -1;         // --filtro ninguno|scanlines|crt
     bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
+    // For launchers (LaunchBox, Playnite, frontends of arcade cabinets). These last only
+    // for this session: the settings file keeps what it had.
+    int fullscreen = -1;          // --pantalla-completa / --ventana
+    int region = -1;              // --region auto|jp|us|eu (a Region)
+    int slot = -1;                // --estado N: load the game's state N once it is open
+    bool help = false;            // --ayuda
+    std::vector<std::string> unknown;  // options plumsg does not know
 };
+
+const char* kHelp =
+    "plumsg [juego] [opciones]\n\n"
+    "  juego                  cartucho (.md .gen .bin .smd .32x .zip) o disco (.cue .chd .iso)\n"
+    "  --pantalla-completa    abrir a pantalla completa (o --fullscreen)\n"
+    "  --ventana              abrir en ventana (o --windowed)\n"
+    "  --3d / --2d            con o sin la vista pseudo-3D\n"
+    "  --filtro f             ninguno, scanlines o crt\n"
+    "  --region r             auto, jp, us o eu\n"
+    "  --estado N             cargar el estado guardado N (0-9) del juego\n"
+    "  --biblioteca carpeta   abrir la biblioteca de esa carpeta (se puede repetir)\n"
+    "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
+    "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
+    "La pantalla completa y la región dadas aquí valen solo para esta vez.";
 
 CommandLine parse(int argc, char** argv) {
     CommandLine c;
@@ -297,6 +318,23 @@ CommandLine parse(int argc, char** argv) {
             const std::string f = next();
             c.filter = f == "crt" ? 2 : f == "scanlines" ? 1 : 0;
         }
+        else if (a == "--pantalla-completa" || a == "--fullscreen") c.fullscreen = 1;
+        else if (a == "--ventana" || a == "--windowed") c.fullscreen = 0;
+        else if (a == "--region") {
+            const std::string r = next();
+            if (r == "auto") c.region = static_cast<int>(Region::Auto);
+            else if (r == "jp" || r == "japon") c.region = static_cast<int>(Region::JapanNtsc);
+            else if (r == "us" || r == "usa") c.region = static_cast<int>(Region::UsaNtsc);
+            else if (r == "eu" || r == "europa" || r == "pal") c.region = static_cast<int>(Region::EuropePal);
+            else c.unknown.push_back(a + " " + r);
+        } else if (a == "--estado" || a == "--load-state") {
+            const std::string n = next();
+            char* end = nullptr;
+            const long slot = std::strtol(n.c_str(), &end, 10);
+            if (!n.empty() && *end == 0 && slot >= 0 && slot < kSlots) c.slot = static_cast<int>(slot);
+            else c.unknown.push_back(a + " " + n);
+        } else if (a == "--ayuda" || a == "--help" || a == "-h" || a == "/?") c.help = true;
+        else if (a.size() > 1 && a[0] == '-') c.unknown.push_back(a);
         else c.rom = a;
     }
     return c;
@@ -306,6 +344,17 @@ CommandLine parse(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     const CommandLine cmd = parse(argc, argv);
+    if (cmd.help || !cmd.unknown.empty()) {
+        // A window build on Windows has no console, so this goes to a message box too.
+        std::string text = kHelp;
+        if (!cmd.unknown.empty()) {
+            text = "Opción desconocida: " + cmd.unknown.front() + "\n\n" + text;
+        }
+        std::fprintf(cmd.help ? stdout : stderr, "%s\n", text.c_str());
+        SDL_ShowSimpleMessageBox(cmd.help ? SDL_MESSAGEBOX_INFORMATION : SDL_MESSAGEBOX_ERROR, "plumsg", text.c_str(),
+                                 nullptr);
+        return cmd.help ? 0 : 2;
+    }
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER) != 0) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
@@ -323,6 +372,16 @@ int main(int argc, char** argv) {
         if (cmd.filter >= 0) settings.render.filter = static_cast<Filter2D>(cmd.filter);
     };
     applyCommandLine();
+    // Fullscreen and region from the command line are for this session only.
+    const bool fileFullscreen = settings.fullscreen;
+    const Region fileRegion = settings.region;
+    if (cmd.fullscreen >= 0) settings.fullscreen = cmd.fullscreen == 1;
+    if (cmd.region >= 0) settings.region = static_cast<Region>(cmd.region);
+    auto toSave = [&](Settings s) {
+        if (cmd.fullscreen >= 0) s.fullscreen = fileFullscreen;
+        if (cmd.region >= 0) s.region = fileRegion;
+        return s;
+    };
     if (capturing) settings.fullscreen = false;
     // The pseudo-3D options of [video]. While a game with its own profile is loaded,
     // settings.render holds the profile's and these wait here.
@@ -388,14 +447,14 @@ int main(int argc, char** argv) {
         if (capturing) return;
         if (!hasProfile) {
             copy3D(settings.render, global3D);
-            settings.save(paths.ini, input->config());
+            toSave(settings).save(paths.ini, input->config());
             return;
         }
         std::error_code ec;
         std::filesystem::create_directories(std::filesystem::u8path(app->profilesDir), ec);
         const std::string text = formatProfile(settings.render, fileName(app->romPath));
         writeFile(app->profilePath(), std::vector<uint8_t>(text.begin(), text.end()));
-        Settings general = settings;
+        Settings general = toSave(settings);
         copy3D(global3D, general.render);
         general.save(paths.ini, input->config());
     };
@@ -446,6 +505,7 @@ int main(int argc, char** argv) {
     if (!cmd.rom.empty()) {
         load(cmd.rom);
         applyCommandLine();  // over the game's profile too
+        if (cmd.slot >= 0 && app->romLoaded) ui->notify(app->loadState(cmd.slot));
     }
     bool openStateMenu = cmd.stateMenu;
     if (!cmd.library.empty()) settings.libraryFolders = cmd.library;
