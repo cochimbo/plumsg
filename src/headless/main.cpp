@@ -8,10 +8,12 @@
 
 #include <cctype>
 #include <chrono>
+#include <thread>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -22,6 +24,8 @@
 #include "cheats.h"
 #include "megadrive.h"
 #include "miniz.h"
+#include "net/udp.h"
+#include "netplay.h"
 #include "pad_test_rom.h"
 #include "system.h"
 #include "test_rom.h"
@@ -35,6 +39,8 @@ const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom> 
   game                  cartridge (.md .gen .bin .smd .32x .zip) or disc (.cue .chd .iso)
   --test-rom            the built-in test program (planes, sprites, scroll, a tone)
   --pad-test-rom        the built-in pad test: the backdrop shows the pressed buttons
+  --two-pad-test-rom    the built-in two-pad test: every frame depends on all that both
+                        pads pressed before it (for checking netplay)
 
 Running
   --frames N            frames to run (default 600); frames are numbered from 0
@@ -48,6 +54,19 @@ Running
 Input
   --input FILE          input script (see below)
   --do "LINE"           one script line given on the command line (can repeat)
+
+Netplay (two plumsg over UDP, as the window's Red menu does)
+  --netplay-host PORT   wait for the other player on this UDP port; this side is pad 1
+  --netplay-join ADDR   join the host at ADDR (name or IP, :PORT, default 7845); pad 2
+  --input-delay N       frames between a press and its effect (host's choice, default 2)
+  --net-lag MS          hold each packet this side sends for MS milliseconds, and
+  --net-loss PERCENT    drop this many of them, to try a slow or bad connection
+  With either, the script's buttons for this side's pad drive it (p1.* on the host,
+  p2.* on the guest) and only button lines are allowed. A button on frame N takes
+  effect on frame N as long as N is not below the input delay (those frames have no
+  input), so both sides' scripts together, run without netplay, give the same
+  frames: compare them with --hash-log and --expect-log. The game starts from the
+  host's console when the guest arrives; the log has the frames both agreed on.
 
 Output
   --png FILE            the last frame as PNG
@@ -272,6 +291,36 @@ void orPad(PadState& d, const PadState& s) {
     d.x |= s.x, d.y |= s.y, d.z |= s.z, d.mode |= s.mode;
 }
 
+// A slower, lossier network than the real one, in front of the socket: what this side
+// sends waits `lagMs` and some packets never leave.
+class LaggyTransport : public NetTransport {
+public:
+    LaggyTransport(NetTransport& inner, long lagMs, long lossPercent)
+        : inner_(inner), lag_(static_cast<uint32_t>(lagMs)), loss_(static_cast<uint32_t>(lossPercent)) {}
+    void setNow(uint32_t now) {
+        now_ = now;
+        while (!queue_.empty() && queue_.front().first <= now_) {
+            inner_.send(queue_.front().second.data(), queue_.front().second.size());
+            queue_.pop_front();
+        }
+    }
+    void send(const uint8_t* data, size_t size) override {
+        seed_ = seed_ * 1103515245u + 12345u;
+        if ((seed_ >> 16) % 100 < loss_) return;
+        queue_.emplace_back(now_ + lag_, std::vector<uint8_t>(data, data + size));
+        setNow(now_);
+    }
+    bool receive(std::vector<uint8_t>& packet) override { return inner_.receive(packet); }
+    void keepPeer() override { inner_.keepPeer(); }
+
+private:
+    NetTransport& inner_;
+    uint32_t lag_, loss_;
+    uint32_t now_ = 0;
+    uint32_t seed_ = 1;
+    std::deque<std::pair<uint32_t, std::vector<uint8_t>>> queue_;
+};
+
 struct LogLine {
     long frame;
     uint32_t picture, sound;
@@ -298,7 +347,9 @@ int main(int argc, char** argv) {
     std::string game, png, layers, wav, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir;
     std::string outDir = ".";
     std::vector<std::string> bios, cheats, scripts, lines;
-    long frames = 600, pngEvery = 0;
+    long frames = 600, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
+    bool netHost = false;
+    std::string netJoin;
     bool sixButton = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
     uint32_t expectHash = 0, expectAudio = 0;
     Region region = Region::Auto;
@@ -358,7 +409,21 @@ int main(int argc, char** argv) {
         else if (a == "--expect-hash") hash(&expectHash), haveExpectHash = true;
         else if (a == "--expect-audio") hash(&expectAudio), haveExpectAudio = true;
         else if (a == "--expect-log") expectLog = next();
-        else if (a.size() > 2 && a.compare(0, 2, "--") == 0 && a != "--test-rom" && a != "--pad-test-rom") {
+        else if (a == "--netplay-host") {
+            number(&netPort);
+            if (netPort == 0 || netPort > 65535) missing = true;
+            netHost = true;
+        } else if (a == "--netplay-join") netJoin = next();
+        else if (a == "--net-lag") number(&netLag);
+        else if (a == "--net-loss") {
+            number(&netLoss);
+            if (netLoss > 90) missing = true;
+        } else if (a == "--input-delay") {
+            number(&inputDelay);
+            if (inputDelay > 10) missing = true;
+        }
+        else if (a.size() > 2 && a.compare(0, 2, "--") == 0 && a != "--test-rom" && a != "--pad-test-rom" &&
+                 a != "--two-pad-test-rom") {
             std::fprintf(stderr, "unknown option %s (see --help)\n", a.c_str());
             return 2;
         } else if (!game.empty()) {
@@ -372,6 +437,11 @@ int main(int argc, char** argv) {
     }
     if (game.empty()) {
         std::fputs(kUsage, stderr);
+        return 2;
+    }
+    const bool netplay = netHost || !netJoin.empty();
+    if (netHost && !netJoin.empty()) {
+        std::fprintf(stderr, "--netplay-host and --netplay-join: one side or the other\n");
         return 2;
     }
 
@@ -389,6 +459,13 @@ int main(int argc, char** argv) {
     }
     for (size_t i = 0; i < lines.size(); ++i)
         if (!parseLine(lines[i], static_cast<int>(i + 1), "--do", commands)) return 2;
+
+    if (netplay)
+        for (const Command& c : commands)
+            if (c.kind != Command::Buttons) {
+                std::fprintf(stderr, "script line %d: only buttons can be scripted in netplay\n", c.line);
+                return 2;
+            }
 
     std::vector<LogLine> expected;
     if (!expectLog.empty() && !readLog(expectLog, expected)) {
@@ -423,6 +500,7 @@ int main(int argc, char** argv) {
     }
     if (game == "--test-rom") md.loadRomData(testrom::build());
     else if (game == "--pad-test-rom") md.loadRomData(testrom::buildPadTest());
+    else if (game == "--two-pad-test-rom") md.loadRomData(testrom::buildTwoPadTest());
     else {
         std::string error;
         if (!md.loadRom(game, &error)) {
@@ -496,8 +574,98 @@ int main(int argc, char** argv) {
     long ran = 0;
     bool ioError = false;
 
+    // What happens after each frame is final: the log, the expected log, the sound.
+    auto record = [&](long frame, uint32_t picture, const std::vector<int16_t>& samples) {
+        const uint32_t frameSound = soundHash(2166136261u, samples);
+        audioHash = soundHash(audioHash, samples);
+        if (!wav.empty()) sound.insert(sound.end(), samples.begin(), samples.end());
+        if (log) std::fprintf(log, "%ld %08x %08x\n", frame, picture, frameSound);
+        while (nextExpected < expected.size() && expected[nextExpected].frame < frame) ++nextExpected;
+        if (divergence < 0 && nextExpected < expected.size() && expected[nextExpected].frame == frame) {
+            const LogLine& e = expected[nextExpected];
+            if (e.picture != picture) {
+                divergence = frame;
+                divergenceWhat = "picture " + hex8(picture) + ", expected " + hex8(e.picture);
+            } else if (e.sound != frameSound) {
+                divergence = frame;
+                divergenceWhat = "sound " + hex8(frameSound) + ", expected " + hex8(e.sound);
+            }
+        }
+    };
+
     const auto start = std::chrono::steady_clock::now();
-    for (long frame = 0; frame < frames; ++frame) {
+    std::string netError;
+    long rollbacks = 0;
+    int ping = 0;
+    if (netplay) {
+        UdpTransport udp;
+        bool ok = udp.open(netHost ? static_cast<int>(netPort) : 0) && (netHost || udp.setPeer(netJoin, 7845));
+        if (!ok) netError = udp.error();
+        NetplaySession::Config config;
+        config.inputDelay = static_cast<int>(inputDelay);
+        LaggyTransport link(udp, netLag, netLoss);
+        NetplaySession session(link, netHost ? NetplaySession::Role::Host : NetplaySession::Role::Guest, config);
+        // A frame can run several times (guessed pads, then the right ones): keep the
+        // last run of each, which is final once both sides have its pads.
+        std::vector<std::vector<int16_t>> frameSamples(static_cast<size_t>(frames));
+        std::vector<uint32_t> framePictures(static_cast<size_t>(frames));
+        session.onFrame = [&](uint32_t f, MegaDrive& m) {
+            if (f >= static_cast<uint32_t>(frames)) return;
+            frameSamples[f] = m.audio().samples();
+            framePictures[f] = frameHash(m.frame());
+        };
+        const int port = netHost ? 0 : 1;
+        const auto clockStart = std::chrono::steady_clock::now();
+        auto nowMs = [&] {
+            return static_cast<uint32_t>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - clockStart).count());
+        };
+        uint32_t doneAt = 0;
+        while (ok) {
+            const uint32_t now = nowMs();
+            link.setNow(now);
+            session.poll(md, now);
+            if (session.phase() == NetplaySession::Phase::Ended) {
+                netError = session.endReason();
+                break;
+            }
+            if (session.phase() == NetplaySession::Phase::Waiting && now > 60000) {
+                netError = "nobody joined within a minute";
+                break;
+            }
+            bool advanced = false;
+            if (session.frame() < static_cast<uint32_t>(frames)) {
+                const long n = static_cast<long>(session.frame()) + inputDelay;  // the frame this press lands on
+                PadState pads[2];
+                for (const Command& c : commands)
+                    if (n >= c.first && n <= c.last) orPad(pads[0], c.pad[0]), orPad(pads[1], c.pad[1]);
+                advanced = session.advance(md, pads[port]);
+                rollbacks += session.lastRollback();
+                md.audio().clearSamples();
+            } else {
+                session.catchUp(md);
+                if (session.confirmedFrames() >= static_cast<uint32_t>(frames)) {
+                    // Linger a moment so the other side gets our last pads too.
+                    if (doneAt == 0) doneAt = now;
+                    if (now - doneAt > 1000) break;
+                }
+            }
+            if (!advanced) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        ping = session.pingMs();
+        if (session.desyncFrame() >= 0 && netError.empty())
+            netError = "the two consoles went different on frame " + std::to_string(session.desyncFrame());
+        session.end();
+        if (netError.empty() || session.confirmedFrames() >= static_cast<uint32_t>(frames)) {
+            netError.clear();
+            // The log and the checks, from each frame's final run. md shows the last one.
+            for (long f = 0; f < frames; ++f) {
+                record(f, framePictures[f], frameSamples[f]);
+                ++ran;
+            }
+        }
+    }
+    for (long frame = 0; frame < frames && !netplay; ++frame) {
         bool quit = false;
         PadState pads[2];
         for (const Command& c : commands) {
@@ -513,24 +681,9 @@ int main(int argc, char** argv) {
         md.setPads(pads[0], pads[1]);
         md.runFrame();
         ++ran;
-        const std::vector<int16_t>& samples = md.audio().samples();
-        const uint32_t frameSound = soundHash(2166136261u, samples);
-        audioHash = soundHash(audioHash, samples);
-        if (!wav.empty()) sound.insert(sound.end(), samples.begin(), samples.end());
-        md.audio().clearSamples();
         const uint32_t picture = frameHash(md.frame());
-        if (log) std::fprintf(log, "%ld %08x %08x\n", frame, picture, frameSound);
-        while (nextExpected < expected.size() && expected[nextExpected].frame < frame) ++nextExpected;
-        if (divergence < 0 && nextExpected < expected.size() && expected[nextExpected].frame == frame) {
-            const LogLine& e = expected[nextExpected];
-            if (e.picture != picture) {
-                divergence = frame;
-                divergenceWhat = "picture " + hex8(picture) + ", expected " + hex8(e.picture);
-            } else if (e.sound != frameSound) {
-                divergence = frame;
-                divergenceWhat = "sound " + hex8(frameSound) + ", expected " + hex8(e.sound);
-            }
-        }
+        record(frame, picture, md.audio().samples());
+        md.audio().clearSamples();
         if (pngEvery > 0 && frame % pngEvery == 0 && !screenshot("", frame)) ioError = true;
         for (const Command& c : commands) {
             if (frame < c.first || frame > c.last) continue;
@@ -544,6 +697,10 @@ int main(int argc, char** argv) {
             }
         }
         if (quit) break;
+    }
+    if (!netError.empty()) {
+        std::fprintf(stderr, "netplay: %s\n", netError.c_str());
+        return 1;
     }
     const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     if (log) std::fclose(log);
@@ -580,6 +737,7 @@ int main(int argc, char** argv) {
         std::printf("audio hash: %08x\npc: %06x\n", audioHash, md.cpu().pc);
         if (md.isMegaCd()) std::printf("sub pc: %06x\n", md.megaCd()->sub().pc);
         std::printf("speed: %.0f fps (%.1fx)\n", fps, fps / md.refreshRate());
+        if (netplay) std::printf("netplay: %ld frames run again, ping %d ms\n", rollbacks, ping);
         for (const std::string& s : failures) std::printf("FAILED: %s\n", s.c_str());
     }
     if (!json.empty()) {
@@ -589,8 +747,9 @@ int main(int argc, char** argv) {
           << ",\n  \"width\": " << f.width << ",\n  \"height\": " << f.height << ",\n  \"hash\": \"" << hex8(lastHash)
           << "\",\n  \"audio_hash\": \"" << hex8(audioHash) << "\",\n  \"pc\": \"" << hex8(md.cpu().pc) << "\"";
         if (md.isMegaCd()) j << ",\n  \"sub_pc\": \"" << hex8(md.megaCd()->sub().pc) << "\"";
-        j << ",\n  \"fps\": " << static_cast<long>(fps) << ",\n  \"divergence\": " << divergence
-          << ",\n  \"failures\": [";
+        j << ",\n  \"fps\": " << static_cast<long>(fps) << ",\n  \"divergence\": " << divergence;
+        if (netplay) j << ",\n  \"netplay_rollback_frames\": " << rollbacks << ",\n  \"netplay_ping_ms\": " << ping;
+        j << ",\n  \"failures\": [";
         for (size_t i = 0; i < failures.size(); ++i) j << (i ? ", " : "") << jsonString(failures[i]);
         j << "]\n}\n";
         if (json == "-") std::fputs(j.str().c_str(), stdout);

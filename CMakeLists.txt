@@ -95,16 +95,24 @@ add_library(plumsg_core STATIC
   src/core/mars.cpp
   src/core/cd_image.cpp
   src/core/megacd.cpp
+  src/core/netplay.cpp
   src/render/planes.cpp
   src/render/profile3d.cpp
 )
 target_include_directories(plumsg_core PUBLIC src src/core)
 target_link_libraries(plumsg_core PUBLIC plumsg_miniz PRIVATE plumsg_ymfm chdr-static)
 
+# UDP sockets for netplay (the session itself is in the core).
+add_library(plumsg_net STATIC src/net/udp.cpp)
+target_link_libraries(plumsg_net PUBLIC plumsg_core)
+if(WIN32)
+  target_link_libraries(plumsg_net PUBLIC ws2_32)
+endif()
+
 # The emulator without a window, for tests, CI and reproducing bugs (see --help).
 add_executable(plumsg-headless src/headless/main.cpp)
 target_include_directories(plumsg-headless PRIVATE tests)
-target_link_libraries(plumsg-headless PRIVATE plumsg_core)
+target_link_libraries(plumsg-headless PRIVATE plumsg_core plumsg_net)
 
 # Everything below up to endif() is the windowed emulator.
 if(PLUMSG_BUILD_FRONTEND)
@@ -160,7 +168,7 @@ add_executable(plumsg WIN32
 # stb_image (public domain / MIT, vendored) decodes the library's PNG and JPEG covers.
 target_include_directories(plumsg PRIVATE third_party/stb)
 find_package(Threads REQUIRED)
-target_link_libraries(plumsg PRIVATE plumsg_core plumsg_imgui Threads::Threads)
+target_link_libraries(plumsg PRIVATE plumsg_core plumsg_net plumsg_imgui Threads::Threads)
 if(TARGET SDL2::SDL2main)
   target_link_libraries(plumsg PRIVATE SDL2::SDL2main)
 endif()
