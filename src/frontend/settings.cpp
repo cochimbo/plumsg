@@ -1,5 +1,6 @@
 #include "settings.h"
 
+#include "../core/system.h"
 #include "../render/profile3d.h"
 
 #include <algorithm>
@@ -30,6 +31,8 @@ bool yes(const std::string& v) {
 constexpr const char* kScaleNames[] = {"entero", "ajustar", "estirar"};
 constexpr const char* kFilterNames[] = {"ninguno", "scanlines", "crt"};
 constexpr const char* kRegionNames[] = {"auto", "japon", "usa", "europa"};
+constexpr const char* kSystemKeys[] = {"megadrive", "32x", "megacd"};
+constexpr const char* kBiosKeys[] = {"megacd_japon", "megacd_usa", "megacd_europa"};
 
 }  // namespace
 
@@ -93,8 +96,18 @@ Settings Settings::load(const std::string& path) {
         } else if (section == "estados") {
             if (key == "ranura") s.stateSlot = std::clamp(std::atoi(value.c_str()), 0, 9);
         } else if (section == "biblioteca") {
-            if (key == "carpeta") s.libraryFolder = value;
-            else if (key == "abrir_al_empezar") s.libraryAtStart = yes(value);
+            if (key == "carpeta") {
+                if (!value.empty() && std::find(s.libraryFolders.begin(), s.libraryFolders.end(), value) == s.libraryFolders.end())
+                    s.libraryFolders.push_back(value);
+            } else if (key == "abrir_al_empezar") s.libraryAtStart = yes(value);
+            else if (key == "sistema") {
+                s.librarySystem = -1;
+                for (int i = 0; i < kSystemCount; ++i)
+                    if (lower(value) == kSystemKeys[i]) s.librarySystem = i;
+            }
+        } else if (section == "bios") {
+            for (int i = 0; i < 3; ++i)
+                if (key == kBiosKeys[i]) s.cdBios[static_cast<size_t>(i)] = value;
         } else if (section == "recientes") {
             if (key == "rom" && !value.empty() && s.recent.size() < kMaxRecent) s.recent.push_back(value);
             else if (key == "ultima_carpeta") s.lastFolder = value;
@@ -141,9 +154,15 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "# ranura: la ranura de estado activa, de 0 a 9.\n"
         << "ranura = " << stateSlot << "\n"
         << "\n[biblioteca]\n"
-        << "# carpeta: donde están tus ROMs. abrir_al_empezar: mostrar la biblioteca al abrir plumsg sin juego.\n"
-        << "carpeta = " << libraryFolder << "\n"
-        << "abrir_al_empezar = " << flag(libraryAtStart) << "\n"
+        << "# carpeta: donde están tus juegos (una línea por carpeta). abrir_al_empezar: mostrar la biblioteca\n"
+        << "# al abrir plumsg sin juego. sistema: pestaña elegida (todos, megadrive, 32x o megacd).\n";
+    for (const auto& f : libraryFolders) out << "carpeta = " << f << "\n";
+    out << "abrir_al_empezar = " << flag(libraryAtStart) << "\n"
+        << "sistema = " << (librarySystem >= 0 && librarySystem < kSystemCount ? kSystemKeys[librarySystem] : "todos") << "\n"
+        << "\n[bios]\n"
+        << "# Las BIOS del Mega CD de cada región (no vienen con plumsg).\n";
+    for (int i = 0; i < 3; ++i) out << kBiosKeys[i] << " = " << cdBios[static_cast<size_t>(i)] << "\n";
+    out
         << "\n[recientes]\n";
     if (!lastFolder.empty()) out << "ultima_carpeta = " << lastFolder << "\n";
     for (const auto& r : recent) out << "rom = " << r << "\n";

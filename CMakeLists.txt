@@ -60,6 +60,7 @@ add_library(plumsg_core STATIC
   src/core/megadrive.cpp
   src/core/rewind.cpp
   src/core/cheats.cpp
+  src/core/system.cpp
   src/render/planes.cpp
   src/render/profile3d.cpp
 )

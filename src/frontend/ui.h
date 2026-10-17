@@ -2,10 +2,12 @@
 
 #include <SDL.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
 #include "../core/cheats.h"
+#include "../core/system.h"
 #include "file_dialog.h"
 #include "input.h"
 #include "library.h"
@@ -78,6 +80,7 @@ public:
     // The game library: a grid of covers that the pad (or the keyboard) can drive.
     void toggleLibrary();
     bool libraryOpen() const { return showLibrary_; }
+    void openBios() { showBios_ = true; }
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
     // The states menu: a list of the slots that the pad (or the keyboard) can drive.
@@ -99,6 +102,9 @@ private:
     void drawAbout();
     void drawCheats(const UiState& state, UiActions& out);
     void drawLibrary(UiActions& out);
+    void drawLibraryFolders(UiActions& out);
+    void drawBios(UiActions& out);
+    void rescanLibrary();
     bool handleLibrary(const SDL_Event& e);
     std::vector<size_t> visibleGames();
     void drawStateMenu(const UiState& state);
@@ -117,6 +123,14 @@ private:
     bool showAbout_ = false;
     bool showCheats_ = false;
     bool showLibrary_ = false;
+    bool showBios_ = false;
+    bool showFolders_ = false;  // the library's list of folders, unfolded
+    // What the file browser (or the system dialog) is choosing a file or folder for.
+    enum class BrowseFor { Game, LibraryFolder, CdBios };
+    BrowseFor browseFor_ = BrowseFor::Game;
+    int biosSlot_ = 0;  // the region whose BIOS is being chosen
+    std::string biosStatus_;
+    std::map<std::string, BiosInfo> biosChecked_;  // what each chosen file looks like, read once
     bool openRequested_ = false;
     bool pendingSave_ = false;  // a binding changed outside frame()
     bool peekMenu_ = false;  // menu bar hidden but shown while the mouse is at the top
@@ -135,6 +149,7 @@ private:
         bool scroll = false;
         bool focusSearch = false;
         int load = -1;         // index into the filtered list chosen this frame
+        bool tabChanged = false;  // the console tab was changed with the pad or the keyboard
         char search[96] = "";
     } libraryView_;
     char cheatCode_[64] = "";
