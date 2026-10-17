@@ -6,6 +6,7 @@
 #include <iterator>
 #include <system_error>
 
+#include "../core/system.h"
 #include "imgui.h"
 
 #ifdef _WIN32
@@ -22,11 +23,6 @@ namespace fs = std::filesystem;
 
 namespace {
 
-bool isRom(const fs::path& p) {
-    std::string ext = p.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".md" || ext == ".gen" || ext == ".smd" || ext == ".bin" || ext == ".zip";
-}
 
 #ifdef _WIN32
 std::wstring widen(const std::string& s) {
@@ -49,7 +45,7 @@ std::string narrow(const wchar_t* w) {
 
 }  // namespace
 
-DialogResult openRomDialog(SDL_Window* window, const std::string& startFolder, std::string* chosen) {
+DialogResult openFileDialog(SDL_Window* window, const std::string& startFolder, Pick pick, std::string* chosen) {
 #ifdef _WIN32
     HWND owner = nullptr;
     SDL_SysWMinfo info;
@@ -61,11 +57,14 @@ DialogResult openRomDialog(SDL_Window* window, const std::string& startFolder, s
     OPENFILENAMEW ofn{};
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = owner;
-    ofn.lpstrFilter = L"ROMs de Mega Drive (*.md, *.gen, *.smd, *.bin, *.zip)\0*.md;*.gen;*.smd;*.bin;*.zip\0Todos los archivos\0*.*\0";
+    ofn.lpstrFilter = pick == Pick::Game
+                          ? L"Juegos (*.md, *.gen, *.smd, *.bin, *.32x, *.zip, *.cue, *.chd, *.iso)\0"
+                            L"*.md;*.gen;*.smd;*.bin;*.32x;*.zip;*.cue;*.chd;*.iso\0Todos los archivos\0*.*\0"
+                          : L"Todos los archivos\0*.*\0";
     ofn.lpstrFile = file;
     ofn.nMaxFile = static_cast<DWORD>(std::size(file));
     ofn.lpstrInitialDir = folder.empty() ? nullptr : folder.c_str();
-    ofn.lpstrTitle = L"Abrir ROM";
+    ofn.lpstrTitle = pick == Pick::Game ? L"Abrir juego" : L"Elegir archivo";
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
     if (!GetOpenFileNameW(&ofn)) return DialogResult::Cancelled;
     *chosen = narrow(file);
@@ -73,16 +72,17 @@ DialogResult openRomDialog(SDL_Window* window, const std::string& startFolder, s
 #else
     (void)window;
     (void)startFolder;
+    (void)pick;
     (void)chosen;
     return DialogResult::Unavailable;
 #endif
 }
 
-void FileBrowser::open(const std::string& folder, bool pickFolder) {
+void FileBrowser::open(const std::string& folder, Pick pick) {
     std::error_code ec;
     fs::path start = folder.empty() ? fs::current_path(ec) : fs::u8path(folder);
     if (!fs::is_directory(start, ec)) start = fs::current_path(ec);
-    pickFolder_ = pickFolder;
+    pick_ = pick;
     list(start.u8string());
     open_ = true;
     justOpened_ = true;
@@ -98,7 +98,8 @@ void FileBrowser::list(const std::string& folder) {
     for (fs::directory_iterator it(fs::u8path(folder), fs::directory_options::skip_permission_denied, ec), end;
          !ec && it != end; it.increment(ec)) {
         const bool dir = it->is_directory(ec);
-        if (dir || (!pickFolder_ && isRom(it->path()))) entries_.push_back({it->path().filename().u8string(), dir});
+        const bool wanted = pick_ == Pick::AnyFile || (pick_ == Pick::Game && isGameFile(it->path().u8string()));
+        if (dir || wanted) entries_.push_back({it->path().filename().u8string(), dir});
     }
     std::sort(entries_.begin(), entries_.end(), [](const Entry& a, const Entry& b) {
         return a.folder != b.folder ? a.folder : a.name < b.name;
@@ -172,7 +173,8 @@ bool FileBrowser::handleEvent(const SDL_Event& e) {
 }
 
 bool FileBrowser::draw(std::string* chosen) {
-    const char* title = pickFolder_ ? "Elegir carpeta" : "Abrir ROM";
+    const bool pickFolder = pick_ == Pick::Folder;
+    const char* title = pickFolder ? "Elegir carpeta" : pick_ == Pick::Game ? "Abrir juego" : "Elegir archivo";
     if (justOpened_) {
         ImGui::OpenPopup(title);
         justOpened_ = false;
@@ -186,7 +188,7 @@ bool FileBrowser::draw(std::string* chosen) {
     if (ImGui::BeginPopupModal(title, &open_)) {
         ImGui::TextWrapped("%s", drives_ ? "Unidades" : folder_.c_str());
         if (ImGui::Button("Subir")) up();
-        if (pickFolder_ && !drives_) {
+        if (pickFolder && !drives_) {
             ImGui::SameLine();
             if (ImGui::Button("Usar esta carpeta")) {
                 *chosen = folder_;
@@ -194,7 +196,7 @@ bool FileBrowser::draw(std::string* chosen) {
             }
         }
         ImGui::SameLine();
-        ImGui::TextDisabled(pickFolder_ ? "A / Intro: entrar   B / Retroceso: subir   Esc: cerrar"
+        ImGui::TextDisabled(pickFolder ? "A / Intro: entrar   B / Retroceso: subir   Esc: cerrar"
                                         : "A / Intro: abrir   B / Retroceso: subir   Esc: cerrar");
         ImGui::Separator();
         std::string next;
@@ -224,7 +226,7 @@ bool FileBrowser::draw(std::string* chosen) {
                 ImGui::PopID();
             }
             if (entries_.empty())
-                ImGui::TextDisabled(pickFolder_ ? "No hay carpetas dentro de esta." : "No hay ROMs en esta carpeta.");
+                ImGui::TextDisabled(pickFolder ? "No hay carpetas dentro de esta." : "No hay ROMs en esta carpeta.");
         }
         ImGui::EndChild();
         if (activate_) {

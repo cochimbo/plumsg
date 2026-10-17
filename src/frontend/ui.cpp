@@ -7,6 +7,7 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 #include "library_names.h"
+#include "../core/system.h"
 
 namespace plumsg {
 
@@ -182,7 +183,8 @@ UiActions Ui::frame(const UiState& state) {
         // In full screen the system dialog can open behind the game's window and never
         // be seen, so there the built-in browser is used instead.
         const bool fullscreen = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
-        switch (fullscreen ? DialogResult::Unavailable : openRomDialog(window_, settings_.lastFolder, &path)) {
+        browseFor_ = BrowseFor::Game;
+        switch (fullscreen ? DialogResult::Unavailable : openFileDialog(window_, settings_.lastFolder, Pick::Game, &path)) {
             case DialogResult::Chosen: out.load = path; break;
             case DialogResult::Cancelled: break;
             case DialogResult::Unavailable: browser_.open(settings_.lastFolder); break;
@@ -200,21 +202,28 @@ UiActions Ui::frame(const UiState& state) {
     if (showCheats_) drawCheats(state, out);
     library_.update();
     if (showLibrary_) drawLibrary(out);
+    if (showBios_) drawBios(out);
     stateMenu_.slots = static_cast<int>(state.slots.size());
     if (stateMenu_.load >= 0) out.loadState = stateMenu_.load;
     if (stateMenu_.save >= 0) out.saveState = stateMenu_.save;
     stateMenu_.load = stateMenu_.save = -1;
     if (stateMenu_.open) drawStateMenu(state);
     std::string picked;
-    const bool pickingFolder = browser_.pickingFolder();
     if (browser_.draw(&picked)) {
-        if (pickingFolder) {
-            settings_.libraryFolder = picked;
-            out.settingsChanged = true;
-            library_.scan(picked);
-            libraryView_.selected = 0;
-        } else {
-            out.load = picked;
+        switch (browseFor_) {
+            case BrowseFor::Game: out.load = picked; break;
+            case BrowseFor::LibraryFolder:
+                if (std::find(settings_.libraryFolders.begin(), settings_.libraryFolders.end(), picked) ==
+                    settings_.libraryFolders.end())
+                    settings_.libraryFolders.push_back(picked);
+                out.settingsChanged = true;
+                rescanLibrary();
+                break;
+            case BrowseFor::CdBios: {
+                settings_.cdBios[static_cast<size_t>(biosSlot_)] = picked;
+                out.settingsChanged = true;
+                break;
+            }
         }
     }
     drawOverlays(state);
@@ -322,6 +331,8 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
                 }
             ImGui::PopID();
         }
+        ImGui::Separator();
+        if (ImGui::MenuItem("BIOS del Mega CD...", nullptr, showBios_)) showBios_ = true;
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Opciones")) {
@@ -734,10 +745,13 @@ void Ui::drawOverlays(const UiState& state) {
 void Ui::toggleLibrary() {
     showLibrary_ = !showLibrary_;
     if (!showLibrary_) return;
-    if (!library_.scanned() || library_.folder() != settings_.libraryFolder) {
-        library_.scan(settings_.libraryFolder);
-        libraryView_.selected = 0;
-    }
+    if (!library_.scanned() || library_.folders() != settings_.libraryFolders) rescanLibrary();
+    libraryView_.scroll = true;
+}
+
+void Ui::rescanLibrary() {
+    library_.scan(settings_.libraryFolders);
+    libraryView_.selected = 0;
     libraryView_.scroll = true;
 }
 
@@ -745,18 +759,22 @@ std::vector<size_t> Ui::visibleGames() {
     const std::string filter = searchKey(libraryView_.search);
     std::vector<size_t> out;
     const auto& games = library_.games();
-    for (size_t i = 0; i < games.size(); ++i)
+    for (size_t i = 0; i < games.size(); ++i) {
+        if (settings_.librarySystem >= 0 && static_cast<int>(games[i].system) != settings_.librarySystem) continue;
         if (filter.empty() || games[i].key.find(filter) != std::string::npos) out.push_back(i);
+    }
     return out;
 }
 
 // While the library is open it owns the pad and the keyboard (except while typing in
 // the search box): the arrows move through the grid, A (or Enter) plays the game, B
-// (or Esc) closes it, Y (or Ctrl+F) goes to the search box.
+// (or Esc) closes it, Y (or Ctrl+F) goes to the search box, and the shoulder buttons
+// (or Page Up and Page Down) change the console tab.
 bool Ui::handleLibrary(const SDL_Event& e) {
     if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_KEYUP &&
         e.type != SDL_CONTROLLERBUTTONUP && e.type != SDL_TEXTINPUT)
         return false;
+    if (browser_.isOpen() || showBios_) return false;
     const bool typing = ImGui::GetIO().WantTextInput;
     if (typing && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_CONTROLLERBUTTONUP) {
         // The search box gets the keys; Enter or the arrows hand them back to the grid.
@@ -773,7 +791,7 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         showLibrary_ = false;
         return true;
     }
-    enum { None, Up, Down, Left, Right, Play, Close, Search } action = None;
+    enum { None, Up, Down, Left, Right, Play, Close, Search, PrevTab, NextTab } action = None;
     if (e.type == SDL_KEYDOWN) {
         const bool ctrl = (e.key.keysym.mod & KMOD_CTRL) != 0;
         switch (e.key.keysym.scancode) {
@@ -783,6 +801,8 @@ bool Ui::handleLibrary(const SDL_Event& e) {
             case SDL_SCANCODE_RIGHT: action = Right; break;
             case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: action = Play; break;
             case SDL_SCANCODE_ESCAPE: action = Close; break;
+            case SDL_SCANCODE_PAGEUP: action = PrevTab; break;
+            case SDL_SCANCODE_PAGEDOWN: action = NextTab; break;
             case SDL_SCANCODE_F: if (ctrl) action = Search; break;
             default: return false;  // let ImGui have the rest (clicks on buttons, Tab...)
         }
@@ -795,8 +815,21 @@ bool Ui::handleLibrary(const SDL_Event& e) {
             case SDL_CONTROLLER_BUTTON_A: case SDL_CONTROLLER_BUTTON_START: action = Play; break;
             case SDL_CONTROLLER_BUTTON_B: action = Close; break;
             case SDL_CONTROLLER_BUTTON_Y: action = Search; break;
+            case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: action = PrevTab; break;
+            case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: action = NextTab; break;
             default: break;
         }
+    }
+    if (action == PrevTab || action == NextTab) {
+        // Tabs: -1 (all), then each console; wraps around.
+        int tab = settings_.librarySystem + 1 + (action == NextTab ? 1 : -1);
+        tab = (tab + kSystemCount + 1) % (kSystemCount + 1);
+        settings_.librarySystem = tab - 1;
+        libraryView_.selected = 0;
+        libraryView_.scroll = true;
+        libraryView_.tabChanged = true;
+        pendingSave_ = true;
+        return true;
     }
     const int count = static_cast<int>(visibleGames().size());
     const int cols = std::max(1, libraryView_.columns);
@@ -809,11 +842,32 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         case Play: if (count > 0) libraryView_.load = sel; break;
         case Close: showLibrary_ = false; break;
         case Search: libraryView_.focusSearch = true; break;
-        case None: break;
+        default: break;
     }
     sel = std::clamp(sel, 0, std::max(0, count - 1));
     libraryView_.scroll = action == Up || action == Down || action == Left || action == Right;
     return true;
+}
+
+// The library's folders: each with a button to take it out, and one to add another.
+void Ui::drawLibraryFolders(UiActions& out) {
+    int remove = -1;
+    for (int i = 0; i < static_cast<int>(settings_.libraryFolders.size()); ++i) {
+        ImGui::PushID(i);
+        if (ImGui::SmallButton("Quitar")) remove = i;
+        ImGui::SameLine();
+        ImGui::TextUnformatted(settings_.libraryFolders[static_cast<size_t>(i)].c_str());
+        ImGui::PopID();
+    }
+    if (remove >= 0) {
+        settings_.libraryFolders.erase(settings_.libraryFolders.begin() + remove);
+        out.settingsChanged = true;
+        rescanLibrary();
+    }
+    if (ImGui::Button("Añadir carpeta...")) {
+        browseFor_ = BrowseFor::LibraryFolder;
+        browser_.open(settings_.libraryFolders.empty() ? settings_.lastFolder : settings_.libraryFolders.back(), Pick::Folder);
+    }
 }
 
 void Ui::drawLibrary(UiActions& out) {
@@ -828,21 +882,35 @@ void Ui::drawLibrary(UiActions& out) {
         ImGui::End();
         return;
     }
+    if (pendingSave_) {
+        out.settingsChanged = true;
+        pendingSave_ = false;
+    }
     auto& games = library_.games();
 
-    if (settings_.libraryFolder.empty()) {
+    if (settings_.libraryFolders.empty()) {
         ImGui::Spacing();
-        ImGui::TextUnformatted("Elige la carpeta donde tienes tus ROMs de Mega Drive.");
-        ImGui::TextDisabled("Se buscan también en sus subcarpetas.");
-        if (ImGui::Button("Elegir carpeta...")) browser_.open(settings_.lastFolder, true);
+        ImGui::TextUnformatted("Elige la carpeta donde tienes tus juegos de Mega Drive, 32X o Mega CD.");
+        ImGui::TextDisabled("Se buscan también en sus subcarpetas, y luego puedes añadir más carpetas.");
+        if (ImGui::Button("Elegir carpeta...")) {
+            browseFor_ = BrowseFor::LibraryFolder;
+            browser_.open(settings_.lastFolder, Pick::Folder);
+        }
         ImGui::End();
         return;
     }
 
-    ImGui::TextDisabled("Carpeta: %s", settings_.libraryFolder.c_str());
-    if (ImGui::Button("Cambiar carpeta...")) browser_.open(settings_.libraryFolder, true);
-    ImGui::SameLine();
-    if (ImGui::Button("Volver a buscar")) library_.scan(settings_.libraryFolder);
+    const std::string foldersLabel = settings_.libraryFolders.size() == 1
+                                         ? "Carpeta: " + settings_.libraryFolders[0]
+                                         : std::to_string(settings_.libraryFolders.size()) + " carpetas";
+    if (ImGui::TreeNodeEx("carpetas", showFolders_ ? ImGuiTreeNodeFlags_DefaultOpen : 0, "%s", foldersLabel.c_str())) {
+        showFolders_ = true;
+        drawLibraryFolders(out);
+        ImGui::TreePop();
+    } else {
+        showFolders_ = false;
+    }
+    if (ImGui::Button("Volver a buscar")) rescanLibrary();
     ImGui::SameLine();
     int missing = 0;
     for (const auto& g : games) missing += g.cover == Library::Cover::Missing;
@@ -850,11 +918,37 @@ void Ui::drawLibrary(UiActions& out) {
     if (ImGui::Button("Descargar carátulas que faltan")) library_.downloadMissing();
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("Busca las carátulas en libretro-thumbnails (internet) por el nombre de cada ROM\n"
+        ImGui::SetTooltip("Busca las carátulas en libretro-thumbnails (internet) por el nombre de cada juego\n"
                           "y las guarda en la carpeta caratulas de plumsg. También puedes poner tus\n"
-                          "propias imágenes: un .png o .jpg con el mismo nombre que la ROM, a su lado.");
+                          "propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado.");
+    ImGui::SameLine();
+    if (ImGui::Button("BIOS del Mega CD...")) showBios_ = true;
     ImGui::SameLine();
     if (ImGui::Checkbox("Abrir la biblioteca al empezar", &settings_.libraryAtStart)) out.settingsChanged = true;
+
+    // One tab per console, with how many games each has.
+    int counts[kSystemCount] = {};
+    for (const auto& g : games) ++counts[static_cast<int>(g.system)];
+    if (ImGui::BeginTabBar("sistemas")) {
+        for (int tab = -1; tab < kSystemCount; ++tab) {
+            const int n = tab < 0 ? static_cast<int>(games.size()) : counts[tab];
+            const std::string label = std::string(tab < 0 ? "Todos" : systemName(static_cast<ConsoleSystem>(tab))) +
+                                      " (" + std::to_string(n) + ")###tab" + std::to_string(tab);
+            // Tabs changed with the pad or the keyboard are selected by hand.
+            const ImGuiTabItemFlags f =
+                libraryView_.tabChanged && settings_.librarySystem == tab ? ImGuiTabItemFlags_SetSelected : 0;
+            if (ImGui::BeginTabItem(label.c_str(), nullptr, f)) {
+                if (!libraryView_.tabChanged && settings_.librarySystem != tab) {
+                    settings_.librarySystem = tab;
+                    libraryView_.selected = 0;
+                    out.settingsChanged = true;
+                }
+                ImGui::EndTabItem();
+            }
+        }
+        libraryView_.tabChanged = false;
+        ImGui::EndTabBar();
+    }
 
     if (libraryView_.focusSearch) {
         ImGui::SetKeyboardFocusHere();
@@ -864,14 +958,15 @@ void Ui::drawLibrary(UiActions& out) {
     if (ImGui::InputTextWithHint("##buscar", "Buscar (Ctrl+F o Y)", libraryView_.search, sizeof libraryView_.search))
         libraryView_.selected = 0;
     ImGui::SameLine();
-    if (library_.pending() > 0) ImGui::Text("%d juegos. Buscando carátulas, quedan %d...", static_cast<int>(games.size()), library_.pending());
-    else ImGui::Text("%d juegos. %s", static_cast<int>(games.size()), library_.downloadStatus().c_str());
-    ImGui::TextDisabled("Flechas o cruceta: elegir   A o Intro: jugar   B o Esc: cerrar");
+    const std::vector<size_t> visible = visibleGames();
+    if (library_.pending() > 0) ImGui::Text("%d juegos. Buscando carátulas, quedan %d...", static_cast<int>(visible.size()), library_.pending());
+    else ImGui::Text("%d juegos. %s", static_cast<int>(visible.size()), library_.downloadStatus().c_str());
+    ImGui::TextDisabled("Flechas o cruceta: elegir   A o Intro: jugar   B o Esc: cerrar   L / R o RePág / AvPág: consola");
     ImGui::Separator();
 
-    const std::vector<size_t> visible = visibleGames();
-    if (games.empty()) ImGui::TextDisabled("No hay ROMs (.md, .bin, .gen, .smd, .zip) en esta carpeta.");
-    else if (visible.empty()) ImGui::TextDisabled("Ningún juego coincide con la búsqueda.");
+    if (games.empty()) ImGui::TextDisabled("No hay juegos (.md, .bin, .gen, .smd, .32x, .zip, .cue, .chd, .iso) en estas carpetas.");
+    else if (visible.empty() && libraryView_.search[0]) ImGui::TextDisabled("Ningún juego coincide con la búsqueda.");
+    else if (visible.empty()) ImGui::TextDisabled("No hay juegos de esta consola en tus carpetas.");
 
     const float coverW = 150.0f, coverH = 210.0f;
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -892,12 +987,12 @@ void Ui::drawLibrary(UiActions& out) {
             libraryView_.selected = n;
             if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) libraryView_.load = n;
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g.path.c_str());
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s\n%s", systemName(g.system), g.path.c_str());
         if (selected && libraryView_.scroll) {
             ImGui::SetScrollHereY(0.5f);
             libraryView_.scroll = false;
         }
-        // The cover, fitted into its box; a plain box with the name if there is none.
+        // The cover, fitted into its box; a plain box with the console's name if there is none.
         const ImVec2 box(pos.x + 6, pos.y + 6);
         if (g.texture && g.height > 0) {
             float w = coverW, h = coverW * static_cast<float>(g.height) / static_cast<float>(g.width);
@@ -909,10 +1004,19 @@ void Ui::drawLibrary(UiActions& out) {
             draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h));
         } else {
             draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(40, 44, 56, 255), 4.0f);
-            const char* label = g.cover == Library::Cover::Pending ? "..." : "Mega Drive";
+            const char* label = g.cover == Library::Cover::Pending ? "..." : systemName(g.system);
             const ImVec2 size = ImGui::CalcTextSize(label);
             draw->AddText(ImVec2(box.x + (coverW - size.x) * 0.5f, box.y + (coverH - size.y) * 0.5f),
                           IM_COL32(140, 146, 160, 255), label);
+        }
+        // On the "Todos" tab, a badge on 32X and Mega CD covers says which console.
+        if (settings_.librarySystem < 0 && g.system != ConsoleSystem::MegaDrive) {
+            const char* badge = systemName(g.system);
+            const ImVec2 size = ImGui::CalcTextSize(badge);
+            const ImVec2 b0(box.x + coverW - size.x - 10, box.y + 4);
+            const ImU32 colour = g.system == ConsoleSystem::Mega32X ? IM_COL32(200, 60, 50, 230) : IM_COL32(40, 110, 200, 230);
+            draw->AddRectFilled(b0, ImVec2(b0.x + size.x + 8, b0.y + size.y + 4), colour, 3.0f);
+            draw->AddText(ImVec2(b0.x + 4, b0.y + 2), IM_COL32(255, 255, 255, 255), badge);
         }
         if (selected)
             draw->AddRect(ImVec2(pos.x + 2, pos.y + 2), ImVec2(pos.x + card.x - 2, pos.y + card.y - 2),
@@ -930,6 +1034,104 @@ void Ui::drawLibrary(UiActions& out) {
         showLibrary_ = false;
     }
     libraryView_.load = -1;
+    ImGui::End();
+}
+
+// The Mega CD BIOS of each region. plumsg cannot include them: they are Sega's.
+void Ui::drawBios(UiActions& out) {
+    ImGui::SetNextWindowSize(ImVec2(680, 0), ImGuiCond_Appearing);
+    if (!ImGui::Begin("BIOS del Mega CD", &showBios_)) {
+        ImGui::End();
+        return;
+    }
+    if (ImGui::IsWindowAppearing()) biosChecked_.clear();  // the files may have changed meanwhile
+    ImGui::TextWrapped("El Mega CD necesita la BIOS de la consola para arrancar los discos, y plumsg no la "
+                       "incluye. Indica dónde tienes la de cada región (un archivo de 128 KB, como "
+                       "bios_CD_U.bin); cada disco usa la de su región.");
+    ImGui::Spacing();
+    static const char* regionNames[3] = {"Japón (Mega-CD)", "EE. UU. (Sega CD)", "Europa (Mega-CD)"};
+    static const Region regions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
+    if (ImGui::BeginTable("bios", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
+        ImGui::TableSetupColumn("Región", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Archivo");
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableHeadersRow();
+        for (int i = 0; i < 3; ++i) {
+            std::string& path = settings_.cdBios[static_cast<size_t>(i)];
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(regionNames[i]);
+            ImGui::TableNextColumn();
+            if (path.empty()) {
+                ImGui::TextDisabled("Sin elegir");
+            } else {
+                ImGui::TextUnformatted(fileName(path).c_str());
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", path.c_str());
+                auto checked = biosChecked_.find(path);
+                if (checked == biosChecked_.end()) checked = biosChecked_.emplace(path, identifyCdBiosFile(path)).first;
+                const BiosInfo& info = checked->second;
+                if (!info.valid) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "No parece una BIOS: %s", info.problem.c_str());
+                } else if (info.region != Region::Auto && info.region != regions[i]) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Parece de otra región");
+                } else {
+                    ImGui::TextColored(ImVec4(0.5f, 0.9f, 0.5f, 1.0f), "Correcta%s%s", info.name.empty() ? "" : ": ",
+                                       info.name.c_str());
+                }
+            }
+            ImGui::TableNextColumn();
+            if (ImGui::Button("Elegir...")) {
+                biosSlot_ = i;
+                browseFor_ = BrowseFor::CdBios;
+                std::string start = path.empty() ? (settings_.libraryFolders.empty() ? settings_.lastFolder
+                                                                                     : settings_.libraryFolders[0])
+                                                 : path.substr(0, path.find_last_of("/\\"));
+                std::string chosen;
+                const bool fullscreen = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+                switch (fullscreen ? DialogResult::Unavailable : openFileDialog(window_, start, Pick::AnyFile, &chosen)) {
+                    case DialogResult::Chosen:
+                        path = chosen;
+                        out.settingsChanged = true;
+                        break;
+                    case DialogResult::Cancelled: break;
+                    case DialogResult::Unavailable: browser_.open(start, Pick::AnyFile); break;
+                }
+            }
+            if (!path.empty()) {
+                ImGui::SameLine();
+                if (ImGui::Button("Quitar")) {
+                    path.clear();
+                    out.settingsChanged = true;
+                }
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    ImGui::Spacing();
+    ImGui::BeginDisabled(settings_.libraryFolders.empty());
+    if (ImGui::Button("Buscar en las carpetas de la biblioteca")) {
+        const std::array<std::string, 3> found = findCdBios(settings_.libraryFolders);
+        int added = 0;
+        for (size_t i = 0; i < 3; ++i)
+            if (!found[i].empty() && found[i] != settings_.cdBios[i]) {
+                settings_.cdBios[i] = found[i];
+                ++added;
+            }
+        if (added) out.settingsChanged = true;
+        const int total = static_cast<int>(!found[0].empty()) + !found[1].empty() + !found[2].empty();
+        biosStatus_ = total == 0 ? "No se ha encontrado ninguna BIOS del Mega CD en esas carpetas."
+                                 : "Encontradas " + std::to_string(total) + " de 3.";
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Busca archivos de 128 KB con la cabecera de la BIOS del Mega CD en las carpetas\n"
+                          "de la biblioteca y sus subcarpetas, y elige una para cada región.");
+    if (!biosStatus_.empty()) {
+        ImGui::SameLine();
+        ImGui::TextUnformatted(biosStatus_.c_str());
+    }
     ImGui::End();
 }
 

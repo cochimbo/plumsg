@@ -9,9 +9,12 @@
 #include <thread>
 #include <vector>
 
+#include "../core/system.h"
+
 namespace plumsg {
 
-// The game library: the ROMs of a folder (and its subfolders), each with its box art.
+// The game library: the games of one or more folders (and their subfolders), each with
+// the console it is for (Mega Drive, 32X or Mega CD) and its box art.
 // Covers are looked for next to the ROMs (same name .png/.jpg, or in a caratulas,
 // covers or boxart folder there) and in the user's own covers folder; the ones that
 // are missing can be downloaded from the libretro-thumbnails sets into that folder.
@@ -26,6 +29,7 @@ public:
         std::string title;  // the name to show
         std::string tags;   // region, revision...
         std::string key;    // searchKey() of title and tags
+        ConsoleSystem system = ConsoleSystem::MegaDrive;
         Cover cover = Cover::Unknown;
         unsigned int texture = 0;
         int width = 0, height = 0;
@@ -38,9 +42,10 @@ public:
 
     // Where downloaded covers go (ending in a separator).
     void setCoversFolder(const std::string& folder) { coversFolder_ = folder; }
-    // Lists the ROMs of `folder` and starts looking for their covers.
-    void scan(const std::string& folder);
-    const std::string& folder() const { return folder_; }
+    // Lists the games of `folders` and starts looking for their covers. The .bin
+    // tracks a .cue points to are part of that disc, not games of their own.
+    void scan(const std::vector<std::string>& folders);
+    const std::vector<std::string>& folders() const { return folders_; }
     bool scanned() const { return scanned_; }
     std::vector<Game>& games() { return games_; }
 
@@ -60,6 +65,7 @@ private:
         size_t index;
         unsigned generation;
         std::string path, stem;
+        ConsoleSystem system;
         bool download;
     };
     struct Result {
@@ -75,7 +81,9 @@ private:
     bool fetch(const Job& job, std::string* coverPath);
     void queue(Job job);
 
-    std::string folder_;
+    std::string systemCovers(ConsoleSystem s) const;
+
+    std::vector<std::string> folders_;
     std::string coversFolder_;
     bool scanned_ = false;
     std::vector<Game> games_;

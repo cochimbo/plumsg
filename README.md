@@ -36,7 +36,10 @@ Primera versión. Lo que hay:
 - **Rebobinado, avance rápido y cámara lenta**.
 - **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
 - **Trucos** Game Genie y Action Replay, guardados por juego.
-- **Biblioteca de juegos** con carátulas, que se descargan solas de libretro-thumbnails.
+- **Biblioteca de juegos** con carátulas, que se descargan solas de libretro-thumbnails,
+  con varias carpetas y una pestaña por consola (Mega Drive, 32X y Mega CD).
+- **BIOS del Mega CD**: se indica dónde está la de cada región (no viene con plumsg). La
+  32X y el Mega CD todavía no arrancan: llegan en la 0.0.6 y la 0.0.7.
 
 No hay ROMs comerciales en el repositorio ni en CI: las pruebas usan una ROM generada por el
 propio proyecto (`tests/test_rom.h`).
@@ -96,15 +99,26 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   el efecto 3D y la cámara) que se recupera al abrir esa ROM; está en `perfiles\` junto a
   `states\`. Al desmarcarlo, el juego vuelve a los ajustes generales.
 
-- **Archivo > Biblioteca** (F10): todas las ROMs de una carpeta y sus subcarpetas, con su
-  carátula, en una cuadrícula que se maneja con el ratón, el teclado o el mando (cruceta
-  para elegir, A para jugar, B para cerrar, Y para buscar). La primera vez pide la carpeta.
-  **Descargar carátulas que faltan** las busca por el nombre de cada ROM (los nombres de
-  No-Intro, como `Sonic The Hedgehog (USA, Europe).md`, aciertan casi siempre) en
-  [libretro-thumbnails](https://github.com/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis)
-  y las guarda en `caratulas\` junto a `states\`. También vale una imagen propia: un `.png`
-  o `.jpg` con el nombre de la ROM a su lado, o en una carpeta `caratulas` o `covers` de
-  la carpeta de ROMs. Si hay carpeta elegida, la biblioteca se abre al arrancar sin juego.
+- **Archivo > Biblioteca** (F10): los juegos de una o varias carpetas y sus subcarpetas,
+  con su carátula, en una cuadrícula que se maneja con el ratón, el teclado o el mando
+  (cruceta para elegir, A para jugar, B para cerrar, Y para buscar). La primera vez pide la
+  carpeta; con **Añadir carpeta...** se suman más y con **Quitar** se sacan. Cada juego
+  sabe de qué consola es por su extensión: `.md`, `.gen`, `.smd` y `.bin` son de Mega
+  Drive (un `.bin` con la cabecera de la 32X o de un disco se reconoce también), `.32x` de
+  32X, y `.cue`, `.chd` e `.iso` de Mega CD; las pistas `.bin` de un `.cue` no salen
+  aparte. Las pestañas **Todos**, **Mega Drive**, **32X** y **Mega CD** filtran por
+  consola (con el mando, los botones L y R; con el teclado, RePág y AvPág).
+  **Descargar carátulas que faltan** las busca por el nombre de cada juego (los nombres de
+  No-Intro y Redump, como `Sonic The Hedgehog (USA, Europe).md`, aciertan casi siempre) en
+  libretro-thumbnails, en el juego de carátulas de cada consola, y las guarda en
+  `caratulas\` junto a `states\` (las de 32X en `caratulas\32X\` y las de Mega CD en
+  `caratulas\MegaCD\`). También vale una imagen propia: un `.png` o `.jpg` con el nombre
+  del juego a su lado, o en una carpeta `caratulas` o `covers` de la carpeta de juegos. Si
+  hay carpetas elegidas, la biblioteca se abre al arrancar sin juego.
+- **Consola > BIOS del Mega CD** (o el botón de la biblioteca): el archivo de la BIOS de
+  cada región (Japón, EE. UU. y Europa, 128 KB, como `bios_CD_U.bin`). plumsg dice si el
+  archivo parece una BIOS y de qué región es, y **Buscar en las carpetas de la
+  biblioteca** las encuentra solas. Cada disco usará la BIOS de su región.
 - **Juego > Trucos**: códigos Game Genie (`ABCD-EFGH`, cambian la ROM) y Action Replay
   (`FF0A12:0009`, o `FF0A12:09` para un byte; fijan ese valor de la RAM en cada cuadro).
   Cada uno se activa o desactiva con su casilla y se guarda para ese juego en `trucos\`.
@@ -138,7 +152,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   repetir da los mismos fotogramas), el ritmo del avance rápido y la cámara lenta, la
   separación en planos del 3D (con la cámara recta, el 3D tiene que verse igual que el 2D),
   la cámara viva, los perfiles 3D, los códigos de trucos (Game Genie descodificado como
-  Genesis Plus GX) y los nombres de la biblioteca.
+  Genesis Plus GX), los nombres de la biblioteca y cómo se reconoce la consola de cada
+  juego, las pistas de un `.cue` y las BIOS del Mega CD.
 - `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la
@@ -148,7 +163,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
 - El emulador también hace capturas desde la línea de comandos:
   `plumsg rom.md --3d --inclinacion 30 --cuadros 120 --captura 3d.png`, con
   `--filtro crt` o `--filtro scanlines`, o de la biblioteca con
-  `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`.
+  `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`
+  (`--biblioteca` se puede repetir, y `--bios` abre la ventana de las BIOS).
 
 ## Licencias
 

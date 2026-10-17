@@ -13,7 +13,10 @@
 #include <string>
 #include <vector>
 
+#include <filesystem>
+
 #include "megadrive.h"
+#include "system.h"
 #include "miniz.h"
 #include "render/planes.h"
 #include "render/profile3d.h"
@@ -635,6 +638,63 @@ void testLibraryNames() {
     check(searchKey("Dr. Robotnik's  Mean-Bean") == "dr robotnik s mean bean", "library: search key");
 }
 
+void testSystems() {
+    namespace fs = std::filesystem;
+    std::vector<uint8_t> md = testrom::build();
+    check(detectSystemFromData(md) == ConsoleSystem::MegaDrive, "systems: a Mega Drive ROM");
+    std::vector<uint8_t> mars = md;
+    std::copy_n("SEGA 32X        ", 16, mars.begin() + 0x100);
+    check(detectSystemFromData(mars) == ConsoleSystem::Mega32X, "systems: a 32X ROM dumped as .bin");
+    std::vector<uint8_t> disc(0x930, 0);
+    std::copy_n("SEGADISCSYSTEM", 14, disc.begin() + 0x10);
+    check(detectSystemFromData(disc) == ConsoleSystem::MegaCD, "systems: a raw disc track");
+    std::copy_n("SEGADISCSYSTEM", 14, disc.begin());
+    check(detectSystemFromData(disc) == ConsoleSystem::MegaCD, "systems: an ISO track");
+
+    const std::string cue = "REM test\nFILE \"Sonic CD (USA) (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n"
+                            "FILE track02.bin BINARY\n";
+    const auto files = cueFilesFromText(cue, "dir/");
+    check(files.size() == 2 && files[0] == "dir/Sonic CD (USA) (Track 01).bin" && files[1] == "dir/track02.bin",
+          "systems: files of a .cue sheet");
+
+    // A folder with one game of each console, a disc's tracks and a BIOS.
+    const fs::path dir = fs::temp_directory_path() / "plumsg_systems_test";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "cd");
+    auto write = [](const fs::path& p, const std::vector<uint8_t>& d) {
+        std::ofstream(p, std::ios::binary).write(reinterpret_cast<const char*>(d.data()), static_cast<std::streamsize>(d.size()));
+    };
+    write(dir / "Game (USA).md", md);
+    write(dir / "Mars.bin", mars);
+    write(dir / "Other.32x", mars);
+    write(dir / "cd" / "Disc (Track 01).bin", disc);
+    std::ofstream(dir / "cd" / "Disc.cue") << "FILE \"Disc (Track 01).bin\" BINARY\n";
+    check(isGameFile((dir / "cd" / "Disc.cue").string()) && !isGameFile("notes.txt"), "systems: game file extensions");
+    check(detectSystem((dir / "Game (USA).md").string()) == ConsoleSystem::MegaDrive &&
+              detectSystem((dir / "Mars.bin").string()) == ConsoleSystem::Mega32X &&
+              detectSystem((dir / "Other.32x").string()) == ConsoleSystem::Mega32X &&
+              detectSystem((dir / "cd" / "Disc.cue").string()) == ConsoleSystem::MegaCD,
+          "systems: detected from the files");
+    const auto tracks = cueFiles((dir / "cd" / "Disc.cue").string());
+    check(tracks.size() == 1 && fs::exists(fs::u8path(tracks[0])), "systems: .cue tracks resolved next to the sheet");
+
+    std::vector<uint8_t> bios(0x20000, 0);
+    std::copy_n("SEGA MEGA DRIVE ", 16, bios.begin() + 0x100);
+    std::copy_n("MEGA-CD BOOT ROM", 16, bios.begin() + 0x150);
+    bios[0x1F0] = 'U';
+    const BiosInfo info = identifyCdBios(bios);
+    check(info.valid && info.region == Region::UsaNtsc && info.name == "MEGA-CD BOOT ROM", "systems: a Mega CD BIOS");
+    check(!identifyCdBios(md).valid, "systems: a cartridge is not a BIOS");
+    write(dir / "cd" / "bios_CD_U.bin", bios);
+    bios[0x1F0] = ' ';
+    write(dir / "bios_CD_E.bin", bios);
+    const auto found = findCdBios({dir.u8string()});
+    check(found[0].empty() && fs::path(found[1]).filename() == "bios_CD_U.bin" &&
+              fs::path(found[2]).filename() == "bios_CD_E.bin",
+          "systems: BIOS found by header region or file name");
+    fs::remove_all(dir);
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -657,6 +717,7 @@ int main() {
     testPal();
     testCheats();
     testLibraryNames();
+    testSystems();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

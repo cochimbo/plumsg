@@ -13,6 +13,7 @@
 
 #include "../core/megadrive.h"
 #include "../core/rewind.h"
+#include "../core/system.h"
 #include "../render/gl_renderers.h"
 #include "../render/profile3d.h"
 #include "audio.h"
@@ -245,9 +246,10 @@ struct CommandLine {
     std::string view;     // --vista name
     float tilt = -1000, yaw = -1000;
     bool stateMenu = false;  // --menu-estados: start with the states menu open
-    std::string library;     // --biblioteca folder: start with the library of that folder open
+    std::vector<std::string> library;  // --biblioteca folder (repeatable): start with the library of those folders open
     int filter = -1;         // --filtro ninguno|scanlines|crt
     bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
+    bool bios = false;            // --bios: start with the Mega CD BIOS window open
 };
 
 CommandLine parse(int argc, char** argv) {
@@ -263,8 +265,9 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--inclinacion") c.tilt = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--giro") c.yaw = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--menu-estados") c.stateMenu = true;
-        else if (a == "--biblioteca") c.library = next();
+        else if (a == "--biblioteca") c.library.push_back(next());
         else if (a == "--descargar-caratulas") c.downloadCovers = true;
+        else if (a == "--bios") c.bios = true;
         else if (a == "--filtro") {
             const std::string f = next();
             c.filter = f == "crt" ? 2 : f == "scanlines" ? 1 : 0;
@@ -390,6 +393,17 @@ int main(int argc, char** argv) {
         ui->notify("Perfil 3D de " + fileName(app->romPath));
     };
     auto load = [&](const std::string& path) {
+        const ConsoleSystem system = detectSystem(path);
+        if (system != ConsoleSystem::MegaDrive) {
+            // The 32X and the Mega CD come in the next versions; the game is kept in the
+            // library and the recent list.
+            const std::string message = std::string("Los juegos de ") + systemName(system) +
+                                        " todavía no funcionan en plumsg: llegarán en la versión " +
+                                        (system == ConsoleSystem::Mega32X ? "0.0.6." : "0.0.7.");
+            if (capturing) std::fprintf(stderr, "%s\n", message.c_str());
+            else ui->notify(message);
+            return;
+        }
         if (app->load(path, capturing ? nullptr : window)) {
             settings.addRecent(path);
             loadProfile();
@@ -407,9 +421,10 @@ int main(int argc, char** argv) {
         applyCommandLine();  // over the game's profile too
     }
     bool openStateMenu = cmd.stateMenu;
-    if (!cmd.library.empty()) settings.libraryFolder = cmd.library;
-    if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolder.empty()))
+    if (!cmd.library.empty()) settings.libraryFolders = cmd.library;
+    if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolders.empty()))
         ui->toggleLibrary();
+    if (cmd.bios) ui->openBios();
     int loops = 0;
     bool downloadCovers = cmd.downloadCovers;
     bool sizedForMenu = false;
