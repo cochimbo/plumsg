@@ -333,6 +333,11 @@ void testPlanes() {
     std::vector<uint32_t> solid;
     markSolidTiles(f, planes, solid);
     check(solid[static_cast<size_t>(210) * 320 + 100] != 0, "planes: the floor is a solid tile");
+    const size_t floor = static_cast<size_t>(210) * 320 + 100, sky = static_cast<size_t>(150) * 320 + 10;
+    const bool hiddenB = planes[PlaneB][floor] != 0;
+    clearBehindSolid(solid, planes);
+    check(hiddenB && planes[PlaneB][floor] == 0 && planes[PlaneB][sky] != 0,
+          "planes: plane B is cleared inside solid tiles, kept elsewhere");
 }
 
 void testEdgeDistance() {

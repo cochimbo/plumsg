@@ -347,8 +347,9 @@ void Pseudo3DRenderer::draw(const VideoFrameMd& frame, const Viewport& area) {
     }
     const bool voxels = options_.style == Style3D::Voxels;
     if (voxels) {
-        for (int p = PlaneB; p < kPlanes; ++p) markEdgeDistance(planes_[p], pw, ph);
         markSolidTiles(frame, planes_, solid_);
+        if (options_.extrusion > 0) clearBehindSolid(solid_, planes_);
+        for (int p = PlaneB; p < kPlanes; ++p) markEdgeDistance(planes_[p], pw, ph);
         upload(solidTexture_, solid_.data(), pw, ph, false);
     }
     for (int p = 0; p < kPlanes; ++p) upload(textures_[p], planes_[p].data(), pw, ph, options_.smooth);

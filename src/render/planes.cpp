@@ -119,4 +119,10 @@ void markSolidTiles(const VideoFrameMd& frame, const Planes& planes, std::vector
         }
 }
 
+void clearBehindSolid(const std::vector<uint32_t>& solid, Planes& planes) {
+    auto& b = planes[PlaneB];
+    for (size_t i = 0; i < b.size() && i < solid.size(); ++i)
+        if (solid[i]) b[i] = 0;
+}
+
 }  // namespace plumsg
