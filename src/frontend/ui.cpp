@@ -7,8 +7,13 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 #include "library_names.h"
+#include "logo_png.h"
 #include "../core/system.h"
 #include "../net/udp.h"
+#include "../render/gl.h"
+
+#define STBI_NO_STDIO
+#include "stb_image.h"
 
 namespace plumsg {
 
@@ -56,13 +61,31 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
 #endif
     ImGui_ImplSDL2_InitForOpenGL(window_, context);
     ImGui_ImplOpenGL3_Init("#version 330 core");
+    loadLogo();
 }
 
 Ui::~Ui() {
     library_.clearTextures();
+    if (logoTexture_) gl::DeleteTextures(1, &logoTexture_);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
+}
+
+void Ui::loadLogo() {
+    int w = 0, h = 0, n = 0;
+    stbi_uc* rgba = stbi_load_from_memory(kLogoPng, static_cast<int>(sizeof(kLogoPng)), &w, &h, &n, 4);
+    if (!rgba) return;
+    gl::GenTextures(1, &logoTexture_);
+    gl::BindTexture(gl::TEXTURE_2D, logoTexture_);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
+    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8, w, h, 0, gl::RGBA, gl::UNSIGNED_BYTE, rgba);
+    stbi_image_free(rgba);
+    logoWidth_ = w;
+    logoHeight_ = h;
 }
 
 bool Ui::handleEvent(const SDL_Event& e) {
@@ -697,6 +720,11 @@ void Ui::drawAbout() {
         ImGui::End();
         return;
     }
+    if (logoTexture_) {
+        const float w = ImGui::GetFontSize() * 22.0f;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (ImGui::GetContentRegionAvail().x - w) * 0.5f));
+        ImGui::Image(static_cast<ImTextureID>(logoTexture_), ImVec2(w, w * logoHeight_ / logoWidth_));
+    }
     ImGui::TextUnformatted("plumsg, emulador de Sega Mega Drive / Genesis con efecto pseudo-3D.");
     ImGui::Spacing();
     ImGui::TextUnformatted("Arrastra una ROM a la ventana o usa Archivo > Abrir ROM.");
@@ -749,10 +777,20 @@ void Ui::drawOverlays(const UiState& state) {
 
     if (!state.romLoaded) {
         // Behind every window, so it never shows through the option windows.
+        // The marquee above the hint, as wide as it is or 60% of the window if narrower.
         const char* hint = "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)";
         const ImVec2 size = ImGui::CalcTextSize(hint);
-        const ImVec2 pos(vp->Pos.x + (vp->Size.x - size.x) * 0.5f, top + (vp->Size.y - menuHeight_ - size.y) * 0.5f);
-        ImGui::GetBackgroundDrawList()->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text), hint);
+        const float logoW = logoTexture_ ? std::min(static_cast<float>(logoWidth_), vp->Size.x * 0.6f) : 0.0f;
+        const float logoH = logoTexture_ ? logoW * logoHeight_ / logoWidth_ : 0.0f;
+        const float gap = logoTexture_ ? size.y * 1.5f : 0.0f;
+        const float y = top + (vp->Size.y - menuHeight_ - logoH - gap - size.y) * 0.5f;
+        ImDrawList* draw = ImGui::GetBackgroundDrawList();
+        if (logoTexture_) {
+            const ImVec2 a(vp->Pos.x + (vp->Size.x - logoW) * 0.5f, y);
+            draw->AddImage(static_cast<ImTextureID>(logoTexture_), a, ImVec2(a.x + logoW, a.y + logoH));
+        }
+        const ImVec2 pos(vp->Pos.x + (vp->Size.x - size.x) * 0.5f, y + logoH + gap);
+        draw->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text), hint);
     }
     const char* badge = nullptr;
     if (state.romLoaded) {
