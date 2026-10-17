@@ -145,6 +145,28 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
 
 La configuración se guarda en `plumsg.ini`.
 
+### Desde la línea de comandos (LaunchBox, Playnite, muebles arcade)
+
+```
+plumsg.exe "C:\Juegos\Sonic.md" --pantalla-completa --3d
+plumsg.exe "C:\Juegos\Sonic CD.cue" --region eu --estado 1
+```
+
+| Opción | Qué hace |
+|---|---|
+| `juego` | el cartucho o disco que se abre |
+| `--pantalla-completa` / `--ventana` | a pantalla completa o en ventana (también `--fullscreen` / `--windowed`) |
+| `--3d` / `--2d` | con o sin la vista pseudo-3D |
+| `--filtro f` | `ninguno`, `scanlines` o `crt` |
+| `--region r` | `auto`, `jp`, `us` o `eu` |
+| `--estado N` | carga el estado guardado N (0-9) del juego al abrirlo |
+| `--biblioteca carpeta` | abre la biblioteca de esa carpeta |
+| `--ayuda` | muestra las opciones |
+
+La pantalla completa y la región que se dan así valen solo para esa vez: `plumsg.ini`
+sigue como estaba. En LaunchBox, por ejemplo, se añade plumsg como emulador con la ruta
+de `plumsg.exe` y `--pantalla-completa` en los parámetros de la línea de comandos.
+
 ## Compilar
 
 Hace falta CMake 3.16+, un compilador de C++17 y SDL2 (si no está instalado, CMake lo
