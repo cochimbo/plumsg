@@ -12,6 +12,7 @@
 #include "cheats.h"
 #include "io.h"
 #include "m68k.h"
+#include "mars.h"
 #include "psg.h"
 #include "vdp_md.h"
 #include "ym2612.h"
@@ -20,7 +21,8 @@
 namespace plumsg {
 
 // The whole console: 68000 and Z80 with their buses and memory maps, VDP, YM2612, PSG,
-// I/O and cartridge, plus the scheduler that interleaves them line by line. It knows
+// I/O and cartridge, plus the scheduler that interleaves them line by line. With a 32X
+// game it also has the 32X, whose two SH-2s run alongside the 68000. It knows
 // nothing about windows, rendering or audio devices: frontends call runFrame(), then
 // read frame() and audio().samples(), and feed the pads in.
 class MegaDrive : private M68kBus, private Z80Bus {
@@ -33,7 +35,7 @@ public:
     MegaDrive(const MegaDrive&) = delete;
     MegaDrive& operator=(const MegaDrive&) = delete;
 
-    bool loadRom(const std::string& path, std::string* error);  // .bin/.md/.gen/.smd/.zip
+    bool loadRom(const std::string& path, std::string* error);  // .bin/.md/.gen/.smd/.32x/.zip
     void loadRomData(std::vector<uint8_t> rom);                 // for tests and tools
     void reset();       // the console's reset button: CPUs, VDP and sound; RAM is kept
     void powerCycle();  // also clears memory
@@ -79,6 +81,8 @@ public:
     VdpMd& vdp() { return vdp_; }
     Ym2612& ym() { return ym_; }
     Psg& psg() { return psg_; }
+    Mars* mars() { return mars_.get(); }  // null unless the game is a 32X one
+    bool is32x() const { return mars_ != nullptr; }
     // CPU view of memory, for tools and tests.
     uint8_t peek(uint32_t addr) { return read8(addr); }
     uint16_t peek16(uint32_t addr) { return read16(addr & ~1u); }
@@ -110,6 +114,7 @@ private:
     void updateIrq() { cpu_.setIrqLevel(vdp_.irqLevel()); }
     void applyRegion();
     void configureFor(Region r);  // clocks, PAL/NTSC and version register
+    void setUpMars();             // adds or removes the 32X to suit the cartridge
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
 
     template <class Ar>
@@ -123,6 +128,7 @@ private:
     Io io_;
     Cartridge cart_;
     AudioMixer mixer_;
+    std::unique_ptr<Mars> mars_;
 
     std::array<uint8_t, 0x10000> ram_{};
     std::array<uint8_t, 0x2000> zram_{};

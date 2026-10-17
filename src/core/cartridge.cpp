@@ -21,10 +21,10 @@ bool hasRomExtension(std::string name) {
         const std::string e(ext);
         return name.size() > e.size() && name.compare(name.size() - e.size(), e.size(), e) == 0;
     };
-    return endsWith(".md") || endsWith(".gen") || endsWith(".bin") || endsWith(".smd");
+    return endsWith(".md") || endsWith(".gen") || endsWith(".bin") || endsWith(".smd") || endsWith(".32x");
 }
 
-// Replaces a zip archive with its first .md/.gen/.bin/.smd entry.
+// Replaces a zip archive with its first .md/.gen/.bin/.smd/.32x entry.
 bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std::string* error) {
     mz_zip_archive zip{};
     if (!mz_zip_reader_init_mem(&zip, data.data(), data.size(), 0)) {
@@ -50,7 +50,7 @@ bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std:
         found = true;
     }
     mz_zip_reader_end(&zip);
-    if (!found && error) *error = "el zip no contiene ninguna ROM (.md, .gen, .bin o .smd): " + path;
+    if (!found && error) *error = "el zip no contiene ninguna ROM (.md, .gen, .bin, .smd o .32x): " + path;
     return found;
 }
 

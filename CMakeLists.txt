@@ -62,6 +62,7 @@ add_library(plumsg_core STATIC
   src/core/cheats.cpp
   src/core/system.cpp
   src/core/sh2.cpp
+  src/core/mars.cpp
   src/render/planes.cpp
   src/render/profile3d.cpp
 )

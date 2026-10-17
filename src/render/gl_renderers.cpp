@@ -404,6 +404,7 @@ void LayerRenderer::compose(const VideoFrameMd& frame, uint32_t* out) {
                 case MdLayer::PlaneA: g = luma; b = luma / 3; break;
                 case MdLayer::Window: g = luma; r = luma / 2; b = luma; break;
                 case MdLayer::Sprite: r = luma; g = luma / 3; break;
+                case MdLayer::Mars: r = luma; b = luma; break;
             }
             // High priority: brighter and pushed towards yellow.
             if (px.priority && px.layer != MdLayer::Backdrop) {

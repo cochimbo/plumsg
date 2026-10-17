@@ -27,6 +27,7 @@ void splitPlanes(const VideoFrameMd& frame, const SplitOptions& options, Planes&
             case MdLayer::PlaneA:
             case MdLayer::Window: return px.priority ? PlanePriority : PlaneA;
             case MdLayer::Sprite: return PlaneSprites;
+            case MdLayer::Mars: return PlaneSky;  // the 32X's picture stays flat, at the back
         }
         return PlaneSky;
     };
@@ -52,9 +53,12 @@ void splitPlanes(const VideoFrameMd& frame, const SplitOptions& options, Planes&
             for (int p = shown + 1; p < kPlanes; ++p) planes[p][o] = 0;
             if (shown != PlaneSky) planes[shown][o] = frame.rgba[i] | 0xFF000000u;
             const bool bOpaque = (b >> 24) != 0;
+            // Behind the Mega Drive's planes: the 32X's picture if it has one, else the backdrop.
+            const uint32_t m = frame.mars[static_cast<size_t>(y) * VideoFrameMd::kMaxWidth + x];
+            const uint32_t under = (m >> 24) ? m : frame.backdrop[row];
             if (shown == PlaneSky) sky[x] = frame.rgba[i] | 0xFF000000u;
-            else if (options.flatB) sky[x] = (bOpaque ? b : frame.backdrop[row]) | 0xFF000000u;
-            else if (!bOpaque) sky[x] = frame.backdrop[row] | 0xFF000000u;  // under plane A or a sprite
+            else if (options.flatB) sky[x] = (bOpaque ? b : under) | 0xFF000000u;
+            else if (!bOpaque) sky[x] = under | 0xFF000000u;  // under plane A or a sprite
             if (sky[x] != 0 && firstSky < 0) firstSky = x;
         }
         // Fill the sky behind plane B from the nearest sky pixel to the left (the first

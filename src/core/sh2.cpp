@@ -623,6 +623,9 @@ bool Sh2::runDma() {
         const int units = autoRequest ? 8 : 1;
         static constexpr uint32_t kSize[4] = {1, 2, 4, 16};
         const int ts = (chcr >> 10) & 3;
+        // A request is used up by the unit it starts; the device raises it again (even
+        // during this unit's own access to it) when it has more.
+        if (!autoRequest) dreq_[c] = false;
         for (int u = 0; u < units && (chcr & 2) == 0; ++u) {
             uint32_t& sar = dmac_.sar[c];
             uint32_t& dar = dmac_.dar[c];
@@ -644,10 +647,7 @@ bool Sh2::runDma() {
                 tcr = 0;
                 chcr |= 2;  // TE: the interrupt (if IE) stays requested until TE is cleared
             }
-            if (!autoRequest) {
-                dreq_[c] = false;  // the requester raises it again for the next unit
-                break;
-            }
+            if (!autoRequest) break;
         }
         return true;
     }

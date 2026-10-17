@@ -524,6 +524,98 @@ void testSh2() {
     check(other.read(0xFFFFFE05, 1) == 0x42 && (other.read(0xFFFFFE04, 1) & 0x40), "SH-2: puerto serie entre las dos CPU");
 }
 
+// A 32X program built by hand: the 68000 turns the adapter on and waits for both SH-2s
+// to say they are ready; then the master SH-2 draws a gradient in direct colour mode
+// and swaps the frame buffers. Checks the boot without a BIOS, the communication
+// words, the frame buffer, the VDP and the layer drawn over the Mega Drive's picture.
+void testMars() {
+    std::vector<uint8_t> rom(0x1000, 0);
+    auto put16 = [&](uint32_t a, std::initializer_list<uint16_t> words) {
+        for (uint16_t w : words) {
+            rom[a] = static_cast<uint8_t>(w >> 8);
+            rom[a + 1] = static_cast<uint8_t>(w);
+            a += 2;
+        }
+    };
+    auto put32 = [&](uint32_t a, uint32_t v) { put16(a, {static_cast<uint16_t>(v >> 16), static_cast<uint16_t>(v)}); };
+    put32(0, 0xFFFF00);
+    put32(4, 0x3F0);
+    const char* system = "SEGA 32X        ";
+    std::copy(system, system + 16, rom.begin() + 0x100);
+    put32(0x3D4, 0x800);       // SH-2 program in the ROM
+    put32(0x3D8, 0);           // to the start of SDRAM
+    put32(0x3DC, 0x200);       // size
+    put32(0x3E0, 0x06000100);  // master entry
+    put32(0x3E4, 0x06000180);  // slave entry
+    put32(0x3E8, 0x06000000);  // VBRs
+    put32(0x3EC, 0x06000000);
+    put16(0x3F0, {0x33FC, 0x0003, 0x00A1, 0x5100,          // move.w #3,$a15100   adapter on, SH-2s running
+                  0x0CB9, 0x4D5F, 0x4F4B, 0x00A1, 0x5120,  // cmp.l #'M_OK',$a15120
+                  0x66F4,                                  // bne.s *-10
+                  0x0CB9, 0x535F, 0x4F4B, 0x00A1, 0x5124,  // cmp.l #'S_OK',$a15124
+                  0x66F4,                                  // bne.s *-10
+                  0x33FC, 0x0001, 0x00A1, 0x512C,          // move.w #1,$a1512c   tell the master to go
+                  0x60FE});                                // bra.s *
+    const uint32_t m = 0x800;  // SDRAM 0x06000000
+    put16(m + 0x100, {0xD117,           // mov.l #$20004000,r1
+                      0xD218,           // mov.l #$8000,r2
+                      0x2121,           // mov.w r2,@r1        FM: the SH-2s get the VDP
+                      0xD318,           // mov.l #$2000402c,r3
+                      0x6031,           // wait: mov.w @r3,r0
+                      0x8801, 0x8BFC,   // cmp/eq #1,r0; bf wait
+                      0xD417,           // mov.l #$24000000,r4  frame buffer
+                      0xD519,           // mov.l #224,r5
+                      0xE601, 0x4618,   // mov #1,r6; shll8 r6  every line starts at word $100
+                      0x2461, 0x7402,   // lines: mov.w r6,@r4; add #2,r4
+                      0x4510, 0x8BFB,   // dt r5; bf lines
+                      0xD414,           // mov.l #$24000200,r4
+                      0xD516,           // mov.l #320,r5
+                      0xE700,           // mov #0,r7
+                      0x2471, 0x7402,   // pixels: mov.w r7,@r4; add #2,r4
+                      0x7701,           // add #1,r7
+                      0x4510, 0x8BFA,   // dt r5; bf pixels
+                      0xD811,           // mov.l #$20004100,r8
+                      0xE002, 0x2801,   // mov #2,r0; mov.w r0,@r8   direct colour
+                      0xE001, 0x8185,   // mov #1,r0; mov.w r0,@(10,r8)  show the other buffer
+                      0xAFFE, 0x0009});
+    put32(m + 0x160, 0x20004000);
+    put32(m + 0x164, 0x8000);
+    put32(m + 0x168, 0x2000402C);
+    put32(m + 0x16C, 0x24000000);
+    put32(m + 0x170, 0x24000200);
+    put32(m + 0x174, 0x20004100);
+    put32(m + 0x178, 224);
+    put32(m + 0x17C, 320);
+    put16(m + 0x180, {0xAFFE, 0x0009});  // the slave just waits
+
+    MegaDrive md;
+    md.loadRomData(rom);
+    check(md.is32x(), "32X: se reconoce el cartucho por su cabecera");
+    for (int i = 0; i < 6; ++i) md.runFrame();
+    const auto& comm = md.mars()->comm();
+    check(comm[0] == 0x4D5F && comm[1] == 0x4F4B && comm[2] == 0x535F && comm[3] == 0x4F4B,
+          "32X: las dos SH-2 arrancan sin BIOS y dicen M_OK y S_OK");
+    const VideoFrameMd& f = md.frame();
+    bool drawn = true;
+    for (int x : {0, 1, 31, 32, 200, f.width - 1}) {  // the VDP was left in H32: 256 pixels
+        const int i = 100 * VideoFrameMd::kMaxWidth + x;
+        auto expand = [](uint32_t v) { return (v << 3) | (v >> 2); };
+        const uint32_t want = 0xFF000000u | expand(x & 31) << 16 | expand((x >> 5) & 31) << 8 | expand((x >> 10) & 31);
+        if (f.info[i].layer != MdLayer::Mars || f.rgba[i] != want || f.mars[i] != want) drawn = false;
+    }
+    check(drawn, "32X: la SH-2 dibuja en el frame buffer y se ve sobre el fondo de la Mega Drive");
+
+    // Savestates keep the 32X: the next frame is the same after a round trip.
+    std::vector<uint8_t> state;
+    md.saveState(state);
+    md.runFrame();
+    const uint32_t a = frameHash(md.frame());
+    std::string error;
+    check(md.loadState(state, &error), "32X: carga su estado");
+    md.runFrame();
+    check(frameHash(md.frame()) == a && md.mars()->comm()[0] == 0x4D5F, "32X: el estado guarda y recupera la 32X");
+}
+
 }  // namespace
 
 void testRewindBuffer() {
@@ -826,6 +918,7 @@ int main() {
     testLibraryNames();
     testSystems();
     testSh2();
+    testMars();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
