@@ -47,6 +47,34 @@ else()
   target_compile_options(plumsg_ymfm PRIVATE -w)
 endif()
 
+# libchdr (BSD-3-Clause) reads Mega CD discs compressed as .chd. Pinned to a known commit.
+# It brings its own copy of miniz for decompressing; its symbols are renamed so they
+# do not clash with the miniz above.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(CHDR_WANT_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(libchdr
+  GIT_REPOSITORY https://github.com/rtissera/libchdr.git
+  GIT_TAG 47d794151b2b64f6aba60304e6480f4f5a2bc24b)
+FetchContent_GetProperties(libchdr)
+if(NOT libchdr_POPULATED)
+  FetchContent_Populate(libchdr)
+  add_subdirectory(${libchdr_SOURCE_DIR} ${libchdr_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
+foreach(sym miniz_def_alloc_func miniz_def_free_func miniz_def_realloc_func mz_adler32 mz_crc32 mz_error mz_free
+    mz_inflate mz_inflateEnd mz_inflateInit mz_inflateInit2 mz_inflateReset mz_uncompress mz_uncompress2 mz_version
+    tinfl_decompress tinfl_decompress_mem_to_callback tinfl_decompress_mem_to_heap tinfl_decompress_mem_to_mem
+    tinfl_decompressor_alloc tinfl_decompressor_free)
+  target_compile_definitions(miniz PRIVATE ${sym}=chdr_${sym})
+  target_compile_definitions(chdr-static PRIVATE ${sym}=chdr_${sym})
+endforeach()
+foreach(t chdr-static miniz chdr-lzma zstd)
+  if(MSVC)
+    target_compile_options(${t} PRIVATE /W0)
+  else()
+    target_compile_options(${t} PRIVATE -w)
+  endif()
+endforeach()
+
 # Emulator core: no SDL, no OS dependencies.
 add_library(plumsg_core STATIC
   src/core/m68k.cpp
@@ -63,11 +91,13 @@ add_library(plumsg_core STATIC
   src/core/system.cpp
   src/core/sh2.cpp
   src/core/mars.cpp
+  src/core/cd_image.cpp
+  src/core/megacd.cpp
   src/render/planes.cpp
   src/render/profile3d.cpp
 )
 target_include_directories(plumsg_core PUBLIC src src/core)
-target_link_libraries(plumsg_core PUBLIC plumsg_miniz PRIVATE plumsg_ymfm)
+target_link_libraries(plumsg_core PUBLIC plumsg_miniz PRIVATE plumsg_ymfm chdr-static)
 
 # SDL2: use an installed copy (vcpkg, system package, SDL2_DIR) or fetch it.
 find_package(SDL2 CONFIG QUIET)
@@ -140,6 +170,7 @@ if(PLUMSG_BUILD_TESTS)
   enable_testing()
   add_executable(core_tests tests/core_tests.cpp src/frontend/library_names.cpp)
   target_include_directories(core_tests PRIVATE tests)
+  target_compile_definitions(core_tests PRIVATE PLUMSG_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")
   target_link_libraries(core_tests PRIVATE plumsg_core)
   add_test(NAME core_tests COMMAND core_tests)
 

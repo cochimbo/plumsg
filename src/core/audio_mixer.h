@@ -35,6 +35,12 @@ public:
     void state(Ar& ar) {
         ar(pos_, prevL_, prevR_, fmQueue_, psgQueue_);
     }
+    // What waits from the 32X or the Mega CD: a block of its own, so older states
+    // without it still load.
+    template <class Ar>
+    void addOnState(Ar& ar) {
+        ar(pwmQueue_);
+    }
 
 private:
     double outRate_ = 44100.0;

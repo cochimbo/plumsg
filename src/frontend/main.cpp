@@ -97,6 +97,7 @@ struct App {
     std::string cheatsDir;
     std::vector<Cheat> cheats;  // the loaded game's
     std::vector<SlotInfo> slots = std::vector<SlotInfo>(kSlots);
+    std::string lastError;  // why the last load failed
 
     std::string savePath() const { return withoutExtension(romPath) + ".sav"; }
     std::string statePath(int slot) const {
@@ -133,20 +134,44 @@ struct App {
         writeFile(cheatsPath(), std::vector<uint8_t>(text.begin(), text.end()));
     }
 
+    // Cartridge SRAM, or the Mega CD's backup RAM, next to the game.
     void saveBattery() {
-        if (romLoaded && console.cartridge().hasSaveData()) console.cartridge().writeSave(savePath());
+        if (!romLoaded) return;
+        if (MegaCd* cd = console.megaCd()) {
+            if (cd->backupRamChanged() &&
+                writeFile(savePath(), std::vector<uint8_t>(cd->backupRam().begin(), cd->backupRam().end())))
+                cd->clearBackupRamChanged();
+            return;
+        }
+        if (console.cartridge().hasSaveData()) console.cartridge().writeSave(savePath());
+    }
+
+    void loadBattery() {
+        MegaCd* cd = console.megaCd();
+        if (!cd) {
+            console.cartridge().loadSave(savePath());
+            return;
+        }
+        std::vector<uint8_t> data;
+        if (readFile(savePath(), data) && data.size() == cd->backupRam().size())
+            std::copy(data.begin(), data.end(), cd->backupRam().begin());
+        else
+            cd->formatBackupRam();
+        cd->clearBackupRamChanged();
     }
 
     bool load(const std::string& path, SDL_Window* window) {
         saveBattery();
         std::string error;
         if (!console.loadRom(path, &error)) {
+            lastError = error;
             if (window) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "plumsg", error.c_str(), window);
             else std::fprintf(stderr, "%s\n", error.c_str());
             return false;
         }
         romPath = path;
-        console.cartridge().loadSave(savePath());
+        lastError.clear();
+        loadBattery();
         romLoaded = true;
         loadCheats();
         if (window) {
@@ -395,19 +420,22 @@ int main(int argc, char** argv) {
     auto load = [&](const std::string& path) {
         const ConsoleSystem system = detectSystem(path);
         if (system == ConsoleSystem::MegaCD) {
-            // The Mega CD comes in the next version; the game is kept in the library and
-            // the recent list.
-            const std::string message = std::string("Los juegos de ") + systemName(system) +
-                                        " todavía no funcionan en plumsg: llegarán en la versión 0.0.7.";
-            if (capturing) std::fprintf(stderr, "%s\n", message.c_str());
-            else ui->notify(message);
-            return;
+            // Discs boot with the BIOS of their region, from the files the user chose.
+            static const Region regions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
+            for (size_t i = 0; i < 3; ++i) {
+                std::vector<uint8_t> bios;
+                if (settings.cdBios[i].empty() || !readFile(settings.cdBios[i], bios) || bios.size() != 0x20000)
+                    bios.clear();
+                app->console.setCdBios(regions[i], std::move(bios));
+            }
         }
         if (app->load(path, capturing ? nullptr : window)) {
             settings.addRecent(path);
             loadProfile();
             rewind.clear();
             setRewindLimits();
+        } else if (app->lastError.find("BIOS") != std::string::npos) {
+            ui->openBios();  // the game is fine: it waits for its BIOS
         } else {
             settings.removeRecent(path);
         }

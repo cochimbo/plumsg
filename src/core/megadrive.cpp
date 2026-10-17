@@ -23,15 +23,22 @@ constexpr uint32_t fourcc(const char (&s)[5]) {
 }  // namespace
 
 MegaDrive::MegaDrive() {
-    vdp_.setDmaReader([this](uint32_t addr) { return read16(addr & 0xFFFFFE); });
+    vdp_.setDmaReader([this](uint32_t addr) {
+        uint16_t w = 0;
+        if (mcd_ && mcd_->dmaRead(addr & 0xFFFFFE, w)) return w;
+        return read16(addr & 0xFFFFFE);
+    });
     applyRegion();
     powerCycle();
 }
 
 bool MegaDrive::loadRom(const std::string& path, std::string* error) {
+    if (detectSystem(path) == ConsoleSystem::MegaCD) return loadDisc(path, error);
     Cartridge loaded;
     if (!loaded.loadFile(path, error)) return false;
     cart_ = std::move(loaded);
+    mcd_.reset();
+    disc_.reset();
     romOriginal_.clear();
     ramCheats_.clear();
     setUpMars();
@@ -42,11 +49,62 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
 
 void MegaDrive::loadRomData(std::vector<uint8_t> rom) {
     cart_.loadData(std::move(rom));
+    mcd_.reset();
+    disc_.reset();
     romOriginal_.clear();
     ramCheats_.clear();
     setUpMars();
     applyRegion();
     powerCycle();
+}
+
+void MegaDrive::setCdBios(Region region, std::vector<uint8_t> bios) {
+    const int slot = region == Region::JapanNtsc ? 0 : region == Region::EuropePal ? 2 : 1;
+    cdBios_[static_cast<size_t>(slot)] = std::move(bios);
+}
+
+bool MegaDrive::loadDisc(const std::string& path, std::string* error) {
+    auto disc = std::make_unique<CdImage>();
+    if (!disc->open(path, error)) return false;
+    return loadDiscImage(std::move(disc), error);
+}
+
+bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error) {
+    std::vector<uint8_t> header(2048);
+    disc->readData(0, header.data());
+    if (std::memcmp(header.data(), "SEGADISCSYSTEM", 14) != 0) {
+        if (error) *error = "no es un disco de Mega CD";
+        return false;
+    }
+    // The disc's first sector has a header like a cartridge's: it stands in for the
+    // cartridge for the region, the title and the savestates.
+    Cartridge loaded;
+    loaded.loadData(header);
+    const Region wanted = region_ == Region::Auto ? loaded.preferredRegion() : region_;
+    const int slot = wanted == Region::JapanNtsc ? 0 : wanted == Region::EuropePal ? 2 : 1;
+    if (cdBios_[static_cast<size_t>(slot)].size() != 0x20000) {
+        static const char* const kNames[3] = {"Japón", "EE. UU.", "Europa"};
+        if (error)
+            *error = std::string("Falta la BIOS del Mega CD de ") + kNames[slot] +
+                     ". Elígela en Consola > BIOS del Mega CD.";
+        return false;
+    }
+    cart_ = std::move(loaded);
+    disc_ = std::move(disc);
+    mcd_ = std::make_unique<MegaCd>();
+    mcd_->insert(disc_.get());
+    romOriginal_.clear();
+    ramCheats_.clear();
+    setUpMars();
+    applyRegion();
+    powerCycle();
+    return true;
+}
+
+std::vector<int16_t>* MegaDrive::addOnSamples() {
+    if (mars_) return &mars_->samples();
+    if (mcd_) return &mcd_->samples();
+    return nullptr;
 }
 
 void MegaDrive::setUpMars() {
@@ -74,9 +132,15 @@ void MegaDrive::configureFor(Region r) {
     ym_.setMasterClock(master);
     mixer_.setFmRate(ym_.sampleRate());
     if (mars_) mars_->setSampleRate(mixer_.outputRate(), master);
+    if (mcd_) {
+        mcd_->setMasterClock(master);
+        mcd_->setSampleRate(mixer_.outputRate());
+        const int slot = r == Region::JapanNtsc ? 0 : r == Region::EuropePal ? 2 : 1;
+        if (cdBios_[static_cast<size_t>(slot)].size() == 0x20000) mcd_->setBios(cdBios_[static_cast<size_t>(slot)]);
+    }
     // Version register: bit 7 overseas, bit 6 PAL, bit 5 no expansion unit; version 0
     // (no TMSS).
-    uint8_t version = 0x20;
+    uint8_t version = mcd_ ? 0x00 : 0x20;
     if (effectiveRegion_ != Region::JapanNtsc) version |= 0x80;
     if (isPal) version |= 0x40;
     io_.setVersion(version);
@@ -86,6 +150,7 @@ void MegaDrive::setSampleRate(double hz) {
     psg_.setSampleRate(hz);
     mixer_.setOutputRate(hz);
     if (mars_) mars_->setSampleRate(hz, pal() ? kMasterPal : kMasterNtsc);
+    if (mcd_) mcd_->setSampleRate(hz);
 }
 
 void MegaDrive::powerCycle() {
@@ -93,6 +158,7 @@ void MegaDrive::powerCycle() {
     zram_.fill(0);
     vdp_.reset();
     if (mars_) mars_->powerOn();
+    if (mcd_) mcd_->powerOn();
     reset();
 }
 
@@ -117,6 +183,11 @@ void MegaDrive::reset() {
         mars_->rebaseClock();
         mars_->samples().clear();
     }
+    if (mcd_) {
+        mcd_->reset();
+        mcd_->rebaseClock();
+        mcd_->samples().clear();
+    }
     cpu_.setIrqLevel(0);
     cpu_.reset();
 }
@@ -130,6 +201,7 @@ void MegaDrive::runUntil(uint64_t clock) {
         if (m68kClock_ < clock && (m68kClock_ <= z80Clock_ || z80Clock_ >= clock)) {
             // The SH-2s catch up first, so the 68000 never sees them behind it.
             if (mars_) mars_->runUntil(m68kClock_);
+            if (mcd_) mcd_->runUntil(m68kClock_);
             now_ = m68kClock_;
             m68kClock_ += static_cast<uint64_t>(cpu_.step()) * 7;
         } else if (z80Running()) {
@@ -141,6 +213,7 @@ void MegaDrive::runUntil(uint64_t clock) {
     }
     now_ = clock;
     if (mars_) mars_->runUntil(clock);
+    if (mcd_) mcd_->runUntil(clock);
 }
 
 void MegaDrive::syncSound() {
@@ -216,7 +289,7 @@ void MegaDrive::runFrame() {
     // Hand this frame's sound to the mixer.
     psgBuffer_.insert(psgBuffer_.end(), psg_.samples().begin(), psg_.samples().end());
     psg_.clearSamples();
-    mixer_.mix(ym_.samples(), psgBuffer_, mars_ ? &mars_->samples() : nullptr);
+    mixer_.mix(ym_.samples(), psgBuffer_, addOnSamples());
 }
 
 void MegaDrive::irqAcknowledge(int level) {
@@ -287,6 +360,10 @@ uint8_t MegaDrive::read8(uint32_t addr) {
         uint16_t w = 0;
         if (mars_->read68k(addr, w)) return static_cast<uint8_t>((addr & 1) ? w : w >> 8);
     }
+    if (mcd_) {
+        uint16_t w = 0;
+        if (mcd_->read68k(addr, w)) return static_cast<uint8_t>((addr & 1) ? w : w >> 8);
+    }
     if (addr < 0x400000) return cart_.read8(addr);
     if (addr >= 0xE00000) return ram_[addr & 0xFFFF];
     if (addr >= 0xC00000) {
@@ -306,6 +383,10 @@ uint16_t MegaDrive::read16(uint32_t addr) {
         uint16_t w = 0;
         if (mars_->read68k(addr, w)) return w;
     }
+    if (mcd_) {
+        uint16_t w = 0;
+        if (mcd_->read68k(addr, w)) return w;
+    }
     if (addr < 0x400000) return cart_.read16(addr);
     if (addr >= 0xE00000) return static_cast<uint16_t>(ram_[addr & 0xFFFF] << 8 | ram_[(addr & 0xFFFF) + 1]);
     if (addr >= 0xC00000) return addr < 0xC00020 ? readVdp(addr) : 0xFFFF;
@@ -324,6 +405,7 @@ uint16_t MegaDrive::read16(uint32_t addr) {
 void MegaDrive::write8(uint32_t addr, uint8_t value) {
     addr &= 0xFFFFFF;
     if (mars_ && mars_->write68k(addr, static_cast<uint16_t>(value << 8 | value), !(addr & 1), (addr & 1) != 0)) return;
+    if (mcd_ && mcd_->write68k(addr & ~1u, static_cast<uint16_t>(value << 8 | value), !(addr & 1), (addr & 1) != 0)) return;
     if (addr >= 0xE00000) {
         ram_[addr & 0xFFFF] = value;
     } else if (addr < 0x400000) {
@@ -344,6 +426,7 @@ void MegaDrive::write8(uint32_t addr, uint8_t value) {
 void MegaDrive::write16(uint32_t addr, uint16_t value) {
     addr &= 0xFFFFFE;
     if (mars_ && mars_->write68k(addr, value, true, true)) return;
+    if (mcd_ && mcd_->write68k(addr, value, true, true)) return;
     if (addr >= 0xE00000) {
         ram_[addr & 0xFFFF] = static_cast<uint8_t>(value >> 8);
         ram_[(addr & 0xFFFF) + 1] = static_cast<uint8_t>(value);
@@ -471,10 +554,20 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         mixer_.state(w);
         block("MIX ", w.data());
     }
+    if (mars_ || mcd_) {
+        StateWriter w;
+        mixer_.addOnState(w);
+        block("MIXA", w.data());
+    }
     if (mars_) {
         StateWriter w;
         mars_->state(w);
         block("32X ", w.data());
+    }
+    if (mcd_) {
+        StateWriter w;
+        mcd_->state(w);
+        block("MCD ", w.data());
     }
     if (quick) {
         // No thumbnail: nobody looks at a rewind snapshot.
@@ -554,7 +647,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
 
     bool ok = true;
     bool hasMixer = false;
-    std::vector<uint8_t> thumbnail;
+    std::vector<uint8_t> thumbnail, addOnState;
     while (ok && !r.atEnd()) {
         uint32_t id = 0, size = 0;
         r(id, size);
@@ -579,6 +672,10 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("32X ")) {
             if (mars_) mars_->state(b);
         }
+        else if (id == fourcc("MCD ")) {
+            if (mcd_) mcd_->state(b);
+        }
+        else if (id == fourcc("MIXA")) addOnState = data;
         else if (id == fourcc("MIX ")) {
             mixer_.reset();
             mixer_.state(b);
@@ -608,12 +705,18 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     }
     configureFor(static_cast<Region>(region & 3));
     if (!hasMixer) mixer_.reset();
+    if (!addOnState.empty()) {
+        // After the main mixer block, which empties the queue.
+        StateReader b(addOnState.data(), addOnState.size());
+        mixer_.addOnState(b);
+    }
     loadedThumbnail_ = std::move(thumbnail);
     mixer_.clearSamples();
     psgBuffer_.clear();
     ym_.samples().clear();
     psg_.clearSamples();
     if (mars_) mars_->samples().clear();
+    if (mcd_) mcd_->samples().clear();
     frames_ = frames;
     updateIrq();
     return true;
