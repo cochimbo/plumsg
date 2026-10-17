@@ -16,6 +16,7 @@
 #include <filesystem>
 
 #include "megadrive.h"
+#include "sh2.h"
 #include "system.h"
 #include "miniz.h"
 #include "render/planes.h"
@@ -417,6 +418,112 @@ void testPal() {
     check((md.peek(0xA10001) & 0xC0) == 0xC0, "PAL: version register says overseas and PAL");
 }
 
+// The SH-2 on a flat 64 KB of big-endian RAM: loops, delayed branches (with a
+// PC-relative load in the slot), the step division, interrupts, the division unit,
+// the DMA controller and the serial link between two CPUs.
+struct FlatSh2Bus : Sh2Bus {
+    std::vector<uint8_t> ram = std::vector<uint8_t>(0x10000);
+    uint32_t sh2Read(Sh2&, uint32_t addr, int size) override {
+        uint32_t v = 0;
+        for (int i = 0; i < size; ++i) v = v << 8 | ram[(addr + static_cast<uint32_t>(i)) & 0xFFFF];
+        return v;
+    }
+    void sh2Write(Sh2&, uint32_t addr, uint32_t value, int size) override {
+        for (int i = 0; i < size; ++i)
+            ram[(addr + static_cast<uint32_t>(i)) & 0xFFFF] = static_cast<uint8_t>(value >> (8 * (size - 1 - i)));
+    }
+    void put16(uint32_t a, std::initializer_list<uint16_t> ops) {
+        for (uint16_t op : ops) {
+            ram[a & 0xFFFF] = static_cast<uint8_t>(op >> 8);
+            ram[(a + 1) & 0xFFFF] = static_cast<uint8_t>(op);
+            a += 2;
+        }
+    }
+    void put32(uint32_t a, uint32_t v) { put16(a, {static_cast<uint16_t>(v >> 16), static_cast<uint16_t>(v)}); }
+};
+
+void testSh2() {
+    FlatSh2Bus bus;
+    Sh2 cpu(bus, 0);
+    bus.put32(0, 0x100);
+    bus.put32(4, 0x1000);
+    bus.put16(0x100, {0xE00A, 0xE100,  // MOV #10,R0; MOV #0,R1
+                      0x310C, 0x4010,  // loop: ADD R0,R1; DT R0
+                      0x8BFC,          // BF loop
+                      0xB011,          // BSR sub
+                      0xE207,          // (slot) MOV #7,R2
+                      0xD304,          // MOV.L @(0x120),R3
+                      0x001B});        // SLEEP
+    bus.put32(0x120, 0x12345678);
+    bus.put16(0x130, {0x7201, 0x000B, 0xC701});  // sub: ADD #1,R2; RTS; (slot) MOVA @(4,PC),R0
+    cpu.reset();
+    for (int i = 0; i < 200 && !cpu.sleeping(); ++i) cpu.step();
+    check(cpu.sleeping() && cpu.reg(1) == 55, "SH-2: bucle con DT y BF");
+    check(cpu.reg(2) == 8, "SH-2: BSR y RTS con sus huecos de retardo");
+    check(cpu.reg(0) == 0x114, "SH-2: MOVA en un hueco de retardo usa el destino del salto");
+    check(cpu.reg(3) == 0x12345678, "SH-2: MOV.L relativo al PC");
+
+    // 1000 / 7 with the step division of the manual.
+    bus.put32(0, 0x200);
+    {
+        uint32_t a = 0x200;
+        bus.put16(a, {0x9116, 0xE007, 0x4028, 0x0019});  // MOV.W @(0x230),R1; MOV #7,R0; SHLL16 R0; DIV0U
+        a += 8;
+        for (int i = 0; i < 16; ++i, a += 2) bus.put16(a, {0x3104});  // DIV1 R0,R1
+        bus.put16(a, {0x4124, 0x611D, 0x001B});  // ROTCL R1; EXTU.W R1,R1; SLEEP
+        bus.put16(0x230, {1000});                // the word MOV.W reads
+    }
+    cpu.reset();
+    for (int i = 0; i < 200 && !cpu.sleeping(); ++i) cpu.step();
+    check(cpu.reg(1) == 142, "SH-2: división paso a paso con DIV0U y DIV1");
+
+    // An external interrupt at level 12 takes vector 70 and RTE comes back.
+    bus.put32(0, 0x300);
+    bus.put32(70 * 4, 0x380);
+    bus.put16(0x300, {0xE000, 0x400E, 0xAFFE, 0x0009});  // MOV #0,R0; LDC R0,SR; loop: BRA loop; NOP
+    bus.put16(0x380, {0xE501, 0x002B, 0x0009});          // MOV #1,R5; RTE; NOP
+    cpu.reset();
+    for (int i = 0; i < 4; ++i) cpu.step();
+    cpu.setIrl(12);
+    cpu.step();
+    const bool entered = cpu.pc() == 0x380 && ((cpu.sr() >> 4) & 15) == 12;
+    cpu.setIrl(0);
+    cpu.step();
+    cpu.step();
+    check(entered && cpu.reg(5) == 1 && cpu.pc() == 0x304 && ((cpu.sr() >> 4) & 15) == 0,
+          "SH-2: interrupción externa y vuelta con RTE");
+
+    // The division unit.
+    cpu.write(0xFFFFFF00, 7, 4);
+    cpu.write(0xFFFFFF04, static_cast<uint32_t>(-100), 4);
+    check(static_cast<int32_t>(cpu.read(0xFFFFFF04, 4)) == -14 && static_cast<int32_t>(cpu.read(0xFFFFFF10, 4)) == -2,
+          "SH-2: unidad de división de 32 bits");
+
+    // A DMA copy of eight words, requested by the controller itself.
+    for (int i = 0; i < 16; ++i) bus.ram[0x400 + i] = static_cast<uint8_t>(i + 1);
+    cpu.write(0xFFFFFF80, 0x400, 4);
+    cpu.write(0xFFFFFF84, 0x500, 4);
+    cpu.write(0xFFFFFF88, 8, 4);
+    cpu.write(0xFFFFFF8C, 0x5601, 4);
+    cpu.write(0xFFFFFFB0, 1, 4);
+    cpu.step();
+    check(std::equal(bus.ram.begin() + 0x400, bus.ram.begin() + 0x410, bus.ram.begin() + 0x500) &&
+              (cpu.read(0xFFFFFF8C, 4) & 2),
+          "SH-2: copia por DMA");
+
+    // A byte through the serial link to the other CPU.
+    Sh2 other(bus, 1);
+    cpu.setPeer(&other);
+    other.setPeer(&cpu);
+    other.write(0xFFFFFE02, 0x10, 1);  // receiver on
+    cpu.write(0xFFFFFE02, 0x20, 1);    // transmitter on
+    cpu.write(0xFFFFFE03, 0x42, 1);
+    cpu.write(0xFFFFFE04, 0x7F, 1);  // clear TDRE: send
+    cpu.write(0xFFFFFFB0, 0, 4);
+    cpu.step();
+    check(other.read(0xFFFFFE05, 1) == 0x42 && (other.read(0xFFFFFE04, 1) & 0x40), "SH-2: puerto serie entre las dos CPU");
+}
+
 }  // namespace
 
 void testRewindBuffer() {
@@ -718,6 +825,7 @@ int main() {
     testCheats();
     testLibraryNames();
     testSystems();
+    testSh2();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
