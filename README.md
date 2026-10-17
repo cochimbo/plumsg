@@ -1,6 +1,6 @@
 # plumsg
 
-Emulador de **Sega Mega Drive / Genesis** para Windows (y Linux) con un efecto
+Emulador de **Sega Mega Drive / Genesis** y **32X** para Windows (y Linux) con un efecto
 **pseudo-3D** que separa las capas de la consola y las pone a distintas profundidades, y
 con **estados guardados** (savestates). Parte de [plumgg](https://github.com/cochimbo/plumgg),
 el emulador de Game Gear, del que hereda el Z80, el PSG, el frontend y el efecto 3D.
@@ -26,6 +26,12 @@ Primera versión. Lo que hay:
   remuestreados a la salida.
 - **Cartuchos** `.bin`, `.md`, `.gen`, `.smd` (entrelazado) y dentro de `.zip`; SRAM a
   `.sav` junto a la ROM; mapper de Super Street Fighter II.
+- **32X** (`.32x`, o un `.bin` con su cabecera): las dos CPU SH-2 con sus módulos
+  (división, DMA, temporizadores, puerto serie entre ellas), el VDP de la 32X (los modos de
+  píxeles empaquetados, color directo y por tramos, con su paleta y la prioridad frente a
+  la Mega Drive), el sonido PWM, los registros de comunicación y la FIFO del 68000. No
+  hace falta BIOS: plumsg hace lo que hacen las ROM de arranque. En el 3D, la imagen de la
+  32X va plana al fondo y el efecto sigue en los planos de la Mega Drive.
 - **Mandos** de 3 y 6 botones, dos jugadores, región automática o forzada.
 - **Estados**: 10 ranuras por juego con fecha y miniatura.
 - **Pseudo-3D**: cinco planos (cielo, plano B, plano A, sprites y tiles con prioridad),
@@ -38,11 +44,11 @@ Primera versión. Lo que hay:
 - **Trucos** Game Genie y Action Replay, guardados por juego.
 - **Biblioteca de juegos** con carátulas, que se descargan solas de libretro-thumbnails,
   con varias carpetas y una pestaña por consola (Mega Drive, 32X y Mega CD).
-- **BIOS del Mega CD**: se indica dónde está la de cada región (no viene con plumsg). La
-  32X y el Mega CD todavía no arrancan: llegan en la 0.0.6 y la 0.0.7.
+- **BIOS del Mega CD**: se indica dónde está la de cada región (no viene con plumsg). El
+  Mega CD todavía no arranca: llega en la 0.0.7.
 
 No hay ROMs comerciales en el repositorio ni en CI: las pruebas usan una ROM generada por el
-propio proyecto (`tests/test_rom.h`).
+propio proyecto (`tests/test_rom.h`) y un programa de 32X propio (`tests/mars/`).
 
 ## Uso
 
@@ -153,7 +159,12 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   separación en planos del 3D (con la cámara recta, el 3D tiene que verse igual que el 2D),
   la cámara viva, los perfiles 3D, los códigos de trucos (Game Genie descodificado como
   Genesis Plus GX), los nombres de la biblioteca y cómo se reconoce la consola de cada
-  juego, las pistas de un `.cue` y las BIOS del Mega CD.
+  juego, las pistas de un `.cue` y las BIOS del Mega CD. De la 32X: instrucciones de la
+  SH-2 y sus módulos, el arranque sin BIOS, el dibujo sobre la imagen de la Mega Drive y
+  los estados, y un programa en C (`tests/mars/program.c`) que las dos SH-2 ejecutan y
+  tiene que dar exactamente lo mismo que el PC (división de libgcc, aritmética de 64 bits
+  y de coma flotante...), más interrupciones, paleta y sonido PWM. Se recompila con
+  `tests/mars/build.sh` (hace falta `gcc-sh-elf`); el resultado va en el repositorio.
 - `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la
@@ -170,4 +181,5 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
 
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
 miniz (MIT, en `third_party/miniz`), stb_image (dominio público o MIT, en `third_party/stb`),
-ymfm (BSD-3-Clause). Las carátulas son de libretro-thumbnails y no van en el repositorio.
+ymfm (BSD-3-Clause). La 32X se ha escrito con la documentación de Sega y el código de
+[ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas son de libretro-thumbnails y no van en el repositorio.
