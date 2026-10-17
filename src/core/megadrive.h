@@ -49,6 +49,7 @@ public:
     void powerCycle();  // also clears memory
 
     // Auto follows the ROM header. Takes effect on the next reset or power cycle.
+    // Mega CD discs always run in their own region, whatever this says.
     void setRegion(Region r);
     Region region() const { return effectiveRegion_; }
     bool pal() const { return effectiveRegion_ == Region::EuropePal; }
@@ -152,6 +153,7 @@ private:
 
     Region region_ = Region::Auto;
     Region effectiveRegion_ = Region::UsaNtsc;
+    Region discRegion_ = Region::UsaNtsc;  // what the disc's security code is for
     uint64_t now_ = 0;         // master clock of whoever is running
     uint64_t lineStart_ = 0;
     uint64_t m68kClock_ = 0;   // master clocks the 68000 has reached

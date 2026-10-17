@@ -144,7 +144,8 @@ bool Ui::handleStateMenu(const SDL_Event& e) {
 }
 
 bool Ui::keyboardBusy() const {
-    return capture_.active || stateMenu_.open || showLibrary_ || browser_.isOpen() || ImGui::GetIO().WantCaptureKeyboard;
+    return capture_.active || stateMenu_.open || showLibrary_ || browser_.isOpen() || !error_.empty() ||
+           ImGui::GetIO().WantCaptureKeyboard;
 }
 
 bool Ui::mouseBusy() const { return ImGui::GetIO().WantCaptureMouse; }
@@ -208,6 +209,7 @@ UiActions Ui::frame(const UiState& state) {
     if (stateMenu_.save >= 0) out.saveState = stateMenu_.save;
     stateMenu_.load = stateMenu_.save = -1;
     if (stateMenu_.open) drawStateMenu(state);
+    if (!error_.empty()) drawError();
     std::string picked;
     if (browser_.draw(&picked)) {
         switch (browseFor_) {
@@ -704,6 +706,27 @@ void Ui::drawAbout() {
     ImGui::BulletText("Flechas  cruceta;  A S D  botones A B C;  Q W E  botones X Y Z");
     ImGui::BulletText("Intro  Start;  Mayús derecha  Mode");
     ImGui::End();
+}
+
+void Ui::drawError() {
+    const char* const kTitle = "plumsg##error";
+    if (!ImGui::IsPopupOpen(kTitle)) ImGui::OpenPopup(kTitle);
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (!ImGui::BeginPopupModal(kTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
+        return;
+    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+    ImGui::TextUnformatted(error_.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::Spacing();
+    // The mouse may be hidden in full screen: Enter, Esc or the pad's A close it too.
+    bool close = ImGui::Button("Aceptar", ImVec2(ImGui::GetFontSize() * 8.0f, 0));
+    for (ImGuiKey key : {ImGuiKey_Enter, ImGuiKey_KeypadEnter, ImGuiKey_Escape, ImGuiKey_GamepadFaceDown})
+        close |= ImGui::IsKeyPressed(key, false);
+    if (close) {
+        error_.clear();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
 }
 
 void Ui::drawOverlays(const UiState& state) {

@@ -51,7 +51,10 @@ void msf(int32_t frames, int& m, int& s, int& f) {
 
 }  // namespace
 
-MegaCd::MegaCd() { powerOn(); }
+MegaCd::MegaCd() {
+    powerOn();
+    formatBackupRam();  // until the frontend loads the saved one
+}
 
 void MegaCd::insert(CdImage* disc) {
     disc_ = disc;
