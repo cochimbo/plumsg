@@ -108,6 +108,10 @@ Settings Settings::load(const std::string& path) {
         } else if (section == "bios") {
             for (int i = 0; i < 3; ++i)
                 if (key == kBiosKeys[i]) s.cdBios[static_cast<size_t>(i)] = value;
+        } else if (section == "red") {
+            if (key == "puerto") s.netPort = std::clamp(std::atoi(value.c_str()), 1, 65535);
+            else if (key == "direccion") s.netAddress = value;
+            else if (key == "retardo") s.netInputDelay = std::clamp(std::atoi(value.c_str()), 0, 6);
         } else if (section == "recientes") {
             if (key == "rom" && !value.empty() && s.recent.size() < kMaxRecent) s.recent.push_back(value);
             else if (key == "ultima_carpeta") s.lastFolder = value;
@@ -162,7 +166,12 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "\n[bios]\n"
         << "# Las BIOS del Mega CD de cada región (no vienen con plumsg).\n";
     for (int i = 0; i < 3; ++i) out << kBiosKeys[i] << " = " << cdBios[static_cast<size_t>(i)] << "\n";
-    out
+    out << "\n[red]\n"
+        << "# puerto: el puerto UDP para alojar partidas. direccion: el último anfitrión al que te uniste.\n"
+        << "# retardo: fotogramas entre pulsar un botón y que haga efecto en una partida en red (0 a 6).\n"
+        << "puerto = " << netPort << "\n"
+        << "direccion = " << netAddress << "\n"
+        << "retardo = " << netInputDelay << "\n"
         << "\n[recientes]\n";
     if (!lastFolder.empty()) out << "ultima_carpeta = " << lastFolder << "\n";
     for (const auto& r : recent) out << "rom = " << r << "\n";

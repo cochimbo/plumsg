@@ -67,3 +67,26 @@ run(2 --test-rom --do "10 jump")
 run(2 --test-rom --do "ten start")
 run(2 --test-rom --frames)
 run(2 --test-rom --no-such-option)
+
+# Netplay over UDP on this machine: a host and a guest, each with its own player's
+# script, see the same frames as one console fed both scripts.
+file(WRITE "${WORK}/p1.txt" "10-40 right\n30+20 a\n100-150 up b\n")
+file(WRITE "${WORK}/p2.txt" "5-25 p2.left\n60-90 p2.c p2.start\n120-200 p2.down\n")
+execute_process(
+  COMMAND "${HEADLESS}" --two-pad-test-rom --frames 200 --netplay-host 47845 --input "${WORK}/p1.txt"
+          --hash-log "${WORK}/net_host.txt" --quiet
+  COMMAND "${HEADLESS}" --two-pad-test-rom --frames 200 --netplay-join 127.0.0.1:47845 --input "${WORK}/p2.txt"
+          --hash-log "${WORK}/net_guest.txt" --quiet
+  RESULTS_VARIABLE codes OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT codes STREQUAL "0;0")
+  message(FATAL_ERROR "netplay host and guest ended with ${codes}\n${out}${err}")
+endif()
+file(READ "${WORK}/p1.txt" p1)
+file(READ "${WORK}/p2.txt" p2)
+file(WRITE "${WORK}/both.txt" "${p1}${p2}")
+run(0 --two-pad-test-rom --frames 200 --input "${WORK}/both.txt" --expect-log "${WORK}/net_host.txt" --quiet)
+run(0 --two-pad-test-rom --frames 200 --input "${WORK}/both.txt" --expect-log "${WORK}/net_guest.txt" --quiet)
+# And the log really depends on pad 2: without its script it goes different.
+run(3 --two-pad-test-rom --frames 200 --input "${WORK}/p1.txt" --expect-log "${WORK}/net_guest.txt" --quiet)
+# Only buttons can be scripted in netplay.
+run(2 --two-pad-test-rom --netplay-host 47846 --do "10 reset")

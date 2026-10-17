@@ -12,10 +12,12 @@
 #include <vector>
 
 #include "../core/megadrive.h"
+#include "../core/netplay.h"
 #include "../core/rewind.h"
 #include "../core/system.h"
 #include "../render/gl_renderers.h"
 #include "../render/profile3d.h"
+#include "../net/udp.h"
 #include "audio.h"
 #include "input.h"
 #include "miniz.h"
@@ -98,6 +100,9 @@ struct App {
     std::vector<Cheat> cheats;  // the loaded game's
     std::vector<SlotInfo> slots = std::vector<SlotInfo>(kSlots);
     std::string lastError;  // why the last load failed
+    // Joined a netplay game: the console runs the host's game, cartridge save
+    // included, which must not overwrite ours. Until another game is loaded.
+    bool hostsBattery = false;
 
     std::string savePath() const { return withoutExtension(romPath) + ".sav"; }
     std::string statePath(int slot) const {
@@ -136,7 +141,7 @@ struct App {
 
     // Cartridge SRAM, or the Mega CD's backup RAM, next to the game.
     void saveBattery() {
-        if (!romLoaded) return;
+        if (!romLoaded || hostsBattery) return;
         if (MegaCd* cd = console.megaCd()) {
             if (cd->backupRamChanged() &&
                 writeFile(savePath(), std::vector<uint8_t>(cd->backupRam().begin(), cd->backupRam().end())))
@@ -171,6 +176,7 @@ struct App {
             return false;
         }
         romPath = path;
+        hostsBattery = false;
         lastError.clear();
         loadBattery();
         romLoaded = true;
@@ -281,6 +287,8 @@ struct CommandLine {
     int fullscreen = -1;          // --pantalla-completa / --ventana
     int region = -1;              // --region auto|jp|us|eu (a Region)
     int slot = -1;                // --estado N: load the game's state N once it is open
+    bool netHost = false;         // --alojar: host a netplay game with the open game
+    std::string netJoin;          // --unirse address: join that host
     bool help = false;            // --ayuda
     std::vector<std::string> unknown;  // options plumsg does not know
 };
@@ -294,6 +302,8 @@ const char* kHelp =
     "  --filtro f             ninguno, scanlines o crt\n"
     "  --region r             auto, jp, us o eu\n"
     "  --estado N             cargar el estado guardado N (0-9) del juego\n"
+    "  --alojar               alojar una partida en red con el juego (puerto del menú Red)\n"
+    "  --unirse direccion     unirse a la partida en red de ese anfitrión (IP:puerto)\n"
     "  --biblioteca carpeta   abrir la biblioteca de esa carpeta (se puede repetir)\n"
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
     "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
@@ -334,6 +344,10 @@ CommandLine parse(int argc, char** argv) {
             const long slot = std::strtol(n.c_str(), &end, 10);
             if (!n.empty() && *end == 0 && slot >= 0 && slot < kSlots) c.slot = static_cast<int>(slot);
             else c.unknown.push_back(a + " " + n);
+        } else if (a == "--alojar" || a == "--host") c.netHost = true;
+        else if (a == "--unirse" || a == "--join") {
+            c.netJoin = next();
+            if (c.netJoin.empty()) c.unknown.push_back(a);
         } else if (a == "--ayuda" || a == "--help" || a == "-h" || a == "/?") c.help = true;
         else if (a.size() > 1 && a[0] == '-') c.unknown.push_back(a);
         else c.rom = a;
@@ -556,12 +570,57 @@ int main(int argc, char** argv) {
         }
         save();
     };
+    // Netplay. The session talks through the socket, so it goes first on the way out.
+    std::unique_ptr<UdpTransport> netSocket;
+    std::unique_ptr<NetplaySession> net;
+    NetplaySession::Phase netPhase = NetplaySession::Phase::Ended;
+    // Connected (or connecting): what would make the two consoles differ is off.
+    auto netPlaying = [&] { return net && net->phase() != NetplaySession::Phase::Waiting; };
+    auto stopNet = [&](std::string why, bool error) {  // a copy: it may be the session's, gone below
+        if (!net) return;
+        net->end();
+        net.reset();
+        netSocket.reset();
+        if (app->romLoaded) app->applyCheats();
+        rewind.clear();
+        if (error) ui->showError(why);
+        else if (!why.empty()) ui->notify(why);
+    };
+    auto startNet = [&](bool host) {
+        stopNet("", false);
+        if (!app->romLoaded) {
+            ui->showError("Abre primero el juego: los dos tenéis que tener abierto el mismo.");
+            return;
+        }
+        auto socket = std::make_unique<UdpTransport>();
+        if (!socket->open(host ? settings.netPort : 0) ||
+            (!host && !socket->setPeer(settings.netAddress, settings.netPort))) {
+            ui->showError(socket->error());
+            return;
+        }
+        NetplaySession::Config config;
+        config.inputDelay = settings.netInputDelay;
+        net = std::make_unique<NetplaySession>(*socket, host ? NetplaySession::Role::Host : NetplaySession::Role::Guest,
+                                               config);
+        netSocket = std::move(socket);
+        netPhase = net->phase();
+        // ROM cheats change the cartridge, which the savestate the guest gets does not carry.
+        app->console.setCheats({});
+        paused = slowMotion = false;
+        ui->notify(host ? "Esperando al otro jugador en el puerto " + std::to_string(settings.netPort)
+                        : "Conectando con " + settings.netAddress);
+    };
     auto selectSlot = [&](int delta) {
         settings.stateSlot = (settings.stateSlot + delta + kSlots) % kSlots;
         const SlotInfo& s = app->slots[static_cast<size_t>(settings.stateSlot)];
         ui->notify("Ranura " + std::to_string(settings.stateSlot) + (s.used ? " (" + s.when + ")" : " (vacía)"));
         save();
     };
+    if (app->romLoaded && (cmd.netHost || !cmd.netJoin.empty())) {
+        if (!cmd.netJoin.empty()) settings.netAddress = cmd.netJoin;
+        startNet(cmd.netHost);
+        ui->openNetplay();  // shows how the connection goes
+    }
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
@@ -570,6 +629,7 @@ int main(int argc, char** argv) {
             switch (e.type) {
                 case SDL_QUIT: running = false; break;
                 case SDL_DROPFILE:
+                    stopNet("Has salido de la partida en red", false);
                     load(e.drop.file);
                     SDL_free(e.drop.file);
                     break;
@@ -584,13 +644,15 @@ int main(int argc, char** argv) {
                     save();
                     break;
                 case Hotkey::SaveState: saveState(settings.stateSlot); break;
-                case Hotkey::LoadState: loadState(settings.stateSlot); break;
+                case Hotkey::LoadState:
+                    if (!netPlaying()) loadState(settings.stateSlot);
+                    break;
                 case Hotkey::PrevSlot: selectSlot(-1); break;
                 case Hotkey::NextSlot: selectSlot(1); break;
                 case Hotkey::StateMenu: ui->toggleStateMenu(); break;
                 case Hotkey::Library: ui->toggleLibrary(); break;
                 case Hotkey::SlowMotion:
-                    if (app->romLoaded) toggleSlowMotion();
+                    if (app->romLoaded && !netPlaying()) toggleSlowMotion();
                     break;
                 default: break;  // rewind and fast forward work while held, below
             }
@@ -628,13 +690,17 @@ int main(int argc, char** argv) {
                 case SDL_SCANCODE_L:
                     if (ctrl) ui->toggleLibrary();
                     break;
-                case SDL_SCANCODE_F1: app->console.reset(); break;
+                case SDL_SCANCODE_F1:
+                    if (!netPlaying()) app->console.reset();
+                    break;
                 case SDL_SCANCODE_F2:
                     settings.view = renderers[(viewIndex() + 1) % renderers.size()]->name();
                     ui->notify(std::string("Vista: ") + settings.view);
                     save();
                     break;
-                case SDL_SCANCODE_P: paused = !paused; break;
+                case SDL_SCANCODE_P:
+                    if (!netPlaying()) paused = !paused;
+                    break;
                 case SDL_SCANCODE_M:
                     settings.mute = !settings.mute;
                     ui->notify(settings.mute ? "Sonido silenciado" : "Sonido activado");
@@ -664,16 +730,52 @@ int main(int argc, char** argv) {
         uiState.gameName = app->romLoaded ? fileName(app->romPath) : std::string();
         uiState.slots = app->slots;
         uiState.cheats = &app->cheats;
+        uiState.netSession = net != nullptr;
+        uiState.netPlaying = netPlaying();
+        uiState.netProgress = -1;
+        if (net) {
+            const bool host = net->role() == NetplaySession::Role::Host;
+            switch (net->phase()) {
+                case NetplaySession::Phase::Waiting:
+                    uiState.netStatus = "Esperando al otro jugador en el puerto " + std::to_string(settings.netPort) +
+                                        ". Mientras, puedes seguir jugando: la partida empezará donde estés.";
+                    break;
+                case NetplaySession::Phase::Connecting:
+                    uiState.netStatus = "Conectando con " + settings.netAddress + "...";
+                    break;
+                case NetplaySession::Phase::Syncing:
+                    uiState.netStatus = host ? "Enviando la partida al otro jugador..." : "Recibiendo la partida del anfitrión...";
+                    uiState.netProgress = net->syncProgress();
+                    break;
+                default:
+                    uiState.netStatus = std::string("Jugando en red como jugador ") + (host ? "1" : "2") + ".\nPing: " +
+                                        std::to_string(net->pingMs()) + " ms. Retardo de los mandos: " +
+                                        std::to_string(net->config().inputDelay) + " fotogramas. Vuelta atrás: " +
+                                        std::to_string(net->lastRollback()) + " fotogramas.";
+                    if (net->desyncFrame() >= 0)
+                        uiState.netStatus += "\nLas dos consolas se han descompasado (fotograma " +
+                                             std::to_string(net->desyncFrame()) +
+                                             "): lo que veis ya no es lo mismo. Salid y volved a empezar.";
+                    break;
+            }
+        }
         const UiActions act = ui->frame(uiState);
-        if (!act.load.empty()) load(act.load);
-        if (act.reset) app->console.reset();
-        if (act.togglePause) paused = !paused;
+        if (!act.load.empty()) {
+            stopNet("Has salido de la partida en red", false);
+            load(act.load);
+        }
+        if (act.netHost) startNet(true);
+        if (act.netJoin) startNet(false);
+        if (act.netLeave) stopNet("Has salido de la partida en red", false);
+        const bool netBusy = netPlaying();
+        if (act.reset && !netBusy) app->console.reset();
+        if (act.togglePause && !netBusy) paused = !paused;
         if (act.quit) running = false;
         if (act.fullscreenChanged) setFullscreen();
         if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight());
         if (act.saveState >= 0) saveState(act.saveState);
-        if (act.loadState >= 0) loadState(act.loadState);
-        if (act.consoleChanged) {
+        if (act.loadState >= 0 && !netBusy) loadState(act.loadState);
+        if (act.consoleChanged && !netBusy) {
             // A new region needs a fresh start, like switching a real console's region.
             applyConsole();
             if (app->romLoaded) app->console.reset();
@@ -684,7 +786,7 @@ int main(int argc, char** argv) {
         if (act.rewindChanged) setRewindLimits();
         if (act.profile >= 0) setProfile(act.profile == 1);
         if (act.cheatsChanged && app->romLoaded) {
-            app->applyCheats();
+            if (!net) app->applyCheats();
             app->saveCheats();
         }
         if (act.settingsChanged) save();
@@ -704,9 +806,46 @@ int main(int argc, char** argv) {
             cam.tilt = std::clamp(cam.tilt + sy * step, kMinTilt, kMaxTilt);
         }
 
-        // The game waits while the states menu, the library or the file browser is open.
         uiState.speed.clear();
-        if (app->romLoaded && !paused && !ui->stateMenuOpen() && !ui->libraryOpen() && !ui->browserOpen()) {
+        if (net) {
+            net->poll(app->console, SDL_GetTicks());
+            const NetplaySession::Phase phase = net->phase();
+            const bool host = net->role() == NetplaySession::Role::Host;
+            if (phase != netPhase) {
+                if (phase == NetplaySession::Phase::Syncing) {
+                    rewind.clear();
+                    if (!host) app->hostsBattery = true;  // the host's state is coming
+                }
+                if (phase == NetplaySession::Phase::Playing) {
+                    ui->notify(std::string("¡Conectados! Eres el jugador ") + (host ? "1" : "2"));
+                    framesRun = 0;  // --cuadros counts the frames played together
+                }
+                netPhase = phase;
+            }
+            if (phase == NetplaySession::Phase::Ended) stopNet(net->endReason(), true);
+        }
+        if (app->romLoaded && netPlaying()) {
+            // A netplay game never waits for menus: the other player is still playing.
+            if (net->phase() == NetplaySession::Phase::Playing) {
+                const bool keyboard = !ui->keyboardBusy();
+                if (!net->shouldWait()) {
+                    app->console.setSampleRate(audio->rate());
+                    if (net->advance(app->console, input->poll(0, keyboard))) {
+                        ++framesRun;
+                        audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
+                        app->console.audio().clearSamples();
+                    }
+                }
+                uiState.speed = net->desyncFrame() >= 0 ? "Red: ¡descompasados!"
+                                                        : "Red " + std::to_string(net->pingMs()) + " ms";
+            } else {
+                uiState.speed = net->phase() == NetplaySession::Phase::Syncing ? "Red: preparando la partida"
+                                                                               : "Red: conectando";
+            }
+            pacer.reset();
+        }
+        // The game waits while the states menu, the library or the file browser is open.
+        else if (app->romLoaded && !paused && !ui->stateMenuOpen() && !ui->libraryOpen() && !ui->browserOpen()) {
             const bool keyboard = !ui->keyboardBusy();
             const bool fast = input->held(Hotkey::FastForward, keyboard);
             if (settings.rewindSeconds > 0 && input->held(Hotkey::Rewind, keyboard)) {
@@ -786,6 +925,9 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (net) net->end();
+    net.reset();
+    netSocket.reset();
     app->saveBattery();
     save();
     for (auto& s : app->slots)

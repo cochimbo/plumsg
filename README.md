@@ -53,6 +53,8 @@ Primera versión. Lo que hay:
   con varias carpetas y una pestaña por consola (Mega Drive, 32X y Mega CD).
 - **BIOS del Mega CD**: se indica dónde está la de cada región (no viene con plumsg), y
   cada disco arranca con la de su región.
+- **Juego en red** a dobles, con *rollback* como GGPO: cada uno en su ordenador, por
+  internet o en casa (ver abajo).
 
 No hay ROMs comerciales en el repositorio ni en CI: las pruebas usan una ROM generada por el
 propio proyecto (`tests/test_rom.h`), un programa de 32X propio (`tests/mars/`) y otro de
@@ -145,6 +147,35 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
 
 La configuración se guarda en `plumsg.ini`.
 
+### Jugar en red
+
+Menú **Red > Jugar en red...**. Los dos abren antes el mismo juego (la misma ROM).
+
+- Quien **aloja** (jugador 1) pulsa *Alojar*. Mientras espera puede seguir jugando: la
+  partida en red empieza en el punto en que esté, con su partida guardada del cartucho,
+  su región y sus mandos.
+- Quien **se une** (jugador 2) escribe la dirección del anfitrión (`IP` o `IP:puerto`) y
+  pulsa *Unirse*. Recibe la partida del anfitrión en un momento y empiezan los dos a la vez.
+- Cada uno juega con **sus controles del jugador 1** (teclado o mando).
+- En casa basta la dirección que muestra la ventana (la de la red local). Por internet,
+  el anfitrión abre (redirige) en su router el **puerto UDP 7845** (se cambia en la
+  ventana) hacia su ordenador y le da al otro su IP pública; o los dos usan una red
+  privada como Tailscale o ZeroTier y no hay que abrir nada. La primera vez Windows
+  pregunta si plumsg puede usar la red: hay que permitirlo.
+
+Cómo funciona: cada consola ejecuta el juego por su cuenta y solo se envían los botones.
+Lo que pulsa el otro se adivina (sigue con lo último que pulsó) hasta que llega; si se
+adivinó mal, plumsg vuelve atrás unos fotogramas con un estado guardado y los repite con
+lo bueno, sin que se note más que un pequeño salto. Así nadie espera a la red mientras el
+ping no pase de unos 150 ms. El **retardo de los mandos** (2 fotogramas por defecto)
+reduce esos saltos a cambio de un poco de retraso al pulsar. Cada segundo las dos
+consolas comparan su memoria; si alguna vez dejaran de coincidir, la ventana lo avisa.
+
+Durante la partida en red no se puede pausar, rebobinar, cambiar la velocidad, cargar
+estados, reiniciar, cambiar la región ni usar trucos (harían que las dos consolas
+dejaran de ver lo mismo). Guardar estados sí. Al que se une no se le toca su partida
+guardada del cartucho: la que usa es la del anfitrión.
+
 ### Desde la línea de comandos (LaunchBox, Playnite, muebles arcade)
 
 ```
@@ -161,6 +192,8 @@ plumsg.exe "C:\Juegos\Sonic CD.cue" --region eu --estado 1
 | `--region r` | `auto`, `jp`, `us` o `eu` |
 | `--estado N` | carga el estado guardado N (0-9) del juego al abrirlo |
 | `--biblioteca carpeta` | abre la biblioteca de esa carpeta |
+| `--alojar` | aloja una partida en red con el juego (en el puerto del menú Red) |
+| `--unirse direccion` | se une a la partida en red de ese anfitrión (`IP` o `IP:puerto`) |
 | `--ayuda` | muestra las opciones |
 
 La pantalla completa y la región que se dan así valen solo para esa vez: `plumsg.ini`
@@ -202,6 +235,9 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   unidad, la lectura de un sector por el controlador y por DMA, el chip gráfico, el PCM,
   el audio de CD y los estados. Se recompila con `tests/megacd/build.sh` (hace falta
   `binutils-m68k-linux-gnu`).
+  Del juego en red: dos sesiones conectadas por una red simulada que retrasa, desordena,
+  duplica y pierde paquetes tienen que ver los mismos fotogramas entre sí y que una sola
+  consola con los dos mandos, aunque vuelvan atrás muchas veces.
 - `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la
@@ -263,9 +299,25 @@ start mode`, y `p2.start` etc. para el segundo mando), o una orden: `screenshot
 
 Código de salida: 0 bien, 1 no se pudo leer o escribir algo, 2 opciones o guion mal
 escritos, 3 falló una comprobación (`--expect-hash`, `--expect-audio`, `--expect-log`).
-Con `--json archivo` (o `-` para la salida estándar) el resumen sale en JSON. Trae dos
-ROM propias: `--test-rom` (la de las pruebas) y `--pad-test-rom`, que pinta el fondo
-según los botones del mando 1. Las pruebas de `ctest` lo usan
+Con `--json archivo` (o `-` para la salida estándar) el resumen sale en JSON. Trae tres
+ROM propias: `--test-rom` (la de las pruebas), `--pad-test-rom`, que pinta el fondo
+según los botones del mando 1, y `--two-pad-test-rom`, en la que cada fotograma depende
+de todo lo que pulsaron los dos mandos antes (para probar el juego en red).
+
+También juega en red como la ventana, para probarlo: `--netplay-host PUERTO` aloja y
+`--netplay-join IP:PUERTO` se une, cada uno con su guion (el anfitrión usa los botones
+del mando 1 y el invitado los de `p2.`). `--net-lag MS` y `--net-loss PORCENTAJE` simulan
+una conexión lenta o que pierde paquetes. El `--hash-log` de cada uno tiene que ser igual
+al de una partida sin red con los dos guiones juntos:
+
+```
+plumsg-headless juego.md --frames 3000 --netplay-host 7845 --net-lag 60 --input p1.txt --hash-log red1.txt &
+plumsg-headless juego.md --frames 3000 --netplay-join 127.0.0.1 --net-lag 60 --input p2.txt --hash-log red2.txt
+cat p1.txt p2.txt > juntos.txt
+plumsg-headless juego.md --frames 3000 --input juntos.txt --expect-log red1.txt
+```
+
+Las pruebas de `ctest` lo usan
 (`tests/headless_tests.cmake`) y el trabajo `headless` de CI lo compila sin SDL2 y guarda
 sus capturas, sonido y hashes como artefacto.
 

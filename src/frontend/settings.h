@@ -13,7 +13,7 @@ namespace plumsg {
 
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
 // the [teclado] / [mando] sections, under [video], [audio], [consola], [velocidad],
-// [estados], [biblioteca], [bios] and [recientes].
+// [estados], [biblioteca], [bios], [red] and [recientes].
 struct Settings {
     static constexpr size_t kMaxRecent = 10;
     static constexpr int kMaxRewindSeconds = 60;
@@ -38,6 +38,12 @@ struct Settings {
     int librarySystem = -1;       // the library's tab: -1 every console, else a ConsoleSystem
     // The Mega CD's BIOS for each region (Japan, USA, Europe); plumsg does not include them.
     std::array<std::string, 3> cdBios;
+    // Netplay: the UDP port to host on (and to join when the address has none), the
+    // last host joined and the input delay in frames.
+    static constexpr int kDefaultNetPort = 7845;
+    int netPort = kDefaultNetPort;
+    std::string netAddress;
+    int netInputDelay = 2;
 
     void addRecent(const std::string& path);
     void removeRecent(const std::string& path);

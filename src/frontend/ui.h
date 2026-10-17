@@ -31,6 +31,9 @@ struct UiActions {
     bool rewindChanged = false;    // the rewind length changed
     int profile = -1;              // 1 give the game its own 3D profile, 0 drop it, -1 nothing
     bool cheatsChanged = false;    // the cheat list was edited: apply it and save it
+    bool netHost = false;          // host a netplay game on settings.netPort
+    bool netJoin = false;          // join the host at settings.netAddress
+    bool netLeave = false;         // leave the netplay game
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -51,6 +54,11 @@ struct UiState {
     std::vector<const char*> views;  // Renderer::name() of each available view
     std::vector<SlotInfo> slots;     // one per slot, 0-9
     std::vector<Cheat>* cheats = nullptr;  // the loaded game's cheats, edited in place
+    // Netplay: a session exists (hosting, joining or playing), and what to say about it.
+    bool netSession = false;
+    bool netPlaying = false;  // connected: the options that would make the consoles differ are off
+    std::string netStatus;
+    float netProgress = -1;   // 0..1 while the game is sent, else -1
 };
 
 // Menu bar and option windows, drawn with Dear ImGui (OpenGL 3) on top of the game.
@@ -81,6 +89,7 @@ public:
     void toggleLibrary();
     bool libraryOpen() const { return showLibrary_; }
     void openBios() { showBios_ = true; }
+    void openNetplay() { showNetplay_ = true; }
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
     // The states menu: a list of the slots that the pad (or the keyboard) can drive.
@@ -108,6 +117,7 @@ private:
     void drawLibrary(UiActions& out);
     void drawLibraryFolders(UiActions& out);
     void drawBios(UiActions& out);
+    void drawNetplay(const UiState& state, UiActions& out);
     void rescanLibrary();
     bool handleLibrary(const SDL_Event& e);
     std::vector<size_t> visibleGames();
@@ -128,6 +138,9 @@ private:
     bool showCheats_ = false;
     bool showLibrary_ = false;
     bool showBios_ = false;
+    bool showNetplay_ = false;
+    char netAddress_[128] = "";
+    std::vector<std::string> localAddresses_;  // this computer's, for the host to share
     bool showFolders_ = false;  // the library's list of folders, unfolded
     // What the file browser (or the system dialog) is choosing a file or folder for.
     enum class BrowseFor { Game, LibraryFolder, CdBios };

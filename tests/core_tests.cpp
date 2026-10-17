@@ -1,7 +1,8 @@
 // Core tests that need no external files: the cartridge (header, SMD, zip, SRAM), the
 // pads, the PSG, the VDP ports, the built-in test ROM drawn and heard, savestates
 // (determinism, round trip, damaged files), rewinding and the speed controls, the
-// pseudo-3D planes, the games' 3D profiles, the cheat codes and the library's names.
+// pseudo-3D planes, the games' 3D profiles, the cheat codes, the library's names and
+// netplay over a simulated network.
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -28,6 +29,8 @@
 #include "mars/mars_program.h"
 #include "megacd/megacd_program.h"
 #include "cd_image.h"
+#include "netplay.h"
+#include "pad_test_rom.h"
 
 using namespace plumsg;
 
@@ -1158,6 +1161,145 @@ void testSystems() {
     fs::remove_all(dir);
 }
 
+// A network between two netplay sessions, in memory: each packet arrives `delay`
+// milliseconds later (plus some jitter, so some overtake others), and some are lost
+// or arrive twice.
+struct SimLink {
+    struct Packet {
+        uint32_t at;
+        std::vector<uint8_t> data;
+    };
+    std::vector<Packet> toA, toB;
+    std::mt19937 rng{1234};
+    uint32_t now = 0;
+    uint32_t delay = 40;
+    int lossPercent = 10;
+
+    void post(std::vector<Packet>& q, const uint8_t* d, size_t n) {
+        if (static_cast<int>(rng() % 100) < lossPercent) return;
+        const int copies = rng() % 20 == 0 ? 2 : 1;
+        for (int i = 0; i < copies; ++i)
+            q.push_back({now + delay + static_cast<uint32_t>(rng() % 30), std::vector<uint8_t>(d, d + n)});
+    }
+    static bool take(std::vector<Packet>& q, uint32_t now, std::vector<uint8_t>& out) {
+        for (size_t i = 0; i < q.size(); ++i)
+            if (q[i].at <= now) {
+                out = std::move(q[i].data);
+                q.erase(q.begin() + static_cast<std::ptrdiff_t>(i));
+                return true;
+            }
+        return false;
+    }
+};
+
+struct SimEnd : NetTransport {
+    SimLink& link;
+    bool isA;
+    SimEnd(SimLink& l, bool a) : link(l), isA(a) {}
+    void send(const uint8_t* d, size_t n) override { link.post(isA ? link.toB : link.toA, d, n); }
+    bool receive(std::vector<uint8_t>& p) override { return SimLink::take(isA ? link.toA : link.toB, link.now, p); }
+};
+
+// What each player presses on their n-th frame: a new random pad every few frames.
+PadState scriptedPad(int player, uint32_t n) {
+    std::mt19937 rng(static_cast<uint32_t>(player * 7919 + n / 5));
+    return unpackPad(static_cast<uint16_t>(rng() & 0xFFF));
+}
+
+void testNetplay() {
+    check(packPad(unpackPad(0xA5C)) == 0xA5C && packPad(PadState{}) == 0, "netplay: los mandos caben en 12 bits");
+
+    constexpr uint32_t kFrames = 400;
+    NetplaySession::Config config;
+    config.inputDelay = 2;
+    config.maxRollback = 8;
+    // Without the network: frame f has the pads pressed on frame f - inputDelay.
+    std::vector<uint32_t> reference;
+    {
+        MegaDrive md;
+        md.loadRomData(testrom::buildTwoPadTest());
+        for (int i = 0; i < 30; ++i) md.runFrame();  // the host played a little alone first
+        for (uint32_t f = 0; f < kFrames; ++f) {
+            const bool early = f < static_cast<uint32_t>(config.inputDelay);
+            const uint32_t n = early ? 0 : f - static_cast<uint32_t>(config.inputDelay);
+            md.setPads(early ? PadState{} : scriptedPad(0, n), early ? PadState{} : scriptedPad(1, n));
+            md.runFrame();
+            reference.push_back(frameHash(md.frame()));
+        }
+    }
+
+    SimLink link;
+    SimEnd hostEnd(link, true), guestEnd(link, false);
+    NetplaySession host(hostEnd, NetplaySession::Role::Host, config);
+    NetplaySession guest(guestEnd, NetplaySession::Role::Guest, config);
+    MegaDrive a, b;
+    a.loadRomData(testrom::buildTwoPadTest());
+    b.loadRomData(testrom::buildTwoPadTest());
+    for (int i = 0; i < 30; ++i) a.runFrame();
+    b.setPadType(0, PadType::ThreeButton);  // the host's pad types win
+    std::vector<uint32_t> hashA(kFrames), hashB(kFrames);
+    host.onFrame = [&](uint32_t f, MegaDrive& md) { if (f < kFrames) hashA[f] = frameHash(md.frame()); };
+    guest.onFrame = [&](uint32_t f, MegaDrive& md) { if (f < kFrames) hashB[f] = frameHash(md.frame()); };
+    int rollbacks = 0, stalls = 0;
+    uint32_t hostTicks = 0, guestTicks = 0;
+    for (int step = 0; step < 40000; ++step) {
+        link.now = static_cast<uint32_t>(step);  // one millisecond per step
+        // The two displays tick at slightly different rates, as two monitors do.
+        const bool hostTick = step % 16 == 0, guestTick = step % 17 == 3;
+        host.poll(a, link.now);
+        guest.poll(b, link.now);
+        if (hostTick && host.frame() < kFrames) {
+            if (!host.advance(a, scriptedPad(0, host.frame()))) ++stalls;
+            rollbacks += host.lastRollback() > 0;
+            ++hostTicks;
+        }
+        if (guestTick && guest.frame() < kFrames) {
+            if (!guest.advance(b, scriptedPad(1, guest.frame()))) ++stalls;
+            rollbacks += guest.lastRollback() > 0;
+            ++guestTicks;
+        }
+        if (host.frame() >= kFrames) host.catchUp(a);
+        if (guest.frame() >= kFrames) guest.catchUp(b);
+        if (host.confirmedFrames() >= kFrames && guest.confirmedFrames() >= kFrames) break;
+    }
+    check(host.phase() == NetplaySession::Phase::Playing && guest.phase() == NetplaySession::Phase::Playing,
+          "netplay: el invitado se conecta y los dos juegan");
+    check(host.confirmedFrames() >= kFrames && guest.confirmedFrames() >= kFrames,
+          "netplay: los dos confirman todos los fotogramas pese a perder paquetes");
+    check(rollbacks > 0, "netplay: hay vueltas atrás cuando el mando del otro llega tarde");
+    check(hashA == hashB, "netplay: las dos consolas ven lo mismo en cada fotograma");
+    check(hashA == reference, "netplay: igual que jugando los dos en la misma consola");
+    check(host.desyncFrame() < 0 && guest.desyncFrame() < 0, "netplay: no se detecta ningún descompás");
+    check(host.pingMs() > 60 && host.pingMs() < 140, "netplay: el ping se mide (unos 2 x 40 ms)");
+    std::printf("     %d vueltas atrás, %d esperas, ping %d ms\n", rollbacks, stalls, host.pingMs());
+
+    guest.end();
+    for (uint32_t t = 0; t < 200; ++t) {
+        link.now += 1;
+        host.poll(a, link.now);
+    }
+    check(host.phase() == NetplaySession::Phase::Ended && host.endReason().find("salido") != std::string::npos,
+          "netplay: el anfitrión se entera de que el invitado se va");
+
+    // A guest with another game is turned away with a reason.
+    SimLink link2;
+    link2.lossPercent = 0;
+    SimEnd h2(link2, true), g2(link2, false);
+    NetplaySession host2(h2, NetplaySession::Role::Host, config);
+    NetplaySession guest2(g2, NetplaySession::Role::Guest, config);
+    MegaDrive c, d;
+    c.loadRomData(testrom::buildTwoPadTest());
+    d.loadRomData(testrom::buildPadTest());
+    for (int step = 0; step < 2000 && guest2.phase() != NetplaySession::Phase::Ended; ++step) {
+        link2.now = static_cast<uint32_t>(step);
+        host2.poll(c, link2.now);
+        guest2.poll(d, link2.now);
+    }
+    check(guest2.phase() == NetplaySession::Phase::Ended && guest2.endReason().find("otro juego") != std::string::npos &&
+              host2.phase() == NetplaySession::Phase::Waiting,
+          "netplay: un invitado con otro juego no entra y el anfitrión sigue esperando");
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -1186,6 +1328,7 @@ int main() {
     testMarsProgram();
     testCdImage();
     testMegaCd();
+    testNetplay();
     {
         // The Z80's reset also resets the YM2612; what it already played must stay.
         Ym2612 ym;

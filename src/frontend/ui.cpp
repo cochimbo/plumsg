@@ -8,6 +8,7 @@
 #include "imgui_impl_opengl3.h"
 #include "library_names.h"
 #include "../core/system.h"
+#include "../net/udp.h"
 
 namespace plumsg {
 
@@ -204,6 +205,7 @@ UiActions Ui::frame(const UiState& state) {
     library_.update();
     if (showLibrary_) drawLibrary(out);
     if (showBios_) drawBios(out);
+    if (showNetplay_) drawNetplay(state, out);
     stateMenu_.slots = static_cast<int>(state.slots.size());
     if (stateMenu_.load >= 0) out.loadState = stateMenu_.load;
     if (stateMenu_.save >= 0) out.saveState = stateMenu_.save;
@@ -269,11 +271,13 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Juego")) {
-        if (ImGui::MenuItem("Pausa", "P", state.paused, state.romLoaded)) out.togglePause = true;
-        if (ImGui::MenuItem("Reiniciar", "F1", false, state.romLoaded)) out.reset = true;
-        if (ImGui::MenuItem("Trucos...", nullptr, showCheats_, state.romLoaded)) showCheats_ = true;
+        // In a netplay game these would make the two consoles go different.
+        const bool solo = state.romLoaded && !state.netPlaying;
+        if (ImGui::MenuItem("Pausa", "P", state.paused, solo)) out.togglePause = true;
+        if (ImGui::MenuItem("Reiniciar", "F1", false, solo)) out.reset = true;
+        if (ImGui::MenuItem("Trucos...", nullptr, showCheats_, solo)) showCheats_ = true;
         ImGui::SeparatorText("Velocidad");
-        if (ImGui::MenuItem("Cámara lenta", "F9", state.slowMotion, state.romLoaded)) out.toggleSlowMotion = true;
+        if (ImGui::MenuItem("Cámara lenta", "F9", state.slowMotion, solo)) out.toggleSlowMotion = true;
         ImGui::TextDisabled("Rebobinar: mantén Retroceso (o el gatillo izquierdo)");
         ImGui::TextDisabled("Avance rápido: mantén Tab (o el gatillo derecho)");
         ImGui::SetNextItemWidth(160);
@@ -294,7 +298,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
             out.saveState = settings_.stateSlot;
         const bool used = settings_.stateSlot < static_cast<int>(state.slots.size()) &&
                           state.slots[static_cast<size_t>(settings_.stateSlot)].used;
-        if (ImGui::MenuItem(("Cargar estado" + slot).c_str(), "F8", false, state.romLoaded && used))
+        if (ImGui::MenuItem(("Cargar estado" + slot).c_str(), "F8", false, state.romLoaded && used && !state.netPlaying))
             out.loadState = settings_.stateSlot;
         if (ImGui::MenuItem("Menú de estados...", "F4")) toggleStateMenu();
         ImGui::SeparatorText("Ranura (F6 / F7)");
@@ -316,6 +320,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
     }
     if (ImGui::BeginMenu("Consola")) {
         static const char* regions[] = {"Automática (la de la ROM)", "Japón (NTSC)", "EE. UU. (NTSC)", "Europa (PAL)"};
+        ImGui::BeginDisabled(state.netPlaying);  // the host's console decides in a netplay game
         ImGui::SeparatorText("Región");
         for (int i = 0; i < 4; ++i)
             if (ImGui::MenuItem(regions[i], nullptr, static_cast<int>(settings_.region) == i)) {
@@ -333,8 +338,14 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
                 }
             ImGui::PopID();
         }
+        ImGui::EndDisabled();
         ImGui::Separator();
         if (ImGui::MenuItem("BIOS del Mega CD...", nullptr, showBios_)) showBios_ = true;
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Red")) {
+        if (ImGui::MenuItem("Jugar en red...", nullptr, showNetplay_)) showNetplay_ = true;
+        if (ImGui::MenuItem("Salir de la partida en red", nullptr, false, state.netSession)) out.netLeave = true;
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Opciones")) {
@@ -1155,6 +1166,67 @@ void Ui::drawBios(UiActions& out) {
         ImGui::SameLine();
         ImGui::TextUnformatted(biosStatus_.c_str());
     }
+    ImGui::End();
+}
+
+void Ui::drawNetplay(const UiState& state, UiActions& out) {
+    if (!ImGui::Begin("Jugar en red", &showNetplay_, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::End();
+        return;
+    }
+    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 36.0f);
+    if (ImGui::IsWindowAppearing()) {
+        localAddresses_ = UdpTransport::localAddresses();
+        std::snprintf(netAddress_, sizeof netAddress_, "%s", settings_.netAddress.c_str());
+    }
+    if (state.netSession) {
+        ImGui::TextWrapped("%s", state.netStatus.c_str());
+        if (state.netProgress >= 0) ImGui::ProgressBar(state.netProgress, ImVec2(ImGui::GetFontSize() * 36.0f, 0));
+        ImGui::Spacing();
+        if (ImGui::Button("Salir de la partida")) out.netLeave = true;
+        ImGui::PopTextWrapPos();
+        ImGui::End();
+        return;
+    }
+    ImGui::TextWrapped("Dos jugadores, cada uno en su ordenador y con el mismo juego abierto (la misma ROM). "
+                       "Quien aloja es el jugador 1 y quien se une, el jugador 2; cada uno juega con sus "
+                       "controles del jugador 1. La partida empieza donde la tenga el anfitrión.");
+    if (!state.romLoaded)
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Abre primero el juego.");
+    ImGui::BeginDisabled(!state.romLoaded);
+
+    ImGui::SeparatorText("Alojar la partida (jugador 1)");
+    ImGui::SetNextItemWidth(120);
+    if (ImGui::InputInt("Puerto UDP", &settings_.netPort, 0, 0)) settings_.netPort = std::clamp(settings_.netPort, 1, 65535);
+    if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+    ImGui::SameLine();
+    if (ImGui::Button("Alojar")) out.netHost = out.settingsChanged = true;
+    if (!localAddresses_.empty())
+        ImGui::TextWrapped("En casa, tu amigo se une a %s:%d.", localAddresses_.front().c_str(), settings_.netPort);
+    ImGui::TextDisabled("Por internet: abre (redirige) el puerto UDP %d de tu router hacia este ordenador y "
+                        "dale tu IP pública; o usad los dos una red privada como Tailscale o ZeroTier "
+                        "y no hace falta abrir nada.", settings_.netPort);
+
+    ImGui::SeparatorText("Unirse a una partida (jugador 2)");
+    ImGui::SetNextItemWidth(300);
+    const bool enter = ImGui::InputTextWithHint("Anfitrión", "IP o nombre, y :puerto si no es el de arriba",
+                                                netAddress_, sizeof netAddress_, ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SameLine();
+    if ((ImGui::Button("Unirse") || enter) && netAddress_[0]) {
+        settings_.netAddress = netAddress_;
+        out.netJoin = out.settingsChanged = true;
+    }
+
+    ImGui::SeparatorText("Ajustes");
+    ImGui::SetNextItemWidth(160);
+    ImGui::SliderInt("Retardo de los mandos", &settings_.netInputDelay, 0, 6, "%d fotogramas", ImGuiSliderFlags_AlwaysClamp);
+    if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Cuántos fotogramas tarda en hacer efecto lo que pulsas. Con más retardo hay menos\n"
+                          "saltos cuando la conexión es lenta; con 0 responde al instante pero salta más.\n"
+                          "Vale el del anfitrión. 2 va bien casi siempre.");
+    ImGui::EndDisabled();
+    ImGui::PopTextWrapPos();
     ImGui::End();
 }
 
