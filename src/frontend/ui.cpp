@@ -1,10 +1,12 @@
 #include "ui.h"
 
 #include <algorithm>
+#include <cstdio>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
+#include "library_names.h"
 
 namespace plumsg {
 
@@ -14,8 +16,9 @@ constexpr int kRows = InputConfig::kButtons + InputConfig::kHotkeys;
 constexpr const char* kRowNames[kRows] = {"Arriba", "Abajo", "Izquierda", "Derecha", "A", "B", "C", "Start",
                                           "X", "Y", "Z", "Mode", "Efecto 3D", "Guardar estado", "Cargar estado",
                                           "Ranura anterior", "Ranura siguiente", "Menú de estados",
-                                          "Rebobinar (mantener)", "Avance rápido (mantener)", "Cámara lenta"};
-static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 9, "update kRowNames");
+                                          "Rebobinar (mantener)", "Avance rápido (mantener)", "Cámara lenta",
+                                          "Biblioteca"};
+static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 10, "update kRowNames");
 
 std::vector<SDL_Scancode>& keysOf(InputConfig& c, int row, int player) {
     if (row >= InputConfig::kButtons) return c.hotkeyKeys[row - InputConfig::kButtons];
@@ -54,6 +57,7 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
 }
 
 Ui::~Ui() {
+    library_.clearTextures();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
@@ -78,7 +82,9 @@ bool Ui::handleEvent(const SDL_Event& e) {
             return true;
         }
     }
+    if (browser_.isOpen() && browser_.handleEvent(e)) return true;
     if (stateMenu_.open && handleStateMenu(e)) return true;
+    if (showLibrary_ && handleLibrary(e)) return true;
     ImGui_ImplSDL2_ProcessEvent(&e);
     return false;
 }
@@ -136,7 +142,9 @@ bool Ui::handleStateMenu(const SDL_Event& e) {
     return true;
 }
 
-bool Ui::keyboardBusy() const { return capture_.active || stateMenu_.open || ImGui::GetIO().WantCaptureKeyboard; }
+bool Ui::keyboardBusy() const {
+    return capture_.active || stateMenu_.open || showLibrary_ || browser_.isOpen() || ImGui::GetIO().WantCaptureKeyboard;
+}
 
 bool Ui::mouseBusy() const { return ImGui::GetIO().WantCaptureMouse; }
 
@@ -171,7 +179,10 @@ UiActions Ui::frame(const UiState& state) {
     if (openRequested_) {
         openRequested_ = false;
         std::string path;
-        switch (openRomDialog(window_, settings_.lastFolder, &path)) {
+        // In full screen the system dialog can open behind the game's window and never
+        // be seen, so there the built-in browser is used instead.
+        const bool fullscreen = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+        switch (fullscreen ? DialogResult::Unavailable : openRomDialog(window_, settings_.lastFolder, &path)) {
             case DialogResult::Chosen: out.load = path; break;
             case DialogResult::Cancelled: break;
             case DialogResult::Unavailable: browser_.open(settings_.lastFolder); break;
@@ -186,13 +197,26 @@ UiActions Ui::frame(const UiState& state) {
     if (showControls_) drawControls(out);
     if (showVideo_) drawVideo(state, out);
     if (showAbout_) drawAbout();
+    if (showCheats_) drawCheats(state, out);
+    library_.update();
+    if (showLibrary_) drawLibrary(out);
     stateMenu_.slots = static_cast<int>(state.slots.size());
     if (stateMenu_.load >= 0) out.loadState = stateMenu_.load;
     if (stateMenu_.save >= 0) out.saveState = stateMenu_.save;
     stateMenu_.load = stateMenu_.save = -1;
     if (stateMenu_.open) drawStateMenu(state);
     std::string picked;
-    if (browser_.draw(&picked)) out.load = picked;
+    const bool pickingFolder = browser_.pickingFolder();
+    if (browser_.draw(&picked)) {
+        if (pickingFolder) {
+            settings_.libraryFolder = picked;
+            out.settingsChanged = true;
+            library_.scan(picked);
+            libraryView_.selected = 0;
+        } else {
+            out.load = picked;
+        }
+    }
     drawOverlays(state);
     return out;
 }
@@ -216,6 +240,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
 
     if (ImGui::BeginMenu("Archivo")) {
         if (ImGui::MenuItem("Abrir ROM...", "Ctrl+O")) openRequested_ = true;
+        if (ImGui::MenuItem("Biblioteca...", "F10", showLibrary_)) toggleLibrary();
         if (ImGui::BeginMenu("Recientes", !settings_.recent.empty())) {
             for (const auto& path : settings_.recent) {
                 if (ImGui::MenuItem(fileName(path).c_str())) out.load = path;
@@ -235,6 +260,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
     if (ImGui::BeginMenu("Juego")) {
         if (ImGui::MenuItem("Pausa", "P", state.paused, state.romLoaded)) out.togglePause = true;
         if (ImGui::MenuItem("Reiniciar", "F1", false, state.romLoaded)) out.reset = true;
+        if (ImGui::MenuItem("Trucos...", nullptr, showCheats_, state.romLoaded)) showCheats_ = true;
         ImGui::SeparatorText("Velocidad");
         if (ImGui::MenuItem("Cámara lenta", "F9", state.slowMotion, state.romLoaded)) out.toggleSlowMotion = true;
         ImGui::TextDisabled("Rebobinar: mantén Retroceso (o el gatillo izquierdo)");
@@ -461,6 +487,25 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     settings_.render.scale = static_cast<ScaleMode>(scale);
     changed |= ImGui::Checkbox("Suavizar píxeles", &settings_.render.smooth);
     changed |= ImGui::Checkbox("Píxeles cuadrados (sin estirar a 4:3)", &settings_.render.squarePixels);
+    int filter = static_cast<int>(settings_.render.filter);
+    ImGui::TextUnformatted("Filtro 2D:");
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Ninguno", &filter, static_cast<int>(Filter2D::None));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Scanlines", &filter, static_cast<int>(Filter2D::Scanlines));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("CRT", &filter, static_cast<int>(Filter2D::Crt));
+    settings_.render.filter = static_cast<Filter2D>(filter);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Scanlines: las líneas oscuras entre las líneas de la imagen, como en una tele.\n"
+                          "CRT: además, la pantalla un poco curva, la máscara de colores y las esquinas\n"
+                          "más oscuras. Solo en la vista 2D; se ve mejor a pantalla completa.");
+    ImGui::BeginDisabled(settings_.render.filter == Filter2D::None);
+    float strength = settings_.render.filterStrength * 100.0f;
+    if (ImGui::SliderFloat("Intensidad del filtro", &strength, 0.0f, 100.0f, "%.0f %%"))
+        settings_.render.filterStrength = strength / 100.0f;
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::EndDisabled();
 
     ImGui::SeparatorText("Ventana");
     ImGui::BeginDisabled(settings_.fullscreen);
@@ -632,7 +677,7 @@ void Ui::drawAbout() {
     ImGui::Spacing();
     ImGui::TextUnformatted("Arrastra una ROM a la ventana o usa Archivo > Abrir ROM.");
     ImGui::SeparatorText("Atajos");
-    ImGui::BulletText("Ctrl+O  abrir ROM");
+    ImGui::BulletText("Ctrl+O  abrir ROM;  F10  biblioteca de juegos");
     ImGui::BulletText("F1  reiniciar");
     ImGui::BulletText("F2  cambiar de vista");
     ImGui::BulletText("P  pausa");
@@ -659,7 +704,7 @@ void Ui::drawOverlays(const UiState& state) {
 
     if (!state.romLoaded) {
         // Behind every window, so it never shows through the option windows.
-        const char* hint = "Arrastra una ROM aquí o usa Archivo > Abrir ROM";
+        const char* hint = "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)";
         const ImVec2 size = ImGui::CalcTextSize(hint);
         const ImVec2 pos(vp->Pos.x + (vp->Size.x - size.x) * 0.5f, top + (vp->Size.y - menuHeight_ - size.y) * 0.5f);
         ImGui::GetBackgroundDrawList()->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text), hint);
@@ -685,5 +730,295 @@ void Ui::drawOverlays(const UiState& state) {
         ImGui::End();
     }
 }
+
+void Ui::toggleLibrary() {
+    showLibrary_ = !showLibrary_;
+    if (!showLibrary_) return;
+    if (!library_.scanned() || library_.folder() != settings_.libraryFolder) {
+        library_.scan(settings_.libraryFolder);
+        libraryView_.selected = 0;
+    }
+    libraryView_.scroll = true;
+}
+
+std::vector<size_t> Ui::visibleGames() {
+    const std::string filter = searchKey(libraryView_.search);
+    std::vector<size_t> out;
+    const auto& games = library_.games();
+    for (size_t i = 0; i < games.size(); ++i)
+        if (filter.empty() || games[i].key.find(filter) != std::string::npos) out.push_back(i);
+    return out;
+}
+
+// While the library is open it owns the pad and the keyboard (except while typing in
+// the search box): the arrows move through the grid, A (or Enter) plays the game, B
+// (or Esc) closes it, Y (or Ctrl+F) goes to the search box.
+bool Ui::handleLibrary(const SDL_Event& e) {
+    if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_KEYUP &&
+        e.type != SDL_CONTROLLERBUTTONUP && e.type != SDL_TEXTINPUT)
+        return false;
+    const bool typing = ImGui::GetIO().WantTextInput;
+    if (typing && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_CONTROLLERBUTTONUP) {
+        // The search box gets the keys; Enter or the arrows hand them back to the grid.
+        if (e.type == SDL_KEYDOWN && (e.key.keysym.scancode == SDL_SCANCODE_RETURN ||
+                                      e.key.keysym.scancode == SDL_SCANCODE_DOWN)) {
+            ImGui::SetWindowFocus(nullptr);
+            return true;
+        }
+        return false;
+    }
+    // Releases always reach ImGui, so it never thinks a key is still held.
+    if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN) return e.type == SDL_TEXTINPUT;
+    if (input_.hotkeyFor(e) == Hotkey::Library) {
+        showLibrary_ = false;
+        return true;
+    }
+    enum { None, Up, Down, Left, Right, Play, Close, Search } action = None;
+    if (e.type == SDL_KEYDOWN) {
+        const bool ctrl = (e.key.keysym.mod & KMOD_CTRL) != 0;
+        switch (e.key.keysym.scancode) {
+            case SDL_SCANCODE_UP: action = Up; break;
+            case SDL_SCANCODE_DOWN: action = Down; break;
+            case SDL_SCANCODE_LEFT: action = Left; break;
+            case SDL_SCANCODE_RIGHT: action = Right; break;
+            case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: action = Play; break;
+            case SDL_SCANCODE_ESCAPE: action = Close; break;
+            case SDL_SCANCODE_F: if (ctrl) action = Search; break;
+            default: return false;  // let ImGui have the rest (clicks on buttons, Tab...)
+        }
+    } else {
+        switch (e.cbutton.button) {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP: action = Up; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN: action = Down; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT: action = Left; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: action = Right; break;
+            case SDL_CONTROLLER_BUTTON_A: case SDL_CONTROLLER_BUTTON_START: action = Play; break;
+            case SDL_CONTROLLER_BUTTON_B: action = Close; break;
+            case SDL_CONTROLLER_BUTTON_Y: action = Search; break;
+            default: break;
+        }
+    }
+    const int count = static_cast<int>(visibleGames().size());
+    const int cols = std::max(1, libraryView_.columns);
+    int& sel = libraryView_.selected;
+    switch (action) {
+        case Up: if (sel - cols >= 0) sel -= cols; break;
+        case Down: sel = std::min(count - 1, sel + cols); break;
+        case Left: sel = std::max(0, sel - 1); break;
+        case Right: sel = std::min(count - 1, sel + 1); break;
+        case Play: if (count > 0) libraryView_.load = sel; break;
+        case Close: showLibrary_ = false; break;
+        case Search: libraryView_.focusSearch = true; break;
+        case None: break;
+    }
+    sel = std::clamp(sel, 0, std::max(0, count - 1));
+    libraryView_.scroll = action == Up || action == Down || action == Left || action == Right;
+    return true;
+}
+
+void Ui::drawLibrary(UiActions& out) {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const float top = static_cast<float>(menuHeight_);
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + top), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(vp->Size.x, vp->Size.y - top), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.96f);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
+    if (!ImGui::Begin("Biblioteca", &showLibrary_, flags)) {
+        ImGui::End();
+        return;
+    }
+    auto& games = library_.games();
+
+    if (settings_.libraryFolder.empty()) {
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Elige la carpeta donde tienes tus ROMs de Mega Drive.");
+        ImGui::TextDisabled("Se buscan también en sus subcarpetas.");
+        if (ImGui::Button("Elegir carpeta...")) browser_.open(settings_.lastFolder, true);
+        ImGui::End();
+        return;
+    }
+
+    ImGui::TextDisabled("Carpeta: %s", settings_.libraryFolder.c_str());
+    if (ImGui::Button("Cambiar carpeta...")) browser_.open(settings_.libraryFolder, true);
+    ImGui::SameLine();
+    if (ImGui::Button("Volver a buscar")) library_.scan(settings_.libraryFolder);
+    ImGui::SameLine();
+    int missing = 0;
+    for (const auto& g : games) missing += g.cover == Library::Cover::Missing;
+    ImGui::BeginDisabled(missing == 0 || library_.pending() > 0);
+    if (ImGui::Button("Descargar carátulas que faltan")) library_.downloadMissing();
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Busca las carátulas en libretro-thumbnails (internet) por el nombre de cada ROM\n"
+                          "y las guarda en la carpeta caratulas de plumsg. También puedes poner tus\n"
+                          "propias imágenes: un .png o .jpg con el mismo nombre que la ROM, a su lado.");
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Abrir la biblioteca al empezar", &settings_.libraryAtStart)) out.settingsChanged = true;
+
+    if (libraryView_.focusSearch) {
+        ImGui::SetKeyboardFocusHere();
+        libraryView_.focusSearch = false;
+    }
+    ImGui::SetNextItemWidth(260);
+    if (ImGui::InputTextWithHint("##buscar", "Buscar (Ctrl+F o Y)", libraryView_.search, sizeof libraryView_.search))
+        libraryView_.selected = 0;
+    ImGui::SameLine();
+    if (library_.pending() > 0) ImGui::Text("%d juegos. Buscando carátulas, quedan %d...", static_cast<int>(games.size()), library_.pending());
+    else ImGui::Text("%d juegos. %s", static_cast<int>(games.size()), library_.downloadStatus().c_str());
+    ImGui::TextDisabled("Flechas o cruceta: elegir   A o Intro: jugar   B o Esc: cerrar");
+    ImGui::Separator();
+
+    const std::vector<size_t> visible = visibleGames();
+    if (games.empty()) ImGui::TextDisabled("No hay ROMs (.md, .bin, .gen, .smd, .zip) en esta carpeta.");
+    else if (visible.empty()) ImGui::TextDisabled("Ningún juego coincide con la búsqueda.");
+
+    const float coverW = 150.0f, coverH = 210.0f;
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float textH = ImGui::GetTextLineHeight() * 2 + 4;
+    const ImVec2 card(coverW + 12, coverH + textH + 12);
+    ImGui::BeginChild("juegos");
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const int cols = std::max(1, static_cast<int>((avail + style.ItemSpacing.x) / (card.x + style.ItemSpacing.x)));
+    libraryView_.columns = cols;
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    for (int n = 0; n < static_cast<int>(visible.size()); ++n) {
+        Library::Game& g = games[visible[static_cast<size_t>(n)]];
+        if (n % cols) ImGui::SameLine();
+        ImGui::PushID(n);
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        const bool selected = n == libraryView_.selected;
+        if (ImGui::Selectable("##juego", selected, ImGuiSelectableFlags_AllowDoubleClick, card)) {
+            libraryView_.selected = n;
+            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) libraryView_.load = n;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g.path.c_str());
+        if (selected && libraryView_.scroll) {
+            ImGui::SetScrollHereY(0.5f);
+            libraryView_.scroll = false;
+        }
+        // The cover, fitted into its box; a plain box with the name if there is none.
+        const ImVec2 box(pos.x + 6, pos.y + 6);
+        if (g.texture && g.height > 0) {
+            float w = coverW, h = coverW * static_cast<float>(g.height) / static_cast<float>(g.width);
+            if (h > coverH) {
+                h = coverH;
+                w = coverH * static_cast<float>(g.width) / static_cast<float>(g.height);
+            }
+            const ImVec2 a(box.x + (coverW - w) * 0.5f, box.y + (coverH - h));
+            draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h));
+        } else {
+            draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(40, 44, 56, 255), 4.0f);
+            const char* label = g.cover == Library::Cover::Pending ? "..." : "Mega Drive";
+            const ImVec2 size = ImGui::CalcTextSize(label);
+            draw->AddText(ImVec2(box.x + (coverW - size.x) * 0.5f, box.y + (coverH - size.y) * 0.5f),
+                          IM_COL32(140, 146, 160, 255), label);
+        }
+        if (selected)
+            draw->AddRect(ImVec2(pos.x + 2, pos.y + 2), ImVec2(pos.x + card.x - 2, pos.y + card.y - 2),
+                          ImGui::GetColorU32(ImGuiCol_NavCursor), 6.0f, 0, 3.0f);
+        // Two lines of title, cut to the card's width; the tags in grey after it.
+        const ImVec4 clip(pos.x + 4, pos.y, pos.x + card.x - 4, pos.y + card.y);
+        draw->AddText(nullptr, 0.0f, ImVec2(pos.x + 6, box.y + coverH + 4), ImGui::GetColorU32(ImGuiCol_Text),
+                      g.title.c_str(), nullptr, coverW, &clip);
+        ImGui::PopID();
+    }
+    ImGui::EndChild();
+
+    if (libraryView_.load >= 0 && libraryView_.load < static_cast<int>(visible.size())) {
+        out.load = games[visible[static_cast<size_t>(libraryView_.load)]].path;
+        showLibrary_ = false;
+    }
+    libraryView_.load = -1;
+    ImGui::End();
+}
+
+void Ui::drawCheats(const UiState& state, UiActions& out) {
+    ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
+    if (!ImGui::Begin("Trucos", &showCheats_)) {
+        ImGui::End();
+        return;
+    }
+    if (!state.romLoaded || !state.cheats) {
+        ImGui::TextDisabled("Abre una ROM para ponerle trucos.");
+        ImGui::End();
+        return;
+    }
+    std::vector<Cheat>& cheats = *state.cheats;
+    ImGui::TextWrapped("Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. "
+                       "Se guardan para este juego y se activan al abrirlo.", state.gameName.c_str());
+    ImGui::Spacing();
+    int remove = -1;
+    if (cheats.empty()) ImGui::TextDisabled("Este juego no tiene trucos todavía.");
+    else if (ImGui::BeginTable("trucos", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight());
+        ImGui::TableSetupColumn("Código", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+        ImGui::TableSetupColumn("Nombre");
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight());
+        for (int i = 0; i < static_cast<int>(cheats.size()); ++i) {
+            Cheat& c = cheats[static_cast<size_t>(i)];
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            if (ImGui::Checkbox("##activo", &c.enabled)) out.cheatsChanged = true;
+            ImGui::TableNextColumn();
+            CheatPatch patch;
+            std::string error;
+            const bool valid = decodeCheat(c.code, &patch, &error);
+            if (valid) ImGui::TextUnformatted(c.code.c_str());
+            else ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", c.code.c_str());
+            if (ImGui::IsItemHovered()) {
+                if (valid)
+                    ImGui::SetTooltip("%s %06X = %0*X (%s)", patch.address >= 0xE00000 ? "RAM" : "ROM",
+                                      static_cast<unsigned>(patch.address), patch.byte ? 2 : 4,
+                                      static_cast<unsigned>(patch.value), patch.byte ? "byte" : "palabra");
+                else
+                    ImGui::SetTooltip("%s", error.c_str());
+            }
+            ImGui::TableNextColumn();
+            char name[96];
+            std::snprintf(name, sizeof name, "%s", c.name.c_str());
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##nombre", name, sizeof name)) c.name = name;
+            if (ImGui::IsItemDeactivatedAfterEdit()) out.cheatsChanged = true;
+            ImGui::TableNextColumn();
+            if (ImGui::Button("x", ImVec2(ImGui::GetFrameHeight(), 0))) remove = i;
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    if (remove >= 0) {
+        cheats.erase(cheats.begin() + remove);
+        out.cheatsChanged = true;
+    }
+
+    ImGui::SeparatorText("Añadir");
+    ImGui::SetNextItemWidth(130);
+    bool add = ImGui::InputTextWithHint("##codigo", "Código", cheatCode_, sizeof cheatCode_,
+                                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CharsUppercase);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-ImGui::CalcTextSize("Añadir").x - ImGui::GetStyle().FramePadding.x * 2 -
+                            ImGui::GetStyle().ItemSpacing.x);
+    add |= ImGui::InputTextWithHint("##nombre_nuevo", "Nombre (opcional)", cheatName_, sizeof cheatName_,
+                                    ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SameLine();
+    add |= ImGui::Button("Añadir");
+    if (add) {
+        CheatPatch patch;
+        if (decodeCheat(cheatCode_, &patch, &cheatError_)) {
+            cheats.push_back({normalizeCheat(cheatCode_), cheatName_, true});
+            cheatCode_[0] = cheatName_[0] = '\0';
+            cheatError_.clear();
+            out.cheatsChanged = true;
+        }
+    }
+    if (!cheatError_.empty()) ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", cheatError_.c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextWrapped("Los Game Genie cambian la ROM; los Action Replay fijan un valor en la RAM en cada cuadro. "
+                       "Algunos juegos comprueban la ROM al arrancar: si no arranca con un truco, reinicia sin él.");
+    ImGui::PopStyleColor();
+    ImGui::End();
+}
+
 
 }  // namespace plumsg

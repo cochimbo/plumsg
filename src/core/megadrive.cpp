@@ -31,6 +31,8 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
     Cartridge loaded;
     if (!loaded.loadFile(path, error)) return false;
     cart_ = std::move(loaded);
+    romOriginal_.clear();
+    ramCheats_.clear();
     applyRegion();
     powerCycle();
     return true;
@@ -38,6 +40,8 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
 
 void MegaDrive::loadRomData(std::vector<uint8_t> rom) {
     cart_.loadData(std::move(rom));
+    romOriginal_.clear();
+    ramCheats_.clear();
     applyRegion();
     powerCycle();
 }
@@ -128,7 +132,45 @@ void MegaDrive::syncSound() {
     ym_.runUntil(now_);
 }
 
+void MegaDrive::setCheats(const std::vector<CheatPatch>& cheats) {
+    // Undo in reverse, so a byte patched twice gets its true original back.
+    for (auto it = romOriginal_.rbegin(); it != romOriginal_.rend(); ++it) cart_.patchRom(it->first, it->second, nullptr);
+    romOriginal_.clear();
+    ramCheats_.clear();
+    for (const CheatPatch& c : cheats) {
+        if (c.address >= 0xE00000) {
+            ramCheats_.push_back(c);
+            continue;
+        }
+        if (c.address >= 0x400000) continue;
+        auto patch = [&](uint32_t offset, uint8_t value) {
+            uint8_t old = 0;
+            if (cart_.patchRom(offset, value, &old)) romOriginal_.emplace_back(offset, old);
+        };
+        if (c.byte) {
+            patch(c.address, static_cast<uint8_t>(c.value));
+        } else {
+            patch(c.address, static_cast<uint8_t>(c.value >> 8));
+            patch(c.address + 1, static_cast<uint8_t>(c.value));
+        }
+    }
+    applyRamCheats();
+}
+
+void MegaDrive::applyRamCheats() {
+    for (const CheatPatch& c : ramCheats_) {
+        const uint32_t a = c.address & 0xFFFF;
+        if (c.byte) {
+            ram_[a] = static_cast<uint8_t>(c.value);
+        } else {
+            ram_[a] = static_cast<uint8_t>(c.value >> 8);
+            ram_[(a + 1) & 0xFFFF] = static_cast<uint8_t>(c.value);
+        }
+    }
+}
+
 void MegaDrive::runFrame() {
+    applyRamCheats();
     const int lines = vdp_.linesPerFrame();
     for (int line = 0; line < lines; ++line) {
         lineStart_ = now_;

@@ -28,6 +28,7 @@ bool yes(const std::string& v) {
 }
 
 constexpr const char* kScaleNames[] = {"entero", "ajustar", "estirar"};
+constexpr const char* kFilterNames[] = {"ninguno", "scanlines", "crt"};
 constexpr const char* kRegionNames[] = {"auto", "japon", "usa", "europa"};
 
 }  // namespace
@@ -66,6 +67,10 @@ Settings Settings::load(const std::string& path) {
                 for (int i = 0; i < 3; ++i)
                     if (lower(value) == kScaleNames[i]) s.render.scale = static_cast<ScaleMode>(i);
             } else if (key == "suavizado") s.render.smooth = yes(value);
+            else if (key == "filtro") {
+                for (int i = 0; i < 3; ++i)
+                    if (lower(value) == kFilterNames[i]) s.render.filter = static_cast<Filter2D>(i);
+            } else if (key == "intensidad_filtro") s.render.filterStrength = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
             else if (read3DKey(key, value, s.render)) continue;
             else if (key == "pixeles_cuadrados") s.render.squarePixels = yes(value);
             else if (key == "tamano_ventana") s.windowScale = std::clamp(std::atoi(value.c_str()), 1, 8);
@@ -87,6 +92,9 @@ Settings Settings::load(const std::string& path) {
             else if (key == "camara_lenta") s.slowMotion = std::clamp(std::atoi(value.c_str()), 10, 90);
         } else if (section == "estados") {
             if (key == "ranura") s.stateSlot = std::clamp(std::atoi(value.c_str()), 0, 9);
+        } else if (section == "biblioteca") {
+            if (key == "carpeta") s.libraryFolder = value;
+            else if (key == "abrir_al_empezar") s.libraryAtStart = yes(value);
         } else if (section == "recientes") {
             if (key == "rom" && !value.empty() && s.recent.size() < kMaxRecent) s.recent.push_back(value);
             else if (key == "ultima_carpeta") s.lastFolder = value;
@@ -104,7 +112,10 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "# vista: 2D o capas (depuración, no son los colores del juego). escalado: entero, ajustar o estirar.\n"
         << "vista = " << view << "\n"
         << "escalado = " << kScaleNames[static_cast<int>(render.scale)] << "\n"
-        << "suavizado = " << flag(render.smooth) << "\n";
+        << "suavizado = " << flag(render.smooth) << "\n"
+        << "# filtro de la vista 2D: ninguno, scanlines o crt. intensidad_filtro: de 0 a 100.\n"
+        << "filtro = " << kFilterNames[static_cast<int>(render.filter)] << "\n"
+        << "intensidad_filtro = " << static_cast<int>(render.filterStrength * 100.0f + 0.5f) << "\n";
     write3D(out, render);
     out << "# pixeles_cuadrados: no estirar la imagen a 4:3 como la tele.\n"
         << "pixeles_cuadrados = " << flag(render.squarePixels) << "\n"
@@ -129,6 +140,10 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "\n[estados]\n"
         << "# ranura: la ranura de estado activa, de 0 a 9.\n"
         << "ranura = " << stateSlot << "\n"
+        << "\n[biblioteca]\n"
+        << "# carpeta: donde están tus ROMs. abrir_al_empezar: mostrar la biblioteca al abrir plumsg sin juego.\n"
+        << "carpeta = " << libraryFolder << "\n"
+        << "abrir_al_empezar = " << flag(libraryAtStart) << "\n"
         << "\n[recientes]\n";
     if (!lastFolder.empty()) out << "ultima_carpeta = " << lastFolder << "\n";
     for (const auto& r : recent) out << "rom = " << r << "\n";

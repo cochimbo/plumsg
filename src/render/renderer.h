@@ -12,10 +12,16 @@ constexpr float kMinTilt = -10.0f, kMaxTilt = 80.0f, kMaxYaw = 75.0f, kMinZoom =
 // How the pseudo-3D view builds each plane: flat cut-outs, or one block per pixel.
 enum class Style3D { Layers, Voxels };
 
+// Look of the 2D picture: plain, with the dark gaps between a TV's lines, or a whole
+// CRT (scanlines, a slightly curved screen, the phosphor mask and darker corners).
+enum class Filter2D { None, Scanlines, Crt };
+
 // Display options chosen in the video menu.
 struct RenderOptions {
     ScaleMode scale = ScaleMode::Integer;
     bool smooth = false;     // bilinear filtering instead of sharp pixels
+    Filter2D filter = Filter2D::None;  // only the 2D view uses it
+    float filterStrength = 0.6f;       // 0..1, how strong the scanlines and the rest are
     bool pseudo3d = false;   // toggled by the "efecto 3D" hotkey: draw with the pseudo-3D renderer
     // Pseudo-3D look, each 0..1 except the tilt.
     Style3D style = Style3D::Voxels;

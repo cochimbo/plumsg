@@ -13,7 +13,7 @@ namespace plumsg {
 
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
 // the [teclado] / [mando] sections, under [video], [audio], [consola], [velocidad],
-// [estados] and [recientes].
+// [estados], [biblioteca] and [recientes].
 struct Settings {
     static constexpr size_t kMaxRecent = 10;
     static constexpr int kMaxRewindSeconds = 60;
@@ -33,6 +33,8 @@ struct Settings {
     int slowMotion = 50;     // slow-motion speed, percent of normal (10-90)
     std::vector<std::string> recent;  // most recent first
     std::string lastFolder;
+    std::string libraryFolder;    // where the game library looks for ROMs
+    bool libraryAtStart = true;   // open the library when plumsg starts without a ROM
 
     void addRecent(const std::string& path);
     void removeRecent(const std::string& path);

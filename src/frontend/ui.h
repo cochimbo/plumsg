@@ -5,8 +5,10 @@
 #include <string>
 #include <vector>
 
+#include "../core/cheats.h"
 #include "file_dialog.h"
 #include "input.h"
+#include "library.h"
 #include "settings.h"
 
 namespace plumsg {
@@ -26,6 +28,7 @@ struct UiActions {
     bool toggleSlowMotion = false;
     bool rewindChanged = false;    // the rewind length changed
     int profile = -1;              // 1 give the game its own 3D profile, 0 drop it, -1 nothing
+    bool cheatsChanged = false;    // the cheat list was edited: apply it and save it
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -45,6 +48,7 @@ struct UiState {
     std::string gameName;     // the ROM's file name, for the profile option
     std::vector<const char*> views;  // Renderer::name() of each available view
     std::vector<SlotInfo> slots;     // one per slot, 0-9
+    std::vector<Cheat>* cheats = nullptr;  // the loaded game's cheats, edited in place
 };
 
 // Menu bar and option windows, drawn with Dear ImGui (OpenGL 3) on top of the game.
@@ -71,6 +75,11 @@ public:
     void render();
 
     void openRom() { openRequested_ = true; }
+    // The game library: a grid of covers that the pad (or the keyboard) can drive.
+    void toggleLibrary();
+    bool libraryOpen() const { return showLibrary_; }
+    bool browserOpen() const { return browser_.isOpen(); }
+    Library& library() { return library_; }
     // The states menu: a list of the slots that the pad (or the keyboard) can drive.
     void toggleStateMenu();
     bool stateMenuOpen() const { return stateMenu_.open; }
@@ -88,6 +97,10 @@ private:
     void drawControls(UiActions& out);
     void drawVideo(const UiState& state, UiActions& out);
     void drawAbout();
+    void drawCheats(const UiState& state, UiActions& out);
+    void drawLibrary(UiActions& out);
+    bool handleLibrary(const SDL_Event& e);
+    std::vector<size_t> visibleGames();
     void drawStateMenu(const UiState& state);
     bool handleStateMenu(const SDL_Event& e);
     void drawOverlays(const UiState& state);
@@ -97,10 +110,13 @@ private:
     Settings& settings_;
     Input& input_;
     FileBrowser browser_;
+    Library library_;
 
     bool showControls_ = false;
     bool showVideo_ = false;
     bool showAbout_ = false;
+    bool showCheats_ = false;
+    bool showLibrary_ = false;
     bool openRequested_ = false;
     bool pendingSave_ = false;  // a binding changed outside frame()
     bool peekMenu_ = false;  // menu bar hidden but shown while the mouse is at the top
@@ -113,6 +129,17 @@ private:
         bool scroll = false;  // bring the selected row into view on the next frame
         int load = -1, save = -1;  // chosen this frame, handed over by frame()
     } stateMenu_;
+    struct LibraryView {
+        int selected = 0;      // in the filtered list
+        int columns = 1;       // of the grid, as last drawn
+        bool scroll = false;
+        bool focusSearch = false;
+        int load = -1;         // index into the filtered list chosen this frame
+        char search[96] = "";
+    } libraryView_;
+    char cheatCode_[64] = "";
+    char cheatName_[96] = "";
+    std::string cheatError_;
     std::string toast_;
     Uint32 toastUntil_ = 0;
 };

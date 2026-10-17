@@ -4,10 +4,12 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "audio_mixer.h"
 #include "cartridge.h"
+#include "cheats.h"
 #include "io.h"
 #include "m68k.h"
 #include "psg.h"
@@ -45,6 +47,10 @@ public:
         io_.setPad(1, p2);
     }
     void setPadType(int port, PadType t) { io_.setPadType(port, t); }
+
+    // Replaces the active cheats. ROM patches are applied now and undone by the next
+    // call (or by loading another ROM); RAM writes are made at the start of every frame.
+    void setCheats(const std::vector<CheatPatch>& cheats);
 
     void runFrame();  // up to the start of the next frame (just after VBlank ends)
 
@@ -134,7 +140,10 @@ private:
     int psgRemainder_ = 0;     // master clocks not yet worth a PSG cycle
     uint64_t frames_ = 0;
     std::vector<int16_t> psgBuffer_;
-    std::vector<uint8_t> loadedThumbnail_;  // THMB of the last loaded state, until a frame runs
+    std::vector<uint8_t> loadedThumbnail_;
+    std::vector<CheatPatch> ramCheats_;
+    std::vector<std::pair<uint32_t, uint8_t>> romOriginal_;  // bytes the ROM cheats replaced
+    void applyRamCheats();  // THMB of the last loaded state, until a frame runs
 };
 
 }  // namespace plumsg
