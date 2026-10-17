@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(PLUMSG_FETCH_SDL2 "Download and build SDL2 if it is not installed" ON)
 option(PLUMSG_BUILD_TESTS "Build the test programs" ON)
+# Off builds only the core, plumsg-headless and the tests: no SDL2, ImGui or OpenGL.
+option(PLUMSG_BUILD_FRONTEND "Build the emulator with its window (needs SDL2 and OpenGL)" ON)
 
 if(MSVC)
   add_compile_options(/W4 /utf-8)
@@ -99,6 +101,13 @@ add_library(plumsg_core STATIC
 target_include_directories(plumsg_core PUBLIC src src/core)
 target_link_libraries(plumsg_core PUBLIC plumsg_miniz PRIVATE plumsg_ymfm chdr-static)
 
+# The emulator without a window, for tests, CI and reproducing bugs (see --help).
+add_executable(plumsg-headless src/headless/main.cpp)
+target_include_directories(plumsg-headless PRIVATE tests)
+target_link_libraries(plumsg-headless PRIVATE plumsg_core)
+
+# Everything below up to endif() is the windowed emulator.
+if(PLUMSG_BUILD_FRONTEND)
 # SDL2: use an installed copy (vcpkg, system package, SDL2_DIR) or fetch it.
 find_package(SDL2 CONFIG QUIET)
 if(NOT SDL2_FOUND AND PLUMSG_FETCH_SDL2)
@@ -165,6 +174,7 @@ if(WIN32 AND TARGET SDL2::SDL2)
   add_custom_command(TARGET plumsg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> $<TARGET_FILE_DIR:plumsg>)
 endif()
+endif()  # PLUMSG_BUILD_FRONTEND
 
 if(PLUMSG_BUILD_TESTS)
   enable_testing()
@@ -179,6 +189,10 @@ if(PLUMSG_BUILD_TESTS)
   target_include_directories(rom_runner PRIVATE tests)
   target_link_libraries(rom_runner PRIVATE plumsg_core)
   add_test(NAME rom_runner_test_rom COMMAND rom_runner --test-rom --frames 60)
+
+  # plumsg-headless end to end: hashes, savestates, input scripts and checks.
+  add_test(NAME headless COMMAND ${CMAKE_COMMAND} -DHEADLESS=$<TARGET_FILE:plumsg-headless>
+           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/headless_test -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_tests.cmake)
 
   # Tom Harte's 68000 single-step tests: m68k_json_runner path/to/v1/*.json.gz
   add_executable(m68k_json_runner tests/m68k_json_runner.cpp)
