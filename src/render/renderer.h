@@ -20,12 +20,15 @@ struct RenderOptions {
     // Pseudo-3D look, each 0..1 except the tilt.
     Style3D style = Style3D::Voxels;
     float depth = 0.6f;      // how far apart the layers are
+    bool tiltCamera = true;  // off: the camera looks straight on, whatever tilt and yaw say
     float tilt = 25.0f;      // camera tilt in degrees, -10..80; at 0 the picture looks flat
     float yaw = 0.0f;        // camera turn around the vertical axis in degrees, -75..75
     float zoom = 1.0f;       // 0.5..3
     float extrusion = 0.5f;  // voxels: how far solid background tiles reach back
     float thickness = 1.0f;  // how much of the gap below a plane its sides (or blocks) fill
     bool shadows = true;     // sprites cast a shadow on the planes behind them
+    bool lighting = true;    // side light on the blocks and soft shadows of every plane on those behind
+    bool liveCamera = false; // the camera sways a few degrees following the action
     bool squarePixels = false;  // show pixels square instead of the TV's 4:3 picture
     bool highBInFront = false;  // high-priority plane B tiles stand with the priority plane
     bool flatB = false;         // plane B stays flat, as part of the sky

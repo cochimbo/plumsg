@@ -125,4 +125,42 @@ void clearBehindSolid(const std::vector<uint32_t>& solid, Planes& planes) {
         if (solid[i]) b[i] = 0;
 }
 
+void LiveCamera::update(const VideoFrameMd& frame, const Planes& planes) {
+    if (!seen_ || frame.frameNumber != lastFrame_) {
+        // Where the sprites are, -1..1 from the middle of the picture.
+        const auto& sprites = planes[PlaneSprites];
+        double sx = 0, sy = 0;
+        long count = 0;
+        for (int y = 0; y < planes.height; y += 2)
+            for (int x = 0; x < planes.width; x += 2)
+                if ((sprites[static_cast<size_t>(y) * planes.width + x] >> 24) >= 128) {
+                    sx += x;
+                    sy += y;
+                    ++count;
+                }
+        float cx = 0, cy = 0;
+        if (count > 0) {
+            cx = static_cast<float>(sx / count / planes.width * 2.0 - 1.0);
+            cy = static_cast<float>(sy / count / planes.height * 2.0 - 1.0);
+        }
+        // How fast plane A scrolls sideways, on the middle line. The scroll value is 10
+        // bits and grows to the right on screen, so the level moving left (the player
+        // running right) makes it smaller.
+        const int line = planes.height / 2;  // lines are counted without interlacing
+        const int scroll = frame.lines[static_cast<size_t>(std::clamp(line, 0, VideoFrameMd::kMaxHeight - 1))].hscrollA;
+        if (seen_ && frame.frameNumber == lastFrame_ + 1) {
+            const int delta = ((lastScroll_ - scroll + 512) & 1023) - 512;
+            speed_ += 0.15f * (static_cast<float>(delta) - speed_);
+        }
+        lastScroll_ = scroll;
+        lastFrame_ = frame.frameNumber;
+        seen_ = true;
+        const float lean = std::clamp(0.6f * cx + 0.4f * speed_ / 4.0f, -1.0f, 1.0f);
+        targetYaw_ = kSwayYaw * lean;
+        targetTilt_ = kSwayTilt * std::clamp(cy, -1.0f, 1.0f);
+    }
+    yaw_ += 0.04f * (targetYaw_ - yaw_);
+    tilt_ += 0.04f * (targetTilt_ - tilt_);
+}
+
 }  // namespace plumsg

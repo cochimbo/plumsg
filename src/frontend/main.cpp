@@ -12,7 +12,9 @@
 #include <vector>
 
 #include "../core/megadrive.h"
+#include "../core/rewind.h"
 #include "../render/gl_renderers.h"
+#include "../render/profile3d.h"
 #include "audio.h"
 #include "input.h"
 #include "miniz.h"
@@ -24,6 +26,7 @@ using namespace plumsg;
 namespace {
 
 constexpr int kSlots = 10;
+constexpr size_t kRewindBytes = size_t{256} << 20;  // memory the rewind snapshots may take
 
 std::string withoutExtension(const std::string& path) {
     size_t dot = path.find_last_of('.');
@@ -59,7 +62,8 @@ bool writeFile(const std::string& path, const std::vector<uint8_t>& data) {
 // the per-user settings folder, since the install folder may not be writable.
 struct Paths {
     std::string ini;
-    std::string states;  // folder for savestates, ending in a separator
+    std::string states;    // folder for savestates, ending in a separator
+    std::string profiles;  // folder for the games' 3D profiles, ending in a separator
 };
 
 Paths findPaths() {
@@ -70,15 +74,15 @@ Paths findPaths() {
         const std::string portable = base + "plumsg.ini";
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
-            return {portable, base + "states/"};
+            return {portable, base + "states/", base + "perfiles/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
-        return {dir + "plumsg.ini", dir + "states/"};
+        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/"};
     }
-    return {base + "plumsg.ini", base + "states/"};
+    return {base + "plumsg.ini", base + "states/", base + "perfiles/"};
 }
 
 struct App {
@@ -86,12 +90,14 @@ struct App {
     bool romLoaded = false;
     std::string romPath;
     std::string statesDir;
+    std::string profilesDir;
     std::vector<SlotInfo> slots = std::vector<SlotInfo>(kSlots);
 
     std::string savePath() const { return withoutExtension(romPath) + ".sav"; }
     std::string statePath(int slot) const {
         return statesDir + withoutExtension(fileName(romPath)) + ".s" + std::to_string(slot);
     }
+    std::string profilePath() const { return profilesDir + withoutExtension(fileName(romPath)) + ".ini"; }
 
     void saveBattery() {
         if (romLoaded && console.cartridge().hasSaveData()) console.cartridge().writeSave(savePath());
@@ -238,11 +244,18 @@ int main(int argc, char** argv) {
     auto input = std::make_unique<Input>(InputConfig::loadOrCreate(paths.ini));
     Settings settings = Settings::load(paths.ini);
     // A screenshot run never touches the user's settings.
-    if (cmd.pseudo3d >= 0) settings.render.pseudo3d = cmd.pseudo3d == 1;
-    if (!cmd.view.empty()) settings.view = cmd.view;
-    if (cmd.tilt > -1000) settings.render.tilt = cmd.tilt;
-    if (cmd.yaw > -1000) settings.render.yaw = cmd.yaw;
+    auto applyCommandLine = [&] {
+        if (cmd.pseudo3d >= 0) settings.render.pseudo3d = cmd.pseudo3d == 1;
+        if (!cmd.view.empty()) settings.view = cmd.view;
+        if (cmd.tilt > -1000) settings.render.tilt = cmd.tilt;
+        if (cmd.yaw > -1000) settings.render.yaw = cmd.yaw;
+    };
+    applyCommandLine();
     if (capturing) settings.fullscreen = false;
+    // The pseudo-3D options of [video]. While a game with its own profile is loaded,
+    // settings.render holds the profile's and these wait here.
+    RenderOptions global3D = settings.render;
+    bool hasProfile = false;
 
     // OpenGL 3.3 core everywhere; macOS only hands out core contexts marked forward compatible.
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -288,6 +301,7 @@ int main(int argc, char** argv) {
     auto ui = std::make_unique<Ui>(window, context, settings, *input);
     auto app = std::make_unique<App>();
     app->statesDir = paths.states;
+    app->profilesDir = paths.profiles;
     auto audio = std::make_unique<Audio>();
 
     auto applyConsole = [&] {
@@ -297,11 +311,44 @@ int main(int argc, char** argv) {
     };
     applyConsole();
     auto save = [&] {
-        if (!capturing) settings.save(paths.ini, input->config());
+        if (capturing) return;
+        if (!hasProfile) {
+            copy3D(settings.render, global3D);
+            settings.save(paths.ini, input->config());
+            return;
+        }
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::u8path(app->profilesDir), ec);
+        const std::string text = formatProfile(settings.render, fileName(app->romPath));
+        writeFile(app->profilePath(), std::vector<uint8_t>(text.begin(), text.end()));
+        Settings general = settings;
+        copy3D(global3D, general.render);
+        general.save(paths.ini, input->config());
+    };
+    RewindBuffer rewind;
+    FramePacer pacer;
+    auto setRewindLimits = [&] {
+        rewind.setLimits(static_cast<size_t>(settings.rewindSeconds * app->console.refreshRate()), kRewindBytes);
+    };
+    setRewindLimits();
+    // A newly loaded game takes its own 3D profile if it has one, else the general options.
+    auto loadProfile = [&] {
+        copy3D(global3D, settings.render);
+        hasProfile = false;
+        std::vector<uint8_t> data;
+        if (!readFile(app->profilePath(), data)) return;
+        RenderOptions r = settings.render;
+        if (!parseProfile(std::string(data.begin(), data.end()), r)) return;
+        copy3D(r, settings.render);
+        hasProfile = true;
+        ui->notify("Perfil 3D de " + fileName(app->romPath));
     };
     auto load = [&](const std::string& path) {
         if (app->load(path, capturing ? nullptr : window)) {
             settings.addRecent(path);
+            loadProfile();
+            rewind.clear();
+            setRewindLimits();
         } else {
             settings.removeRecent(path);
         }
@@ -309,7 +356,10 @@ int main(int argc, char** argv) {
     };
     auto setFullscreen = [&] { SDL_SetWindowFullscreen(window, settings.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0); };
     if (settings.fullscreen) setFullscreen();
-    if (!cmd.rom.empty()) load(cmd.rom);
+    if (!cmd.rom.empty()) {
+        load(cmd.rom);
+        applyCommandLine();  // over the game's profile too
+    }
     bool openStateMenu = cmd.stateMenu;
     bool sizedForMenu = false;
 
@@ -317,6 +367,7 @@ int main(int argc, char** argv) {
     Uint64 next = SDL_GetPerformanceCounter();
     bool running = true;
     bool paused = false;
+    bool slowMotion = false;
     bool orbiting = false;  // dragging the pseudo-3D camera with the mouse
     int framesRun = 0;
     RenderOptions& cam = settings.render;
@@ -333,6 +384,24 @@ int main(int argc, char** argv) {
     auto loadState = [&](int slot) {
         if (app->romLoaded) ui->notify(app->loadState(slot));
     };
+    auto toggleSlowMotion = [&] {
+        slowMotion = !slowMotion;
+        ui->notify(slowMotion ? "Cámara lenta (" + std::to_string(settings.slowMotion) + "%)" : "Velocidad normal");
+    };
+    auto setProfile = [&](bool on) {
+        if (!app->romLoaded || on == hasProfile) return;
+        if (on) {
+            hasProfile = true;
+            ui->notify("El 3D se guarda ahora solo para " + fileName(app->romPath));
+        } else {
+            std::error_code ec;
+            std::filesystem::remove(std::filesystem::u8path(app->profilePath()), ec);
+            hasProfile = false;
+            copy3D(global3D, settings.render);
+            ui->notify("El juego vuelve a usar el 3D general");
+        }
+        save();
+    };
     auto selectSlot = [&](int delta) {
         settings.stateSlot = (settings.stateSlot + delta + kSlots) % kSlots;
         const SlotInfo& s = app->slots[static_cast<size_t>(settings.stateSlot)];
@@ -342,8 +411,8 @@ int main(int argc, char** argv) {
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
+            input->handleEvent(e);  // first, so it sees every trigger pull and release
             if (ui->handleEvent(e)) continue;
-            input->handleEvent(e);
             switch (e.type) {
                 case SDL_QUIT: running = false; break;
                 case SDL_DROPFILE:
@@ -365,11 +434,16 @@ int main(int argc, char** argv) {
                 case Hotkey::PrevSlot: selectSlot(-1); break;
                 case Hotkey::NextSlot: selectSlot(1); break;
                 case Hotkey::StateMenu: ui->toggleStateMenu(); break;
-                default: break;
+                case Hotkey::SlowMotion:
+                    if (app->romLoaded) toggleSlowMotion();
+                    break;
+                default: break;  // rewind and fast forward work while held, below
             }
             // The pseudo-3D camera: drag to turn it, wheel to zoom, double click to centre it.
             if (cam.pseudo3d) {
-                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && !ui->mouseBusy()) {
+                // Without tilting the camera only the zoom changes.
+                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && !ui->mouseBusy() &&
+                    cam.tiltCamera) {
                     if (e.button.clicks >= 2) centreCamera();
                     else orbiting = true;
                 } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && orbiting) {
@@ -427,6 +501,9 @@ int main(int argc, char** argv) {
         }
         uiState.romLoaded = app->romLoaded;
         uiState.paused = paused;
+        uiState.slowMotion = slowMotion;
+        uiState.hasProfile = hasProfile;
+        uiState.gameName = app->romLoaded ? fileName(app->romPath) : std::string();
         uiState.slots = app->slots;
         const UiActions act = ui->frame(uiState);
         if (!act.load.empty()) load(act.load);
@@ -441,7 +518,12 @@ int main(int argc, char** argv) {
             // A new region needs a fresh start, like switching a real console's region.
             applyConsole();
             if (app->romLoaded) app->console.reset();
+            rewind.clear();
+            setRewindLimits();
         }
+        if (act.toggleSlowMotion) toggleSlowMotion();
+        if (act.rewindChanged) setRewindLimits();
+        if (act.profile >= 0) setProfile(act.profile == 1);
         if (act.settingsChanged) save();
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
         if (!sizedForMenu && !settings.fullscreen) {
@@ -450,7 +532,7 @@ int main(int argc, char** argv) {
         }
 
         const double frameSeconds = 1.0 / app->console.refreshRate();
-        if (cam.pseudo3d) {
+        if (cam.pseudo3d && cam.tiltCamera) {
             // The right stick turns the camera at up to 90 degrees a second.
             float sx, sy;
             input->rightStick(&sx, &sy);
@@ -460,14 +542,44 @@ int main(int argc, char** argv) {
         }
 
         // The game waits while the states menu is open.
+        uiState.speed.clear();
         if (app->romLoaded && !paused && !ui->stateMenuOpen()) {
             const bool keyboard = !ui->keyboardBusy();
-            app->console.setPads(input->poll(0, keyboard), input->poll(1, keyboard));
-            app->console.setSampleRate(audio->rate());
-            app->console.runFrame();
-            ++framesRun;
-            audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
-            app->console.audio().clearSamples();
+            const bool fast = input->held(Hotkey::FastForward, keyboard);
+            if (settings.rewindSeconds > 0 && input->held(Hotkey::Rewind, keyboard)) {
+                // Back one frame per tick: load the newest snapshot and run that frame
+                // again (silently, without the pads) to have its picture on screen.
+                std::vector<uint8_t> snapshot;
+                std::string error;
+                if (rewind.pop(snapshot) && app->console.loadState(snapshot, &error)) {
+                    app->console.setPads(PadState{}, PadState{});
+                    app->console.runFrame();
+                    app->console.audio().clearSamples();
+                    uiState.speed = "<< Rebobinando";
+                } else {
+                    uiState.speed = "<< No se puede rebobinar más";
+                }
+                pacer.reset();
+            } else {
+                // Fast forward and slow motion run more or fewer frames per tick; the
+                // sound follows, higher or lower, because each frame's samples are made
+                // for 1/speed of a tick.
+                const double speed = fast ? settings.fastForward : slowMotion ? settings.slowMotion / 100.0 : 1.0;
+                if (fast) uiState.speed = ">> x" + std::to_string(settings.fastForward);
+                else if (slowMotion) uiState.speed = "Cámara lenta " + std::to_string(settings.slowMotion) + "%";
+                for (int n = pacer.framesForTick(speed); n > 0; --n) {
+                    if (settings.rewindSeconds > 0) {
+                        std::vector<uint8_t> snapshot;
+                        if (app->console.saveState(snapshot, true)) rewind.push(std::move(snapshot));
+                    }
+                    app->console.setPads(input->poll(0, keyboard), input->poll(1, keyboard));
+                    app->console.setSampleRate(audio->rate() / speed);
+                    app->console.runFrame();
+                    ++framesRun;
+                    audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
+                    app->console.audio().clearSamples();
+                }
+            }
         }
 
         int w, h;

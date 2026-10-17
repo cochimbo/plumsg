@@ -1,8 +1,9 @@
 #include "settings.h"
 
+#include "../render/profile3d.h"
+
 #include <algorithm>
 #include <cctype>
-#include <cmath>
 #include <cstdlib>
 #include <fstream>
 
@@ -65,19 +66,8 @@ Settings Settings::load(const std::string& path) {
                 for (int i = 0; i < 3; ++i)
                     if (lower(value) == kScaleNames[i]) s.render.scale = static_cast<ScaleMode>(i);
             } else if (key == "suavizado") s.render.smooth = yes(value);
-            else if (key == "efecto_3d") s.render.pseudo3d = yes(value);
-            else if (key == "estilo_3d") s.render.style = lower(value) == "capas" ? Style3D::Layers : Style3D::Voxels;
-            else if (key == "profundidad_3d") s.render.depth = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
-            else if (key == "inclinacion_3d")
-                s.render.tilt = std::clamp(static_cast<float>(std::atof(value.c_str())), kMinTilt, kMaxTilt);
-            else if (key == "giro_3d") s.render.yaw = std::clamp(static_cast<float>(std::atof(value.c_str())), -kMaxYaw, kMaxYaw);
-            else if (key == "zoom_3d") s.render.zoom = std::clamp(static_cast<float>(std::atof(value.c_str())), kMinZoom, kMaxZoom);
-            else if (key == "extrusion_3d") s.render.extrusion = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
-            else if (key == "grosor_3d") s.render.thickness = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
-            else if (key == "sombras_3d") s.render.shadows = yes(value);
+            else if (read3DKey(key, value, s.render)) continue;
             else if (key == "pixeles_cuadrados") s.render.squarePixels = yes(value);
-            else if (key == "b_alta_delante") s.render.highBInFront = yes(value);
-            else if (key == "plano_b_plano") s.render.flatB = yes(value);
             else if (key == "tamano_ventana") s.windowScale = std::clamp(std::atoi(value.c_str()), 1, 8);
             else if (key == "pantalla_completa") s.fullscreen = yes(value);
             else if (key == "barra_menus") s.showMenu = yes(value);
@@ -91,6 +81,10 @@ Settings Settings::load(const std::string& path) {
             } else if (key == "mando1" || key == "mando2") {
                 s.padType[key == "mando1" ? 0 : 1] = value == "3" ? PadType::ThreeButton : PadType::SixButton;
             }
+        } else if (section == "velocidad") {
+            if (key == "rebobinado_segundos") s.rewindSeconds = std::clamp(std::atoi(value.c_str()), 0, kMaxRewindSeconds);
+            else if (key == "avance_rapido") s.fastForward = std::clamp(std::atoi(value.c_str()), 2, 10);
+            else if (key == "camara_lenta") s.slowMotion = std::clamp(std::atoi(value.c_str()), 10, 90);
         } else if (section == "estados") {
             if (key == "ranura") s.stateSlot = std::clamp(std::atoi(value.c_str()), 0, 9);
         } else if (section == "recientes") {
@@ -110,24 +104,10 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "# vista: 2D o capas (depuración, no son los colores del juego). escalado: entero, ajustar o estirar.\n"
         << "vista = " << view << "\n"
         << "escalado = " << kScaleNames[static_cast<int>(render.scale)] << "\n"
-        << "suavizado = " << flag(render.smooth) << "\n"
-        << "efecto_3d = " << flag(render.pseudo3d) << "\n"
-        << "# estilo_3d: voxeles o capas. profundidad_3d, grosor_3d y extrusion_3d van de 0 a 100.\n"
-        << "# Cámara: inclinacion_3d de -10 a 80 grados, giro_3d de -75 a 75, zoom_3d de 0.5 a 3.\n"
-        << "estilo_3d = " << (render.style == Style3D::Layers ? "capas" : "voxeles") << "\n"
-        << "profundidad_3d = " << std::lround(render.depth * 100) << "\n"
-        << "inclinacion_3d = " << std::lround(render.tilt) << "\n"
-        << "giro_3d = " << std::lround(render.yaw) << "\n"
-        << "zoom_3d = " << std::lround(render.zoom * 100) / 100.0 << "\n"
-        << "extrusion_3d = " << std::lround(render.extrusion * 100) << "\n"
-        << "grosor_3d = " << std::lround(render.thickness * 100) << "\n"
-        << "sombras_3d = " << flag(render.shadows) << "\n"
-        << "# pixeles_cuadrados: no estirar la imagen a 4:3 como la tele.\n"
+        << "suavizado = " << flag(render.smooth) << "\n";
+    write3D(out, render);
+    out << "# pixeles_cuadrados: no estirar la imagen a 4:3 como la tele.\n"
         << "pixeles_cuadrados = " << flag(render.squarePixels) << "\n"
-        << "# b_alta_delante: los tiles del plano B con prioridad van delante, con los de A.\n"
-        << "b_alta_delante = " << flag(render.highBInFront) << "\n"
-        << "# plano_b_plano: el plano B se queda plano, como parte del cielo.\n"
-        << "plano_b_plano = " << flag(render.flatB) << "\n"
         << "tamano_ventana = " << windowScale << "\n"
         << "pantalla_completa = " << flag(fullscreen) << "\n"
         << "barra_menus = " << flag(showMenu) << "\n"
@@ -140,6 +120,12 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"
         << "mando1 = " << (padType[0] == PadType::ThreeButton ? 3 : 6) << "\n"
         << "mando2 = " << (padType[1] == PadType::ThreeButton ? 3 : 6) << "\n"
+        << "\n[velocidad]\n"
+        << "# rebobinado_segundos: cuántos segundos se pueden rebobinar (0 lo desactiva, hasta 60).\n"
+        << "# avance_rapido: veces más rápido, de 2 a 10. camara_lenta: porcentaje de la velocidad, de 10 a 90.\n"
+        << "rebobinado_segundos = " << rewindSeconds << "\n"
+        << "avance_rapido = " << fastForward << "\n"
+        << "camara_lenta = " << slowMotion << "\n"
         << "\n[estados]\n"
         << "# ranura: la ranura de estado activa, de 0 a 9.\n"
         << "ranura = " << stateSlot << "\n"

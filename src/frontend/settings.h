@@ -12,10 +12,11 @@
 namespace plumsg {
 
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
-// the [teclado] / [mando] sections, under [video], [audio], [consola], [estados] and
-// [recientes].
+// the [teclado] / [mando] sections, under [video], [audio], [consola], [velocidad],
+// [estados] and [recientes].
 struct Settings {
     static constexpr size_t kMaxRecent = 10;
+    static constexpr int kMaxRewindSeconds = 60;
 
     std::string view = "2D";  // Renderer::name() of the active view
     RenderOptions render;
@@ -27,6 +28,9 @@ struct Settings {
     Region region = Region::Auto;
     std::array<PadType, 2> padType{PadType::SixButton, PadType::SixButton};
     int stateSlot = 0;  // 0-9
+    int rewindSeconds = 20;  // how far back rewinding reaches, 0 = off
+    int fastForward = 4;     // fast-forward speed, times normal (2-10)
+    int slowMotion = 50;     // slow-motion speed, percent of normal (10-90)
     std::vector<std::string> recent;  // most recent first
     std::string lastFolder;
 

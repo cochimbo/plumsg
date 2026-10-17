@@ -335,7 +335,7 @@ void MegaDrive::busState(Ar& ar) {
        psgRemainder_, frames_);
 }
 
-bool MegaDrive::saveState(std::vector<uint8_t>& out) {
+bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
     StateWriter body;
     uint32_t crc = cart_.crc32();
     uint8_t region = static_cast<uint8_t>(effectiveRegion_);
@@ -393,7 +393,9 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out) {
         mixer_.state(w);
         block("MIX ", w.data());
     }
-    if (!loadedThumbnail_.empty()) {
+    if (quick) {
+        // No thumbnail: nobody looks at a rewind snapshot.
+    } else if (!loadedThumbnail_.empty()) {
         // Nothing has run since a state was loaded: the picture on screen is still the
         // one from before, so keep the loaded state's thumbnail.
         block("THMB", loadedThumbnail_);
@@ -415,7 +417,7 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out) {
 
     mz_ulong packedSize = mz_compressBound(static_cast<mz_ulong>(body.data().size()));
     std::vector<uint8_t> packed(packedSize);
-    if (mz_compress2(packed.data(), &packedSize, body.data().data(), static_cast<mz_ulong>(body.data().size()), 6) != MZ_OK)
+    if (mz_compress2(packed.data(), &packedSize, body.data().data(), static_cast<mz_ulong>(body.data().size()), quick ? 1 : 6) != MZ_OK)
         return false;
     packed.resize(packedSize);
     StateWriter file;
@@ -465,7 +467,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
 
     // Keep the current state so a bad block cannot leave the console half loaded.
     std::vector<uint8_t> backup;
-    saveState(backup);
+    saveState(backup, true);
 
     bool ok = true;
     bool hasMixer = false;
@@ -510,8 +512,11 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         std::string ignored;
         std::vector<uint8_t> restore;
         if (unpackState(backup, restore).empty()) {
-            // Reload the backup block by block (same code path, known good).
+            // Reload the backup block by block (same code path, known good). The quick
+            // backup has no thumbnail, so keep the one that was there.
+            std::vector<uint8_t> keptThumbnail = loadedThumbnail_;
             loadState(backup, &ignored);
+            loadedThumbnail_ = std::move(keptThumbnail);
         }
         return fail("el estado está dañado o es de una versión incompatible");
     }

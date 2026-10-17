@@ -23,6 +23,9 @@ struct UiActions {
     bool consoleChanged = false;  // region or pad types changed
     bool fullscreenChanged = false;
     bool settingsChanged = false;  // something in Settings or the controls changed: save the .ini
+    bool toggleSlowMotion = false;
+    bool rewindChanged = false;    // the rewind length changed
+    int profile = -1;              // 1 give the game its own 3D profile, 0 drop it, -1 nothing
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -36,6 +39,10 @@ struct SlotInfo {
 struct UiState {
     bool romLoaded = false;
     bool paused = false;
+    bool slowMotion = false;
+    std::string speed;     // badge in the corner while not at normal speed ("<< REBOBINANDO", "x4"...)
+    bool hasProfile = false;  // the loaded game has its own 3D profile
+    std::string gameName;     // the ROM's file name, for the profile option
     std::vector<const char*> views;  // Renderer::name() of each available view
     std::vector<SlotInfo> slots;     // one per slot, 0-9
 };
