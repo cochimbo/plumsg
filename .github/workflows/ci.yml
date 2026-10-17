@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+      - name: Core tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Z80 exerciser (ZEXDOC)
+        run: |
+          curl -sSfL -o zexdoc.com https://raw.githubusercontent.com/anotherlin/z80emu/master/testfiles/zexdoc.com
+          ./build/zex_runner zexdoc.com
+      - name: 68000 single-step tests (Tom Harte)
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/SingleStepTests/680x0 harte
+          git -C harte sparse-checkout set 68000/v1
+          git -C harte checkout e0d5ece9670205cc84a0101081837deb446f86a3
+          ./build/m68k_json_runner --cycles --allow-failures 40 harte/68000/v1/*.json.gz
+      - name: Screenshot of the test ROM
+        run: ./build/rom_runner --test-rom --frames 120 --png test-rom.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-rom-screenshot
+          path: test-rom.png

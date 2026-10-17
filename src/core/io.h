@@ -1,0 +1,52 @@
+#pragma once
+
+#include <array>
+#include <cstdint>
+
+namespace plumsg {
+
+// Buttons of one Mega Drive pad, true while held.
+struct PadState {
+    bool up = false, down = false, left = false, right = false;
+    bool a = false, b = false, c = false, start = false;
+    bool x = false, y = false, z = false, mode = false;
+};
+
+enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1 };
+
+// The I/O chip: version register and the two controller ports (the third, the
+// modem/extension port, reads as nothing connected). Pads are read through the TH line:
+// a 3-button pad multiplexes its buttons on TH; a 6-button pad also counts TH pulses
+// and shows X/Y/Z/Mode on the fourth one, until TH rests for about 1.5 ms.
+class Io {
+public:
+    void reset();
+    void setVersion(uint8_t v) { version_ = v; }
+    void setPad(int port, const PadState& s) { pads_[port & 1] = s; }
+    void setPadType(int port, PadType t) { types_[port & 1] = t; }
+    PadType padType(int port) const { return types_[port & 1]; }
+
+    // 0xA10001-0xA1001F, odd addresses. `now` is the time in master clocks, for the
+    // 6-button pad's timeout.
+    uint8_t read(uint32_t addr, uint64_t now);
+    void write(uint32_t addr, uint8_t value, uint64_t now);
+
+    template <class Ar>
+    void state(Ar& ar) {
+        ar(data_, ctrl_, version_, thCount_, lastTh_, thTime_, types_);
+    }
+
+private:
+    uint8_t readPort(int port, uint64_t now);
+
+    std::array<uint8_t, 3> data_{};
+    std::array<uint8_t, 3> ctrl_{};
+    uint8_t version_ = 0xA0;
+    std::array<uint8_t, 2> thCount_{};   // TH falling edges seen (6-button protocol), 0..4
+    std::array<bool, 2> lastTh_{true, true};
+    std::array<uint64_t, 2> thTime_{};
+    std::array<PadType, 2> types_{PadType::SixButton, PadType::SixButton};
+    std::array<PadState, 2> pads_{};
+};
+
+}  // namespace plumsg
