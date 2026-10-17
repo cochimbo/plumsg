@@ -22,6 +22,8 @@ public:
     void setMasterClock(double hz) { masterClock_ = hz; }
     double sampleRate() const { return masterClock_ / 7.0 / 144.0; }
 
+    // The chip's reset line. Samples already made are kept: the Z80's reset, which
+    // games pulse mid-frame, resets the YM2612 too, and that sound has played.
     void reset();
     // Brings the chip up to `masterClocks` (a running count), producing samples.
     void runUntil(uint64_t masterClocks);

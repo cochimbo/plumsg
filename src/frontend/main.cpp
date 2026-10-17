@@ -165,8 +165,9 @@ struct App {
         std::string error;
         if (!console.loadRom(path, &error)) {
             lastError = error;
-            if (window) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "plumsg", error.c_str(), window);
-            else std::fprintf(stderr, "%s\n", error.c_str());
+            // With a window the caller shows it inside the window: a system message box
+            // can open behind the game in full screen and never be seen.
+            if (!window) std::fprintf(stderr, "%s\n", error.c_str());
             return false;
         }
         romPath = path;
@@ -493,10 +494,10 @@ int main(int argc, char** argv) {
             loadProfile();
             rewind.clear();
             setRewindLimits();
-        } else if (app->lastError.find("BIOS") != std::string::npos) {
-            ui->openBios();  // the game is fine: it waits for its BIOS
         } else {
-            settings.removeRecent(path);
+            if (!capturing) ui->showError(app->lastError);
+            if (app->lastError.find("BIOS") != std::string::npos) ui->openBios();  // the game is fine: it waits for its BIOS
+            else settings.removeRecent(path);
         }
         save();
     };

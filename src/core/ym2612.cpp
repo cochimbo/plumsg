@@ -46,7 +46,6 @@ void Ym2612::reset() {
     impl_->chip.reset();
     impl_->timer = {-1, -1};
     impl_->busy = 0;
-    samples_.clear();
 }
 
 void Ym2612::runUntil(uint64_t masterClocks) {

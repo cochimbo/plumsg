@@ -770,7 +770,9 @@ void testCdImage() {
 
 // A disc made in memory for the Mega CD program: a data track whose sector 0 is a
 // disc header, and a second, audio track with a loud square wave.
-std::unique_ptr<CdImage> testDisc() {
+// `header` is the region in its header and `security` the byte of its security code
+// that says the region the BIOS checks (0x7A USA, 0xA1 Japan, 0x64 Europe).
+std::unique_ptr<CdImage> testDisc(char header = 'U', uint8_t security = 0x7A) {
     std::vector<CdImage::Track> tracks(2);
     tracks[0].number = 1;
     tracks[0].begin = -150;
@@ -786,7 +788,8 @@ std::unique_ptr<CdImage> testDisc() {
     std::vector<uint8_t> data(40 * 2048 + 200 * 2352);
     std::memcpy(data.data(), "SEGADISCSYSTEM  ", 16);
     std::memcpy(&data[0x100], "SEGA MEGA DRIVE ", 16);
-    data[0x1F0] = 'U';
+    data[0x1F0] = static_cast<uint8_t>(header);
+    data[0x20B] = security;
     for (size_t i = 40 * 2048; i < data.size(); i += 4) {
         const int16_t v = ((i / 400) & 1) ? 12000 : -12000;
         for (int c = 0; c < 2; ++c) {
@@ -809,6 +812,16 @@ void testMegaCd() {
     bios.resize(0x20000);
     md.setCdBios(Region::UsaNtsc, bios);
     check(md.loadDiscImage(testDisc(), &error) && md.isMegaCd(), "Mega CD: carga un disco con la BIOS de su región");
+    {
+        // The region comes from the security code, and the console follows the disc.
+        MegaDrive other;
+        other.setCdBios(Region::UsaNtsc, bios);
+        other.setRegion(Region::EuropePal);
+        check(other.loadDiscImage(testDisc('J', 0x7A), &error) && other.region() == Region::UsaNtsc,
+              "Mega CD: la región sale del código de seguridad (Snatcher dice J en un disco americano)");
+        check(!other.loadDiscImage(testDisc('U', 0x64), &error) && error.find("Europa") != std::string::npos,
+              "Mega CD: un disco europeo pide la BIOS europea");
+    }
     MegaCd& cd = *md.megaCd();
     auto result = [&](int i) {
         const auto& prg = cd.programRam();
@@ -1173,6 +1186,14 @@ int main() {
     testMarsProgram();
     testCdImage();
     testMegaCd();
+    {
+        // The Z80's reset also resets the YM2612; what it already played must stay.
+        Ym2612 ym;
+        ym.setMasterClock(MegaDrive::kMasterNtsc);
+        ym.runUntil(7 * 144 * 100);
+        ym.reset();
+        check(ym.samples().size() == 200, "YM2612: un reset no tira el sonido ya hecho");
+    }
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

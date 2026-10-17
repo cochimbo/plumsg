@@ -258,11 +258,14 @@ void VdpMd::startLine(int line) {
     if (line == 0) inVblank_ = false;
     if (line == active) {
         inVblank_ = true;
-        vintPending_ = true;
-        z80Irq_ = true;
     } else if (line == active + 1) {
         z80Irq_ = false;  // the Z80's interrupt line is held for about one line
     }
+}
+
+void VdpMd::raiseVint() {
+    vintPending_ = true;
+    z80Irq_ = true;
 }
 
 void VdpMd::endLine(int line) {

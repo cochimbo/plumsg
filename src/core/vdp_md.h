@@ -47,7 +47,11 @@ public:
     // Called by the scheduler.
     int linesPerFrame() const { return pal_ ? 313 : 262; }
     int activeLines() const { return (pal_ && (regs_[1] & 0x08)) ? 240 : 224; }
-    void startLine(int line);   // updates the V counter, VBlank and the VINT
+    void startLine(int line);   // updates the V counter and VBlank
+    // The VINT comes this many master clocks after VBlank starts: games that wait for
+    // the VBlank flag with interrupts on see it before their handler runs (Snatcher).
+    static constexpr int kVintDelay = 788;
+    void raiseVint();           // at kVintDelay into the first line of VBlank
     void renderLine(int line);  // draws an active line with the registers as they are now
     void endLine(int line);     // HINT counter (at the start of horizontal blanking)
     void endFrame();

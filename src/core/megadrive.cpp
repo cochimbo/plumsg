@@ -80,17 +80,23 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
     // cartridge for the region, the title and the savestates.
     Cartridge loaded;
     loaded.loadData(header);
-    const Region wanted = region_ == Region::Auto ? loaded.preferredRegion() : region_;
+    // The region is the one of the security code the BIOS checks, not the header's
+    // (Snatcher's says Japan on a USA disc), and the console always follows it: a
+    // BIOS of another region refuses the disc and shows its CD player instead.
+    const Region wanted = header[0x20B] == 0x64 ? Region::EuropePal
+                          : header[0x20B] == 0xA1 ? Region::JapanNtsc
+                                                  : Region::UsaNtsc;
     const int slot = wanted == Region::JapanNtsc ? 0 : wanted == Region::EuropePal ? 2 : 1;
     if (cdBios_[static_cast<size_t>(slot)].size() != 0x20000) {
         static const char* const kNames[3] = {"Japón", "EE. UU.", "Europa"};
         if (error)
             *error = std::string("Falta la BIOS del Mega CD de ") + kNames[slot] +
-                     ". Elígela en Consola > BIOS del Mega CD.";
+                     ": elígela en Consola > BIOS del Mega CD.";
         return false;
     }
     cart_ = std::move(loaded);
     disc_ = std::move(disc);
+    discRegion_ = wanted;
     mcd_ = std::make_unique<MegaCd>();
     mcd_->insert(disc_.get());
     romOriginal_.clear();
@@ -120,7 +126,8 @@ void MegaDrive::setRegion(Region r) {
 }
 
 void MegaDrive::applyRegion() {
-    configureFor(region_ == Region::Auto ? (cart_.loaded() ? cart_.preferredRegion() : Region::UsaNtsc) : region_);
+    if (mcd_) configureFor(discRegion_);
+    else configureFor(region_ == Region::Auto ? (cart_.loaded() ? cart_.preferredRegion() : Region::UsaNtsc) : region_);
 }
 
 void MegaDrive::configureFor(Region r) {
@@ -167,6 +174,7 @@ void MegaDrive::reset() {
     loadedThumbnail_.clear();
     io_.reset();
     ym_.reset();
+    ym_.samples().clear();
     psg_.reset();
     psg_.setStereo(0xFF);
     mixer_.reset();
@@ -272,6 +280,12 @@ void MegaDrive::runFrame() {
         if (mars_) mars_->startLine(line, vdp_.activeLines());
         updateIrq();
         z80_.setIrqLine(vdp_.z80Irq());
+        if (line == vdp_.activeLines()) {
+            runUntil(lineStart_ + VdpMd::kVintDelay);
+            vdp_.raiseVint();
+            updateIrq();
+            z80_.setIrqLine(vdp_.z80Irq());
+        }
         runUntil(lineStart_ + VdpMd::kActiveClocks);
         if (line < vdp_.activeLines()) {
             vdp_.renderLine(line);

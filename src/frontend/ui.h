@@ -87,6 +87,9 @@ public:
     void toggleStateMenu();
     bool stateMenuOpen() const { return stateMenu_.open; }
     void notify(std::string message);
+    // A message the user has to acknowledge, drawn inside the window so that it is seen
+    // in full screen too.
+    void showError(std::string message) { error_ = std::move(message); }
 
 private:
     struct Capture {
@@ -100,6 +103,7 @@ private:
     void drawControls(UiActions& out);
     void drawVideo(const UiState& state, UiActions& out);
     void drawAbout();
+    void drawError();
     void drawCheats(const UiState& state, UiActions& out);
     void drawLibrary(UiActions& out);
     void drawLibraryFolders(UiActions& out);
@@ -155,6 +159,7 @@ private:
     char cheatCode_[64] = "";
     char cheatName_[96] = "";
     std::string cheatError_;
+    std::string error_;  // showError(), until acknowledged
     std::string toast_;
     Uint32 toastUntil_ = 0;
 };
