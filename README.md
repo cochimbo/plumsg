@@ -1,6 +1,6 @@
 # plumsg
 
-Emulador de **Sega Mega Drive / Genesis** y **32X** para Windows (y Linux) con un efecto
+Emulador de **Sega Mega Drive / Genesis**, **32X** y **Mega CD** para Windows (y Linux) con un efecto
 **pseudo-3D** que separa las capas de la consola y las pone a distintas profundidades, y
 con **estados guardados** (savestates). Parte de [plumgg](https://github.com/cochimbo/plumgg),
 el emulador de Game Gear, del que hereda el Z80, el PSG, el frontend y el efecto 3D.
@@ -32,6 +32,13 @@ Primera versión. Lo que hay:
   la Mega Drive), el sonido PWM, los registros de comunicación y la FIFO del 68000. No
   hace falta BIOS: plumsg hace lo que hacen las ROM de arranque. En el 3D, la imagen de la
   32X va plana al fondo y el efecto sigue en los planos de la Mega Drive.
+- **Mega CD** (`.cue` con sus `.bin` o `.wav`, `.iso`, `.chd`, o un `.bin` de una sola
+  pista de datos): la segunda CPU 68000 a 12,5 MHz con su memoria de programa, la memoria
+  de palabras compartida (modos de 2 y 1 Mbit, con las vistas por celdas y por puntos), la
+  memoria de guardado (a `.sav` junto al disco), el controlador de CD (con DMA), la unidad
+  emulada a nivel de órdenes, el chip gráfico que gira y escala sellos, el temporizador,
+  el chip PCM RF5C164 y el audio de CD, todo mezclado con el FM y el PSG. Necesita la BIOS
+  de la región del disco (ver abajo).
 - **Mandos** de 3 y 6 botones, dos jugadores, región automática o forzada.
 - **Estados**: 10 ranuras por juego con fecha y miniatura.
 - **Pseudo-3D**: cinco planos (cielo, plano B, plano A, sprites y tiles con prioridad),
@@ -44,15 +51,16 @@ Primera versión. Lo que hay:
 - **Trucos** Game Genie y Action Replay, guardados por juego.
 - **Biblioteca de juegos** con carátulas, que se descargan solas de libretro-thumbnails,
   con varias carpetas y una pestaña por consola (Mega Drive, 32X y Mega CD).
-- **BIOS del Mega CD**: se indica dónde está la de cada región (no viene con plumsg). El
-  Mega CD todavía no arranca: llega en la 0.0.7.
+- **BIOS del Mega CD**: se indica dónde está la de cada región (no viene con plumsg), y
+  cada disco arranca con la de su región.
 
 No hay ROMs comerciales en el repositorio ni en CI: las pruebas usan una ROM generada por el
-propio proyecto (`tests/test_rom.h`) y un programa de 32X propio (`tests/mars/`).
+propio proyecto (`tests/test_rom.h`), un programa de 32X propio (`tests/mars/`) y otro de
+Mega CD con un disco hecho en memoria (`tests/megacd/`). Tampoco las BIOS del Mega CD.
 
 ## Uso
 
-Arrastra una ROM a la ventana, usa **Archivo > Abrir ROM** o abre la **biblioteca** (F10).
+Arrastra una ROM o un disco a la ventana, usa **Archivo > Abrir ROM** o abre la **biblioteca** (F10).
 
 | Tecla | Acción |
 |---|---|
@@ -140,7 +148,7 @@ La configuración se guarda en `plumsg.ini`.
 ## Compilar
 
 Hace falta CMake 3.16+, un compilador de C++17 y SDL2 (si no está instalado, CMake lo
-descarga). Dear ImGui y ymfm se descargan solos.
+descarga). Dear ImGui, ymfm y libchdr se descargan solos.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -165,10 +173,18 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   tiene que dar exactamente lo mismo que el PC (división de libgcc, aritmética de 64 bits
   y de coma flotante...), más interrupciones, paleta y sonido PWM. Se recompila con
   `tests/mars/build.sh` (hace falta `gcc-sh-elf`); el resultado va en el repositorio.
+  Del Mega CD: hojas `.cue` (varios archivos, `INDEX 00`, `PREGAP`), un `.chd` hecho con
+  chdman (`tests/megacd/disco.chd`), y un programa en ensamblador para las dos CPU
+  (`tests/megacd/main.s` hace de BIOS y carga `sub.s` en la CPU secundaria) que prueba
+  la comunicación entre ellas, interrupciones, la memoria de guardado, las órdenes a la
+  unidad, la lectura de un sector por el controlador y por DMA, el chip gráfico, el PCM,
+  el audio de CD y los estados. Se recompila con `tests/megacd/build.sh` (hace falta
+  `binutils-m68k-linux-gnu`).
 - `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la
-  imagen (con `--layers prefijo` también cada capa del VDP, y `--wav` el sonido).
+  imagen (con `--layers prefijo` también cada capa del VDP, y `--wav` el sonido). Con un
+  disco de Mega CD, `--bios archivo` dice qué BIOS usar.
   `rom_runner --write-test-rom prueba.md` escribe la ROM de prueba a un archivo.
 - `zex_runner zexdoc.com`: el ejercitador del Z80.
 - El emulador también hace capturas desde la línea de comandos:
@@ -181,5 +197,5 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
 
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
 miniz (MIT, en `third_party/miniz`), stb_image (dominio público o MIT, en `third_party/stb`),
-ymfm (BSD-3-Clause). La 32X se ha escrito con la documentación de Sega y el código de
+ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de
 [ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas son de libretro-thumbnails y no van en el repositorio.
