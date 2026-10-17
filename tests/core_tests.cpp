@@ -1,11 +1,14 @@
 // Core tests that need no external files: the cartridge (header, SMD, zip, SRAM), the
 // pads, the PSG, the VDP ports, the built-in test ROM drawn and heard, savestates
-// (determinism, round trip, damaged files) and the pseudo-3D planes.
+// (determinism, round trip, damaged files), rewinding and the speed controls, the
+// pseudo-3D planes and the games' 3D profiles.
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <memory>
 #include <random>
 #include <string>
 #include <vector>
@@ -13,6 +16,8 @@
 #include "megadrive.h"
 #include "miniz.h"
 #include "render/planes.h"
+#include "render/profile3d.h"
+#include "rewind.h"
 #include "test_rom.h"
 
 using namespace plumsg;
@@ -410,6 +415,162 @@ void testPal() {
 
 }  // namespace
 
+void testRewindBuffer() {
+    RewindBuffer r;
+    r.setLimits(3, 1000);
+    for (uint8_t i = 1; i <= 5; ++i) r.push(std::vector<uint8_t>(10, i));
+    std::vector<uint8_t> s;
+    check(r.size() == 3 && r.bytes() == 30, "rewind: keeps only the newest snapshots");
+    check(r.pop(s) && s[0] == 5 && r.pop(s) && s[0] == 4 && r.pop(s) && s[0] == 3 && !r.pop(s) && r.bytes() == 0,
+          "rewind: pops newest first, then runs out");
+    r.setLimits(100, 25);
+    for (uint8_t i = 1; i <= 5; ++i) r.push(std::vector<uint8_t>(10, i));
+    check(r.size() == 2 && r.bytes() == 20, "rewind: the byte limit drops the oldest too");
+    r.setLimits(0, 1000);
+    r.push(std::vector<uint8_t>(10, 9));
+    check(r.empty(), "rewind: no frames means off");
+}
+
+void testFramePacer() {
+    auto total = [](double speed, int ticks, int* most = nullptr) {
+        FramePacer p;
+        int sum = 0, top = 0;
+        for (int i = 0; i < ticks; ++i) {
+            const int n = p.framesForTick(speed);
+            sum += n;
+            top = std::max(top, n);
+        }
+        if (most) *most = top;
+        return sum;
+    };
+    int most = 0;
+    check(total(1.0, 60, &most) == 60 && most == 1, "speed: normal runs one frame per tick");
+    check(total(4.0, 60, &most) == 240 && most == 4, "speed: fast forward x4");
+    check(total(0.5, 60, &most) == 30 && most == 1, "speed: slow motion at 50% runs every other tick");
+    check(total(0.1, 100) == 10, "speed: 10% adds up without losing frames to rounding");
+    check(total(2.5, 4) == 10, "speed: fractions carry over between ticks");
+}
+
+void testRewindPlayback() {
+    // Rewinding n frames and playing them again with the same pads gives the same
+    // picture as the first time: the snapshots are full states.
+    MegaDrive md;
+    md.loadRomData(testrom::build());
+    md.setSampleRate(44100);
+    RewindBuffer r;
+    r.setLimits(600, size_t{64} << 20);
+    std::vector<uint32_t> first;
+    auto pads = [](int i) {
+        PadState p;
+        p.right = (i / 5) % 2 == 0;
+        p.a = i % 3 == 0;
+        return p;
+    };
+    double slowest = 0;
+    for (int i = 0; i < 120; ++i) {
+        std::vector<uint8_t> s;
+        const auto t0 = std::chrono::steady_clock::now();
+        md.saveState(s, true);
+        slowest = std::max(slowest, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+        r.push(std::move(s));
+        md.setPads(pads(i), PadState{});
+        md.runFrame();
+        md.audio().clearSamples();
+        if (i >= 60) first.push_back(frameHash(md.frame()));
+    }
+    std::printf("     (%zu snapshots, %zu KB, the slowest took %.2f ms)\n", r.size(), r.bytes() / 1024, slowest);
+    std::vector<uint8_t> s;
+    std::string error;
+    bool ok = true;
+    for (int i = 0; i < 60; ++i) ok &= r.pop(s);
+    ok &= md.loadState(s, &error);
+    std::vector<uint32_t> again;
+    for (int i = 60; i < 120; ++i) {
+        md.setPads(pads(i), PadState{});
+        md.runFrame();
+        md.audio().clearSamples();
+        again.push_back(frameHash(md.frame()));
+    }
+    check(ok && r.size() == 60, "rewind: went back 60 frames");
+    check(again == first, "rewind: replaying from there gives the same frames");
+
+    std::vector<uint8_t> quick;
+    md.saveState(quick, true);
+    std::vector<uint32_t> pixels;
+    int w = 0, h = 0;
+    check(!MegaDrive::stateThumbnail(quick, pixels, &w, &h), "rewind: quick snapshots carry no thumbnail");
+}
+
+void testProfiles() {
+    RenderOptions r;
+    r.pseudo3d = true;
+    r.style = Style3D::Layers;
+    r.depth = 0.8f;
+    r.tilt = 40;
+    r.yaw = -30;
+    r.zoom = 1.5f;
+    r.extrusion = 0.2f;
+    r.thickness = 0.7f;
+    r.shadows = false;
+    r.highBInFront = true;
+    r.flatB = true;
+    r.tiltCamera = false;
+    r.lighting = false;
+    r.liveCamera = true;
+    r.smooth = true;  // not part of a profile
+    const std::string text = formatProfile(r, "Sonic.md");
+    RenderOptions back;
+    check(parseProfile(text, back) && same3D(back, r), "profile: written and read back the same");
+    check(!back.smooth, "profile: only carries the 3D options");
+
+    RenderOptions partial;
+    const RenderOptions defaults;
+    check(parseProfile("[perfil_3d]\ninclinacion_3d = 500\nprofundidad_3d = 30\n", partial) && partial.tilt == kMaxTilt &&
+              std::fabs(partial.depth - 0.3f) < 1e-6f && partial.yaw == defaults.yaw,
+          "profile: missing keys keep their value, out of range ones are clamped");
+    RenderOptions untouched;
+    check(!parseProfile("[video]\ninclinacion_3d = 10\n", untouched) && untouched.tilt == defaults.tilt,
+          "profile: a file without [perfil_3d] is not a profile");
+
+    RenderOptions target;
+    target.smooth = true;
+    copy3D(r, target);
+    check(same3D(target, r) && target.smooth, "profile: copy3D leaves the other options alone");
+}
+
+void testLiveCamera() {
+    auto frame = std::make_unique<VideoFrameMd>();
+    Planes planes;
+    planes.width = 320;
+    planes.height = 224;
+    for (auto& p : planes.layer) p.assign(320 * 224, 0);
+    // A sprite on the right of the screen, nothing scrolling.
+    for (int y = 100; y < 120; ++y)
+        for (int x = 280; x < 300; ++x) planes[PlaneSprites][static_cast<size_t>(y) * 320 + x] = 0xFFFFFFFFu;
+    LiveCamera cam;
+    for (int i = 0; i < 300; ++i) {
+        frame->frameNumber = static_cast<uint64_t>(i + 1);
+        cam.update(*frame, planes);
+    }
+    check(cam.yaw() > 1.0f && cam.yaw() <= LiveCamera::kSwayYaw && std::fabs(cam.tilt()) < 1.0f,
+          "live camera: leans towards the sprites, within its limit");
+
+    // No sprites, the level scrolling left (the player running right), wrapping round.
+    for (auto& p : planes.layer) p.assign(320 * 224, 0);
+    LiveCamera run;
+    int scroll = 5;
+    for (int i = 0; i < 300; ++i) {
+        frame->frameNumber = static_cast<uint64_t>(i + 1);
+        for (auto& l : frame->lines) l.hscrollA = static_cast<int16_t>(scroll);
+        scroll = (scroll - 4 + 1024) % 1024;
+        run.update(*frame, planes);
+    }
+    check(run.yaw() > 1.0f && run.yaw() <= LiveCamera::kSwayYaw, "live camera: leans with the scroll");
+    const float before = run.yaw();
+    for (int i = 0; i < 10; ++i) run.update(*frame, planes);  // the same frame again: only eases
+    check(std::fabs(run.yaw() - before) < 0.5f, "live camera: a repeated frame does not jolt it");
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -422,7 +583,12 @@ int main() {
     testVdpFillScrollTable();
     testTestRom();
     testStates();
+    testRewindBuffer();
+    testFramePacer();
+    testRewindPlayback();
     testPlanes();
+    testProfiles();
+    testLiveCamera();
     testEdgeDistance();
     testPal();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);

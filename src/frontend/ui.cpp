@@ -13,8 +13,9 @@ namespace {
 constexpr int kRows = InputConfig::kButtons + InputConfig::kHotkeys;
 constexpr const char* kRowNames[kRows] = {"Arriba", "Abajo", "Izquierda", "Derecha", "A", "B", "C", "Start",
                                           "X", "Y", "Z", "Mode", "Efecto 3D", "Guardar estado", "Cargar estado",
-                                          "Ranura anterior", "Ranura siguiente", "Menú de estados"};
-static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 6, "update kRowNames");
+                                          "Ranura anterior", "Ranura siguiente", "Menú de estados",
+                                          "Rebobinar (mantener)", "Avance rápido (mantener)", "Cámara lenta"};
+static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 9, "update kRowNames");
 
 std::vector<SDL_Scancode>& keysOf(InputConfig& c, int row, int player) {
     if (row >= InputConfig::kButtons) return c.hotkeyKeys[row - InputConfig::kButtons];
@@ -71,6 +72,11 @@ bool Ui::handleEvent(const SDL_Event& e) {
             return true;
         }
         if (e.type == SDL_CONTROLLERBUTTONUP) return true;
+        if (e.type == SDL_CONTROLLERAXISMOTION) {
+            const SDL_GameControllerButton trigger = triggerPulled(e);
+            if (capture_.column == 2 && trigger != SDL_CONTROLLER_BUTTON_INVALID) finishCapture(trigger);
+            return true;
+        }
     }
     if (stateMenu_.open && handleStateMenu(e)) return true;
     ImGui_ImplSDL2_ProcessEvent(&e);
@@ -229,6 +235,20 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
     if (ImGui::BeginMenu("Juego")) {
         if (ImGui::MenuItem("Pausa", "P", state.paused, state.romLoaded)) out.togglePause = true;
         if (ImGui::MenuItem("Reiniciar", "F1", false, state.romLoaded)) out.reset = true;
+        ImGui::SeparatorText("Velocidad");
+        if (ImGui::MenuItem("Cámara lenta", "F9", state.slowMotion, state.romLoaded)) out.toggleSlowMotion = true;
+        ImGui::TextDisabled("Rebobinar: mantén Retroceso (o el gatillo izquierdo)");
+        ImGui::TextDisabled("Avance rápido: mantén Tab (o el gatillo derecho)");
+        ImGui::SetNextItemWidth(160);
+        ImGui::SliderInt("Segundos de rebobinado", &settings_.rewindSeconds, 0, Settings::kMaxRewindSeconds,
+                         settings_.rewindSeconds ? "%d s" : "desactivado", ImGuiSliderFlags_AlwaysClamp);
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.rewindChanged = true;
+        ImGui::SetNextItemWidth(160);
+        ImGui::SliderInt("Avance rápido", &settings_.fastForward, 2, 10, "%dx", ImGuiSliderFlags_AlwaysClamp);
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        ImGui::SetNextItemWidth(160);
+        ImGui::SliderInt("Cámara lenta##velocidad", &settings_.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Estado")) {
@@ -327,7 +347,7 @@ void Ui::drawControls(UiActions& out) {
     bool changed = false;
 
     if (ImGui::BeginTable("bindings", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
-        ImGui::TableSetupColumn("Acción", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn("Acción", ImGuiTableColumnFlags_WidthFixed, 170.0f);
         ImGui::TableSetupColumn("Teclado (jugador 1)");
         ImGui::TableSetupColumn("Teclado (jugador 2)");
         ImGui::TableSetupColumn("Mando");
@@ -346,7 +366,7 @@ void Ui::drawControls(UiActions& out) {
                 if (capture_.active && capture_.row == row && capture_.column == col) {
                     label = pad ? "Pulsa un botón..." : "Pulsa una tecla...";
                 } else if (pad) {
-                    for (auto b : padOf(c, row)) label += (label.empty() ? "" : ", ") + std::string(SDL_GameControllerGetStringForButton(b));
+                    for (auto b : padOf(c, row)) label += (label.empty() ? "" : ", ") + std::string(padButtonName(b));
                 } else {
                     for (auto k : keysOf(c, row, col)) label += (label.empty() ? "" : ", ") + std::string(SDL_GetScancodeName(k));
                 }
@@ -462,6 +482,20 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     changed |= ImGui::Checkbox("Mostrar la barra de menús (Esc)", &settings_.showMenu);
 
     ImGui::SeparatorText("Pseudo-3D");
+    ImGui::BeginDisabled(!state.romLoaded);
+    bool profile = state.hasProfile;
+    if (ImGui::Checkbox("Guardar el 3D solo para este juego", &profile)) out.profile = profile ? 1 : 0;
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip(state.romLoaded ? "Los ajustes de abajo (también el efecto 3D y la cámara) se guardan\n"
+                                            "para %s y se recuperan al abrirlo.\n"
+                                            "Al desmarcarlo, el juego vuelve a usar los ajustes generales."
+                                          : "Abre una ROM para guardarle un perfil 3D propio.",
+                          state.gameName.c_str());
+    if (state.hasProfile) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(perfil de %s)", state.gameName.c_str());
+    }
     changed |= ImGui::Checkbox("Efecto 3D", &settings_.render.pseudo3d);
     ImGui::SameLine();
     ImGui::TextDisabled("(atajo en Opciones > Controles)");
@@ -478,10 +512,16 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     float depth = r.depth * 100.0f, thickness = r.thickness * 100.0f;
     if (ImGui::SliderFloat("Profundidad", &depth, 0.0f, 100.0f, "%.0f %%")) r.depth = depth / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
+    changed |= ImGui::Checkbox("Inclinar la cámara", &r.tiltCamera);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Sin marcar, la cámara mira de frente y la imagen se ve como en 2D;\n"
+                          "la profundidad se nota con la iluminación y la cámara viva.");
+    ImGui::BeginDisabled(!r.tiltCamera);
     ImGui::SliderFloat("Inclinación", &r.tilt, kMinTilt, kMaxTilt, "%.0f°");
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     ImGui::SliderFloat("Giro", &r.yaw, -kMaxYaw, kMaxYaw, "%.0f°");
     changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::EndDisabled();
     ImGui::SliderFloat("Zoom", &r.zoom, kMinZoom, kMaxZoom, "%.2fx");
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     if (ImGui::SliderFloat("Grosor", &thickness, 0.0f, 100.0f, "%.0f %%")) r.thickness = thickness / 100.0f;
@@ -491,6 +531,14 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     if (ImGui::SliderFloat("Extrusión", &extrusion, 0.0f, 100.0f, "%.0f %%")) r.extrusion = extrusion / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     ImGui::EndDisabled();
+    changed |= ImGui::Checkbox("Iluminación", &r.lighting);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Luz lateral sobre los bloques y sombras suaves de cada plano sobre los de detrás.\n"
+                          "Hace que el relieve se vea también con la cámara de frente.");
+    changed |= ImGui::Checkbox("Cámara viva", &r.liveCamera);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("La cámara se balancea unos grados siguiendo la acción,\n"
+                          "así las capas se mueven entre sí aunque mires de frente.");
     changed |= ImGui::Checkbox("Sombra de los sprites", &r.shadows);
     changed |= ImGui::Checkbox("Plano B con prioridad delante", &r.highBInFront);
     if (ImGui::IsItemHovered())
@@ -508,6 +556,9 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
         r.extrusion = defaults.extrusion;
         r.thickness = defaults.thickness;
         r.shadows = defaults.shadows;
+        r.tiltCamera = defaults.tiltCamera;
+        r.lighting = defaults.lighting;
+        r.liveCamera = defaults.liveCamera;
         r.highBInFront = defaults.highBInFront;
         r.flatB = defaults.flatB;
         changed = true;
@@ -591,6 +642,8 @@ void Ui::drawAbout() {
     ImGui::BulletText("F3  efecto 3D (se puede cambiar en Opciones > Controles)");
     ImGui::BulletText("F5 / F8  guardar / cargar estado; F6 / F7  cambiar de ranura");
     ImGui::BulletText("F4 o clic del stick izquierdo  menú de estados, manejable con el mando");
+    ImGui::BulletText("Retroceso o gatillo izquierdo (mantener)  rebobinar");
+    ImGui::BulletText("Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta");
     ImGui::SeparatorText("Mando (teclado)");
     ImGui::BulletText("Flechas  cruceta;  A S D  botones A B C;  Q W E  botones X Y Z");
     ImGui::BulletText("Intro  Start;  Mayús derecha  Mode");
@@ -611,11 +664,16 @@ void Ui::drawOverlays(const UiState& state) {
         const ImVec2 pos(vp->Pos.x + (vp->Size.x - size.x) * 0.5f, top + (vp->Size.y - menuHeight_ - size.y) * 0.5f);
         ImGui::GetBackgroundDrawList()->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text), hint);
     }
-    if (state.paused && state.romLoaded) {
+    const char* badge = nullptr;
+    if (state.romLoaded) {
+        if (state.paused) badge = "PAUSA";
+        else if (!state.speed.empty()) badge = state.speed.c_str();
+    }
+    if (badge) {
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x - 10, top + 10), ImGuiCond_Always, ImVec2(1, 0));
         ImGui::SetNextWindowBgAlpha(0.6f);
         ImGui::Begin("##pausa", nullptr, flags);
-        ImGui::TextUnformatted("PAUSA");
+        ImGui::TextUnformatted(badge);
         ImGui::End();
     }
     if (!toast_.empty() && SDL_TICKS_PASSED(SDL_GetTicks(), toastUntil_)) toast_.clear();

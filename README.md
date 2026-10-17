@@ -30,6 +30,10 @@ Primera versión. Lo que hay:
 - **Estados**: 10 ranuras por juego con fecha y miniatura.
 - **Pseudo-3D**: cinco planos (cielo, plano B, plano A, sprites y tiles con prioridad),
   en estilo de capas o de vóxeles, con extrusión de los tiles macizos del plano A.
+  Iluminación lateral con sombras suaves entre planos, cámara viva que se balancea
+  siguiendo la acción, y la inclinación de la cámara se puede quitar para mirar de frente.
+- **Perfiles 3D por juego**: cada ROM puede guardar sus propios ajustes del 3D.
+- **Rebobinado, avance rápido y cámara lenta**.
 
 No hay ROMs comerciales en el repositorio ni en CI: las pruebas usan una ROM generada por el
 propio proyecto (`tests/test_rom.h`).
@@ -49,6 +53,9 @@ Arrastra una ROM a la ventana o usa **Archivo > Abrir ROM**.
 | F5 / F8 | Guardar / cargar estado en la ranura actual |
 | F4 (mando: clic del stick izquierdo) | Menú de estados |
 | F6 / F7 | Ranura anterior / siguiente |
+| Retroceso (mando: gatillo izquierdo), mantener | Rebobinar |
+| Tab (mando: gatillo derecho), mantener | Avance rápido |
+| F9 | Cámara lenta (activar / desactivar) |
 | F1 | Reiniciar |
 | F2 | Cambiar de vista (2D / capas de depuración) |
 | P | Pausa |
@@ -66,12 +73,24 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   al ejecutable si hay un `plumsg.ini` a su lado, modo portátil). Un estado de otra ROM o
   dañado se rechaza sin tocar la partida. Cargar un estado restaura también la SRAM en
   memoria; el `.sav` se sigue escribiendo al salir o al cambiar de ROM.
+- **Juego > Velocidad**: cámara lenta y cuántos segundos se pueden rebobinar (20 por
+  defecto, hasta 60; 0 lo desactiva), a qué velocidad va el avance rápido (4x) y la cámara
+  lenta (50 %). El sonido acompaña: más agudo al acelerar y más grave a cámara lenta. Al
+  rebobinar el juego va hacia atrás fotograma a fotograma, en silencio, y al soltar sigue
+  desde ahí.
 - **Consola**: región (automática según la cabecera, Japón, EE. UU. o Europa/PAL) y tipo
   de mando (3 o 6 botones) de cada puerto. Cambiar la región reinicia el juego.
 - **Opciones > Vídeo**: escalado, 4:3 o píxeles cuadrados, y las opciones del 3D
   (estilo, profundidad, inclinación, giro, zoom, grosor, extrusión, sombras, plano B con
   prioridad delante, plano B plano para juegos que pintan el cielo en él). La cámara del
   3D se gira arrastrando con el ratón o con el stick derecho, y se centra con doble clic.
+  Tres casillas cambian cómo se nota la profundidad: **Inclinar la cámara** (sin marcar,
+  mira de frente y la imagen coincide con la 2D), **Iluminación** (luz lateral sobre los
+  bloques y sombras suaves de cada plano sobre los de detrás) y **Cámara viva** (un
+  balanceo de 3 a 4 grados que sigue a los sprites y al scroll).
+  **Guardar el 3D solo para este juego** crea un perfil con todos esos ajustes (también
+  el efecto 3D y la cámara) que se recupera al abrir esa ROM; está en `perfiles\` junto a
+  `states\`. Al desmarcarlo, el juego vuelve a los ajustes generales.
 
 La configuración se guarda en `plumsg.ini`.
 
@@ -92,8 +111,10 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
 ## Pruebas
 
 - `core_tests`: cartucho, mandos, PSG, VDP, la ROM de prueba (imagen y sonido),
-  savestates (determinismo, ida y vuelta, archivos dañados) y la separación en planos del
-  3D (con la cámara recta, el 3D tiene que verse igual que el 2D).
+  savestates (determinismo, ida y vuelta, archivos dañados), el rebobinado (volver atrás y
+  repetir da los mismos fotogramas), el ritmo del avance rápido y la cámara lenta, la
+  separación en planos del 3D (con la cámara recta, el 3D tiene que verse igual que el 2D),
+  la cámara viva y los perfiles 3D.
 - `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la

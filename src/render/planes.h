@@ -61,4 +61,27 @@ void markSolidTiles(const VideoFrameMd& frame, const Planes& planes, std::vector
 // the camera straight on nothing changes: plane A covers those pixels.
 void clearBehindSolid(const std::vector<uint32_t>& solid, Planes& planes);
 
+// The "live camera": a small sway of the pseudo-3D camera that follows the action, so
+// the depth shows through parallax even when the camera looks straight on. It leans
+// towards where the sprites are on screen and towards where the level scrolls (most
+// games keep the player centred and move the background instead), at most kSwayYaw
+// degrees sideways and kSwayTilt up or down, and eases towards that so it never jumps.
+class LiveCamera {
+public:
+    static constexpr float kSwayYaw = 4.0f, kSwayTilt = 3.0f;
+    // Feed it every frame drawn; a frame already seen (pause, slow motion) only eases.
+    void update(const VideoFrameMd& frame, const Planes& planes);
+    void reset() { *this = LiveCamera(); }
+    float yaw() const { return yaw_; }    // degrees to add to the camera's turn
+    float tilt() const { return tilt_; }  // degrees to add to its tilt
+
+private:
+    float yaw_ = 0, tilt_ = 0;
+    float targetYaw_ = 0, targetTilt_ = 0;
+    float speed_ = 0;  // horizontal scroll in pixels per frame, smoothed
+    int lastScroll_ = 0;
+    uint64_t lastFrame_ = 0;
+    bool seen_ = false;
+};
+
 }  // namespace plumsg

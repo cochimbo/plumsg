@@ -73,21 +73,29 @@ void main() {
 )";
 
 // uMode 0 draws the plane: the top slice in its own colours and the sides darker the
-// deeper they go. uMode 1 draws the sprite shadow: uImage is the sprite plane, shifted
-// by uShadowShift, and uMask the plane the shadow falls on.
+// deeper they go. uMode 1 draws a shadow: uImage is the plane casting it, shifted by
+// uShadowShift, and uMask the plane it falls on. uShadowBlur spreads it over a 3x3
+// patch of samples for a soft shadow (0 for a hard one), uShadowAlpha is how dark it is.
 constexpr const char* kPlaneFragment = R"(#version 330 core
 uniform sampler2D uImage;
 uniform sampler2D uMask;
 uniform int uMode;
 uniform int uSlices;
 uniform vec2 uShadowShift;
+uniform vec2 uShadowBlur;
+uniform float uShadowAlpha;
 in vec2 vUv;
 flat in int vSlice;
 out vec4 outColor;
 void main() {
     if (uMode == 1) {
-        if (texture(uImage, vUv - uShadowShift).a < 0.5 || texture(uMask, vUv).a < 0.5) discard;
-        outColor = vec4(0.0, 0.0, 0.0, 0.4);
+        if (texture(uMask, vUv).a < 0.5) discard;
+        float cover = 0.0;
+        for (int i = -1; i <= 1; ++i)
+            for (int j = -1; j <= 1; ++j)
+                cover += step(0.5, texture(uImage, vUv - uShadowShift + vec2(i, j) * uShadowBlur).a);
+        if (cover == 0.0) discard;
+        outColor = vec4(0.0, 0.0, 0.0, uShadowAlpha * cover / 9.0);
         return;
     }
     vec4 c = texture(uImage, vUv);
@@ -120,6 +128,7 @@ uniform float uExtrude;
 uniform float uScale;
 uniform float uAspect;
 uniform ivec2 uSize;
+uniform int uLighting;
 out vec3 vColor;
 
 // 0 for an empty pixel, else 1..4 from the edge inwards.
@@ -189,11 +198,13 @@ void main() {
         normal = normalize(vec3(-0.5 * dx, -0.5 * dy, 1.0));
     }
     // Light from the top left, in front; a flat front face keeps the true colours. Walls
-    // also darken the further back they reach.
-    const vec3 light = normalize(vec3(-0.5, 0.6, 0.8));
+    // also darken the further back they reach. With uLighting the light comes from
+    // further to the side, so the rounded edges of every shape show their relief even
+    // with the camera straight on.
+    vec3 light = uLighting == 1 ? normalize(vec3(-0.8, 0.5, 0.45)) : normalize(vec3(-0.5, 0.6, 0.8));
     float shade = (0.4 + 0.6 * max(dot(normal, light), 0.0)) / (0.4 + 0.6 * light.z);
     shade *= 1.0 - 0.45 * clamp((top - z) / 48.0, 0.0, 1.0);
-    vColor = texelFetch(uImage, pixel, 0).rgb * min(shade, 1.1);
+    vColor = texelFetch(uImage, pixel, 0).rgb * min(shade, uLighting == 1 ? 1.3 : 1.1);
     gl_Position = uViewProj * vec4(p.x * uScale * uAspect, p.y * uScale, p.z, 1.0);
 }
 )";
@@ -371,8 +382,18 @@ void Pseudo3DRenderer::draw(const VideoFrameMd& frame, const Viewport& area) {
     const float halfHeight = 1.08f * (aspect >= worldW / worldH ? worldH / 2.0f : worldW / 2.0f / aspect);
     const float radians = 3.14159265f / 180.0f;
     const float distance = halfHeight / std::tan(fov / 2) / std::clamp(options_.zoom, kMinZoom, kMaxZoom);
-    const float tilt = std::clamp(options_.tilt, kMinTilt, kMaxTilt) * radians;
-    const float yaw = std::clamp(options_.yaw, -kMaxYaw, kMaxYaw) * radians;
+    // Without tilting the camera looks straight on; the live camera sways on top.
+    float tiltDeg = options_.tiltCamera ? std::clamp(options_.tilt, kMinTilt, kMaxTilt) : 0.0f;
+    float yawDeg = options_.tiltCamera ? std::clamp(options_.yaw, -kMaxYaw, kMaxYaw) : 0.0f;
+    if (options_.liveCamera) {
+        live_.update(frame, planes_);
+        tiltDeg += live_.tilt();
+        yawDeg += live_.yaw();
+    } else {
+        live_.reset();
+    }
+    const float tilt = tiltDeg * radians;
+    const float yaw = yawDeg * radians;
     // Orbit the middle of plane A's blocks. Planes are scaled as seen from where the
     // camera sits when it looks straight on, `eye` along the z axis.
     const float pivot = 0.5f * (height[PlaneA] - extrude);
@@ -422,6 +443,7 @@ void Pseudo3DRenderer::draw(const VideoFrameMd& frame, const Viewport& area) {
         gl::Uniform1i(gl::GetUniformLocation(voxelProgram_, "uSolid"), 1);
         gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uAspect"), aspectPx);
         gl::Uniform2i(gl::GetUniformLocation(voxelProgram_, "uSize"), pw, ph);
+        gl::Uniform1i(gl::GetUniformLocation(voxelProgram_, "uLighting"), options_.lighting ? 1 : 0);
         gl::ActiveTexture(gl::TEXTURE0 + 1);
         gl::BindTexture(gl::TEXTURE_2D, solidTexture_);
         gl::ActiveTexture(gl::TEXTURE0);
@@ -440,22 +462,43 @@ void Pseudo3DRenderer::draw(const VideoFrameMd& frame, const Viewport& area) {
         gl::UseProgram(program_);
     }
 
-    if (options_.shadows && depth > 0) {
-        // The light comes from the top left, so the shadow falls down and to the right,
-        // further the higher the sprites stand over the plane it falls on.
+    // Shadows, all from a light at the top left so they fall down and to the right. The
+    // sprites' are sharp; with lighting every plane also casts a soft one on the planes
+    // behind it, which reads as ambient occlusion where shapes meet. How far a shadow
+    // reaches depends on how far apart the planes are (their nominal heights, without
+    // the voxels' extrusion).
+    struct Shadow {
+        int caster, target;
+        bool soft;
+    };
+    std::vector<Shadow> shadows;
+    if (options_.shadows) shadows.insert(shadows.end(), {{PlaneSprites, PlaneA, false}, {PlaneSprites, PlaneB, false}});
+    if (options_.lighting) {
+        shadows.insert(shadows.end(), {{PlanePriority, PlaneA, true}, {PlanePriority, PlaneB, true}, {PlaneA, PlaneB, true},
+                                       {PlaneA, PlaneSky, true}, {PlaneB, PlaneSky, true}, {PlaneSprites, PlaneSky, true}});
+    }
+    if (!shadows.empty() && depth > 0) {
+        const float nominal[kPlanes] = {0.0f, 0.25f * depth, 0.55f * depth, 0.8f * depth, 1.0f * depth};
         gl::Uniform1i(mode, 1);
         gl::Uniform1f(step, 0.0f);
         gl::Enable(gl::BLEND);
         gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
         gl::DepthMask(gl::FALSE_);
-        for (int target : {PlaneA, PlaneB}) {
-            const float lift = height[PlaneSprites] - height[target];
-            gl::Uniform1f(top, height[target] + 0.05f);
-            gl::Uniform2f(gl::GetUniformLocation(program_, "uShadowShift"), 0.3f * lift / worldW, 0.3f * lift / worldH);
+        const gl::GLint shift = gl::GetUniformLocation(program_, "uShadowShift");
+        const gl::GLint blur = gl::GetUniformLocation(program_, "uShadowBlur");
+        const gl::GLint alpha = gl::GetUniformLocation(program_, "uShadowAlpha");
+        for (const Shadow& sh : shadows) {
+            const float lift = nominal[sh.caster] - nominal[sh.target];
+            const float reach = sh.soft ? std::min(0.15f * lift, 6.0f) : 0.3f * lift;  // in pixels
+            const float spread = sh.soft ? 1.0f + std::min(0.1f * lift, 3.0f) : 0.0f;
+            gl::Uniform1f(top, height[sh.target] + 0.05f);
+            gl::Uniform2f(shift, reach / static_cast<float>(pw), reach / static_cast<float>(ph));
+            gl::Uniform2f(blur, spread / static_cast<float>(pw), spread / static_cast<float>(ph));
+            gl::Uniform1f(alpha, sh.soft ? 0.35f : 0.4f);
             gl::ActiveTexture(gl::TEXTURE0);
-            gl::BindTexture(gl::TEXTURE_2D, textures_[PlaneSprites]);
+            gl::BindTexture(gl::TEXTURE_2D, textures_[sh.caster]);
             gl::ActiveTexture(gl::TEXTURE0 + 1);
-            gl::BindTexture(gl::TEXTURE_2D, textures_[target]);
+            gl::BindTexture(gl::TEXTURE_2D, textures_[sh.target]);
             gl::DrawArraysInstanced(gl::TRIANGLE_STRIP, 0, 4, 1);
         }
         gl::DepthMask(gl::TRUE_);

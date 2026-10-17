@@ -58,7 +58,9 @@ public:
     // Savestates: only between frames. The format is versioned and made of tagged
     // blocks, so newer readers can skip unknown blocks; it is deflate-compressed and
     // tied to the ROM's CRC32. loadState() leaves the console untouched on failure.
-    bool saveState(std::vector<uint8_t>& out);
+    // `quick` skips the thumbnail and compresses less, for rewind snapshots taken
+    // every frame.
+    bool saveState(std::vector<uint8_t>& out, bool quick = false);
     bool loadState(const std::vector<uint8_t>& in, std::string* error);
     // The half-size picture stored in a savestate (RGBA, `width` x `height`).
     static bool stateThumbnail(const std::vector<uint8_t>& state, std::vector<uint32_t>& pixels, int* width,

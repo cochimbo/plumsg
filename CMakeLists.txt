@@ -58,7 +58,9 @@ add_library(plumsg_core STATIC
   src/core/ym2612.cpp
   src/core/audio_mixer.cpp
   src/core/megadrive.cpp
+  src/core/rewind.cpp
   src/render/planes.cpp
+  src/render/profile3d.cpp
 )
 target_include_directories(plumsg_core PUBLIC src src/core)
 target_link_libraries(plumsg_core PUBLIC plumsg_miniz PRIVATE plumsg_ymfm)

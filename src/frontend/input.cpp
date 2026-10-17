@@ -13,8 +13,17 @@ namespace {
 // Names used in the [teclado] / [mando] sections of the .ini file.
 constexpr const char* kButtonNames[InputConfig::kButtons] = {"arriba", "abajo", "izquierda", "derecha", "a", "b",
                                                              "c", "start", "x", "y", "z", "mode"};
-constexpr const char* kHotkeyNames[InputConfig::kHotkeys] = {"efecto_3d", "guardar_estado", "cargar_estado",
-                                                             "ranura_anterior", "ranura_siguiente", "menu_estados"};
+constexpr const char* kHotkeyNames[InputConfig::kHotkeys] = {
+    "efecto_3d", "guardar_estado", "cargar_estado", "ranura_anterior", "ranura_siguiente",
+    "menu_estados", "rebobinar", "avance_rapido", "camara_lenta"};
+
+constexpr int kTriggerThreshold = 16000;  // of 32767: a trigger counts as pressed past halfway
+
+bool padDown(SDL_GameController* pad, SDL_GameControllerButton b) {
+    if (b == kPadLeftTrigger) return SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > kTriggerThreshold;
+    if (b == kPadRightTrigger) return SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > kTriggerThreshold;
+    return SDL_GameControllerGetButton(pad, b) != 0;
+}
 
 std::string trim(const std::string& s) {
     size_t b = s.find_first_not_of(" \t\r\n");
@@ -52,6 +61,27 @@ std::vector<std::string> splitList(const std::string& s) {
 
 }  // namespace
 
+const char* padButtonName(SDL_GameControllerButton b) {
+    if (b == kPadLeftTrigger) return "lefttrigger";
+    if (b == kPadRightTrigger) return "righttrigger";
+    const char* name = SDL_GameControllerGetStringForButton(b);
+    return name ? name : "?";
+}
+
+SDL_GameControllerButton padButtonFromName(const std::string& name) {
+    const std::string n = lower(name);
+    if (n == "lefttrigger") return kPadLeftTrigger;
+    if (n == "righttrigger") return kPadRightTrigger;
+    return SDL_GameControllerGetButtonFromString(n.c_str());
+}
+
+SDL_GameControllerButton triggerPulled(const SDL_Event& e) {
+    if (e.type != SDL_CONTROLLERAXISMOTION || e.caxis.value <= kTriggerThreshold) return SDL_CONTROLLER_BUTTON_INVALID;
+    if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT) return kPadLeftTrigger;
+    if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT) return kPadRightTrigger;
+    return SDL_CONTROLLER_BUTTON_INVALID;
+}
+
 InputConfig InputConfig::defaults() {
     InputConfig c;
     auto set = [&](MdButton b, std::vector<SDL_Scancode> k, std::vector<SDL_GameControllerButton> p) {
@@ -78,6 +108,11 @@ InputConfig InputConfig::defaults() {
     c.hotkeyKeys[static_cast<int>(Hotkey::NextSlot)] = {SDL_SCANCODE_F7};
     c.hotkeyKeys[static_cast<int>(Hotkey::StateMenu)] = {SDL_SCANCODE_F4};
     c.hotkeyPad[static_cast<int>(Hotkey::StateMenu)] = {SDL_CONTROLLER_BUTTON_LEFTSTICK};
+    c.hotkeyKeys[static_cast<int>(Hotkey::Rewind)] = {SDL_SCANCODE_BACKSPACE};
+    c.hotkeyPad[static_cast<int>(Hotkey::Rewind)] = {kPadLeftTrigger};
+    c.hotkeyKeys[static_cast<int>(Hotkey::FastForward)] = {SDL_SCANCODE_TAB};
+    c.hotkeyPad[static_cast<int>(Hotkey::FastForward)] = {kPadRightTrigger};
+    c.hotkeyKeys[static_cast<int>(Hotkey::SlowMotion)] = {SDL_SCANCODE_F9};
     return c;
 }
 
@@ -130,7 +165,7 @@ InputConfig InputConfig::loadOrCreate(const std::string& path) {
             auto& list = b >= 0 ? c.pad[b] : c.hotkeyPad[h];
             list.clear();
             for (const auto& name : splitList(value)) {
-                SDL_GameControllerButton gb = SDL_GameControllerGetButtonFromString(lower(name).c_str());
+                SDL_GameControllerButton gb = padButtonFromName(name);
                 if (gb != SDL_CONTROLLER_BUTTON_INVALID) list.push_back(gb);
             }
         }
@@ -153,7 +188,7 @@ void InputConfig::write(std::ostream& out) const {
     };
     auto padList = [&](const char* name, const std::vector<SDL_GameControllerButton>& list) {
         out << name << " = ";
-        for (size_t k = 0; k < list.size(); ++k) out << (k ? ", " : "") << SDL_GameControllerGetStringForButton(list[k]);
+        for (size_t k = 0; k < list.size(); ++k) out << (k ? ", " : "") << padButtonName(list[k]);
         out << "\n";
     };
     out << "# Controles de plumsg. Puedes poner varias teclas o botones separados por comas.\n"
@@ -161,10 +196,12 @@ void InputConfig::write(std::ostream& out) const {
            "# jugador 1 y el segundo, el jugador 2.\n"
            "# Teclas: nombres de SDL (Up, Down, Left, Right, A, S, Return, Space, Right Shift...).\n"
            "# Botones de mando: a, b, x, y, back, guide, start, leftstick, rightstick,\n"
-           "# leftshoulder, rightshoulder, dpup, dpdown, dpleft, dpright.\n"
+           "# leftshoulder, rightshoulder, lefttrigger, righttrigger, dpup, dpdown, dpleft, dpright.\n"
            "# efecto_3d activa y desactiva el efecto pseudo-3D; guardar_estado, cargar_estado,\n"
            "# ranura_anterior y ranura_siguiente manejan los estados guardados; menu_estados\n"
-           "# abre un menú para elegir ranura, guardar y cargar con el mando.\n\n[teclado]\n";
+           "# abre un menú para elegir ranura, guardar y cargar con el mando.\n"
+           "# rebobinar y avance_rapido funcionan mientras se mantienen pulsados; camara_lenta\n"
+           "# la activa y la desactiva.\n\n[teclado]\n";
     for (int i = 0; i < kButtons; ++i) keyList(kButtonNames[i], keys[i]);
     for (int i = 0; i < kHotkeys; ++i) keyList(kHotkeyNames[i], hotkeyKeys[i]);
     out << "\n[teclado2]\n";
@@ -188,6 +225,17 @@ void Input::openAll() {
 }
 
 void Input::handleEvent(const SDL_Event& e) {
+    pulled_ = SDL_CONTROLLER_BUTTON_INVALID;
+    if (e.type == SDL_CONTROLLERAXISMOTION &&
+        (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
+        auto it = std::find_if(triggers_.begin(), triggers_.end(), [&](const auto& t) { return t.first == e.caxis.which; });
+        if (it == triggers_.end()) it = triggers_.insert(triggers_.end(), {e.caxis.which, 0});
+        const int bit = e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? 1 : 2;
+        const bool down = e.caxis.value > kTriggerThreshold;
+        if (down && !(it->second & bit)) pulled_ = triggerPulled(e);
+        it->second = down ? it->second | bit : it->second & ~bit;
+        return;
+    }
     if (e.type == SDL_CONTROLLERDEVICEADDED) {
         SDL_JoystickID id = SDL_JoystickGetDeviceInstanceID(e.cdevice.which);
         for (auto* p : pads_)
@@ -212,9 +260,25 @@ Hotkey Input::hotkeyFor(const SDL_Event& e) const {
         } else if (e.type == SDL_CONTROLLERBUTTONDOWN) {
             for (SDL_GameControllerButton gb : config_.hotkeyPad[h])
                 if (gb == e.cbutton.button) return static_cast<Hotkey>(h);
+        } else if (e.type == SDL_CONTROLLERAXISMOTION && pulled_ != SDL_CONTROLLER_BUTTON_INVALID) {
+            for (SDL_GameControllerButton gb : config_.hotkeyPad[h])
+                if (gb == pulled_) return static_cast<Hotkey>(h);
         }
     }
     return Hotkey::Count;
+}
+
+bool Input::held(Hotkey h, bool useKeyboard) const {
+    const int i = static_cast<int>(h);
+    if (useKeyboard) {
+        const Uint8* kb = SDL_GetKeyboardState(nullptr);
+        for (SDL_Scancode sc : config_.hotkeyKeys[i])
+            if (kb[sc]) return true;
+    }
+    for (auto* p : pads_)
+        for (SDL_GameControllerButton gb : config_.hotkeyPad[i])
+            if (padDown(p, gb)) return true;
+    return false;
 }
 
 std::vector<std::string> Input::padNames() const {
@@ -247,7 +311,7 @@ PadState Input::poll(int player, bool useKeyboard) const {
         if (useKeyboard)
             for (SDL_Scancode sc : keys[b]) down[b] = down[b] || kb[sc];
         if (pad)
-            for (SDL_GameControllerButton gb : config_.pad[b]) down[b] = down[b] || SDL_GameControllerGetButton(pad, gb);
+            for (SDL_GameControllerButton gb : config_.pad[b]) down[b] = down[b] || padDown(pad, gb);
     }
     if (config_.stickAsDpad && pad) {
         const int x = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);

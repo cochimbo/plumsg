@@ -54,7 +54,9 @@ protected:
 // tilted camera: the sky at the back, then plane B, plane A, the sprites, and the
 // high-priority tiles at the front. In the layers style each raised plane is a cut-out
 // whose sides reach down towards the plane below it; in the voxels style every pixel
-// of a raised plane is a lit block. Sprites can cast a shadow on the background.
+// of a raised plane is a lit block. Sprites can cast a shadow on the background, and with
+// lighting every plane casts a soft one on those behind it. The live camera sways the
+// view a little to follow the action.
 class Pseudo3DRenderer : public Renderer {
 public:
     Pseudo3DRenderer();
@@ -73,6 +75,7 @@ private:
     int texWidth_ = 0, texHeight_ = 0;
     Planes planes_;
     std::vector<uint32_t> solid_;  // markSolidTiles() for the voxel style
+    LiveCamera live_;
 };
 
 }  // namespace plumsg
