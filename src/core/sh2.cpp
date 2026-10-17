@@ -1,5 +1,7 @@
 #include "sh2.h"
 
+#include <vector>
+
 namespace plumsg {
 
 namespace {
@@ -15,6 +17,12 @@ int32_t s16(uint32_t v) { return static_cast<int16_t>(v); }
 // Memory as the CPU sees it
 
 uint32_t Sh2::read(uint32_t addr, int size) {
+    if (fast(addr)) {
+        const uint8_t* p = fastMemory_ + (addr & fastMask_ & ~static_cast<uint32_t>(size - 1));
+        if (size == 2) return static_cast<uint32_t>(p[0] << 8 | p[1]);
+        if (size == 4) return static_cast<uint32_t>(p[0]) << 24 | static_cast<uint32_t>(p[1]) << 16 | p[2] << 8 | p[3];
+        return p[0];
+    }
     switch (addr >> 29) {
         case 0: case 1: case 4: case 5:
             return bus_.sh2Read(*this, addr & 0x1FFFFFFF & ~static_cast<uint32_t>(size - 1), size);
@@ -36,6 +44,11 @@ uint32_t Sh2::read(uint32_t addr, int size) {
 }
 
 void Sh2::write(uint32_t addr, uint32_t value, int size) {
+    if (fast(addr)) {
+        uint8_t* p = fastMemory_ + (addr & fastMask_ & ~static_cast<uint32_t>(size - 1));
+        for (int i = 0; i < size; ++i) p[i] = static_cast<uint8_t>(value >> (8 * (size - 1 - i)));
+        return;
+    }
     switch (addr >> 29) {
         case 0: case 1: case 4: case 5:
             bus_.sh2Write(*this, addr & 0x1FFFFFFF & ~static_cast<uint32_t>(size - 1), value, size);
@@ -50,6 +63,7 @@ void Sh2::write(uint32_t addr, uint32_t value, int size) {
             if (addr < 0xFFFFFE00) return;
             const uint32_t a = addr & ~static_cast<uint32_t>(size - 1);
             for (int i = 0; i < size; ++i) writeIo(a + static_cast<uint32_t>(i), static_cast<uint8_t>(value >> (8 * (size - 1 - i))));
+            updateOnChipIrqs();
             return;
         }
         default: return;  // purges and the address array: the cache is not simulated
@@ -76,6 +90,7 @@ void Sh2::reset() {
     intc_ = Intc{};
     ccr_ = sbycr_ = 0;
     bsc_.fill(0);
+    onChipIrqs_ = false;
     pc_ = read(0, 4);
     r_[15] = read(4, 4);
 }
@@ -128,10 +143,12 @@ int Sh2::step() {
     extra_ = 0;
     int cycles = 1;
     if (runDma()) return 1 + extra_;
-    if (!noIrqNext_ && takeInterrupt()) {
+    // takeInterrupt() only when something could interrupt: the external level is above
+    // the mask, or an on-chip module has its interrupt enabled.
+    if (!noIrqNext_ && (irl_ > imask() || onChipIrqs_) && takeInterrupt()) {
         cycles = 13;
     } else if (sleeping_) {
-        cycles = 4;
+        cycles = 16;  // nothing to do until an interrupt: wake up to check for one now and then
     } else {
         noIrqNext_ = false;
         const uint16_t op = static_cast<uint16_t>(fetch(pc_));
@@ -151,11 +168,16 @@ void Sh2::delaySlot(uint32_t target) {
     const uint16_t op = static_cast<uint16_t>(fetch(slot));
     // A branch in a delay slot is an illegal slot instruction; it is treated as one
     // that does nothing.
-    const bool branch = (op & 0xF000) == 0xA000 || (op & 0xF000) == 0xB000 || (op & 0xFF00) == 0x8900 ||
-                        (op & 0xFF00) == 0x8B00 || (op & 0xFF00) == 0x8D00 || (op & 0xFF00) == 0x8F00 ||
-                        (op & 0xF0FF) == 0x0003 || (op & 0xF0FF) == 0x0023 || (op & 0xF0FF) == 0x400B ||
-                        (op & 0xF0FF) == 0x402B || op == 0x000B || op == 0x002B || (op & 0xFF00) == 0xC300;
-    if (!branch) execute(op);
+    static const std::vector<bool> kBranch = [] {
+        std::vector<bool> t(0x10000);
+        for (uint32_t op = 0; op < 0x10000; ++op)
+            t[op] = (op & 0xF000) == 0xA000 || (op & 0xF000) == 0xB000 || (op & 0xFF00) == 0x8900 ||
+                    (op & 0xFF00) == 0x8B00 || (op & 0xFF00) == 0x8D00 || (op & 0xFF00) == 0x8F00 ||
+                    (op & 0xF0FF) == 0x0003 || (op & 0xF0FF) == 0x0023 || (op & 0xF0FF) == 0x400B ||
+                    (op & 0xF0FF) == 0x402B || op == 0x000B || op == 0x002B || (op & 0xFF00) == 0xC300;
+        return t;
+    }();
+    if (!kBranch[op]) execute(op);
     inSlot_ = false;
     pc_ = target;
     extra_ += 1;
@@ -563,6 +585,12 @@ void Sh2::execute(uint16_t op) {
             break;
         }
         case 0xA: {  // BRA
+            if (op == 0xAFFE && !inSlot_ && fetch(pc_ + 2) == 0x0009) {
+                // bra to itself with a nop: only an interrupt gets out, so wait for one
+                // as SLEEP does (returning here).
+                sleeping_ = true;
+                return;
+            }
             const int32_t d = static_cast<int32_t>(static_cast<uint32_t>(op & 0xFFF) << 20) >> 19;
             delaySlot(pc_ + 4 + static_cast<uint32_t>(d));
             extra_ += 1;

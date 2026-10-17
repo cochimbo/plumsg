@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <memory>
 #include <random>
@@ -24,6 +25,7 @@
 #include "rewind.h"
 #include "test_rom.h"
 #include "frontend/library_names.h"
+#include "mars/mars_program.h"
 
 using namespace plumsg;
 
@@ -528,8 +530,12 @@ void testSh2() {
 // to say they are ready; then the master SH-2 draws a gradient in direct colour mode
 // and swaps the frame buffers. Checks the boot without a BIOS, the communication
 // words, the frame buffer, the VDP and the layer drawn over the Mega Drive's picture.
-void testMars() {
-    std::vector<uint8_t> rom(0x1000, 0);
+// A 32X cartridge around an SH-2 program loaded at 0x06000000: the 68000 turns the
+// adapter on, waits for both SH-2s to say they are ready and writes 1 in the seventh
+// communication word.
+std::vector<uint8_t> marsRom(const uint8_t* program, size_t size, uint32_t masterEntry, uint32_t slaveEntry) {
+    std::vector<uint8_t> rom(0x800 + ((size + 3) & ~size_t{3}), 0);
+    std::copy(program, program + size, rom.begin() + 0x800);
     auto put16 = [&](uint32_t a, std::initializer_list<uint16_t> words) {
         for (uint16_t w : words) {
             rom[a] = static_cast<uint8_t>(w >> 8);
@@ -542,11 +548,11 @@ void testMars() {
     put32(4, 0x3F0);
     const char* system = "SEGA 32X        ";
     std::copy(system, system + 16, rom.begin() + 0x100);
-    put32(0x3D4, 0x800);       // SH-2 program in the ROM
-    put32(0x3D8, 0);           // to the start of SDRAM
-    put32(0x3DC, 0x200);       // size
-    put32(0x3E0, 0x06000100);  // master entry
-    put32(0x3E4, 0x06000180);  // slave entry
+    put32(0x3D4, 0x800);  // SH-2 program in the ROM
+    put32(0x3D8, 0);      // to the start of SDRAM
+    put32(0x3DC, static_cast<uint32_t>((size + 3) & ~size_t{3}));
+    put32(0x3E0, masterEntry);
+    put32(0x3E4, slaveEntry);
     put32(0x3E8, 0x06000000);  // VBRs
     put32(0x3EC, 0x06000000);
     put16(0x3F0, {0x33FC, 0x0003, 0x00A1, 0x5100,          // move.w #3,$a15100   adapter on, SH-2s running
@@ -556,7 +562,20 @@ void testMars() {
                   0x66F4,                                  // bne.s *-10
                   0x33FC, 0x0001, 0x00A1, 0x512C,          // move.w #1,$a1512c   tell the master to go
                   0x60FE});                                // bra.s *
-    const uint32_t m = 0x800;  // SDRAM 0x06000000
+    return rom;
+}
+
+void testMars() {
+    std::vector<uint8_t> program(0x200, 0);
+    auto put16 = [&](uint32_t a, std::initializer_list<uint16_t> words) {
+        for (uint16_t w : words) {
+            program[a] = static_cast<uint8_t>(w >> 8);
+            program[a + 1] = static_cast<uint8_t>(w);
+            a += 2;
+        }
+    };
+    auto put32 = [&](uint32_t a, uint32_t v) { put16(a, {static_cast<uint16_t>(v >> 16), static_cast<uint16_t>(v)}); };
+    const uint32_t m = 0;  // SDRAM 0x06000000
     put16(m + 0x100, {0xD117,           // mov.l #$20004000,r1
                       0xD218,           // mov.l #$8000,r2
                       0x2121,           // mov.w r2,@r1        FM: the SH-2s get the VDP
@@ -589,7 +608,7 @@ void testMars() {
     put16(m + 0x180, {0xAFFE, 0x0009});  // the slave just waits
 
     MegaDrive md;
-    md.loadRomData(rom);
+    md.loadRomData(marsRom(program.data(), program.size(), 0x06000100, 0x06000180));
     check(md.is32x(), "32X: se reconoce el cartucho por su cabecera");
     for (int i = 0; i < 6; ++i) md.runFrame();
     const auto& comm = md.mars()->comm();
@@ -614,6 +633,60 @@ void testMars() {
     check(md.loadState(state, &error), "32X: carga su estado");
     md.runFrame();
     check(frameHash(md.frame()) == a && md.mars()->comm()[0] == 0x4D5F, "32X: el estado guarda y recupera la 32X");
+}
+
+// The C program in tests/mars, compiled for the SH-2: both CPUs run the same checks
+// (libgcc's division, 64-bit and floating point arithmetic, jump tables...) and must
+// get what this machine gets; then VBlank interrupts, packed pixels through the
+// palette, and a square wave on the PWM.
+namespace marschecks {
+#include "mars/checks.inc"
+}
+
+void testMarsProgram() {
+    MegaDrive md;
+    md.setSampleRate(44100);
+    md.loadRomData(marsRom(kMarsProgram, sizeof(kMarsProgram), 0x06000200, 0x06000220));
+    for (int i = 0; i < 30 && md.mars()->comm()[7] != 0xD0; ++i) md.runFrame();
+    uint32_t want[16];
+    marschecks::runChecks(want);
+    const auto& sdram = md.mars()->sdram();
+    auto result = [&](int i) {
+        const size_t a = 0x3F000 + static_cast<size_t>(i) * 4;
+        return static_cast<uint32_t>(sdram[a] << 24 | sdram[a + 1] << 16 | sdram[a + 2] << 8 | sdram[a + 3]);
+    };
+    int masterOk = 0, slaveOk = 0;
+    for (int i = 0; i < 16; ++i) {
+        if (result(i) == want[i]) ++masterOk;
+        else std::printf("     maestra[%d] = %08x, debería ser %08x\n", i, result(i), want[i]);
+        if (result(16 + i) == want[i]) ++slaveOk;
+    }
+    check(masterOk == 16, "32X: la SH-2 maestra calcula lo mismo que este ordenador (programa en C)");
+    check(slaveOk == 16, "32X: la SH-2 esclava también");
+    check(result(32) >= 3, "32X: interrupciones de VBlank con su manejador y RTE");
+    check(md.mars()->comm()[7] == 0xD0, "32X: el programa termina");
+
+    md.runFrame();
+    md.runFrame();
+    const VideoFrameMd& f = md.frame();
+    bool packed = true;
+    for (int x : {0, 7, 8, 100, f.width - 1}) {
+        const uint32_t i = static_cast<uint32_t>(50 * VideoFrameMd::kMaxWidth + x);
+        const uint32_t level = static_cast<uint32_t>(x) >> 3;
+        const uint32_t c = (level << 3) | (level >> 2);
+        if (f.info[i].layer != MdLayer::Mars || f.rgba[i] != (0xFF000000u | c << 16 | c << 8 | c)) packed = false;
+    }
+    check(packed, "32X: píxeles empaquetados a través de la paleta");
+
+    md.audio().clearSamples();
+    for (int i = 0; i < 5; ++i) md.runFrame();
+    const auto& out = md.audio().samples();
+    int lo = 0, hi = 0;
+    for (size_t i = 0; i < out.size(); i += 2) {
+        lo = std::min<int>(lo, out[i]);
+        hi = std::max<int>(hi, out[i]);
+    }
+    check(out.size() > 2 * 3000 && hi - lo > 10000, "32X: el PWM suena");
 }
 
 }  // namespace
@@ -919,6 +992,7 @@ int main() {
     testSystems();
     testSh2();
     testMars();
+    testMarsProgram();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

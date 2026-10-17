@@ -61,6 +61,14 @@ public:
     void setVbr(uint32_t v) { vbr_ = v; }
     uint32_t vbr() const { return vbr_; }
 
+    // A RAM the CPU may read and write directly instead of through the bus (the 32X's
+    // SDRAM): `size` bytes, a power of two, at `base` (without the cache-through bits).
+    void setFastMemory(uint32_t base, uint32_t size, uint8_t* memory) {
+        fastBase_ = base;
+        fastMask_ = size - 1;
+        fastMemory_ = memory;
+    }
+
     // Memory through the CPU's eyes (cache-through bits, on-chip registers, data array).
     uint32_t read(uint32_t addr, int size);
     void write(uint32_t addr, uint32_t value, int size);
@@ -76,6 +84,7 @@ public:
         ar(sci_.smr, sci_.brr, sci_.scr, sci_.tdr, sci_.ssr, sci_.rdr);
         ar(intc_.ipra, intc_.iprb, intc_.vcra, intc_.vcrb, intc_.vcrc, intc_.vcrd, intc_.vcrwdt, intc_.icr);
         ar(ccr_, sbycr_, bsc_);
+        updateOnChipIrqs();
     }
 
 private:
@@ -92,13 +101,21 @@ private:
     void divide32();
     void divide64();
     void sciTransfer();
+    void updateOnChipIrqs() {
+        onChipIrqs_ = (divu_.dvcr & 2) || (dmac_.chcr[0] & 4) || (dmac_.chcr[1] & 4) || (wdt_.wtcsr & 0x20) ||
+                      (sci_.scr & 0xC0) || (frt_.tier & 0x8E);
+    }
 
     bool t() const { return sr_ & 1; }
     void setT(bool v) { sr_ = (sr_ & ~1u) | (v ? 1u : 0u); }
     int imask() const { return (sr_ >> 4) & 15; }
 
+    bool fast(uint32_t addr) const { return fastMemory_ && ((addr & 0xDFFFFFFF) & ~fastMask_) == fastBase_; }
+
     Sh2Bus& bus_;
     int id_;
+    uint8_t* fastMemory_ = nullptr;
+    uint32_t fastBase_ = 0, fastMask_ = 0;
     Sh2* peer_ = nullptr;
 
     std::array<uint32_t, 16> r_{};
@@ -106,6 +123,7 @@ private:
     uint32_t sr_ = 0xF0;  // T bit 0, S 1, I 4-7, Q 8, M 9
     bool sleeping_ = false;
     bool noIrqNext_ = false;  // the last instruction blocks interrupts for one instruction
+    bool onChipIrqs_ = false;  // some on-chip module has its interrupt enabled
     bool inSlot_ = false;
     uint32_t slotTarget_ = 0;
     int extra_ = 0;  // wait states added by the bus during this step

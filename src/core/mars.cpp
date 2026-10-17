@@ -20,6 +20,8 @@ uint32_t colorOf(uint16_t c) {
 Mars::Mars(Cartridge& cart) : cart_(cart) {
     master_.setPeer(&slave_);
     slave_.setPeer(&master_);
+    master_.setFastMemory(0x06000000, 0x40000, sdram_.data());
+    slave_.setFastMemory(0x06000000, 0x40000, sdram_.data());
 
     // The SH-2 boot ROMs. Every exception vector leads to a loop at 0x200; reset starts
     // at 0x204. The master waits a little (the 68000 is still clearing memory), says
@@ -190,16 +192,21 @@ void Mars::runUntil(uint64_t masterClock) {
         runPwm(target);
         return;
     }
-    // Whichever SH-2 is behind runs next, one instruction at a time, so they see each
-    // other's writes in order.
+    // Whichever SH-2 is behind runs next, a few instructions at a time (at most
+    // kQuantum cycles past the other), so they see each other's writes nearly in order.
+    constexpr uint64_t kQuantum = 16 * kTicksPerSh2Cycle;
     for (;;) {
         const int c = sh2Ticks_[0] <= sh2Ticks_[1] ? 0 : 1;
-        if (sh2Ticks_[c] >= target) break;
+        uint64_t& ticks = sh2Ticks_[c];
+        if (ticks >= target) break;
+        const uint64_t until = std::min(target, sh2Ticks_[c ^ 1] + kQuantum);
         Sh2& cpu = c ? slave_ : master_;
-        now_ = sh2Ticks_[c];
-        if (pwm_.nextTick <= now_) runPwm(now_);
-        sh2Ticks_[c] += static_cast<uint64_t>(cpu.step()) * kTicksPerSh2Cycle;
-        cpu.setDreq(1, false);  // the PWM's request is a pulse
+        do {
+            now_ = ticks;
+            if (pwm_.nextTick <= now_) runPwm(now_);
+            ticks += static_cast<uint64_t>(cpu.step()) * kTicksPerSh2Cycle;
+            cpu.setDreq(1, false);  // the PWM's request is a pulse
+        } while (ticks < until);
     }
     runPwm(target);
 }

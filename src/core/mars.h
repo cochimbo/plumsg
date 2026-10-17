@@ -54,6 +54,7 @@ public:
     Sh2& master() { return master_; }
     Sh2& slave() { return slave_; }
     const std::array<uint16_t, 8>& comm() const { return comm_; }
+    const std::array<uint8_t, 0x40000>& sdram() const { return sdram_; }
 
     template <class Ar>
     void state(Ar& ar) {
