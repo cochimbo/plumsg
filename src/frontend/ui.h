@@ -124,6 +124,8 @@ private:
     void drawStateMenu(const UiState& state);
     bool handleStateMenu(const SDL_Event& e);
     void drawOverlays(const UiState& state);
+    // Hides the mouse pointer while a game runs and the mouse has been still a while.
+    void hideIdleCursor(const UiState& state);
     void finishCapture(int keyOrButton);
     void loadLogo();
 
@@ -178,6 +180,7 @@ private:
     std::string error_;  // showError(), until acknowledged
     std::string toast_;
     Uint32 toastUntil_ = 0;
+    Uint32 lastMouseMove_ = 0;  // SDL_GetTicks() of the last mouse motion, click or wheel
 };
 
 }  // namespace plumsg

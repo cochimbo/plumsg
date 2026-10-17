@@ -20,6 +20,8 @@ namespace plumsg {
 namespace {
 
 constexpr int kRows = InputConfig::kButtons + InputConfig::kHotkeys;
+// While a game runs the mouse pointer goes away once it has been still this long.
+constexpr Uint32 kCursorIdleMs = 2000;
 constexpr const char* kRowNames[kRows] = {"Arriba", "Abajo", "Izquierda", "Derecha", "A", "B", "C", "Start",
                                           "X", "Y", "Z", "Mode", "Efecto 3D", "Guardar estado", "Cargar estado",
                                           "Ranura anterior", "Ranura siguiente", "Menú de estados",
@@ -89,6 +91,8 @@ void Ui::loadLogo() {
 }
 
 bool Ui::handleEvent(const SDL_Event& e) {
+    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEWHEEL)
+        lastMouseMove_ = SDL_GetTicks();
     if (capture_.active) {
         if (e.type == SDL_KEYDOWN) {
             if (e.key.keysym.scancode == SDL_SCANCODE_ESCAPE) capture_.active = false;
@@ -254,7 +258,20 @@ UiActions Ui::frame(const UiState& state) {
         }
     }
     drawOverlays(state);
+    hideIdleCursor(state);
     return out;
+}
+
+// The backend reads the cursor ImGui asks for at the start of the next frame and hides
+// the system pointer when it is None.
+void Ui::hideIdleCursor(const UiState& state) {
+    const bool windowOpen = showControls_ || showVideo_ || showAbout_ || showCheats_ || showLibrary_ ||
+                            showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
+                            !error_.empty() || capture_.active ||
+                            ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) || ImGui::GetIO().WantCaptureMouse;
+    const bool playing = state.romLoaded && !state.paused;
+    if (playing && !windowOpen && SDL_GetTicks() - lastMouseMove_ >= kCursorIdleMs)
+        ImGui::SetMouseCursor(ImGuiMouseCursor_None);
 }
 
 void Ui::render() {
