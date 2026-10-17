@@ -34,3 +34,27 @@ jobs:
         with:
           name: test-rom-screenshot
           path: test-rom.png
+
+  # The emulator without a window: builds without SDL2 or OpenGL, as a CI job or a
+  # Claude thread would to reproduce a bug, and keeps a run's outputs as an artifact.
+  headless:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (no frontend)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPLUMSG_BUILD_FRONTEND=OFF
+          cmake --build build --parallel --target plumsg-headless core_tests
+      - name: Headless tests
+        run: ctest --test-dir build --output-on-failure -R "headless|core_tests"
+      - name: Sample run with an input script
+        run: |
+          mkdir -p headless-out
+          ./build/plumsg-headless --pad-test-rom --frames 120 --out-dir headless-out \
+            --do "30+30 start" --do "45 screenshot" --do "90 screenshot" --json headless-out/pad.json
+          ./build/plumsg-headless --test-rom --frames 300 --png-every 100 --out-dir headless-out \
+            --wav headless-out/test-rom.wav --hash-log headless-out/test-rom-hashes.txt --json headless-out/test-rom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: headless-output
+          path: headless-out

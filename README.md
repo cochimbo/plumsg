@@ -193,6 +193,60 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`
   (`--biblioteca` se puede repetir, y `--bios` abre la ventana de las BIOS).
 
+## Sin ventana: `plumsg-headless`
+
+`plumsg-headless` es el emulador sin ventana, sin sonido y sin tarjeta gráfica, para
+pruebas, CI y reproducir fallos. Ejecuta un cartucho o un disco durante N fotogramas,
+pulsa los botones que diga un guion y guarda lo que se le pida: capturas PNG, el sonido
+en WAV, un hash por fotograma, estados y volcados de la RAM. También comprueba
+resultados y dice en qué fotograma una ejecución empieza a ser distinta.
+
+Para compilar solo esto (sin SDL2, ImGui ni OpenGL):
+
+```
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPLUMSG_BUILD_FRONTEND=OFF
+cmake --build build --target plumsg-headless
+```
+
+Ejemplos (`plumsg-headless --help` da todas las opciones):
+
+```
+# 600 fotogramas y una captura del último
+plumsg-headless juego.md --frames 600 --png final.png
+
+# un disco de Mega CD con las BIOS de una carpeta, una captura cada 60 fotogramas
+plumsg-headless disco.cue --bios-dir bios/ --frames 1800 --png-every 60 --out-dir capturas
+
+# con un guion de mando, y guardando el hash de cada fotograma
+plumsg-headless juego.md --input partida.txt --hash-log hashes.txt
+
+# después de un cambio en el core: ¿en qué fotograma deja de verse igual?
+plumsg-headless juego.md --input partida.txt --expect-log hashes.txt
+```
+
+El guion tiene una orden por línea: los fotogramas (`N`, `N-M` o `N+K`, contados desde
+0) y los botones que se mantienen pulsados en ellos (`up down left right a b c x y z
+start mode`, y `p2.start` etc. para el segundo mando), o una orden: `screenshot
+[archivo]`, `savestate archivo`, `loadstate archivo`, `dump-ram archivo`, `hash`,
+`reset`, `power` o `quit`. Con `--do "120+4 start"` se da una línea desde la línea de
+órdenes.
+
+```
+120+4    start          # pulsar Start en la pantalla de título
+300-420  right
+330+10   right c        # saltar mientras anda
+420      screenshot nivel.png
+600      quit
+```
+
+Código de salida: 0 bien, 1 no se pudo leer o escribir algo, 2 opciones o guion mal
+escritos, 3 falló una comprobación (`--expect-hash`, `--expect-audio`, `--expect-log`).
+Con `--json archivo` (o `-` para la salida estándar) el resumen sale en JSON. Trae dos
+ROM propias: `--test-rom` (la de las pruebas) y `--pad-test-rom`, que pinta el fondo
+según los botones del mando 1. Las pruebas de `ctest` lo usan
+(`tests/headless_tests.cmake`) y el trabajo `headless` de CI lo compila sin SDL2 y guarda
+sus capturas, sonido y hashes como artefacto.
+
 ## Licencias
 
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),

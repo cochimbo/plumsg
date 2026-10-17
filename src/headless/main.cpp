@@ -1,0 +1,601 @@
+// plumsg-headless: the emulator without a window, sound card or GPU, for tests, CI and
+// reproducing bugs. It runs a cartridge or a disc for a number of frames, feeds the
+// pads from an input script and writes what was asked for: screenshots, the sound as
+// WAV, a hash of every frame, savestates and memory dumps. It can also check the
+// result against expected hashes and say on which frame a run first went different.
+//
+// Run it without arguments (or with --help) for the options and the script format.
+
+#include <cctype>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "cheats.h"
+#include "megadrive.h"
+#include "miniz.h"
+#include "pad_test_rom.h"
+#include "system.h"
+#include "test_rom.h"
+
+using namespace plumsg;
+
+namespace {
+
+const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom> [options]
+
+  game                  cartridge (.md .gen .bin .smd .32x .zip) or disc (.cue .chd .iso)
+  --test-rom            the built-in test program (planes, sprites, scroll, a tone)
+  --pad-test-rom        the built-in pad test: the backdrop shows the pressed buttons
+
+Running
+  --frames N            frames to run (default 600); frames are numbered from 0
+  --region jp|us|eu     force the console's region (default: what the game says)
+  --six-button          6-button pads instead of 3-button ones
+  --bios FILE           Mega CD BIOS; its region comes from its header (else: all)
+  --bios-dir DIR        look for Mega CD BIOS files in DIR and its subfolders
+  --load-state FILE     start from this savestate (after loading the game)
+  --cheat CODE          Game Genie or Action Replay code (can repeat)
+
+Input
+  --input FILE          input script (see below)
+  --do "LINE"           one script line given on the command line (can repeat)
+
+Output
+  --png FILE            the last frame as PNG
+  --layers PREFIX       also PREFIX_planeB.png, PREFIX_planeA.png, PREFIX_sprites.png
+  --png-every N         a PNG every N frames, as frame_000123.png in --out-dir
+  --out-dir DIR         where screenshots without a name go (default: .)
+  --wav FILE            the whole run's sound (44100 Hz stereo)
+  --save-state FILE     a savestate after the last frame
+  --dump-ram FILE       the 68000's work RAM (64 KB) after the last frame
+  --hash-log FILE       one line per frame: frame, picture hash, sound hash
+  --json FILE           the summary as JSON (- for standard output)
+  --quiet               no summary on standard output
+
+Checks (exit code 3 when one fails)
+  --expect-hash HEX     the last frame's picture hash must be HEX
+  --expect-audio HEX    the hash of the whole run's sound must be HEX
+  --expect-log FILE     every frame must match this --hash-log; the first frame that
+                        does not is reported
+
+Input scripts: one command per line, # starts a comment.
+  FRAMES BUTTONS...     hold the buttons during FRAMES; BUTTONS are up down left right
+                        a b c x y z start mode, for pad 2 written p2.a, p2.start...
+  FRAMES screenshot [FILE]   PNG after the frame (frame_000123.png in --out-dir)
+  FRAMES savestate FILE      savestate after the frame
+  FRAMES loadstate FILE      load a savestate before the frame
+  FRAMES dump-ram FILE       work RAM after the frame
+  FRAMES hash                print the frame's hash
+  FRAMES reset               press the reset button before the frame
+  FRAMES power               switch off and on again before the frame
+  FRAMES quit                stop after this frame
+FRAMES is N (one frame), N-M (M included) or N+K (K frames from N). Lines with
+buttons add up; a button is held only on the frames its lines cover.
+
+  # wait for the title, press Start, walk right while jumping
+  120+4    start
+  300-420  right
+  330+10   right c
+  420      screenshot level.png
+  600      quit
+
+Exit codes: 0 fine, 1 could not load or write something, 2 bad arguments or
+script, 3 a check failed.
+)";
+
+uint32_t fnvAdd(uint32_t h, uint32_t v) {
+    h ^= v;
+    return h * 16777619u;
+}
+
+// The same hash the tests and rom_runner print: FNV-1a over the visible pixels.
+uint32_t frameHash(const VideoFrameMd& f) {
+    uint32_t h = 2166136261u;
+    for (int y = 0; y < f.height; ++y)
+        for (int x = 0; x < f.width; ++x) h = fnvAdd(h, f.pixel(x, y));
+    return h;
+}
+
+uint32_t soundHash(uint32_t h, const std::vector<int16_t>& samples) {
+    for (int16_t s : samples) h = fnvAdd(h, static_cast<uint16_t>(s));
+    return h;
+}
+
+bool writeFile(const std::string& path, const void* data, size_t size) {
+    std::ofstream out(path, std::ios::binary);
+    out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
+    return static_cast<bool>(out);
+}
+
+bool readFile(const std::string& path, std::vector<uint8_t>& data) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return false;
+    data.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    return true;
+}
+
+bool writePng(const std::string& path, const uint32_t* argb, int width, int height, int stride) {
+    std::vector<uint8_t> rgba(static_cast<size_t>(width) * height * 4);
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x) {
+            const uint32_t p = argb[y * stride + x];
+            uint8_t* o = &rgba[(static_cast<size_t>(y) * width + x) * 4];
+            o[0] = static_cast<uint8_t>(p >> 16);
+            o[1] = static_cast<uint8_t>(p >> 8);
+            o[2] = static_cast<uint8_t>(p);
+            o[3] = 0xFF;
+        }
+    size_t size = 0;
+    void* png = tdefl_write_image_to_png_file_in_memory(rgba.data(), width, height, 4, &size);
+    if (!png) return false;
+    const bool ok = writeFile(path, png, size);
+    mz_free(png);
+    return ok;
+}
+
+bool writeWav(const std::string& path, const std::vector<int16_t>& samples, int rate) {
+    std::ofstream out(path, std::ios::binary);
+    auto u32 = [&](uint32_t v) { out.write(reinterpret_cast<const char*>(&v), 4); };
+    auto u16 = [&](uint16_t v) { out.write(reinterpret_cast<const char*>(&v), 2); };
+    const uint32_t bytes = static_cast<uint32_t>(samples.size() * 2);
+    out.write("RIFF", 4);
+    u32(36 + bytes);
+    out.write("WAVEfmt ", 8);
+    u32(16);
+    u16(1);
+    u16(2);
+    u32(static_cast<uint32_t>(rate));
+    u32(static_cast<uint32_t>(rate) * 4);
+    u16(4);
+    u16(16);
+    out.write("data", 4);
+    u32(bytes);
+    out.write(reinterpret_cast<const char*>(samples.data()), bytes);
+    return static_cast<bool>(out);
+}
+
+std::string hex8(uint32_t v) {
+    char s[16];
+    std::snprintf(s, sizeof s, "%08x", v);
+    return s;
+}
+
+std::string jsonString(const std::string& s) {
+    std::string o = "\"";
+    for (char c : s) {
+        if (c == '"' || c == '\\') o += '\\', o += c;
+        else if (static_cast<unsigned char>(c) < 0x20) {
+            char u[8];
+            std::snprintf(u, sizeof u, "\\u%04x", c);
+            o += u;
+        } else o += c;
+    }
+    return o + "\"";
+}
+
+// What a script line does on its frames.
+struct Command {
+    enum Kind { Buttons, Screenshot, SaveState, LoadState, DumpRam, Hash, Reset, Power, Quit } kind = Buttons;
+    long first = 0, last = 0;  // frames, both included
+    PadState pad[2];
+    std::string file;
+    int line = 0;
+};
+
+bool parseFrames(const std::string& s, long* first, long* last) {
+    char* end = nullptr;
+    const long a = std::strtol(s.c_str(), &end, 10);
+    if (end == s.c_str() || a < 0) return false;
+    if (*end == 0) {
+        *first = *last = a;
+        return true;
+    }
+    const char sep = *end;
+    const char* rest = end + 1;
+    const long b = std::strtol(rest, &end, 10);
+    if (end == rest || *end != 0) return false;
+    if (sep == '-' && b >= a) *first = a, *last = b;
+    else if (sep == '+' && b > 0) *first = a, *last = a + b - 1;
+    else return false;
+    return true;
+}
+
+bool setButton(PadState& p, const std::string& name) {
+    static const std::map<std::string, bool PadState::*> kButtons = {
+        {"up", &PadState::up},   {"down", &PadState::down}, {"left", &PadState::left},   {"right", &PadState::right},
+        {"a", &PadState::a},     {"b", &PadState::b},       {"c", &PadState::c},         {"start", &PadState::start},
+        {"x", &PadState::x},     {"y", &PadState::y},       {"z", &PadState::z},         {"mode", &PadState::mode},
+    };
+    const auto it = kButtons.find(name);
+    if (it == kButtons.end()) return false;
+    p.*(it->second) = true;
+    return true;
+}
+
+// Parses one script line into `out` (nothing for blank and comment lines).
+bool parseLine(const std::string& raw, int lineNo, const std::string& where, std::vector<Command>& out) {
+    std::string text = raw.substr(0, raw.find('#'));
+    std::istringstream in(text);
+    std::vector<std::string> words;
+    for (std::string w; in >> w;) words.push_back(w);
+    if (words.empty()) return true;
+    auto fail = [&](const std::string& why) {
+        std::fprintf(stderr, "%s:%d: %s\n", where.c_str(), lineNo, why.c_str());
+        return false;
+    };
+    Command c;
+    c.line = lineNo;
+    if (!parseFrames(words[0], &c.first, &c.last)) return fail("bad frames '" + words[0] + "' (N, N-M or N+K)");
+    if (words.size() < 2) return fail("nothing to do");
+    std::string verb = words[1];
+    for (char& ch : verb) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    static const std::map<std::string, Command::Kind> kVerbs = {
+        {"screenshot", Command::Screenshot}, {"savestate", Command::SaveState}, {"loadstate", Command::LoadState},
+        {"dump-ram", Command::DumpRam},      {"hash", Command::Hash},           {"reset", Command::Reset},
+        {"power", Command::Power},           {"quit", Command::Quit},
+    };
+    const auto v = kVerbs.find(verb);
+    if (v != kVerbs.end()) {
+        c.kind = v->second;
+        const bool needsFile = c.kind == Command::SaveState || c.kind == Command::LoadState || c.kind == Command::DumpRam;
+        const bool takesFile = needsFile || c.kind == Command::Screenshot;
+        if (words.size() > (takesFile ? 3u : 2u)) return fail("too many words for " + verb);
+        if (needsFile && words.size() < 3) return fail(verb + " needs a file");
+        if (words.size() == 3) c.file = words[2];
+        out.push_back(c);
+        return true;
+    }
+    for (size_t i = 1; i < words.size(); ++i) {
+        std::string b = words[i];
+        for (char& ch : b) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        int port = 0;
+        if (b.rfind("p1.", 0) == 0) b = b.substr(3);
+        else if (b.rfind("p2.", 0) == 0) b = b.substr(3), port = 1;
+        if (!setButton(c.pad[port], b)) return fail("unknown button or command '" + words[i] + "'");
+    }
+    out.push_back(c);
+    return true;
+}
+
+void orPad(PadState& d, const PadState& s) {
+    d.up |= s.up, d.down |= s.down, d.left |= s.left, d.right |= s.right;
+    d.a |= s.a, d.b |= s.b, d.c |= s.c, d.start |= s.start;
+    d.x |= s.x, d.y |= s.y, d.z |= s.z, d.mode |= s.mode;
+}
+
+struct LogLine {
+    long frame;
+    uint32_t picture, sound;
+};
+
+bool readLog(const std::string& path, std::vector<LogLine>& log) {
+    std::ifstream in(path);
+    if (!in) return false;
+    for (std::string line; std::getline(in, line);) {
+        if (line.empty() || line[0] == '#') continue;
+        LogLine l{};
+        unsigned long p = 0, s = 0;
+        if (std::sscanf(line.c_str(), "%ld %lx %lx", &l.frame, &p, &s) < 2) continue;
+        l.picture = static_cast<uint32_t>(p);
+        l.sound = static_cast<uint32_t>(s);
+        log.push_back(l);
+    }
+    return true;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    std::string game, png, layers, wav, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir;
+    std::string outDir = ".";
+    std::vector<std::string> bios, cheats, scripts, lines;
+    long frames = 600, pngEvery = 0;
+    bool sixButton = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
+    uint32_t expectHash = 0, expectAudio = 0;
+    Region region = Region::Auto;
+
+    if (argc < 2) {
+        std::fputs(kUsage, stderr);
+        return 2;
+    }
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        bool missing = false;
+        auto next = [&]() -> std::string {
+            if (i + 1 < argc) return argv[++i];
+            missing = true;
+            return "";
+        };
+        auto number = [&](long* out) {
+            const std::string s = next();
+            char* end = nullptr;
+            *out = std::strtol(s.c_str(), &end, 10);
+            if (s.empty() || *end != 0 || *out < 0) missing = true;
+        };
+        auto hash = [&](uint32_t* out) {
+            const std::string s = next();
+            char* end = nullptr;
+            *out = static_cast<uint32_t>(std::strtoul(s.c_str(), &end, 16));
+            if (s.empty() || *end != 0) missing = true;
+        };
+        if (a == "--help" || a == "-h") {
+            std::fputs(kUsage, stdout);
+            return 0;
+        } else if (a == "--frames") number(&frames);
+        else if (a == "--region") {
+            const std::string r = next();
+            if (r == "jp" || r == "japan") region = Region::JapanNtsc;
+            else if (r == "us" || r == "usa") region = Region::UsaNtsc;
+            else if (r == "eu" || r == "europe" || r == "pal") region = Region::EuropePal;
+            else missing = true;
+        } else if (a == "--pal") region = Region::EuropePal;
+        else if (a == "--six-button") sixButton = true;
+        else if (a == "--bios") bios.push_back(next());
+        else if (a == "--bios-dir") biosDir = next();
+        else if (a == "--load-state") stateIn = next();
+        else if (a == "--cheat") cheats.push_back(next());
+        else if (a == "--input") scripts.push_back(next());
+        else if (a == "--do") lines.push_back(next());
+        else if (a == "--png") png = next();
+        else if (a == "--layers") layers = next();
+        else if (a == "--png-every") number(&pngEvery);
+        else if (a == "--out-dir") outDir = next();
+        else if (a == "--wav") wav = next();
+        else if (a == "--save-state") stateOut = next();
+        else if (a == "--dump-ram") ramOut = next();
+        else if (a == "--hash-log") hashLog = next();
+        else if (a == "--json") json = next();
+        else if (a == "--quiet") quiet = true;
+        else if (a == "--expect-hash") hash(&expectHash), haveExpectHash = true;
+        else if (a == "--expect-audio") hash(&expectAudio), haveExpectAudio = true;
+        else if (a == "--expect-log") expectLog = next();
+        else if (a.size() > 2 && a.compare(0, 2, "--") == 0 && a != "--test-rom" && a != "--pad-test-rom") {
+            std::fprintf(stderr, "unknown option %s (see --help)\n", a.c_str());
+            return 2;
+        } else if (!game.empty()) {
+            std::fprintf(stderr, "only one game at a time (%s and %s)\n", game.c_str(), a.c_str());
+            return 2;
+        } else game = a;
+        if (missing) {
+            std::fprintf(stderr, "%s needs a valid value (see --help)\n", a.c_str());
+            return 2;
+        }
+    }
+    if (game.empty()) {
+        std::fputs(kUsage, stderr);
+        return 2;
+    }
+
+    // The script.
+    std::vector<Command> commands;
+    for (const std::string& path : scripts) {
+        std::ifstream in(path);
+        if (!in) {
+            std::fprintf(stderr, "cannot read %s\n", path.c_str());
+            return 1;
+        }
+        int n = 0;
+        for (std::string line; std::getline(in, line);)
+            if (!parseLine(line, ++n, path, commands)) return 2;
+    }
+    for (size_t i = 0; i < lines.size(); ++i)
+        if (!parseLine(lines[i], static_cast<int>(i + 1), "--do", commands)) return 2;
+
+    std::vector<LogLine> expected;
+    if (!expectLog.empty() && !readLog(expectLog, expected)) {
+        std::fprintf(stderr, "cannot read %s\n", expectLog.c_str());
+        return 1;
+    }
+
+    // The console.
+    MegaDrive md;
+    md.setRegion(region);
+    for (int p = 0; p < 2; ++p) md.setPadType(p, sixButton ? PadType::SixButton : PadType::ThreeButton);
+    static const Region kRegions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
+    if (!biosDir.empty()) {
+        const auto found = findCdBios({biosDir});
+        for (int r = 0; r < 3; ++r) {
+            std::vector<uint8_t> data;
+            if (!found[r].empty() && readFile(found[r], data)) md.setCdBios(kRegions[r], data);
+        }
+    }
+    for (const std::string& path : bios) {
+        std::vector<uint8_t> data;
+        if (!readFile(path, data)) {
+            std::fprintf(stderr, "cannot read BIOS %s\n", path.c_str());
+            return 1;
+        }
+        const BiosInfo info = identifyCdBios(data);
+        if (!info.valid) std::fprintf(stderr, "warning: %s: %s\n", path.c_str(), info.problem.c_str());
+        if (info.region == Region::Auto)
+            for (Region r : kRegions) md.setCdBios(r, data);
+        else
+            md.setCdBios(info.region, data);
+    }
+    if (game == "--test-rom") md.loadRomData(testrom::build());
+    else if (game == "--pad-test-rom") md.loadRomData(testrom::buildPadTest());
+    else {
+        std::string error;
+        if (!md.loadRom(game, &error)) {
+            std::fprintf(stderr, "cannot load %s: %s\n", game.c_str(), error.c_str());
+            return 1;
+        }
+    }
+    if (!cheats.empty()) {
+        std::vector<CheatPatch> patches;
+        for (const std::string& code : cheats) {
+            CheatPatch p;
+            std::string error;
+            if (!decodeCheat(code, &p, &error)) {
+                std::fprintf(stderr, "bad cheat %s: %s\n", code.c_str(), error.c_str());
+                return 2;
+            }
+            patches.push_back(p);
+        }
+        md.setCheats(patches);
+    }
+    auto loadState = [&](const std::string& path) {
+        std::vector<uint8_t> data;
+        std::string error;
+        if (!readFile(path, data)) error = "cannot read it";
+        else if (md.loadState(data, &error)) return true;
+        std::fprintf(stderr, "cannot load state %s: %s\n", path.c_str(), error.c_str());
+        return false;
+    };
+    auto saveState = [&](const std::string& path) {
+        std::vector<uint8_t> data;
+        if (md.saveState(data) && writeFile(path, data.data(), data.size())) return true;
+        std::fprintf(stderr, "cannot write state %s\n", path.c_str());
+        return false;
+    };
+    auto dumpRam = [&](const std::string& path) {
+        if (writeFile(path, md.workRam().data(), md.workRam().size())) return true;
+        std::fprintf(stderr, "cannot write %s\n", path.c_str());
+        return false;
+    };
+    auto screenshot = [&](std::string path, long frame) {
+        if (path.empty()) {
+            char name[32];
+            std::snprintf(name, sizeof name, "frame_%06ld.png", frame);
+            path = outDir + "/" + name;
+        }
+        const VideoFrameMd& f = md.frame();
+        if (writePng(path, f.rgba.data(), f.width, f.height, VideoFrameMd::kMaxWidth)) return true;
+        std::fprintf(stderr, "cannot write %s\n", path.c_str());
+        return false;
+    };
+    if (!stateIn.empty() && !loadState(stateIn)) return 1;
+
+    std::FILE* log = nullptr;
+    if (!hashLog.empty()) {
+        log = std::fopen(hashLog.c_str(), "w");
+        if (!log) {
+            std::fprintf(stderr, "cannot write %s\n", hashLog.c_str());
+            return 1;
+        }
+        std::fprintf(log, "# frame picture sound\n");
+    }
+
+    constexpr int kRate = 44100;
+    md.setSampleRate(kRate);
+    md.audio().clearSamples();
+    std::vector<int16_t> sound;
+    uint32_t audioHash = 2166136261u;
+    long divergence = -1;
+    std::string divergenceWhat;
+    size_t nextExpected = 0;
+    long ran = 0;
+    bool ioError = false;
+
+    const auto start = std::chrono::steady_clock::now();
+    for (long frame = 0; frame < frames; ++frame) {
+        bool quit = false;
+        PadState pads[2];
+        for (const Command& c : commands) {
+            if (frame < c.first || frame > c.last) continue;
+            switch (c.kind) {
+                case Command::Buttons: orPad(pads[0], c.pad[0]), orPad(pads[1], c.pad[1]); break;
+                case Command::LoadState: if (!loadState(c.file)) ioError = true; break;
+                case Command::Reset: md.reset(); break;
+                case Command::Power: md.powerCycle(); break;
+                default: break;
+            }
+        }
+        md.setPads(pads[0], pads[1]);
+        md.runFrame();
+        ++ran;
+        const std::vector<int16_t>& samples = md.audio().samples();
+        const uint32_t frameSound = soundHash(2166136261u, samples);
+        audioHash = soundHash(audioHash, samples);
+        if (!wav.empty()) sound.insert(sound.end(), samples.begin(), samples.end());
+        md.audio().clearSamples();
+        const uint32_t picture = frameHash(md.frame());
+        if (log) std::fprintf(log, "%ld %08x %08x\n", frame, picture, frameSound);
+        while (nextExpected < expected.size() && expected[nextExpected].frame < frame) ++nextExpected;
+        if (divergence < 0 && nextExpected < expected.size() && expected[nextExpected].frame == frame) {
+            const LogLine& e = expected[nextExpected];
+            if (e.picture != picture) {
+                divergence = frame;
+                divergenceWhat = "picture " + hex8(picture) + ", expected " + hex8(e.picture);
+            } else if (e.sound != frameSound) {
+                divergence = frame;
+                divergenceWhat = "sound " + hex8(frameSound) + ", expected " + hex8(e.sound);
+            }
+        }
+        if (pngEvery > 0 && frame % pngEvery == 0 && !screenshot("", frame)) ioError = true;
+        for (const Command& c : commands) {
+            if (frame < c.first || frame > c.last) continue;
+            switch (c.kind) {
+                case Command::Screenshot: if (!screenshot(c.file, frame)) ioError = true; break;
+                case Command::SaveState: if (!saveState(c.file)) ioError = true; break;
+                case Command::DumpRam: if (!dumpRam(c.file)) ioError = true; break;
+                case Command::Hash: std::printf("frame %ld hash %08x\n", frame, picture); break;
+                case Command::Quit: quit = true; break;
+                default: break;
+            }
+        }
+        if (quit) break;
+    }
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    if (log) std::fclose(log);
+    if (!expected.empty() && divergence < 0 && static_cast<long>(expected.back().frame) >= ran) {
+        divergence = ran;
+        divergenceWhat = "the run ended before the expected log";
+    }
+
+    const VideoFrameMd& f = md.frame();
+    const uint32_t lastHash = frameHash(f);
+    if (!png.empty() && !screenshot(png, ran - 1)) ioError = true;
+    if (!layers.empty()) {
+        for (auto [name, layer] : {std::pair<const char*, const uint32_t*>{"_planeB.png", f.planeB.data()},
+                                   {"_planeA.png", f.planeA.data()}, {"_sprites.png", f.sprites.data()}})
+            if (!writePng(layers + name, layer, f.width, f.height, VideoFrameMd::kMaxWidth)) ioError = true;
+    }
+    if (!wav.empty() && !writeWav(wav, sound, kRate)) ioError = true;
+    if (!stateOut.empty() && !saveState(stateOut)) ioError = true;
+    if (!ramOut.empty() && !dumpRam(ramOut)) ioError = true;
+
+    std::vector<std::string> failures;
+    if (haveExpectHash && lastHash != expectHash)
+        failures.push_back("picture hash " + hex8(lastHash) + ", expected " + hex8(expectHash));
+    if (haveExpectAudio && audioHash != expectAudio)
+        failures.push_back("sound hash " + hex8(audioHash) + ", expected " + hex8(expectAudio));
+    if (divergence >= 0) failures.push_back("frame " + std::to_string(divergence) + ": " + divergenceWhat);
+
+    const char* system = md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : "megadrive";
+    const double fps = seconds > 0 ? ran / seconds : 0;
+    if (!quiet) {
+        std::printf("title: %s\nsystem: %s  region: %s\nframes: %ld  size: %dx%d  hash: %08x\n",
+                    md.cartridge().header().title.c_str(), system, md.pal() ? "pal" : "ntsc", ran, f.width, f.height,
+                    lastHash);
+        std::printf("audio hash: %08x\npc: %06x\n", audioHash, md.cpu().pc);
+        if (md.isMegaCd()) std::printf("sub pc: %06x\n", md.megaCd()->sub().pc);
+        std::printf("speed: %.0f fps (%.1fx)\n", fps, fps / md.refreshRate());
+        for (const std::string& s : failures) std::printf("FAILED: %s\n", s.c_str());
+    }
+    if (!json.empty()) {
+        std::ostringstream j;
+        j << "{\n  \"title\": " << jsonString(md.cartridge().header().title) << ",\n  \"system\": \"" << system
+          << "\",\n  \"pal\": " << (md.pal() ? "true" : "false") << ",\n  \"frames\": " << ran
+          << ",\n  \"width\": " << f.width << ",\n  \"height\": " << f.height << ",\n  \"hash\": \"" << hex8(lastHash)
+          << "\",\n  \"audio_hash\": \"" << hex8(audioHash) << "\",\n  \"pc\": \"" << hex8(md.cpu().pc) << "\"";
+        if (md.isMegaCd()) j << ",\n  \"sub_pc\": \"" << hex8(md.megaCd()->sub().pc) << "\"";
+        j << ",\n  \"fps\": " << static_cast<long>(fps) << ",\n  \"divergence\": " << divergence
+          << ",\n  \"failures\": [";
+        for (size_t i = 0; i < failures.size(); ++i) j << (i ? ", " : "") << jsonString(failures[i]);
+        j << "]\n}\n";
+        if (json == "-") std::fputs(j.str().c_str(), stdout);
+        else if (std::ofstream out(json); !(out << j.str())) ioError = true;
+    }
+    if (ioError) return 1;
+    return failures.empty() ? 0 : 3;
+}
