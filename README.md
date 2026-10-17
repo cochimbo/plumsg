@@ -34,13 +34,16 @@ Primera versión. Lo que hay:
   siguiendo la acción, y la inclinación de la cámara se puede quitar para mirar de frente.
 - **Perfiles 3D por juego**: cada ROM puede guardar sus propios ajustes del 3D.
 - **Rebobinado, avance rápido y cámara lenta**.
+- **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
+- **Trucos** Game Genie y Action Replay, guardados por juego.
+- **Biblioteca de juegos** con carátulas, que se descargan solas de libretro-thumbnails.
 
 No hay ROMs comerciales en el repositorio ni en CI: las pruebas usan una ROM generada por el
 propio proyecto (`tests/test_rom.h`).
 
 ## Uso
 
-Arrastra una ROM a la ventana o usa **Archivo > Abrir ROM**.
+Arrastra una ROM a la ventana, usa **Archivo > Abrir ROM** o abre la **biblioteca** (F10).
 
 | Tecla | Acción |
 |---|---|
@@ -52,6 +55,7 @@ Arrastra una ROM a la ventana o usa **Archivo > Abrir ROM**.
 | F3 | Efecto 3D |
 | F5 / F8 | Guardar / cargar estado en la ranura actual |
 | F4 (mando: clic del stick izquierdo) | Menú de estados |
+| F10 o Ctrl+L | Biblioteca de juegos |
 | F6 / F7 | Ranura anterior / siguiente |
 | Retroceso (mando: gatillo izquierdo), mantener | Rebobinar |
 | Tab (mando: gatillo derecho), mantener | Avance rápido |
@@ -92,6 +96,25 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   el efecto 3D y la cámara) que se recupera al abrir esa ROM; está en `perfiles\` junto a
   `states\`. Al desmarcarlo, el juego vuelve a los ajustes generales.
 
+- **Archivo > Biblioteca** (F10): todas las ROMs de una carpeta y sus subcarpetas, con su
+  carátula, en una cuadrícula que se maneja con el ratón, el teclado o el mando (cruceta
+  para elegir, A para jugar, B para cerrar, Y para buscar). La primera vez pide la carpeta.
+  **Descargar carátulas que faltan** las busca por el nombre de cada ROM (los nombres de
+  No-Intro, como `Sonic The Hedgehog (USA, Europe).md`, aciertan casi siempre) en
+  [libretro-thumbnails](https://github.com/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis)
+  y las guarda en `caratulas\` junto a `states\`. También vale una imagen propia: un `.png`
+  o `.jpg` con el nombre de la ROM a su lado, o en una carpeta `caratulas` o `covers` de
+  la carpeta de ROMs. Si hay carpeta elegida, la biblioteca se abre al arrancar sin juego.
+- **Juego > Trucos**: códigos Game Genie (`ABCD-EFGH`, cambian la ROM) y Action Replay
+  (`FF0A12:0009`, o `FF0A12:09` para un byte; fijan ese valor de la RAM en cada cuadro).
+  Cada uno se activa o desactiva con su casilla y se guarda para ese juego en `trucos\`.
+- **Opciones > Vídeo > Filtro 2D**: **Scanlines** (las líneas oscuras entre líneas de la
+  tele, más finas donde la imagen es brillante) o **CRT** (además, la pantalla un poco
+  curva, la máscara de colores y las esquinas oscuras), con su intensidad. Se notan más
+  cuanto más grande es la ventana, mejor a pantalla completa.
+- A pantalla completa, **Abrir ROM** usa el explorador propio de plumsg (también con el
+  mando) en vez del diálogo de Windows, que se quedaba escondido detrás del juego.
+
 La configuración se guarda en `plumsg.ini`.
 
 ## Compilar
@@ -114,7 +137,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   savestates (determinismo, ida y vuelta, archivos dañados), el rebobinado (volver atrás y
   repetir da los mismos fotogramas), el ritmo del avance rápido y la cámara lenta, la
   separación en planos del 3D (con la cámara recta, el 3D tiene que verse igual que el 2D),
-  la cámara viva y los perfiles 3D.
+  la cámara viva, los perfiles 3D, los códigos de trucos (Game Genie descodificado como
+  Genesis Plus GX) y los nombres de la biblioteca.
 - `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la
@@ -122,9 +146,12 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   `rom_runner --write-test-rom prueba.md` escribe la ROM de prueba a un archivo.
 - `zex_runner zexdoc.com`: el ejercitador del Z80.
 - El emulador también hace capturas desde la línea de comandos:
-  `plumsg rom.md --3d --inclinacion 30 --cuadros 120 --captura 3d.png`.
+  `plumsg rom.md --3d --inclinacion 30 --cuadros 120 --captura 3d.png`, con
+  `--filtro crt` o `--filtro scanlines`, o de la biblioteca con
+  `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`.
 
 ## Licencias
 
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
-miniz (MIT, en `third_party/miniz`), ymfm (BSD-3-Clause).
+miniz (MIT, en `third_party/miniz`), stb_image (dominio público o MIT, en `third_party/stb`),
+ymfm (BSD-3-Clause). Las carátulas son de libretro-thumbnails y no van en el repositorio.

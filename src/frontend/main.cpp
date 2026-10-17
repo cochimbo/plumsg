@@ -64,6 +64,8 @@ struct Paths {
     std::string ini;
     std::string states;    // folder for savestates, ending in a separator
     std::string profiles;  // folder for the games' 3D profiles, ending in a separator
+    std::string cheats;    // folder for the games' cheat lists
+    std::string covers;    // folder for the library's downloaded covers
 };
 
 Paths findPaths() {
@@ -74,15 +76,15 @@ Paths findPaths() {
         const std::string portable = base + "plumsg.ini";
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
-            return {portable, base + "states/", base + "perfiles/"};
+            return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
-        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/"};
+        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/"};
     }
-    return {base + "plumsg.ini", base + "states/", base + "perfiles/"};
+    return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/"};
 }
 
 struct App {
@@ -91,6 +93,8 @@ struct App {
     std::string romPath;
     std::string statesDir;
     std::string profilesDir;
+    std::string cheatsDir;
+    std::vector<Cheat> cheats;  // the loaded game's
     std::vector<SlotInfo> slots = std::vector<SlotInfo>(kSlots);
 
     std::string savePath() const { return withoutExtension(romPath) + ".sav"; }
@@ -98,6 +102,35 @@ struct App {
         return statesDir + withoutExtension(fileName(romPath)) + ".s" + std::to_string(slot);
     }
     std::string profilePath() const { return profilesDir + withoutExtension(fileName(romPath)) + ".ini"; }
+    std::string cheatsPath() const { return cheatsDir + withoutExtension(fileName(romPath)) + ".txt"; }
+
+    // Hands the console the codes that are on and valid.
+    void applyCheats() {
+        std::vector<CheatPatch> patches;
+        for (const Cheat& c : cheats) {
+            CheatPatch p;
+            if (c.enabled && decodeCheat(c.code, &p, nullptr)) patches.push_back(p);
+        }
+        console.setCheats(patches);
+    }
+
+    void loadCheats() {
+        cheats.clear();
+        std::vector<uint8_t> data;
+        if (readFile(cheatsPath(), data)) cheats = parseCheats(std::string(data.begin(), data.end()));
+        applyCheats();
+    }
+
+    void saveCheats() {
+        std::error_code ec;
+        if (cheats.empty()) {
+            std::filesystem::remove(std::filesystem::u8path(cheatsPath()), ec);
+            return;
+        }
+        std::filesystem::create_directories(std::filesystem::u8path(cheatsDir), ec);
+        const std::string text = formatCheats(cheats);
+        writeFile(cheatsPath(), std::vector<uint8_t>(text.begin(), text.end()));
+    }
 
     void saveBattery() {
         if (romLoaded && console.cartridge().hasSaveData()) console.cartridge().writeSave(savePath());
@@ -114,6 +147,7 @@ struct App {
         romPath = path;
         console.cartridge().loadSave(savePath());
         romLoaded = true;
+        loadCheats();
         if (window) {
             std::string title = "plumsg - " + fileName(path);
             const std::string& name = console.cartridge().header().title;
@@ -211,6 +245,9 @@ struct CommandLine {
     std::string view;     // --vista name
     float tilt = -1000, yaw = -1000;
     bool stateMenu = false;  // --menu-estados: start with the states menu open
+    std::string library;     // --biblioteca folder: start with the library of that folder open
+    int filter = -1;         // --filtro ninguno|scanlines|crt
+    bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
 };
 
 CommandLine parse(int argc, char** argv) {
@@ -226,6 +263,12 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--inclinacion") c.tilt = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--giro") c.yaw = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--menu-estados") c.stateMenu = true;
+        else if (a == "--biblioteca") c.library = next();
+        else if (a == "--descargar-caratulas") c.downloadCovers = true;
+        else if (a == "--filtro") {
+            const std::string f = next();
+            c.filter = f == "crt" ? 2 : f == "scanlines" ? 1 : 0;
+        }
         else c.rom = a;
     }
     return c;
@@ -249,6 +292,7 @@ int main(int argc, char** argv) {
         if (!cmd.view.empty()) settings.view = cmd.view;
         if (cmd.tilt > -1000) settings.render.tilt = cmd.tilt;
         if (cmd.yaw > -1000) settings.render.yaw = cmd.yaw;
+        if (cmd.filter >= 0) settings.render.filter = static_cast<Filter2D>(cmd.filter);
     };
     applyCommandLine();
     if (capturing) settings.fullscreen = false;
@@ -302,6 +346,8 @@ int main(int argc, char** argv) {
     auto app = std::make_unique<App>();
     app->statesDir = paths.states;
     app->profilesDir = paths.profiles;
+    app->cheatsDir = paths.cheats;
+    ui->library().setCoversFolder(paths.covers);
     auto audio = std::make_unique<Audio>();
 
     auto applyConsole = [&] {
@@ -361,6 +407,11 @@ int main(int argc, char** argv) {
         applyCommandLine();  // over the game's profile too
     }
     bool openStateMenu = cmd.stateMenu;
+    if (!cmd.library.empty()) settings.libraryFolder = cmd.library;
+    if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolder.empty()))
+        ui->toggleLibrary();
+    int loops = 0;
+    bool downloadCovers = cmd.downloadCovers;
     bool sizedForMenu = false;
 
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -434,6 +485,7 @@ int main(int argc, char** argv) {
                 case Hotkey::PrevSlot: selectSlot(-1); break;
                 case Hotkey::NextSlot: selectSlot(1); break;
                 case Hotkey::StateMenu: ui->toggleStateMenu(); break;
+                case Hotkey::Library: ui->toggleLibrary(); break;
                 case Hotkey::SlowMotion:
                     if (app->romLoaded) toggleSlowMotion();
                     break;
@@ -470,6 +522,9 @@ int main(int argc, char** argv) {
                 case SDL_SCANCODE_O:
                     if (ctrl) ui->openRom();
                     break;
+                case SDL_SCANCODE_L:
+                    if (ctrl) ui->toggleLibrary();
+                    break;
                 case SDL_SCANCODE_F1: app->console.reset(); break;
                 case SDL_SCANCODE_F2:
                     settings.view = renderers[(viewIndex() + 1) % renderers.size()]->name();
@@ -505,6 +560,7 @@ int main(int argc, char** argv) {
         uiState.hasProfile = hasProfile;
         uiState.gameName = app->romLoaded ? fileName(app->romPath) : std::string();
         uiState.slots = app->slots;
+        uiState.cheats = &app->cheats;
         const UiActions act = ui->frame(uiState);
         if (!act.load.empty()) load(act.load);
         if (act.reset) app->console.reset();
@@ -524,6 +580,10 @@ int main(int argc, char** argv) {
         if (act.toggleSlowMotion) toggleSlowMotion();
         if (act.rewindChanged) setRewindLimits();
         if (act.profile >= 0) setProfile(act.profile == 1);
+        if (act.cheatsChanged && app->romLoaded) {
+            app->applyCheats();
+            app->saveCheats();
+        }
         if (act.settingsChanged) save();
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
         if (!sizedForMenu && !settings.fullscreen) {
@@ -541,9 +601,9 @@ int main(int argc, char** argv) {
             cam.tilt = std::clamp(cam.tilt + sy * step, kMinTilt, kMaxTilt);
         }
 
-        // The game waits while the states menu is open.
+        // The game waits while the states menu, the library or the file browser is open.
         uiState.speed.clear();
-        if (app->romLoaded && !paused && !ui->stateMenuOpen()) {
+        if (app->romLoaded && !paused && !ui->stateMenuOpen() && !ui->libraryOpen() && !ui->browserOpen()) {
             const bool keyboard = !ui->keyboardBusy();
             const bool fast = input->held(Hotkey::FastForward, keyboard);
             if (settings.rewindSeconds > 0 && input->held(Hotkey::Rewind, keyboard)) {
@@ -593,7 +653,19 @@ int main(int argc, char** argv) {
         view.setOptions(settings.render);
         view.draw(app->console.frame(), game);
         ui->render();
-        if (capturing && (framesRun >= cmd.frames || !app->romLoaded || (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {
+        ++loops;
+        if (downloadCovers && ui->library().pending() == 0 && loops > 5) {
+            ui->library().downloadMissing();
+            downloadCovers = false;
+            loops = 0;
+        }
+        // A screenshot waits a few frames for the window and the popups to settle, and a
+        // library one for its covers.
+        const bool libraryReady =
+            loops > 3 && (!ui->libraryOpen() || (!downloadCovers && ui->library().pending() == 0 && loops > 20));
+        if (capturing && libraryReady &&
+            (framesRun >= cmd.frames || !app->romLoaded || ui->libraryOpen() ||
+             (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {
             const bool ok = captureWindow(window, cmd.capture);
             std::printf("%s %s\n", ok ? "captura guardada en" : "no se pudo guardar", cmd.capture.c_str());
             running = false;

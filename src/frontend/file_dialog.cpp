@@ -78,61 +78,167 @@ DialogResult openRomDialog(SDL_Window* window, const std::string& startFolder, s
 #endif
 }
 
-void FileBrowser::open(const std::string& folder) {
+void FileBrowser::open(const std::string& folder, bool pickFolder) {
     std::error_code ec;
-    fs::path start = folder.empty() ? fs::current_path(ec) : fs::path(folder);
+    fs::path start = folder.empty() ? fs::current_path(ec) : fs::u8path(folder);
     if (!fs::is_directory(start, ec)) start = fs::current_path(ec);
-    list(start.string());
+    pickFolder_ = pickFolder;
+    list(start.u8string());
     open_ = true;
     justOpened_ = true;
 }
 
 void FileBrowser::list(const std::string& folder) {
     folder_ = folder;
+    drives_ = false;
     entries_.clear();
+    selected_ = 0;
+    scroll_ = true;
     std::error_code ec;
-    for (fs::directory_iterator it(folder, fs::directory_options::skip_permission_denied, ec), end; !ec && it != end;
-         it.increment(ec)) {
+    for (fs::directory_iterator it(fs::u8path(folder), fs::directory_options::skip_permission_denied, ec), end;
+         !ec && it != end; it.increment(ec)) {
         const bool dir = it->is_directory(ec);
-        if (dir || isRom(it->path())) entries_.push_back({it->path().filename().string(), dir});
+        if (dir || (!pickFolder_ && isRom(it->path()))) entries_.push_back({it->path().filename().u8string(), dir});
     }
     std::sort(entries_.begin(), entries_.end(), [](const Entry& a, const Entry& b) {
         return a.folder != b.folder ? a.folder : a.name < b.name;
     });
 }
 
+void FileBrowser::up() {
+    const fs::path here = fs::u8path(folder_);
+    const fs::path parent = here.parent_path();
+    if (!parent.empty() && parent != here) {
+        const std::string from = here.filename().u8string();
+        list(parent.u8string());
+        for (size_t i = 0; i < entries_.size(); ++i)
+            if (entries_[i].name == from) selected_ = static_cast<int>(i);
+        return;
+    }
+#ifdef _WIN32
+    // Above a drive's root: the list of drives.
+    entries_.clear();
+    const DWORD mask = GetLogicalDrives();
+    for (int d = 0; d < 26; ++d)
+        if (mask & (1u << d)) entries_.push_back({std::string(1, static_cast<char>('A' + d)) + ":\\", true});
+    drives_ = true;
+    folder_.clear();
+    selected_ = 0;
+    scroll_ = true;
+#endif
+}
+
+bool FileBrowser::handleEvent(const SDL_Event& e) {
+    if (!open_ || ImGui::GetIO().WantTextInput) return false;
+    if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN) {
+        return e.type == SDL_KEYUP || e.type == SDL_CONTROLLERBUTTONUP || e.type == SDL_TEXTINPUT;
+    }
+    enum { None, Up, Down, PageUp, PageDown, Open, Back, Close } action = None;
+    if (e.type == SDL_KEYDOWN) {
+        switch (e.key.keysym.scancode) {
+            case SDL_SCANCODE_UP: action = Up; break;
+            case SDL_SCANCODE_DOWN: action = Down; break;
+            case SDL_SCANCODE_PAGEUP: action = PageUp; break;
+            case SDL_SCANCODE_PAGEDOWN: action = PageDown; break;
+            case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: action = Open; break;
+            case SDL_SCANCODE_BACKSPACE: action = Back; break;
+            case SDL_SCANCODE_ESCAPE: action = Close; break;
+            default: break;
+        }
+    } else {
+        switch (e.cbutton.button) {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP: action = Up; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN: action = Down; break;
+            case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: action = PageUp; break;
+            case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: action = PageDown; break;
+            case SDL_CONTROLLER_BUTTON_A: action = Open; break;
+            case SDL_CONTROLLER_BUTTON_B: action = Back; break;
+            case SDL_CONTROLLER_BUTTON_START: case SDL_CONTROLLER_BUTTON_BACK: action = Close; break;
+            default: break;
+        }
+    }
+    const int count = static_cast<int>(entries_.size());
+    switch (action) {
+        case Up: selected_ = std::max(0, selected_ - 1); scroll_ = true; break;
+        case Down: selected_ = std::min(std::max(0, count - 1), selected_ + 1); scroll_ = true; break;
+        case PageUp: selected_ = std::max(0, selected_ - 10); scroll_ = true; break;
+        case PageDown: selected_ = std::min(std::max(0, count - 1), selected_ + 10); scroll_ = true; break;
+        case Open: activate_ = true; break;
+        case Back: up(); break;
+        case Close: open_ = false; break;
+        case None: break;
+    }
+    return true;
+}
+
 bool FileBrowser::draw(std::string* chosen) {
+    const char* title = pickFolder_ ? "Elegir carpeta" : "Abrir ROM";
     if (justOpened_) {
-        ImGui::OpenPopup("Abrir ROM");
+        ImGui::OpenPopup(title);
         justOpened_ = false;
     }
     bool picked = false;
-    ImGui::SetNextWindowSize(ImVec2(520, 420), ImGuiCond_Appearing);
-    if (ImGui::BeginPopupModal("Abrir ROM", &open_)) {
-        ImGui::TextWrapped("%s", folder_.c_str());
-        if (ImGui::Button("Subir")) list(fs::path(folder_).parent_path().string());
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Appearing,
+                            ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(std::min(640.0f, vp->Size.x - 40), std::min(480.0f, vp->Size.y - 40)),
+                             ImGuiCond_Appearing);
+    if (ImGui::BeginPopupModal(title, &open_)) {
+        ImGui::TextWrapped("%s", drives_ ? "Unidades" : folder_.c_str());
+        if (ImGui::Button("Subir")) up();
+        if (pickFolder_ && !drives_) {
+            ImGui::SameLine();
+            if (ImGui::Button("Usar esta carpeta")) {
+                *chosen = folder_;
+                picked = true;
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled(pickFolder_ ? "A / Intro: entrar   B / Retroceso: subir   Esc: cerrar"
+                                        : "A / Intro: abrir   B / Retroceso: subir   Esc: cerrar");
         ImGui::Separator();
         std::string next;
-        if (ImGui::BeginChild("archivos", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
-            for (const auto& e : entries_) {
-                const std::string label = e.folder ? "[" + e.name + "]" : e.name;
-                if (ImGui::Selectable(label.c_str())) {
-                    next = (fs::path(folder_) / e.name).string();
-                    if (!e.folder) {
-                        *chosen = next;
-                        picked = true;
-                        next.clear();
-                    }
-                }
+        auto choose = [&](const Entry& e) {
+            const std::string path = drives_ ? e.name : (fs::u8path(folder_) / fs::u8path(e.name)).u8string();
+            if (e.folder) {
+                next = path;
+            } else {
+                *chosen = path;
+                picked = true;
             }
-            if (entries_.empty()) ImGui::TextDisabled("No hay ROMs en esta carpeta.");
+        };
+        if (ImGui::BeginChild("archivos", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
+            for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
+                const Entry& e = entries_[static_cast<size_t>(i)];
+                const std::string label = e.folder ? "[" + e.name + "]" : e.name;
+                ImGui::PushID(i);
+                if (ImGui::Selectable(label.c_str(), i == selected_, ImGuiSelectableFlags_AllowDoubleClick)) {
+                    selected_ = i;
+                    // A folder opens with one click, like before; files too.
+                    choose(e);
+                }
+                if (i == selected_ && scroll_) {
+                    ImGui::SetScrollHereY(0.5f);
+                    scroll_ = false;
+                }
+                ImGui::PopID();
+            }
+            if (entries_.empty())
+                ImGui::TextDisabled(pickFolder_ ? "No hay carpetas dentro de esta." : "No hay ROMs en esta carpeta.");
         }
         ImGui::EndChild();
+        if (activate_) {
+            activate_ = false;
+            if (selected_ >= 0 && selected_ < static_cast<int>(entries_.size()) && next.empty() && !picked)
+                choose(entries_[static_cast<size_t>(selected_)]);
+        }
         if (!next.empty()) list(next);
         if (ImGui::Button("Cancelar")) open_ = false;
         if (picked) open_ = false;
         if (!open_) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
+    } else {
+        open_ = false;
     }
     return picked;
 }

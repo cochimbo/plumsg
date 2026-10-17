@@ -49,6 +49,80 @@ out vec4 outColor;
 void main() { outColor = texture(uImage, vUv); }
 )";
 
+// The 2D picture through a TV. Each line of the picture is drawn as a beam brightest
+// at its centre, which leaves dark gaps between lines; bright lines are wider, like a
+// real electron beam. uFilter 1 is just that (scanlines); 2 is a whole CRT: the screen
+// bulges a little (uv pulled towards the corners), the aperture grille tints every
+// column of screen pixels red, green or blue in turn, a soft glow spreads the light
+// and the corners darken. uStrength 0..1 scales all of it. The picture is sampled by
+// hand: one texel row per beam and, across, a blend of the two nearest texels that is
+// sharp in the middle of a pixel and soft at its edges.
+constexpr const char* kCrtFragment = R"(#version 330 core
+uniform sampler2D uImage;
+uniform int uFilter;
+uniform float uStrength;
+uniform vec2 uSource;  // texture size in texels
+uniform vec2 uOutput;  // viewport size in screen pixels
+in vec2 vUv;
+out vec4 outColor;
+
+vec3 texel(float x, float y) {
+    ivec2 p = clamp(ivec2(int(x), int(y)), ivec2(0), ivec2(uSource) - 1);
+    return texelFetch(uImage, p, 0).rgb;
+}
+
+// The picture's colour at line `row`, `x` texels across.
+vec3 line(float x, float row) {
+    float fx = x - 0.5;
+    float x0 = floor(fx);
+    float t = fx - x0;
+    t = mix(t, smoothstep(0.0, 1.0, t), 0.8);
+    vec3 a = texel(x0, row), b = texel(x0 + 1.0, row);
+    return pow(mix(a, b, t), vec3(2.2));  // blend and light in linear space
+}
+
+float beam(float distance, vec3 colour) {
+    float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
+    float width = mix(0.24, 0.42, sqrt(luma));
+    return exp(-0.5 * distance * distance / (width * width));
+}
+
+void main() {
+    vec2 uv = vUv;
+    float strength = clamp(uStrength, 0.0, 1.0);
+    if (uFilter == 2) {
+        vec2 c = uv * 2.0 - 1.0;
+        c *= 1.0 + 0.10 * strength * (c.yx * c.yx);
+        uv = c * 0.5 + 0.5;
+        if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) {
+            outColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+    }
+    vec2 p = uv * uSource;
+    float row = floor(p.y);
+    float d = p.y - row - 0.5;  // -0.5..0.5 from this line's centre
+    // This line and the nearer neighbour both light the pixel.
+    float other = d < 0.0 ? row - 1.0 : row + 1.0;
+    vec3 near = line(p.x, row), far = line(p.x, other);
+    vec3 lit = near * beam(d, near) + far * beam(1.0 - abs(d), far);
+    // How much the gaps darken grows with the strength; the beam is renormalised so a
+    // flat colour keeps about its brightness.
+    vec3 base = near;
+    vec3 colour = mix(base, lit * 1.55, strength);
+    if (uFilter == 2) {
+        vec3 glow = 0.25 * (line(p.x - 1.5, row) + line(p.x + 1.5, row)) + 0.5 * base;
+        colour += glow * 0.18 * strength;
+        int column = int(mod(gl_FragCoord.x, 3.0));
+        vec3 mask = column == 0 ? vec3(1.0, 0.72, 0.72) : column == 1 ? vec3(0.72, 1.0, 0.72) : vec3(0.72, 0.72, 1.0);
+        colour *= mix(vec3(1.0), mask * 1.18, 0.7 * strength);
+        vec2 e = uv * (1.0 - uv.yx);
+        colour *= mix(1.0, clamp(pow(e.x * e.y * 18.0, 0.22), 0.0, 1.0), strength);
+    }
+    outColor = vec4(pow(clamp(colour, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
+}
+)";
+
 // One plane of the diorama, drawn as `instances` stacked slices: the top one at uTop,
 // the rest stepping down by uStep to make the plane's sides. Every slice is scaled so
 // that, seen from the untilted camera, it covers exactly the same pixels as the plane
@@ -253,6 +327,7 @@ Mat4 view(float distance, float tilt, float yaw, float pivot) {
 
 GlTextureRenderer::GlTextureRenderer() {
     program_ = gl::buildProgram(kQuadVertex, kQuadFragment);
+    crtProgram_ = gl::buildProgram(kQuadVertex, kCrtFragment);
     gl::GenVertexArrays(1, &vao_);
     texture_ = makeTexture();
 }
@@ -261,6 +336,7 @@ GlTextureRenderer::~GlTextureRenderer() {
     gl::DeleteTextures(1, &texture_);
     gl::DeleteVertexArrays(1, &vao_);
     gl::DeleteProgram(program_);
+    gl::DeleteProgram(crtProgram_);
 }
 
 void GlTextureRenderer::draw(const VideoFrameMd& frame, const Viewport& area) {
@@ -291,8 +367,16 @@ void GlTextureRenderer::draw(const VideoFrameMd& frame, const Viewport& area) {
             h = static_cast<int>(static_cast<float>(area.width) * lines / pictureW);
     }
     gl::Viewport(area.x + (area.width - w) / 2, area.y + (area.height - h) / 2, w, h);
-    gl::UseProgram(program_);
-    gl::Uniform1i(gl::GetUniformLocation(program_, "uImage"), 0);
+    const bool crt = filterable_ && options_.filter != Filter2D::None && crtProgram_;
+    const gl::GLuint program = crt ? crtProgram_ : program_;
+    gl::UseProgram(program);
+    gl::Uniform1i(gl::GetUniformLocation(program, "uImage"), 0);
+    if (crt) {
+        gl::Uniform1i(gl::GetUniformLocation(program, "uFilter"), options_.filter == Filter2D::Crt ? 2 : 1);
+        gl::Uniform1f(gl::GetUniformLocation(program, "uStrength"), options_.filterStrength);
+        gl::Uniform2f(gl::GetUniformLocation(program, "uSource"), static_cast<float>(fw), static_cast<float>(fh));
+        gl::Uniform2f(gl::GetUniformLocation(program, "uOutput"), static_cast<float>(w), static_cast<float>(h));
+    }
     gl::ActiveTexture(gl::TEXTURE0);
     gl::BindTexture(gl::TEXTURE_2D, texture_);
     gl::BindVertexArray(vao_);

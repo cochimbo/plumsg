@@ -22,9 +22,11 @@ public:
 protected:
     // Fills `out` (frame.width x frame.height, 0xAARRGGBB) from the frame.
     virtual void compose(const VideoFrameMd& frame, uint32_t* out) = 0;
+    bool filterable_ = false;  // draws through the scanlines / CRT filter when one is chosen
 
 private:
     gl::GLuint program_ = 0;
+    gl::GLuint crtProgram_ = 0;
     gl::GLuint vao_ = 0;
     gl::GLuint texture_ = 0;
     int texWidth_ = 0, texHeight_ = 0;
@@ -34,6 +36,7 @@ private:
 // The real Mega Drive picture.
 class FlatRenderer : public GlTextureRenderer {
 public:
+    FlatRenderer() { filterable_ = true; }
     const char* name() const override { return "2D"; }
 
 protected:

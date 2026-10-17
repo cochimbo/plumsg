@@ -179,6 +179,13 @@ void Cartridge::reset() {
     for (int i = 0; i < 8; ++i) banks_[i] = static_cast<uint8_t>(i);
 }
 
+bool Cartridge::patchRom(uint32_t offset, uint8_t value, uint8_t* previous) {
+    if (offset >= rom_.size()) return false;
+    if (previous) *previous = rom_[offset];
+    rom_[offset] = value;
+    return true;
+}
+
 bool Cartridge::sramAt(uint32_t addr) const {
     return sramPresent_ && sramMapped_ && addr >= sramStart_ && addr <= sramEnd_;
 }

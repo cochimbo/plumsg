@@ -15,7 +15,7 @@ constexpr const char* kButtonNames[InputConfig::kButtons] = {"arriba", "abajo", 
                                                              "c", "start", "x", "y", "z", "mode"};
 constexpr const char* kHotkeyNames[InputConfig::kHotkeys] = {
     "efecto_3d", "guardar_estado", "cargar_estado", "ranura_anterior", "ranura_siguiente",
-    "menu_estados", "rebobinar", "avance_rapido", "camara_lenta"};
+    "menu_estados", "rebobinar", "avance_rapido", "camara_lenta", "biblioteca"};
 
 constexpr int kTriggerThreshold = 16000;  // of 32767: a trigger counts as pressed past halfway
 
@@ -113,6 +113,7 @@ InputConfig InputConfig::defaults() {
     c.hotkeyKeys[static_cast<int>(Hotkey::FastForward)] = {SDL_SCANCODE_TAB};
     c.hotkeyPad[static_cast<int>(Hotkey::FastForward)] = {kPadRightTrigger};
     c.hotkeyKeys[static_cast<int>(Hotkey::SlowMotion)] = {SDL_SCANCODE_F9};
+    c.hotkeyKeys[static_cast<int>(Hotkey::Library)] = {SDL_SCANCODE_F10};
     return c;
 }
 
@@ -201,7 +202,7 @@ void InputConfig::write(std::ostream& out) const {
            "# ranura_anterior y ranura_siguiente manejan los estados guardados; menu_estados\n"
            "# abre un menú para elegir ranura, guardar y cargar con el mando.\n"
            "# rebobinar y avance_rapido funcionan mientras se mantienen pulsados; camara_lenta\n"
-           "# la activa y la desactiva.\n\n[teclado]\n";
+           "# la activa y la desactiva. biblioteca abre la lista de juegos con sus carátulas.\n\n[teclado]\n";
     for (int i = 0; i < kButtons; ++i) keyList(kButtonNames[i], keys[i]);
     for (int i = 0; i < kHotkeys; ++i) keyList(kHotkeyNames[i], hotkeyKeys[i]);
     out << "\n[teclado2]\n";

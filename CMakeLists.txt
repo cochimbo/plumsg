@@ -59,6 +59,7 @@ add_library(plumsg_core STATIC
   src/core/audio_mixer.cpp
   src/core/megadrive.cpp
   src/core/rewind.cpp
+  src/core/cheats.cpp
   src/render/planes.cpp
   src/render/profile3d.cpp
 )
@@ -108,16 +109,22 @@ add_executable(plumsg WIN32
   src/frontend/settings.cpp
   src/frontend/file_dialog.cpp
   src/frontend/ui.cpp
+  src/frontend/library.cpp
+  src/frontend/library_names.cpp
+  src/frontend/http.cpp
   src/render/gl.cpp
   src/render/gl_renderers.cpp
 )
-target_link_libraries(plumsg PRIVATE plumsg_core plumsg_imgui)
+# stb_image (public domain / MIT, vendored) decodes the library's PNG and JPEG covers.
+target_include_directories(plumsg PRIVATE third_party/stb)
+find_package(Threads REQUIRED)
+target_link_libraries(plumsg PRIVATE plumsg_core plumsg_imgui Threads::Threads)
 if(TARGET SDL2::SDL2main)
   target_link_libraries(plumsg PRIVATE SDL2::SDL2main)
 endif()
 target_link_libraries(plumsg PRIVATE ${PLUMSG_SDL2_TARGET})
 if(WIN32)
-  target_link_libraries(plumsg PRIVATE comdlg32)
+  target_link_libraries(plumsg PRIVATE comdlg32 wininet)
 endif()
 
 # Copy SDL2.dll next to plumsg.exe so it runs straight from the build folder.
@@ -128,7 +135,7 @@ endif()
 
 if(PLUMSG_BUILD_TESTS)
   enable_testing()
-  add_executable(core_tests tests/core_tests.cpp)
+  add_executable(core_tests tests/core_tests.cpp src/frontend/library_names.cpp)
   target_include_directories(core_tests PRIVATE tests)
   target_link_libraries(core_tests PRIVATE plumsg_core)
   add_test(NAME core_tests COMMAND core_tests)

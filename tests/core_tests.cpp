@@ -1,7 +1,7 @@
 // Core tests that need no external files: the cartridge (header, SMD, zip, SRAM), the
 // pads, the PSG, the VDP ports, the built-in test ROM drawn and heard, savestates
 // (determinism, round trip, damaged files), rewinding and the speed controls, the
-// pseudo-3D planes and the games' 3D profiles.
+// pseudo-3D planes, the games' 3D profiles, the cheat codes and the library's names.
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -19,6 +19,7 @@
 #include "render/profile3d.h"
 #include "rewind.h"
 #include "test_rom.h"
+#include "frontend/library_names.h"
 
 using namespace plumsg;
 
@@ -571,6 +572,69 @@ void testLiveCamera() {
     check(std::fabs(run.yaw() - before) < 0.5f, "live camera: a repeated frame does not jolt it");
 }
 
+void testCheats() {
+    CheatPatch p;
+    std::string error;
+    // Every bit of address and value goes to its own place: encode, decode, compare.
+    bool roundTrip = true;
+    std::mt19937 rng(7);
+    for (int i = 0; i < 2000; ++i) {
+        const uint32_t address = rng() & 0x3FFFFE;
+        const uint16_t value = static_cast<uint16_t>(rng());
+        const std::string code = encodeGameGenie(address, value);
+        roundTrip &= decodeCheat(code, &p, &error) && p.address == address && p.value == value && !p.byte;
+    }
+    check(roundTrip, "cheats: Game Genie codes decode back to their address and value");
+    check(encodeGameGenie(0, 0) == "AAAA-AAAA", "cheats: Game Genie all zeros is AAAA-AAAA");
+    check(decodeCheat("aaaa aaaa", &p, &error) && p.address == 0 && p.value == 0, "cheats: lower case and spaces accepted");
+    check(!decodeCheat("ABCI-AAAA", &p, &error), "cheats: I is not a Game Genie letter");
+    check(!decodeCheat("ABC-AAAA", &p, &error), "cheats: Game Genie needs 8 letters");
+    check(decodeCheat("FF0A12:0009", &p, &error) && p.address == 0xFF0A12 && p.value == 9 && !p.byte,
+          "cheats: Action Replay word");
+    check(decodeCheat("FFB3D5:63", &p, &error) && p.address == 0xFFB3D5 && p.value == 0x63 && p.byte,
+          "cheats: Action Replay byte");
+    check(decodeCheat("FF0A120009", &p, &error) && p.address == 0xFF0A12 && p.value == 9,
+          "cheats: Action Replay without separator");
+    check(!decodeCheat("FF0A13:0009", &p, &error), "cheats: word write to an odd address refused");
+    check(!decodeCheat("A10000:0001", &p, &error), "cheats: address outside ROM and RAM refused");
+
+    MegaDrive md;
+    md.loadRomData(testrom::build());
+    const uint16_t original = md.peek16(0x200);
+    std::vector<CheatPatch> list(2);
+    decodeCheat(encodeGameGenie(0x200, 0x1234), &list[0], &error);
+    decodeCheat("FFF000:BEEF", &list[1], &error);
+    md.setCheats(list);
+    check(md.peek16(0x200) == 0x1234, "cheats: Game Genie patches the ROM");
+    md.runFrame();
+    check(md.peek16(0xFFF000) == 0xBEEF, "cheats: Action Replay keeps RAM at its value");
+    md.setCheats({});
+    check(md.peek16(0x200) == original, "cheats: turning them off restores the ROM");
+
+    std::vector<Cheat> cheats = {{"ABCD-EFGH", "Vidas infinitas", true}, {"FF0A12:0009", "", false}};
+    const std::vector<Cheat> back = parseCheats(formatCheats(cheats));
+    check(back.size() == 2 && back[0].code == "ABCD-EFGH" && back[0].name == "Vidas infinitas" && back[0].enabled &&
+              back[1].code == "FF0A12:0009" && back[1].name.empty() && !back[1].enabled,
+          "cheats: cheat file round trip");
+}
+
+void testLibraryNames() {
+    check(gameTitle("Lion King, The (World)") == "The Lion King", "library: trailing ', The' moves to the front");
+    check(gameTitle("Adventures of Batman & Robin, The (USA)") == "The Adventures of Batman & Robin",
+          "library: article with an ampersand in the name");
+    check(gameTitle("Sonic The Hedgehog 2 (World) (Rev B)") == "Sonic The Hedgehog 2", "library: tags dropped");
+    check(gameTitle("Golden Axe III") == "Golden Axe III", "library: name without tags kept");
+    check(gameTags("Sonic The Hedgehog 2 (World) (Rev B)") == "World · Rev B", "library: tags listed");
+    const auto names = coverNames("Comix Zone (USA) (Sega Smash Pack)");
+    check(names.size() > 2 && names[0] == "Comix Zone (USA) (Sega Smash Pack)" && names[1] == "Comix Zone (USA)",
+          "library: cover names drop trailing tags one by one");
+    check(coverNames("Sonic & Knuckles (World)")[0] == "Sonic _ Knuckles (World)", "library: '&' becomes '_' like libretro");
+    const auto bare = coverNames("Golden Axe III");
+    check(!bare.empty() && bare[0] == "Golden Axe III (USA)", "library: a bare name tries the usual regions");
+    check(urlEncode("Columns (USA, Europe)") == "Columns%20%28USA%2C%20Europe%29", "library: URL encoding");
+    check(searchKey("Dr. Robotnik's  Mean-Bean") == "dr robotnik s mean bean", "library: search key");
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -591,6 +655,8 @@ int main() {
     testLiveCamera();
     testEdgeDistance();
     testPal();
+    testCheats();
+    testLibraryNames();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

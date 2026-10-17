@@ -36,6 +36,9 @@ public:
     // The region the header asks for, preferring USA, then Japan, then Europe.
     Region preferredRegion() const;
 
+    // Changes one byte of the ROM image (cheats); false if `offset` is past its end.
+    bool patchRom(uint32_t offset, uint8_t value, uint8_t* previous);
+
     void reset();
     uint8_t read8(uint32_t addr) const;
     uint16_t read16(uint32_t addr) const;
