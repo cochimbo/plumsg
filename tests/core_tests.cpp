@@ -197,9 +197,38 @@ void testVdpPorts() {
     vdp.writeControl(0x5000);              // VRAM write 0x1000 with DMA (CD5)
     vdp.writeControl(0x0080);
     vdp.writeData(0x7700);
-    bool filled = true;
-    for (int i = 0x1001; i < 0x1020; ++i) filled = filled && vdp.vram()[static_cast<size_t>(i)] == 0x77;
-    check(filled && vdp.vram()[0x1021] == 0, "VDP: DMA fill");
+    // The data word lands at 0x1000. The fill then runs over 0x1001..0x1020, writing its
+    // byte each time to the other byte of the word: 0x1000, 0x1003, 0x1002, ... 0x1021.
+    bool filled = vdp.vram()[0x1000] == 0x77 && vdp.vram()[0x1001] == 0x00;
+    for (int i = 0x1002; i < 0x1020; ++i) filled = filled && vdp.vram()[static_cast<size_t>(i)] == 0x77;
+    check(filled && vdp.vram()[0x1020] == 0 && vdp.vram()[0x1021] == 0x77, "VDP: DMA fill");
+}
+
+void testVdpFillScrollTable() {
+    // Contra Hard Corps builds its line scroll table with two fills of auto-increment 4:
+    // one from the even address of each entry, which sets the low bytes, and one from the
+    // odd address, which sets the high bytes. Writing the fill byte to the address itself
+    // swapped the halves and left the lower part of the screen still.
+    VdpMd vdp;
+    vdp.reset();
+    vdp.writeControl(0x8174);  // display and DMA on
+    vdp.writeControl(0x8F04);
+    auto fill = [&](uint16_t addrCommand, uint16_t value) {
+        vdp.writeControl(0x9400);
+        vdp.writeControl(0x93E0);  // 224 lines
+        vdp.writeControl(0x9780);
+        vdp.writeControl(addrCommand);
+        vdp.writeControl(0x0082);  // VRAM 0xB800 or 0xB801, with DMA
+        vdp.writeData(value);
+    };
+    fill(0x7800, 0xB0B0);
+    fill(0x7801, 0xFBFB);
+    bool table = true;
+    for (int line = 1; line < 224; ++line) {
+        const size_t a = 0xB800 + static_cast<size_t>(line) * 4;
+        table = table && vdp.vram()[a] == 0xFB && vdp.vram()[a + 1] == 0xB0;
+    }
+    check(table, "VDP: DMA fills build a scroll table byte by byte");
 }
 
 void testVdpHblankFlag() {
@@ -385,6 +414,7 @@ int main() {
     testPsg();
     testVdpPorts();
     testVdpHblankFlag();
+    testVdpFillScrollTable();
     testTestRom();
     testStates();
     testPlanes();

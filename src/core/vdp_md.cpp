@@ -123,7 +123,9 @@ void VdpMd::dmaFill(uint16_t value) {
     const uint32_t length = dmaLength();
     const int target = code_ & 0x0F;
     for (uint32_t i = 0; i < length; ++i) {
-        if (target == 1) vram_[addr_ & 0xFFFF] = static_cast<uint8_t>(value >> 8);
+        // The high byte goes to the other byte of the word at the address: filling from
+        // an odd address writes the high bytes of the words, from an even one the low.
+        if (target == 1) vram_[(addr_ ^ 1) & 0xFFFF] = static_cast<uint8_t>(value >> 8);
         else if (target == 3) cram_[(addr_ >> 1) & 63] = value & 0x0EEE;
         else if (target == 5 && ((addr_ >> 1) & 63) < 40) vsram_[(addr_ >> 1) & 63] = value & 0x07FF;
         addr_ = (addr_ + regs_[15]) & 0xFFFF;
