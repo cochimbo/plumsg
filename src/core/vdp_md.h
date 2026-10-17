@@ -21,6 +21,9 @@ namespace plumsg {
 class VdpMd {
 public:
     static constexpr int kMasterPerLine = 3420;
+    // Where the active part of a line ends and horizontal blanking starts, in master
+    // clocks from the start of the line. Lines are drawn and HINT fires here.
+    static constexpr int kActiveClocks = 2560;
 
     VdpMd();
 
@@ -36,7 +39,8 @@ public:
     int writeControl(uint16_t value);
     int writeData(uint16_t value);
     uint16_t readData();
-    uint16_t readStatus();
+    // The status register at `lineClock` master clocks into the current line.
+    uint16_t readStatus(int lineClock);
     // H/V counter for the current position: `lineClock` master clocks into the line.
     uint16_t readHV(int lineClock) const;
 

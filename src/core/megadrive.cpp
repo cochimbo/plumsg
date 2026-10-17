@@ -10,10 +10,6 @@ namespace plumsg {
 
 namespace {
 
-// Where the active part of a line ends and horizontal blanking starts, in master
-// clocks from the start of the line. Lines are drawn and HINT fires here.
-constexpr int kActiveClocks = 2560;
-
 constexpr uint32_t kStateMagic = 0x53444D50;  // "PMDS"
 constexpr uint32_t kStateVersion = 1;
 constexpr size_t kMaxStateSize = 4 << 20;
@@ -139,7 +135,7 @@ void MegaDrive::runFrame() {
         vdp_.startLine(line);
         updateIrq();
         z80_.setIrqLine(vdp_.z80Irq());
-        runUntil(lineStart_ + kActiveClocks);
+        runUntil(lineStart_ + VdpMd::kActiveClocks);
         if (line < vdp_.activeLines()) vdp_.renderLine(line);
         vdp_.endLine(line);
         updateIrq();
@@ -166,7 +162,7 @@ void MegaDrive::irqAcknowledge(int level) {
 uint16_t MegaDrive::readVdp(uint32_t addr) {
     switch (addr & 0x1F) {
         case 0x00: case 0x02: return vdp_.readData();
-        case 0x04: case 0x06: return vdp_.readStatus();
+        case 0x04: case 0x06: return vdp_.readStatus(lineClock());
         case 0x08: case 0x0A: case 0x0C: case 0x0E: return vdp_.readHV(lineClock());
         default: return 0xFFFF;
     }

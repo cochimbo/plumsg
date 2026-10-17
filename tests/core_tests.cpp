@@ -202,6 +202,23 @@ void testVdpPorts() {
     check(filled && vdp.vram()[0x1021] == 0, "VDP: DMA fill");
 }
 
+void testVdpHblankFlag() {
+    // Status bit 2 follows horizontal blanking, so code that polls it to time its writes
+    // gets past the loop instead of waiting for ever.
+    VdpMd vdp;
+    vdp.reset();
+    vdp.writeControl(0x8144);  // display on
+    for (const bool h40 : {false, true}) {
+        vdp.writeControl(h40 ? 0x8C81 : 0x8C00);
+        auto hblank = [&](int clock) { return (vdp.readStatus(clock) & 0x04) != 0; };
+        bool active = false;
+        for (int c = 900; c < VdpMd::kActiveClocks; c += 50) active = active || hblank(c);
+        const bool blank = hblank(VdpMd::kActiveClocks + 400) && hblank(VdpMd::kMasterPerLine - 1);
+        check(!active && blank && !hblank(VdpMd::kActiveClocks),
+              h40 ? "VDP: HBlank status flag (H40)" : "VDP: HBlank status flag (H32)");
+    }
+}
+
 void testTestRom() {
     MegaDrive md;
     md.loadRomData(testrom::build());
@@ -367,6 +384,7 @@ int main() {
     testPads();
     testPsg();
     testVdpPorts();
+    testVdpHblankFlag();
     testTestRom();
     testStates();
     testPlanes();
