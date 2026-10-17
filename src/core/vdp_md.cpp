@@ -208,13 +208,19 @@ uint16_t VdpMd::readData() {
     return v;
 }
 
-uint16_t VdpMd::readStatus() {
+uint16_t VdpMd::readStatus(int lineClock) {
     uint16_t s = 0x3600;  // FIFO empty; bits 10-15 read as the open bus usually holds them
     if (vintPending_) s |= 0x80;
     if (spriteOverflow_) s |= 0x40;
     if (spriteCollision_) s |= 0x20;
     if (oddFrame_ && (regs_[12] & 0x02)) s |= 0x10;
     if (inVblank_ || !displayEnabled()) s |= 0x08;
+    // HBlank: set a little after the active part of the line ends and cleared just after
+    // the next line starts (H40) or as it starts (H32). Games poll it to time writes.
+    const int clock = lineClock % kMasterPerLine;
+    const int start = kActiveClocks + (h40() ? 228 : 280);
+    const int end = kActiveClocks + (h40() ? 872 : 860) - kMasterPerLine;
+    if (clock >= start || clock < end) s |= 0x04;
     if (dmaBusyLines_ > 0) s |= 0x02;
     if (pal_) s |= 0x01;
     pendingControl_ = false;
