@@ -76,6 +76,7 @@ void MegaCd::reset() {
     resetCpu();
     const uint32_t vector = io_.vectorLevel4;
     io_ = {};
+    modeWritePending_ = false;
     io_.vectorLevel4 = vector;
     counter_ = {};
     led_ = 0;
@@ -116,6 +117,7 @@ void MegaCd::formatBackupRam() {
 void MegaCd::runUntil(uint64_t masterClock) {
     const uint64_t target = static_cast<uint64_t>(static_cast<double>(masterClock) * kSubClock / master_);
     while (subClock_ < target) {
+        landModeWrite();
         int cycles = 16;
         if (!io_.halt) {
             if (resetPending_) {
@@ -126,6 +128,7 @@ void MegaCd::runUntil(uint64_t masterClock) {
         }
         step(cycles);
         subClock_ += static_cast<uint64_t>(cycles);
+        if (subClock_ <= target) landModeWrite();
     }
 }
 
@@ -268,6 +271,20 @@ void MegaCd::subWrite(uint32_t addr, uint16_t value, bool upper, bool lower) {
     if (addr >= 0xFF8000) writeIo(addr, value, upper, lower);
 }
 
+void MegaCd::writeMemoryMode(uint8_t low) {
+    if (io_.wramSelect != ((low & 1) != 0)) io_.wramSwitchRequest = false;
+    io_.wramSelect = (low & 1) != 0;
+    io_.wramMode = (low & 4) != 0;
+    io_.wramPriority = static_cast<uint8_t>((low >> 3) & 3);
+    if (io_.wramSelect) io_.wramSwitch = false;
+}
+
+void MegaCd::landModeWrite() {
+    if (!modeWritePending_) return;
+    modeWritePending_ = false;
+    writeMemoryMode(modeWrite_);
+}
+
 uint16_t MegaCd::readIo(uint32_t addr, bool upper, bool lower) {
     addr = 0xFF8000 | (addr & 0x1FF);
     uint16_t d = 0;
@@ -338,11 +355,8 @@ void MegaCd::writeIo(uint32_t addr, uint16_t value, bool upper, bool lower) {
             if (upper) led_ = static_cast<uint8_t>((value >> 8) & 3);
             return;
         case 0xFF8002:
-            if (io_.wramSelect != ((low & 1) != 0)) io_.wramSwitchRequest = false;
-            io_.wramSelect = (low & 1) != 0;
-            io_.wramMode = (low & 4) != 0;
-            io_.wramPriority = static_cast<uint8_t>((low >> 3) & 3);
-            if (io_.wramSelect) io_.wramSwitch = false;
+            modeWritePending_ = true;
+            modeWrite_ = low;
             return;
         case 0xFF8004:
             if (lower) cdc_.address = low & 0x1F;
