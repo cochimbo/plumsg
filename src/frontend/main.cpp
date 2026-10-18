@@ -329,6 +329,7 @@ struct CommandLine {
     int filter = -1;         // --filtro ninguno|scanlines|crt
     bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
+    bool coverSearch = false;     // --buscar-caratula: with --biblioteca, look for the first game's cover
     bool editor = false;          // --instrumentos: start with the instrument editor open
     std::string track;            // --pista f.vgm: and this track in it
     // For launchers (LaunchBox, Playnite, frontends of arcade cabinets). These last only
@@ -355,6 +356,7 @@ const char* kHelp =
     "  --unirse direccion     unirse a la partida en red de ese anfitrión (IP:puerto)\n"
     "  --biblioteca carpeta   abrir la biblioteca de esa carpeta (se puede repetir)\n"
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
+    "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
     "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
     "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
     "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
@@ -376,6 +378,7 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--biblioteca") c.library.push_back(next());
         else if (a == "--descargar-caratulas") c.downloadCovers = true;
         else if (a == "--bios") c.bios = true;
+        else if (a == "--buscar-caratula") c.coverSearch = true;
         else if (a == "--instrumentos") c.editor = true;
         else if (a == "--pista") c.track = next();
         else if (a == "--filtro") {
@@ -627,6 +630,7 @@ int main(int argc, char** argv) {
     }
     int loops = 0;
     bool downloadCovers = cmd.downloadCovers;
+    bool coverSearch = cmd.coverSearch;
     bool sizedForMenu = false;
 
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -1083,10 +1087,16 @@ int main(int argc, char** argv) {
             downloadCovers = false;
             loops = 0;
         }
+        if (coverSearch && ui->libraryOpen() && ui->library().pending() == 0 && loops > 3) {
+            ui->openCoverSearch(0);
+            coverSearch = false;
+            loops = 0;
+        }
         // A screenshot waits a few frames for the window and the popups to settle, and a
         // library one for its covers.
         const bool libraryReady =
-            loops > 3 && (!ui->libraryOpen() || (!downloadCovers && ui->library().pending() == 0 && loops > 20));
+            loops > 3 && (!ui->libraryOpen() || (!downloadCovers && !coverSearch && ui->library().pending() == 0 && loops > 20)) &&
+            !ui->coverSearchBusy();
         if (capturing && libraryReady &&
             (framesRun >= cmd.frames || !app->romLoaded || ui->libraryOpen() ||
              (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {

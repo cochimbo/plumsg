@@ -39,19 +39,24 @@ constexpr int kCoverHeight = 280;  // covers are shrunk to this many pixels tall
 constexpr int kMaxDepth = 3;       // subfolders scanned below the library folder
 
 // The libretro-thumbnails box art of each console, on libretro's server and in its
-// GitHub copy.
+// GitHub copy. The list of names comes from the server's index of the folder, or
+// from GitHub's API.
 struct CoverSet {
     const char* libretro;
     const char* github;
     const char* subfolder;  // under the covers folder ("" for the Mega Drive's, as before)
+    const char* list;       // GitHub's tree of the folder
 };
 constexpr CoverSet kCoverSets[kSystemCount] = {
     {"https://thumbnails.libretro.com/Sega%20-%20Mega%20Drive%20-%20Genesis/Named_Boxarts/",
-     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/master/Named_Boxarts/", ""},
+     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/master/Named_Boxarts/", "",
+     "https://api.github.com/repos/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/git/trees/master:Named_Boxarts"},
     {"https://thumbnails.libretro.com/Sega%20-%2032X/Named_Boxarts/",
-     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_32X/master/Named_Boxarts/", "32X"},
+     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_32X/master/Named_Boxarts/", "32X",
+     "https://api.github.com/repos/libretro-thumbnails/Sega_-_32X/git/trees/master:Named_Boxarts"},
     {"https://thumbnails.libretro.com/Sega%20-%20Mega-CD%20-%20Sega%20CD/Named_Boxarts/",
-     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega-CD_-_Sega_CD/master/Named_Boxarts/", "MegaCD"},
+     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega-CD_-_Sega_CD/master/Named_Boxarts/", "MegaCD",
+     "https://api.github.com/repos/libretro-thumbnails/Sega_-_Mega-CD_-_Sega_CD/git/trees/master:Named_Boxarts"},
 };
 
 const CoverSet& coverSet(ConsoleSystem s) { return kCoverSets[static_cast<int>(s)]; }
@@ -107,7 +112,7 @@ bool decode(const std::vector<uint8_t>& data, std::vector<uint32_t>& pixels, int
 
 }  // namespace
 
-Library::Library() : worker_([this] { work(); }) {}
+Library::Library() : worker_([this] { work(); }), searcher_([this] { searchWork(); }) {}
 
 Library::~Library() {
     {
@@ -116,7 +121,9 @@ Library::~Library() {
         jobs_.clear();
     }
     wake_.notify_all();
+    searchWake_.notify_all();
     worker_.join();
+    searcher_.join();
 }
 
 void Library::scan(const std::vector<std::string>& folders) {
@@ -220,7 +227,85 @@ void Library::queue(Job job) {
     wake_.notify_one();
 }
 
+void Library::askSearch(SearchTask task) {
+    task.serial = ++searchSerial_;
+    search_.busy = true;
+    search_.status.clear();
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        task_ = std::move(task);
+        hasTask_ = true;
+    }
+    searchWake_.notify_one();
+}
+
+void Library::searchCovers(ConsoleSystem s, const std::string& query) {
+    search_.names.clear();
+    askSearch({SearchTask::Names, 0, s, query});
+}
+
+void Library::previewCover(ConsoleSystem s, const std::string& name) { askSearch({SearchTask::Preview, 0, s, name}); }
+
+bool Library::useCover(size_t game) {
+    if (game >= games_.size() || previewImage_.empty()) return false;
+    Game& g = games_[game];
+    const std::string target = systemCovers(g.system);
+    if (target.empty()) return false;
+    std::error_code ec;
+    fs::create_directories(fs::u8path(target), ec);
+    {
+        std::ofstream f(fs::u8path(target + g.stem + ".png"), std::ios::binary);
+        f.write(reinterpret_cast<const char*>(previewImage_.data()), static_cast<std::streamsize>(previewImage_.size()));
+        if (!f) {
+            search_.status = "No se pudo guardar la carátula en " + target;
+            return false;
+        }
+    }
+    g.cover = Cover::Pending;
+    queue({game, generation_, g.path, g.stem, g.system, false});
+    return true;
+}
+
+void Library::endCoverSearch() {
+    ++searchSerial_;  // a reply still on its way is dropped
+    if (search_.preview) gl::DeleteTextures(1, &search_.preview);
+    search_ = CoverSearch();
+    previewImage_.clear();
+}
+
 void Library::update() {
+    {
+        SearchReply r;
+        bool got = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (hasReply_) {
+                r = std::move(reply_);
+                hasReply_ = false;
+                got = true;
+            }
+        }
+        if (got && r.serial == searchSerial_) {
+            search_.busy = false;
+            search_.status = r.status;
+            if (r.kind == SearchTask::Names) {
+                search_.names = std::move(r.names);
+            } else if (!r.pixels.empty()) {
+                if (!search_.preview) gl::GenTextures(1, &search_.preview);
+                gl::BindTexture(gl::TEXTURE_2D, search_.preview);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
+                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8, r.width, r.height, 0, gl::RGBA, gl::UNSIGNED_BYTE,
+                               r.pixels.data());
+                search_.width = r.width;
+                search_.height = r.height;
+                search_.previewName = r.name;
+                previewImage_ = std::move(r.image);
+            }
+        }
+    }
     // A few per frame: each upload is quick, but dozens at once would stutter the game.
     for (int n = 0; n < 4; ++n) {
         Result r;
@@ -251,6 +336,11 @@ void Library::update() {
 }
 
 void Library::clearTextures() {
+    if (search_.preview) {
+        gl::DeleteTextures(1, &search_.preview);
+        search_.preview = 0;
+        search_.previewName.clear();
+    }
     for (Game& g : games_)
         if (g.texture) {
             gl::DeleteTextures(1, &g.texture);
@@ -317,6 +407,60 @@ bool Library::fetch(const Job& job, std::string* coverPath) {
         return true;
     }
     return false;
+}
+
+// The names in the console's box art set, from libretro's index of the folder or,
+// if that fails, from GitHub. Kept for the rest of the session.
+bool Library::loadCoverIndex(ConsoleSystem s, std::string* error) {
+    std::vector<std::string>& index = coverIndex_[static_cast<int>(s)];
+    if (!index.empty()) return true;
+    const CoverSet& set = coverSet(s);
+    std::vector<uint8_t> body;
+    int status = 0;
+    for (const char* url : {set.libretro, set.list}) {
+        status = httpGet(url, body);
+        if (status == 200) index = parseCoverList(std::string(body.begin(), body.end()));
+        if (!index.empty()) return true;
+    }
+    *error = status == 0 ? "No se pudo conectar con el servidor de carátulas."
+                         : "No se pudo leer la lista de carátulas (error " + std::to_string(status) + ").";
+    return false;
+}
+
+void Library::searchWork() {
+    for (;;) {
+        SearchTask task;
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            searchWake_.wait(lock, [this] { return stop_ || hasTask_; });
+            if (stop_) return;
+            task = std::move(task_);
+            hasTask_ = false;
+        }
+        SearchReply r;
+        r.kind = task.kind;
+        r.serial = task.serial;
+        r.name = task.text;
+        if (task.kind == SearchTask::Names) {
+            if (loadCoverIndex(task.system, &r.status)) {
+                r.names = similarCoverNames(coverIndex_[static_cast<int>(task.system)], task.text, 60);
+                if (r.names.empty()) r.status = "Ninguna carátula se parece a ese nombre.";
+            }
+        } else {
+            const CoverSet& set = coverSet(task.system);
+            const std::string file = urlEncode(task.text) + ".png";
+            int status = httpGet(set.libretro + file, r.image);
+            if (status != 200 || !isImage(r.image)) status = httpGet(set.github + file, r.image);
+            if (status != 200 || !isImage(r.image) || !decode(r.image, r.pixels, &r.width, &r.height)) {
+                r.image.clear();
+                r.pixels.clear();
+                r.status = status == 0 ? "No se pudo conectar con el servidor de carátulas." : "No se pudo descargar esa carátula.";
+            }
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        reply_ = std::move(r);
+        hasReply_ = true;
+    }
 }
 
 void Library::work() {

@@ -20,6 +20,15 @@ std::string searchKey(const std::string& text);
 // first: the whole name, then with fewer trailing tags, then the bare title with the
 // usual regions. Characters the set cannot use in file names (&*/:`<>?\|") become '_'.
 std::vector<std::string> coverNames(const std::string& fileStem);
+// The box art names (without ".png") in a listing of a Named_Boxarts folder: either
+// the HTML index of thumbnails.libretro.com (href="...png", percent-encoded) or the
+// JSON of GitHub's git trees API ("path": "...png"). Sorted, without repeats.
+std::vector<std::string> parseCoverList(const std::string& listing);
+// The `max` names of `names` that look most like `query` (a game's name as the user
+// typed it), best first. Words are compared without case or punctuation, a word may
+// be the start of another or have a typo, and roman numerals match digits ("II" is
+// "2"). Names that share nothing with the query are left out.
+std::vector<std::string> similarCoverNames(const std::vector<std::string>& names, const std::string& query, size_t max);
 // Percent-encodes everything but letters, digits and -._~ (spaces become %20).
 std::string urlEncode(const std::string& text);
 

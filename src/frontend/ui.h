@@ -116,6 +116,9 @@ public:
     void toggleLibrary();
     bool libraryOpen() const { return showLibrary_; }
     void openBios() { showBios_ = true; }
+    // "Buscar carátula..." for the library's game `game`.
+    void openCoverSearch(size_t game);
+    bool coverSearchBusy() const { return showCoverSearch_ && (coverSearch_.autoPreview || library_.coverSearch().busy); }
     void openNetplay() { showNetplay_ = true; }
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
@@ -149,6 +152,8 @@ private:
     void drawGameOptions(const UiState& state, UiActions& out);
     void drawLibrary(UiActions& out);
     void drawLibraryFolders(UiActions& out);
+    void drawCoverSearch();
+    void startCoverSearch();
     void drawBios(UiActions& out);
     void drawNetplay(const UiState& state, UiActions& out);
     void rescanLibrary();
@@ -210,13 +215,23 @@ private:
         bool tabChanged = false;  // the console tab was changed with the pad or the keyboard
         // The menu of one game (right click, X on the pad or the menu key): its index in
         // the filtered list, the item chosen with the pad or the keys, and a request to open it.
-        static constexpr int kItems = 4;  // Jugar, Trucos, Opciones de este juego, Editor de instrumentos
+        static constexpr int kItems = 5;  // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula
         int menuGame = -1;
         int menuItem = 0;
         bool openMenu = false;
         int menuAction = -1;   // item picked with the pad or the keys this frame
         char search[96] = "";
     } libraryView_;
+    // "Buscar carátula..." for one game of the library.
+    bool showCoverSearch_ = false;
+    struct CoverSearchView {
+        size_t game = 0;   // index into the library's games
+        std::string path;  // of that game, in case the library is scanned again
+        char query[128] = "";
+        int selected = -1;  // in the list of names
+        bool focus = false;
+        bool autoPreview = false;  // show the closest cover once the names arrive
+    } coverSearch_;
     char cheatCode_[64] = "";
     char cheatName_[96] = "";
     std::string cheatError_;
