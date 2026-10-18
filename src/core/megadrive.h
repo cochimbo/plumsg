@@ -120,8 +120,9 @@ public:
     using MemoryWatch = std::function<void(uint32_t addr, uint8_t value, bool m68k)>;
     void setMemoryWatch(MemoryWatch watch);
     // Keeps the game from asking for music and sounds: the 68000's writes to
-    // [addr, addr + count) of anything but 0 or 0x80 are dropped. count 0: none.
-    void lockSoundRequests(uint32_t addr, int count);
+    // [addr, addr + count) of anything but 0 or 0x80 (of anything, if all) are dropped.
+    // count 0: none.
+    void lockSoundRequests(uint32_t addr, int count, bool all = false);
     // Writes a byte of work RAM or Z80 RAM directly, past the lock.
     void poke(uint32_t addr, uint8_t value);
     // Runs without drawing the picture (faster, for when only the sound matters).
@@ -204,6 +205,7 @@ private:
     MemoryWatch watch_;
     uint32_t lockAddr_ = 0;
     int lockCount_ = 0;
+    bool lockAll_ = false;
     bool watching_ = false;  // watch_ or a lock
     bool drawing_ = true;
     bool fromM68k_ = false;  // the Z80 bus write being made comes from the 68000  // THMB of the last loaded state, until a frame runs

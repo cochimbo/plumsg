@@ -24,6 +24,12 @@ namespace plumsg {
 // the number in a register. Those routines are found in the ROM, where the game calls
 // them from many places with a different number each time; the extractor then calls
 // them itself, from a moment the game was quiet.
+//
+// GEMS (the driver of many games of Sega of America: Sonic Spinball, Earthworm Jim) takes
+// messages from a ring in the Z80's memory: the game writes a message after the last one
+// (FF 10 n starts song n) and then where the next will go. The extractor finds that byte
+// and the ring while the game boots, learns the message whose last byte changes most, and
+// writes it itself with every number.
 class SongExtractor {
 public:
     struct Song {
