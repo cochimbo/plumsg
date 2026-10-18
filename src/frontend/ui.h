@@ -3,12 +3,14 @@
 #include <SDL.h>
 
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "../core/cheats.h"
 #include "../core/system.h"
+#include "achievements_ui.h"
 #include "cheat_database.h"
 #include "file_dialog.h"
 #include "input.h"
@@ -47,6 +49,7 @@ struct UiActions {
     bool startRecording = false;      // the editor's requests: record the game's music,
     bool stopRecording = false;       // stop and hand it over,
     bool assignmentsChanged = false;  // and the game's instruments changed
+    bool achievementsChanged = false; // RetroAchievements switched on or off, or hardcore
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -87,6 +90,8 @@ struct UiState {
     bool netPlaying = false;  // connected: the options that would make the consoles differ are off
     std::string netStatus;
     float netProgress = -1;   // 0..1 while the game is sent, else -1
+    // RetroAchievements' hardcore mode is on: no rewinding, slow motion, cheats or loading states.
+    bool hardcore = false;
     EditorView editor;
 };
 
@@ -132,6 +137,11 @@ public:
     Library& library() { return library_; }
     // The instrument editor's window, drawn with the rest (not owned).
     void setEditor(InstrumentEditor* editor) { editor_ = editor; }
+    // RetroAchievements' menu, windows and notices (not owned).
+    void setAchievements(Achievements* achievements);
+    void showAchievement(const Achievements::Notice& notice) {
+        if (achievements_) achievements_->show(notice);
+    }
     // Where the SoundFonts to choose from are: the one that comes with plumsg, and the
     // user's folder (created if missing), listed in Sonido > SoundFont.
     void setSoundfonts(std::string included, std::string folder);
@@ -186,6 +196,7 @@ private:
     Library library_;
     CheatDatabase cheatDb_;
     InstrumentEditor* editor_ = nullptr;
+    std::unique_ptr<AchievementsUi> achievements_;
     std::string includedSoundfont_, soundfontFolder_;
     void drawSoundfontMenu(UiActions& out);
     void drawSoundfontCombo(UiActions& out, bool labelled = true);

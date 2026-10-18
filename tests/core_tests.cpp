@@ -2,7 +2,7 @@
 // pads, the PSG, the VDP ports, the built-in test ROM drawn and heard, savestates
 // (determinism, round trip, damaged files), rewinding and the speed controls, the
 // pseudo-3D planes, the games' 3D profiles, the cheat codes, the library's names and
-// netplay over a simulated network.
+// netplay over a simulated network, and RetroAchievements against a made-up server.
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -26,6 +26,7 @@
 #include "render/profile3d.h"
 #include "rewind.h"
 #include "test_rom.h"
+#include "frontend/achievements.h"
 #include "frontend/library_names.h"
 #include "mars/mars_program.h"
 #include "megacd/megacd_program.h"
@@ -1356,6 +1357,79 @@ void testNetplay() {
 }
 
 // The Roland sound: register writes become the right MIDI events.
+// RetroAchievements: the game's hash, its memory as the achievements address it, and a
+// whole session (login, game, an achievement earned) against a made-up server.
+void testAchievements() {
+    MegaDrive md;
+    md.loadRomData(std::vector<uint8_t>(0x200, 0));
+    check(Achievements::gameHash(md) == "bf619eac0cdf3f68d496ea9344137e8b", "logros: hash = MD5 de la ROM");
+    md.poke(0xFF0010, 0x12);
+    md.poke(0xFF0011, 0x34);
+    md.poke(0xFFFFFF, 0x56);
+    uint8_t bytes[3] = {};
+    check(Achievements::readMemory(md, 0x10, bytes, 2) == 2 && bytes[0] == 0x34 && bytes[1] == 0x12,
+          "logros: la RAM del 68000 con los bytes de cada palabra cambiados");
+    check(Achievements::readMemory(md, 0xFFFE, bytes, 2) == 2 && bytes[1] == 0x56, "logros: el final de la RAM");
+    check(Achievements::readMemory(md, 0x20000, bytes, 1) == 0, "logros: nada más allá de la SRAM");
+
+    std::vector<std::string> asked;
+    auto server = [&](const std::string& url, const std::string& post, const std::string& agent, std::string& body) {
+        asked.push_back(post);
+        check(agent.rfind("plumsg/", 0) == 0 && agent.find("rcheevos/") != std::string::npos,
+              "logros: el User-Agent dice plumsg y rcheevos");
+        (void)url;
+        if (post.rfind("r=login2", 0) == 0)
+            body = "{\"Success\":true,\"User\":\"Probador\",\"Token\":\"FICHA\",\"Score\":100,\"SoftcoreScore\":0,"
+                   "\"Messages\":0,\"Permissions\":1,\"AccountType\":\"Registered\"}";
+        else if (post.rfind("r=achievementsets", 0) == 0)
+            body = "{\"Success\":true,\"GameId\":7,\"Title\":\"Juego de prueba\",\"ConsoleId\":1,"
+                   "\"ImageIconUrl\":\"http://servidor/juego.png\",\"RichPresenceGameId\":7,\"RichPresencePatch\":\"\","
+                   "\"Sets\":[{\"AchievementSetId\":70,\"GameId\":7,\"Title\":null,\"Type\":\"core\","
+                   "\"ImageIconUrl\":\"http://servidor/juego.png\",\"Achievements\":["
+                   "{\"ID\":701,\"Title\":\"Cinco\",\"Description\":\"Llega a cinco\",\"Flags\":3,\"Points\":10,"
+                   "\"MemAddr\":\"0xH0010=5\",\"Author\":\"Alguien\",\"BadgeName\":\"00001\","
+                   "\"Created\":1367266583,\"Modified\":1376929305}],\"Leaderboards\":[]}]}";
+        else if (post.rfind("r=startsession", 0) == 0)
+            body = "{\"Success\":true,\"Unlocks\":[],\"HardcoreUnlocks\":[]}";
+        else if (post.rfind("r=awardachievement", 0) == 0)
+            body = "{\"Success\":true,\"Score\":110,\"SoftcoreScore\":0,\"AchievementID\":701,\"AchievementsRemaining\":0}";
+        else
+            body = "{\"Success\":true}";
+        return 200;
+    };
+    Achievements ra(server, false);
+    ra.loadGame(md, Achievements::gameHash(md));  // before logging in: it waits for it
+    ra.loginWithPassword("Probador", "secreta");
+    for (int i = 0; i < 6; ++i) ra.poll();
+    check(ra.loggedIn() && ra.token() == "FICHA", "logros: sesión iniciada, con la ficha para la próxima vez");
+    check(ra.gameLoaded() && ra.gameTitle() == "Juego de prueba" && ra.achievementCount() == 1,
+          "logros: el juego identificado por su hash, con su logro");
+    bool gameNotice = false;
+    for (const auto& n : ra.takeNotices()) gameNotice |= n.kind == Achievements::Notice::Kind::GameStarted;
+    check(gameNotice, "logros: aviso de juego con logros");
+
+    md.poke(0xFF0011, 0);
+    ra.doFrame();
+    ra.doFrame();
+    check(ra.takeNotices().empty(), "logros: nada mientras no se cumple");
+    md.poke(0xFF0011, 5);  // address 0x10 for the achievements
+    ra.doFrame();
+    const auto notices = ra.takeNotices();
+    check(notices.size() == 1 && notices[0].kind == Achievements::Notice::Kind::Unlocked && notices[0].title == "Cinco" &&
+              notices[0].points == 10,
+          "logros: logro conseguido al cumplirse");
+    ra.poll();
+    check(!asked.empty() && asked.back().rfind("r=awardachievement", 0) == 0 && asked.back().find("a=701") != std::string::npos,
+          "logros: el logro se envía al servidor");
+    check(ra.unlockedCount() == 1, "logros: cuenta como conseguido");
+
+    // Savestates keep the progress; an empty one starts over.
+    const std::vector<uint8_t> progress = ra.saveProgress();
+    check(!progress.empty(), "logros: el progreso cabe en el estado");
+    ra.unloadGame();
+    check(!ra.gameLoaded(), "logros: juego cerrado");
+}
+
 void testRoland() {
     Ym2612 ym;
     ym.setMasterClock(MegaDrive::kMasterNtsc);
@@ -1586,6 +1660,7 @@ int main() {
     testMegaCd();
     testNetplay();
     testRoland();
+    testAchievements();
     testVgm();
     testSongExtract(false);
     testSongExtract(true);

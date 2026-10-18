@@ -108,6 +108,7 @@ public:
     bool is32x() const { return mars_ != nullptr; }
     MegaCd* megaCd() { return mcd_.get(); }  // null unless a disc is loaded
     bool isMegaCd() const { return mcd_ != nullptr; }
+    CdImage* disc() { return disc_.get(); }  // the disc in the Mega CD, null if none
     // CPU view of memory, for tools and tests.
     uint8_t peek(uint32_t addr) { return read8(addr); }
     uint16_t peek16(uint32_t addr) { return read16(addr & ~1u); }

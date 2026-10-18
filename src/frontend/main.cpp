@@ -18,8 +18,10 @@
 #include "../render/gl_renderers.h"
 #include "../render/profile3d.h"
 #include "../net/udp.h"
+#include "achievements.h"
 #include "audio.h"
 #include "game_options.h"
+#include "http.h"
 #include "input.h"
 #include "miniz.h"
 #include "settings.h"
@@ -111,6 +113,8 @@ struct App {
     // Joined a netplay game: the console runs the host's game, cartridge save
     // included, which must not overwrite ours. Until another game is loaded.
     bool hostsBattery = false;
+    std::string achievementsHash;  // the game as RetroAchievements knows it
+    bool noCheats = false;         // RetroAchievements' hardcore mode: the cheats stay off
 
     std::string savePath() const { return withoutExtension(romPath) + ".sav"; }
     std::string statePath(int slot) const {
@@ -124,6 +128,10 @@ struct App {
     // Hands the console the codes that are on and valid.
     void applyCheats() {
         std::vector<CheatPatch> patches;
+        if (noCheats) {
+            console.setCheats(patches);
+            return;
+        }
         for (const Cheat& c : cheats) {
             std::vector<CheatPatch> p;
             if (c.enabled && decodeCheatCodes(c.code, &p, nullptr)) patches.insert(patches.end(), p.begin(), p.end());
@@ -212,6 +220,7 @@ struct App {
         romPath = path;
         hostsBattery = false;
         lastError.clear();
+        achievementsHash = Achievements::gameHash(console);  // before cheats change the ROM
         loadBattery();
         romLoaded = true;
         loadCheats();
@@ -285,13 +294,17 @@ struct App {
         return "Estado guardado en la ranura " + std::to_string(slot);
     }
 
-    std::string loadState(int slot) {
+    std::string loadState(int slot, bool* loaded = nullptr) {
+        if (loaded) *loaded = false;
         std::vector<uint8_t> data;
         if (!readFile(statePath(slot), data)) return "La ranura " + std::to_string(slot) + " está vacía";
         std::string error;
         if (!console.loadState(data, &error)) return "No se pudo cargar el estado: " + error;
+        if (loaded) *loaded = true;
         return "Estado cargado de la ranura " + std::to_string(slot);
     }
+    // The achievements' progress when the state in `slot` was saved, next to it.
+    std::string progressPath(int slot) const { return statePath(slot) + ".logros"; }
 };
 
 // Saves what is on screen (the whole window) as a PNG, for screenshots taken from the
@@ -511,6 +524,32 @@ int main(int argc, char** argv) {
     app->cheatsDir = paths.cheats;
     ui->library().setCoversFolder(paths.covers);
     auto audio = std::make_unique<Audio>();
+    // RetroAchievements, never in a screenshot run.
+    Achievements achievements([](const std::string& url, const std::string& post, const std::string& agent,
+                                 std::string& body) {
+        std::vector<uint8_t> data;
+        const int status = httpRequest(url, post, agent, data);
+        body.assign(data.begin(), data.end());
+        return status;
+    });
+    if (!capturing) ui->setAchievements(&achievements);
+    auto hardcore = [&] { return !capturing && settings.achievements && settings.raHardcore; };
+    app->noCheats = hardcore();
+    // Logs in (with the token kept from the last time) and identifies the loaded game,
+    // or logs out when switched off.
+    auto applyAchievements = [&] {
+        if (capturing) return;
+        achievements.setHardcore(hardcore());
+        if (!settings.achievements) {
+            if (achievements.loggedIn() || achievements.loggingIn()) achievements.logout();
+            return;
+        }
+        if (!achievements.loggedIn() && !achievements.loggingIn() && !settings.raToken.empty())
+            achievements.loginWithToken(settings.raUser, settings.raToken);
+        if (app->romLoaded && !achievements.gameLoaded() && !achievements.loadingGame())
+            achievements.loadGame(app->console, app->achievementsHash);
+    };
+    applyAchievements();
 
     auto applyConsole = [&] {
         app->console.setRegion(settings.region);
@@ -601,6 +640,7 @@ int main(int argc, char** argv) {
         useGameOptions(path);  // before loading: the region may be the game's own
         if (app->load(path, capturing ? nullptr : window)) {
             applySound();  // now it is known whether it is a disc
+            if (settings.achievements && !capturing) achievements.loadGame(app->console, app->achievementsHash);
             settings.addRecent(path);
             if (!game.own.empty()) ui->notify("Opciones propias de " + fileName(path));
             rewind.clear();
@@ -618,7 +658,7 @@ int main(int argc, char** argv) {
     if (!cmd.rom.empty()) {
         load(cmd.rom);
         applyCommandLine();  // over the game's profile too
-        if (cmd.slot >= 0 && app->romLoaded) ui->notify(app->loadState(cmd.slot));
+        if (cmd.slot >= 0 && app->romLoaded && !hardcore()) ui->notify(app->loadState(cmd.slot));
         roland->allNotesOff();
     }
     bool openStateMenu = cmd.stateMenu;
@@ -653,11 +693,29 @@ int main(int argc, char** argv) {
         save();
     };
     auto saveState = [&](int slot) {
-        if (app->romLoaded) ui->notify(app->saveState(slot));
+        if (!app->romLoaded) return;
+        ui->notify(app->saveState(slot));
+        std::error_code ec;
+        if (achievements.gameLoaded()) writeFile(app->progressPath(slot), achievements.saveProgress());
+        else std::filesystem::remove(std::filesystem::u8path(app->progressPath(slot)), ec);
     };
     auto loadState = [&](int slot) {
-        if (app->romLoaded) ui->notify(app->loadState(slot));
+        if (!app->romLoaded) return;
+        if (hardcore()) {
+            ui->notify("En modo hardcore no se pueden cargar estados");
+            return;
+        }
+        bool loaded = false;
+        ui->notify(app->loadState(slot, &loaded));
         roland->allNotesOff();  // what was playing is not what the state plays
+        std::vector<uint8_t> progress;
+        if (loaded && !readFile(app->progressPath(slot), progress)) progress.clear();
+        if (loaded) achievements.loadProgress(progress);
+    };
+    // The console's reset button; the achievements start over with it.
+    auto resetConsole = [&] {
+        app->console.reset();
+        achievements.reset();
     };
     auto toggleSlowMotion = [&] {
         slowMotion = !slowMotion;
@@ -740,6 +798,7 @@ int main(int argc, char** argv) {
         stopRecording();
         save();  // the game's own options, while they are still its
         app->unload(capturing ? nullptr : window);
+        achievements.unloadGame();
         useGameOptions(std::string());
         roland->allNotesOff();
         rewind.clear();
@@ -791,7 +850,7 @@ int main(int argc, char** argv) {
                 case Hotkey::Library: ui->toggleLibrary(); break;
                 case Hotkey::Stop: stop(); break;
                 case Hotkey::SlowMotion:
-                    if (app->romLoaded && !netPlaying()) toggleSlowMotion();
+                    if (app->romLoaded && !netPlaying() && !hardcore()) toggleSlowMotion();
                     break;
                 default: break;  // rewind and fast forward work while held, below
             }
@@ -830,7 +889,7 @@ int main(int argc, char** argv) {
                     if (ctrl) ui->toggleLibrary();
                     break;
                 case SDL_SCANCODE_F1:
-                    if (!netPlaying()) app->console.reset();
+                    if (!netPlaying() && app->romLoaded) resetConsole();
                     break;
                 case SDL_SCANCODE_F2:
                     settings.view = renderers[(viewIndex() + 1) % renderers.size()]->name();
@@ -890,6 +949,7 @@ int main(int argc, char** argv) {
         uiState.editor.recordedSeconds = recorder.secondsAt(app->console.masterClocks());
         uiState.editor.soundfontReady = rolandFontOk;
         uiState.disc = app->romLoaded && app->console.megaCd();
+        uiState.hardcore = hardcore();
         uiState.netSession = net != nullptr;
         uiState.netPlaying = netPlaying();
         uiState.netProgress = -1;
@@ -928,7 +988,7 @@ int main(int argc, char** argv) {
         if (act.netJoin) startNet(false);
         if (act.netLeave) stopNet("Has salido de la partida en red", false);
         const bool netBusy = netPlaying();
-        if (act.reset && !netBusy) app->console.reset();
+        if (act.reset && !netBusy && app->romLoaded) resetConsole();
         if (act.stop) stop();
         if (act.togglePause && !netBusy) paused = !paused;
         if (act.quit) running = false;
@@ -939,11 +999,21 @@ int main(int argc, char** argv) {
         if (act.consoleChanged && !netBusy) {
             // A new region needs a fresh start, like switching a real console's region.
             applyConsole();
-            if (app->romLoaded) app->console.reset();
+            if (app->romLoaded) resetConsole();
             rewind.clear();
             setRewindLimits();
         }
-        if (act.toggleSlowMotion) toggleSlowMotion();
+        if (act.toggleSlowMotion && !hardcore()) toggleSlowMotion();
+        if (act.achievementsChanged) applyAchievements();
+        // Hardcore switched on or off: the cheats, rewinding and slow motion follow.
+        if (hardcore() != app->noCheats) {
+            app->noCheats = hardcore();
+            if (!net) app->applyCheats();
+            if (app->noCheats) {
+                slowMotion = false;
+                rewind.clear();
+            }
+        }
         if (act.rewindChanged) setRewindLimits();
         if (act.profile >= 0) setProfile(act.profile == 1);
         if (!act.cheatsFor.empty()) openCheats(act.cheatsFor);
@@ -994,6 +1064,7 @@ int main(int argc, char** argv) {
         }
 
         uiState.speed.clear();
+        bool ranFrame = false;
         if (net) {
             net->poll(app->console, SDL_GetTicks());
             const NetplaySession::Phase phase = net->phase();
@@ -1018,6 +1089,8 @@ int main(int argc, char** argv) {
                 if (!net->shouldWait()) {
                     app->console.setSampleRate(audio->rate());
                     if (net->advance(app->console, input->poll(0, keyboard))) {
+                        achievements.doFrame();
+                        ranFrame = true;
                         ++framesRun;
                         audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
                         app->console.audio().clearSamples();
@@ -1042,7 +1115,8 @@ int main(int argc, char** argv) {
         else if (app->romLoaded && !paused && !ui->stateMenuOpen() && !ui->libraryOpen() && !ui->browserOpen()) {
             const bool keyboard = !ui->keyboardBusy();
             const bool fast = input->held(Hotkey::FastForward, keyboard);
-            if (settings.rewindSeconds > 0 && input->held(Hotkey::Rewind, keyboard)) {
+            const bool canRewind = settings.rewindSeconds > 0 && !hardcore();
+            if (canRewind && input->held(Hotkey::Rewind, keyboard)) {
                 // Back one frame per tick: load the newest snapshot and run that frame
                 // again (silently, without the pads) to have its picture on screen.
                 std::vector<uint8_t> snapshot;
@@ -1065,18 +1139,35 @@ int main(int argc, char** argv) {
                 if (fast) uiState.speed = ">> x" + std::to_string(settings.fastForward);
                 else if (slowMotion) uiState.speed = "Cámara lenta " + std::to_string(settings.slowMotion) + "%";
                 for (int n = pacer.framesForTick(speed); n > 0; --n) {
-                    if (settings.rewindSeconds > 0) {
+                    if (canRewind) {
                         std::vector<uint8_t> snapshot;
                         if (app->console.saveState(snapshot, true)) rewind.push(std::move(snapshot));
                     }
                     app->console.setPads(input->poll(0, keyboard), input->poll(1, keyboard));
                     app->console.setSampleRate(audio->rate() / speed);
                     app->console.runFrame();
+                    achievements.doFrame();
+                    ranFrame = true;
                     ++framesRun;
                     audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
                     app->console.audio().clearSamples();
                 }
             }
+        }
+
+        // RetroAchievements: its answers, and what it has to say.
+        if (!ranFrame) achievements.idle();
+        achievements.poll();
+        for (const Achievements::Notice& n : achievements.takeNotices()) {
+            if (n.kind == Achievements::Notice::Kind::Reset && app->romLoaded) {
+                resetConsole();
+                rewind.clear();
+            }
+            ui->showAchievement(n);
+        }
+        if (achievements.loggedIn() && achievements.token() != settings.raToken) {
+            settings.raToken = achievements.token();
+            save();
         }
 
         int w, h;

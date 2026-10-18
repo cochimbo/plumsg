@@ -58,6 +58,8 @@ Primera versión. Lo que hay:
   cada disco arranca con la de su región.
 - **Juego en red** a dobles, con *rollback* como GGPO: cada uno en su ordenador, por
   internet o en casa (ver abajo).
+- **RetroAchievements**: los logros, retos y clasificaciones de retroachievements.org,
+  con tu cuenta de allí y modo hardcore (ver abajo).
 
 No hay ROMs comerciales en el repositorio ni en CI: las pruebas usan una ROM generada por el
 propio proyecto (`tests/test_rom.h`), un programa de 32X propio (`tests/mars/`) y otro de
@@ -257,6 +259,27 @@ estados, reiniciar, cambiar la región ni usar trucos (harían que las dos conso
 dejaran de ver lo mismo). Guardar estados sí. Al que se une no se le toca su partida
 guardada del cartucho: la que usa es la del anfitrión.
 
+### Logros (RetroAchievements)
+
+Menú **Logros**. Activa *RetroAchievements* e inicia sesión en **Logros > Cuenta...** con tu
+cuenta de [retroachievements.org](https://retroachievements.org) (es gratis). La contraseña
+no se guarda: plumsg guarda en `plumsg.ini` la sesión que da el servidor, y la próxima vez
+entra solo.
+
+- Al abrir un juego se busca en RetroAchievements por su hash (el mismo que usan RetroArch
+  y los demás emuladores; en el Mega CD, el de la cabecera del disco). Si lo conoce, sale
+  un aviso con cuántos logros tienes de ese juego.
+- Cada logro conseguido sale en la esquina de abajo a la derecha con su insignia, también
+  a pantalla completa y con la barra de menús escondida. Arriba a la izquierda salen los
+  retos en marcha, el progreso de un logro que se está consiguiendo y los contadores de
+  las clasificaciones.
+- **Logros > Logros de este juego...** los lista todos, conseguidos o no, con su progreso.
+- **Modo hardcore**: los logros cuentan para la puntuación hardcore y las clasificaciones, pero
+  no se puede rebobinar, ir a cámara lenta, usar trucos ni cargar estados (guardarlos sí).
+  Al activarlo con un juego abierto, el juego vuelve a empezar.
+- Sin conexión, los logros se guardan y se envían cuando vuelve.
+- Cada estado guardado lleva al lado (`.logros`) cómo iban los logros en ese momento.
+
 ### Desde la línea de comandos (LaunchBox, Playnite, muebles arcade)
 
 ```
@@ -409,7 +432,7 @@ sus capturas, sonido y hashes como artefacto.
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
 miniz (MIT, en `third_party/miniz`), stb_image (dominio público o MIT, en `third_party/stb`),
 ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
-`third_party/tsf`). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
+`third_party/tsf`), rcheevos (MIT, para RetroAchievements). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
 propia licencia libre (`soundfonts\GeneralUser-GS-LICENSE.txt` en la instalación). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de
 [ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas son de libretro-thumbnails y las listas de trucos de libretro-database
 (CC BY-SA 4.0); se descargan al usarlas y no van en el repositorio.
