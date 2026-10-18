@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,9 @@ struct UiActions {
     bool netHost = false;          // host a netplay game on settings.netPort
     bool netJoin = false;          // join the host at settings.netAddress
     bool netLeave = false;         // leave the netplay game
+    std::string cheatsFor;         // open the Trucos window for this game
+    std::string optionsFor;        // open the Opciones de este juego window for this game
+    bool gameOptionsChanged = false;  // a game's own options were edited: save them (and apply if loaded)
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -44,8 +48,19 @@ struct SlotInfo {
     int width = 0, height = 0;
 };
 
+// What the Opciones de este juego window edits: which options the game has its own
+// value of, and the values (the game's where it has its own, the general ones elsewhere).
+struct GameOptionsView {
+    std::string game;                     // file name, empty when no game was chosen
+    Settings* values = nullptr;
+    std::set<std::string>* own = nullptr;
+    const Settings* general = nullptr;    // to go back to when an option stops being the game's
+    bool loaded = false;                  // the game is the one running: changes apply at once
+};
+
 struct UiState {
     bool romLoaded = false;
+    std::string romPath;
     bool paused = false;
     bool slowMotion = false;
     std::string speed;     // badge in the corner while not at normal speed ("<< REBOBINANDO", "x4"...)
@@ -53,7 +68,9 @@ struct UiState {
     std::string gameName;     // the ROM's file name, for the profile option
     std::vector<const char*> views;  // Renderer::name() of each available view
     std::vector<SlotInfo> slots;     // one per slot, 0-9
-    std::vector<Cheat>* cheats = nullptr;  // the loaded game's cheats, edited in place
+    std::vector<Cheat>* cheats = nullptr;  // the cheats of the Trucos window's game, edited in place
+    std::string cheatsGame;                // that game's file name
+    GameOptionsView gameOptions;
     // Netplay: a session exists (hosting, joining or playing), and what to say about it.
     bool netSession = false;
     bool netPlaying = false;  // connected: the options that would make the consoles differ are off
@@ -114,6 +131,7 @@ private:
     void drawAbout();
     void drawError();
     void drawCheats(const UiState& state, UiActions& out);
+    void drawGameOptions(const UiState& state, UiActions& out);
     void drawLibrary(UiActions& out);
     void drawLibraryFolders(UiActions& out);
     void drawBios(UiActions& out);
@@ -144,6 +162,7 @@ private:
     bool showLibrary_ = false;
     bool showBios_ = false;
     bool showNetplay_ = false;
+    bool showGameOptions_ = false;
     char netAddress_[128] = "";
     std::vector<std::string> localAddresses_;  // this computer's, for the host to share
     bool showFolders_ = false;  // the library's list of folders, unfolded
@@ -172,6 +191,13 @@ private:
         bool focusSearch = false;
         int load = -1;         // index into the filtered list chosen this frame
         bool tabChanged = false;  // the console tab was changed with the pad or the keyboard
+        // The menu of one game (right click, X on the pad or the menu key): its index in
+        // the filtered list, the item chosen with the pad or the keys, and a request to open it.
+        static constexpr int kItems = 3;  // Jugar, Trucos, Opciones de este juego
+        int menuGame = -1;
+        int menuItem = 0;
+        bool openMenu = false;
+        int menuAction = -1;   // item picked with the pad or the keys this frame
         char search[96] = "";
     } libraryView_;
     char cheatCode_[64] = "";

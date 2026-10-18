@@ -51,6 +51,11 @@ void Settings::removeRecent(const std::string& path) {
 Settings Settings::load(const std::string& path) {
     Settings s;
     std::ifstream in(path);
+    parse(in, s);
+    return s;
+}
+
+void Settings::parse(std::istream& in, Settings& s) {
     std::string line, section;
     while (std::getline(in, line)) {
         line = trim(line);
@@ -117,13 +122,17 @@ Settings Settings::load(const std::string& path) {
             else if (key == "ultima_carpeta") s.lastFolder = value;
         }
     }
-    return s;
 }
 
 bool Settings::save(const std::string& path, const InputConfig& input) const {
     std::ofstream out(path);
     if (!out) return false;
     input.write(out);
+    write(out);
+    return static_cast<bool>(out);
+}
+
+void Settings::write(std::ostream& out) const {
     auto flag = [](bool b) { return b ? "si" : "no"; };
     out << "\n[video]\n"
         << "# vista: 2D o capas (depuración, no son los colores del juego). escalado: entero, ajustar o estirar.\n"
@@ -175,7 +184,6 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "\n[recientes]\n";
     if (!lastFolder.empty()) out << "ultima_carpeta = " << lastFolder << "\n";
     for (const auto& r : recent) out << "rom = " << r << "\n";
-    return static_cast<bool>(out);
 }
 
 }  // namespace plumsg

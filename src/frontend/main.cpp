@@ -19,6 +19,7 @@
 #include "../render/profile3d.h"
 #include "../net/udp.h"
 #include "audio.h"
+#include "game_options.h"
 #include "input.h"
 #include "miniz.h"
 #include "settings.h"
@@ -108,8 +109,10 @@ struct App {
     std::string statePath(int slot) const {
         return statesDir + withoutExtension(fileName(romPath)) + ".s" + std::to_string(slot);
     }
-    std::string profilePath() const { return profilesDir + withoutExtension(fileName(romPath)) + ".ini"; }
-    std::string cheatsPath() const { return cheatsDir + withoutExtension(fileName(romPath)) + ".txt"; }
+    // A game's own options (3D profile included) and its cheats, by the game's path.
+    std::string profilePath(const std::string& game) const { return profilesDir + withoutExtension(fileName(game)) + ".ini"; }
+    std::string cheatsPath(const std::string& game) const { return cheatsDir + withoutExtension(fileName(game)) + ".txt"; }
+    std::string cheatsPath() const { return cheatsPath(romPath); }
 
     // Hands the console the codes that are on and valid.
     void applyCheats() {
@@ -122,21 +125,45 @@ struct App {
     }
 
     void loadCheats() {
-        cheats.clear();
-        std::vector<uint8_t> data;
-        if (readFile(cheatsPath(), data)) cheats = parseCheats(std::string(data.begin(), data.end()));
+        cheats = readCheats(romPath);
         applyCheats();
     }
 
-    void saveCheats() {
+    void saveCheats() { writeCheats(romPath, cheats); }
+
+    std::vector<Cheat> readCheats(const std::string& game) const {
+        std::vector<uint8_t> data;
+        if (!readFile(cheatsPath(game), data)) return {};
+        return parseCheats(std::string(data.begin(), data.end()));
+    }
+
+    void writeCheats(const std::string& game, const std::vector<Cheat>& list) const {
         std::error_code ec;
-        if (cheats.empty()) {
-            std::filesystem::remove(std::filesystem::u8path(cheatsPath()), ec);
+        if (list.empty()) {
+            std::filesystem::remove(std::filesystem::u8path(cheatsPath(game)), ec);
             return;
         }
         std::filesystem::create_directories(std::filesystem::u8path(cheatsDir), ec);
-        const std::string text = formatCheats(cheats);
-        writeFile(cheatsPath(), std::vector<uint8_t>(text.begin(), text.end()));
+        const std::string text = formatCheats(list);
+        writeFile(cheatsPath(game), std::vector<uint8_t>(text.begin(), text.end()));
+    }
+
+    // The options `game` keeps of its own, over `general`.
+    GameOverrides readOverrides(const std::string& game, const Settings& general) const {
+        std::vector<uint8_t> data;
+        if (game.empty() || !readFile(profilePath(game), data)) return {{}, general};
+        return parseGameOverrides(std::string(data.begin(), data.end()), general);
+    }
+
+    void writeOverrides(const std::string& game, const GameOverrides& o) const {
+        std::error_code ec;
+        const std::string text = formatGameOverrides(o, fileName(game));
+        if (text.empty()) {
+            std::filesystem::remove(std::filesystem::u8path(profilePath(game)), ec);
+            return;
+        }
+        std::filesystem::create_directories(std::filesystem::u8path(profilesDir), ec);
+        writeFile(profilePath(game), std::vector<uint8_t>(text.begin(), text.end()));
     }
 
     // Cartridge SRAM, or the Mega CD's backup RAM, next to the game.
@@ -398,10 +425,10 @@ int main(int argc, char** argv) {
         return s;
     };
     if (capturing) settings.fullscreen = false;
-    // The pseudo-3D options of [video]. While a game with its own profile is loaded,
-    // settings.render holds the profile's and these wait here.
-    RenderOptions global3D = settings.render;
-    bool hasProfile = false;
+    // The general values of the options a game can have its own of. While a game with
+    // some of its own is loaded, settings holds the game's and the general ones wait here.
+    Settings general = toSave(settings);
+    GameOverrides game{{}, general};  // the loaded game's own options
 
     // OpenGL 3.3 core everywhere; macOS only hands out core contexts marked forward compatible.
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -458,20 +485,18 @@ int main(int argc, char** argv) {
         app->console.setPadType(1, settings.padType[1]);
     };
     applyConsole();
+    // Each option goes to the game's file if the game has its own value of it, else to plumsg.ini.
     auto save = [&] {
         if (capturing) return;
-        if (!hasProfile) {
-            copy3D(settings.render, global3D);
-            toSave(settings).save(paths.ini, input->config());
-            return;
+        Settings out = toSave(settings);
+        for (const GameOption& o : gameOptions()) {
+            if (game.has(o.key)) o.copy(general, out);
+            else o.copy(settings, general);
         }
-        std::error_code ec;
-        std::filesystem::create_directories(std::filesystem::u8path(app->profilesDir), ec);
-        const std::string text = formatProfile(settings.render, fileName(app->romPath));
-        writeFile(app->profilePath(), std::vector<uint8_t>(text.begin(), text.end()));
-        Settings general = toSave(settings);
-        copy3D(global3D, general.render);
-        general.save(paths.ini, input->config());
+        out.save(paths.ini, input->config());
+        if (!app->romLoaded) return;
+        game.values = settings;
+        app->writeOverrides(app->romPath, game);
     };
     RewindBuffer rewind;
     FramePacer pacer;
@@ -479,17 +504,12 @@ int main(int argc, char** argv) {
         rewind.setLimits(static_cast<size_t>(settings.rewindSeconds * app->console.refreshRate()), kRewindBytes);
     };
     setRewindLimits();
-    // A newly loaded game takes its own 3D profile if it has one, else the general options.
-    auto loadProfile = [&] {
-        copy3D(global3D, settings.render);
-        hasProfile = false;
-        std::vector<uint8_t> data;
-        if (!readFile(app->profilePath(), data)) return;
-        RenderOptions r = settings.render;
-        if (!parseProfile(std::string(data.begin(), data.end()), r)) return;
-        copy3D(r, settings.render);
-        hasProfile = true;
-        ui->notify("Perfil 3D de " + fileName(app->romPath));
+    // A game takes its own options where it has them, and the general ones elsewhere.
+    auto useGameOptions = [&](const std::string& path) {
+        game.restore(general, settings);
+        game = app->readOverrides(path, general);
+        game.applyTo(settings);
+        applyConsole();
     };
     auto load = [&](const std::string& path) {
         const ConsoleSystem system = detectSystem(path);
@@ -503,12 +523,14 @@ int main(int argc, char** argv) {
                 app->console.setCdBios(regions[i], std::move(bios));
             }
         }
+        useGameOptions(path);  // before loading: the region may be the game's own
         if (app->load(path, capturing ? nullptr : window)) {
             settings.addRecent(path);
-            loadProfile();
+            if (!game.own.empty()) ui->notify("Opciones propias de " + fileName(path));
             rewind.clear();
             setRewindLimits();
         } else {
+            useGameOptions(app->romLoaded ? app->romPath : std::string());
             if (!capturing) ui->showError(app->lastError);
             if (app->lastError.find("BIOS") != std::string::npos) ui->openBios();  // the game is fine: it waits for its BIOS
             else settings.removeRecent(path);
@@ -557,18 +579,30 @@ int main(int argc, char** argv) {
         ui->notify(slowMotion ? "Cámara lenta (" + std::to_string(settings.slowMotion) + "%)" : "Velocidad normal");
     };
     auto setProfile = [&](bool on) {
-        if (!app->romLoaded || on == hasProfile) return;
+        if (!app->romLoaded || on == game.has("perfil_3d")) return;
         if (on) {
-            hasProfile = true;
+            game.own.insert("perfil_3d");
             ui->notify("El 3D se guarda ahora solo para " + fileName(app->romPath));
         } else {
-            std::error_code ec;
-            std::filesystem::remove(std::filesystem::u8path(app->profilePath()), ec);
-            hasProfile = false;
-            copy3D(global3D, settings.render);
+            game.own.erase("perfil_3d");
+            copy3D(general.render, settings.render);
             ui->notify("El juego vuelve a usar el 3D general");
         }
         save();
+    };
+    // The Opciones de este juego and Trucos windows can be for a game that is not loaded
+    // (opened from the library): then they work on these copies, saved to its files.
+    std::string optionsGame, cheatsGame;
+    std::string windowsRom;  // the game loaded when they were opened
+    GameOverrides otherOptions;
+    std::vector<Cheat> otherCheats;
+    auto openGameOptions = [&](const std::string& path) {
+        optionsGame = path;
+        if (path != app->romPath || !app->romLoaded) otherOptions = app->readOverrides(path, general);
+    };
+    auto openCheats = [&](const std::string& path) {
+        cheatsGame = path;
+        if (path != app->romPath || !app->romLoaded) otherCheats = app->readCheats(path);
     };
     // Netplay. The session talks through the socket, so it goes first on the way out.
     std::unique_ptr<UdpTransport> netSocket;
@@ -723,13 +757,28 @@ int main(int argc, char** argv) {
             ui->toggleStateMenu();
             openStateMenu = false;
         }
+        // Another game loaded: the windows that were on the old one now edit its files.
+        if (app->romPath != windowsRom) {
+            windowsRom = app->romPath;
+            if (!optionsGame.empty()) openGameOptions(optionsGame);
+            if (!cheatsGame.empty()) openCheats(cheatsGame);
+        }
         uiState.romLoaded = app->romLoaded;
+        uiState.romPath = app->romPath;
         uiState.paused = paused;
         uiState.slowMotion = slowMotion;
-        uiState.hasProfile = hasProfile;
+        uiState.hasProfile = game.has("perfil_3d");
         uiState.gameName = app->romLoaded ? fileName(app->romPath) : std::string();
         uiState.slots = app->slots;
-        uiState.cheats = &app->cheats;
+        const bool cheatsLoaded = app->romLoaded && cheatsGame == app->romPath;
+        uiState.cheats = cheatsGame.empty() ? nullptr : cheatsLoaded ? &app->cheats : &otherCheats;
+        uiState.cheatsGame = cheatsGame.empty() ? std::string() : fileName(cheatsGame);
+        const bool optionsLoaded = app->romLoaded && optionsGame == app->romPath;
+        uiState.gameOptions.game = optionsGame.empty() ? std::string() : fileName(optionsGame);
+        uiState.gameOptions.values = optionsLoaded ? &settings : &otherOptions.values;
+        uiState.gameOptions.own = optionsLoaded ? &game.own : &otherOptions.own;
+        uiState.gameOptions.general = &general;
+        uiState.gameOptions.loaded = optionsLoaded;
         uiState.netSession = net != nullptr;
         uiState.netPlaying = netPlaying();
         uiState.netProgress = -1;
@@ -785,9 +834,19 @@ int main(int argc, char** argv) {
         if (act.toggleSlowMotion) toggleSlowMotion();
         if (act.rewindChanged) setRewindLimits();
         if (act.profile >= 0) setProfile(act.profile == 1);
-        if (act.cheatsChanged && app->romLoaded) {
+        if (!act.cheatsFor.empty()) openCheats(act.cheatsFor);
+        if (act.cheatsChanged && cheatsLoaded) {
             if (!net) app->applyCheats();
             app->saveCheats();
+        } else if (act.cheatsChanged && !cheatsGame.empty()) {
+            app->writeCheats(cheatsGame, otherCheats);
+        }
+        if (!act.optionsFor.empty()) openGameOptions(act.optionsFor);
+        if (act.gameOptionsChanged && optionsLoaded) {
+            save();
+            if (act.rewindChanged) setRewindLimits();
+        } else if (act.gameOptionsChanged && !optionsGame.empty()) {
+            app->writeOverrides(optionsGame, otherOptions);
         }
         if (act.settingsChanged) save();
         // The first frame tells us how tall the menu bar is; grow the window to fit it.

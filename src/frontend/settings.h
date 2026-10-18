@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <istream>
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -50,8 +52,12 @@ struct Settings {
 
     // Reads the sections it knows from `path`, ignoring the rest.
     static Settings load(const std::string& path);
+    // Applies the sections it knows from `in` onto `s`, leaving the rest of `s` as it is.
+    static void parse(std::istream& in, Settings& s);
     // Rewrites the whole file: the controls from `input` plus these settings.
     bool save(const std::string& path, const InputConfig& input) const;
+    // Writes every section of these settings (not the controls), with comments.
+    void write(std::ostream& out) const;
 };
 
 }  // namespace plumsg

@@ -157,6 +157,7 @@ add_executable(plumsg WIN32
   src/frontend/input.cpp
   src/frontend/audio.cpp
   src/frontend/settings.cpp
+  src/frontend/game_options.cpp
   src/frontend/file_dialog.cpp
   src/frontend/ui.cpp
   src/frontend/library.cpp
