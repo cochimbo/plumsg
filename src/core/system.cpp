@@ -1,5 +1,7 @@
 #include "system.h"
 
+#include "i18n.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -130,11 +132,11 @@ std::vector<std::string> cueFiles(const std::string& cuePath) {
 BiosInfo identifyCdBios(const std::vector<uint8_t>& data) {
     BiosInfo info;
     if (data.size() != 0x20000) {
-        info.problem = "no mide 128 KB, como las BIOS del Mega CD";
+        info.problem = tr("no mide 128 KB, como las BIOS del Mega CD");
         return info;
     }
     if (!startsWith(data, 0x100, "SEGA")) {
-        info.problem = "no tiene la cabecera de SEGA";
+        info.problem = tr("no tiene la cabecera de SEGA");
         return info;
     }
     Cartridge c;
@@ -152,12 +154,12 @@ BiosInfo identifyCdBiosFile(const std::string& path) {
     const auto size = fs::file_size(fs::u8path(path), ec);
     if (ec) {
         BiosInfo info;
-        info.problem = "no se encuentra el archivo";
+        info.problem = tr("no se encuentra el archivo");
         return info;
     }
     if (size != 0x20000) {
         BiosInfo info;
-        info.problem = "no mide 128 KB, como las BIOS del Mega CD";
+        info.problem = tr("no mide 128 KB, como las BIOS del Mega CD");
         return info;
     }
     return identifyCdBios(readStart(path, 0x20000));

@@ -9,9 +9,11 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 #include "game_options.h"
+#include "languages.h"
 #include "library_names.h"
 #include "icon_png.h"
 #include "logo_png.h"
+#include "../core/i18n.h"
 #include "../core/system.h"
 #include "../net/udp.h"
 #include "../render/gl.h"
@@ -26,11 +28,11 @@ namespace {
 constexpr int kRows = InputConfig::kButtons + InputConfig::kHotkeys;
 // While a game runs the mouse pointer goes away once it has been still this long.
 constexpr Uint32 kCursorIdleMs = 2000;
-constexpr const char* kRowNames[kRows] = {"Arriba", "Abajo", "Izquierda", "Derecha", "A", "B", "C", "Start",
-                                          "X", "Y", "Z", "Mode", "Efecto 3D", "Guardar estado", "Cargar estado",
-                                          "Ranura anterior", "Ranura siguiente", "Menú de estados",
-                                          "Rebobinar (mantener)", "Avance rápido (mantener)", "Cámara lenta",
-                                          "Biblioteca", "Parar emulación"};
+constexpr const char* kRowNames[kRows] = {N_("Arriba"), N_("Abajo"), N_("Izquierda"), N_("Derecha"), "A", "B", "C", "Start",
+                                          "X", "Y", "Z", "Mode", N_("Efecto 3D"), N_("Guardar estado"), N_("Cargar estado"),
+                                          N_("Ranura anterior"), N_("Ranura siguiente"), N_("Menú de estados"),
+                                          N_("Rebobinar (mantener)"), N_("Avance rápido (mantener)"), N_("Cámara lenta"),
+                                          N_("Biblioteca"), N_("Parar emulación")};
 static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 11, "update kRowNames");
 
 std::vector<SDL_Scancode>& keysOf(InputConfig& c, int row, int player) {
@@ -56,6 +58,16 @@ std::string shortCode(const std::string& code) {
     return code.substr(0, plus) + " +" + std::to_string(more);
 }
 
+// ImGui::Combo with its items translated.
+bool comboTr(const char* label, int* current, const char* const items[], int count) {
+    std::vector<const char*> shown(items, items + count);
+    for (const char*& item : shown) item = tr(item);
+    return ImGui::Combo(label, current, shown.data(), count);
+}
+
+constexpr const char* kRegionNames[] = {N_("Automática (la de la ROM)"), N_("Japón (NTSC)"), N_("EE. UU. (NTSC)"),
+                                        N_("Europa (PAL)")};
+
 // What a code writes, one line per write, for its tooltip.
 std::string describePatches(const std::vector<CheatPatch>& patches) {
     std::string out;
@@ -63,7 +75,7 @@ std::string describePatches(const std::vector<CheatPatch>& patches) {
     for (const CheatPatch& p : patches) {
         std::snprintf(line, sizeof line, "%s%s %06X = %0*X (%s)", out.empty() ? "" : "\n", p.address >= 0xE00000 ? "RAM" : "ROM",
                       static_cast<unsigned>(p.address), p.byte ? 2 : 4, static_cast<unsigned>(p.value),
-                      p.byte ? "byte" : "palabra");
+                      p.byte ? tr("byte") : tr("palabra"));
         out += line;
     }
     return out;
@@ -80,11 +92,13 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
     ImGui::StyleColorsDark();
     ImGui::GetStyle().WindowRounding = 4.0f;
 #ifdef _WIN32
-    // Segoe UI reads better than the built-in bitmap font; it covers Spanish accents too.
+    // Segoe UI reads better than the built-in bitmap font; it covers the accents of every
+    // language plumsg speaks (Latin-1 and Latin Extended-A: ç, ã, œ...).
     const char* font = "C:\\Windows\\Fonts\\segoeui.ttf";
     if (SDL_RWops* f = SDL_RWFromFile(font, "rb")) {
         SDL_RWclose(f);
-        io.Fonts->AddFontFromFileTTF(font, 18.0f);
+        static const ImWchar ranges[] = {0x0020, 0x017F, 0x2010, 0x2026, 0};
+        io.Fonts->AddFontFromFileTTF(font, 18.0f, nullptr, ranges);
     }
 #endif
     ImGui_ImplSDL2_InitForOpenGL(window_, context);
@@ -354,71 +368,70 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
     if (!settings_.showMenu && !peekMenu_) return;
     if (!ImGui::BeginMainMenuBar()) return;
 
-    if (ImGui::BeginMenu("Archivo")) {
-        if (ImGui::MenuItem("Abrir ROM...", "Ctrl+O")) openRequested_ = true;
-        if (ImGui::MenuItem("Biblioteca...", "F10", showLibrary_)) toggleLibrary();
-        if (ImGui::BeginMenu("Recientes", !settings_.recent.empty())) {
+    if (ImGui::BeginMenu(tr("Archivo"))) {
+        if (ImGui::MenuItem(tr("Abrir ROM..."), "Ctrl+O")) openRequested_ = true;
+        if (ImGui::MenuItem(tr("Biblioteca..."), "F10", showLibrary_)) toggleLibrary();
+        if (ImGui::BeginMenu(tr("Recientes"), !settings_.recent.empty())) {
             for (const auto& path : settings_.recent) {
                 if (ImGui::MenuItem(fileName(path).c_str())) out.load = path;
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", path.c_str());
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Borrar lista")) {
+            if (ImGui::MenuItem(tr("Borrar lista"))) {
                 settings_.recent.clear();
                 out.settingsChanged = true;
             }
             ImGui::EndMenu();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Salir")) out.quit = true;
+        if (ImGui::MenuItem(tr("Salir"))) out.quit = true;
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Juego")) {
+    if (ImGui::BeginMenu(tr("Juego"))) {
         // In a netplay game these would make the two consoles go different.
         const bool solo = state.romLoaded && !state.netPlaying;
-        if (ImGui::MenuItem("Pausa", "P", state.paused, solo)) out.togglePause = true;
-        if (ImGui::MenuItem("Reiniciar", "F1", false, solo)) out.reset = true;
-        if (ImGui::MenuItem("Parar emulación", "F12", false, state.romLoaded)) out.stop = true;
+        if (ImGui::MenuItem(tr("Pausa"), "P", state.paused, solo)) out.togglePause = true;
+        if (ImGui::MenuItem(tr("Reiniciar"), "F1", false, solo)) out.reset = true;
+        if (ImGui::MenuItem(tr("Parar emulación"), "F12", false, state.romLoaded)) out.stop = true;
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("Cierra el juego (guarda su partida de cartucho) y vuelve a la\n"
-                              "pantalla de inicio, o a la biblioteca si tienes carpetas en ella.");
-        if (ImGui::MenuItem("Trucos...", nullptr, false, solo)) {
+            ImGui::SetTooltip("%s", tr("Cierra el juego (guarda su partida de cartucho) y vuelve a la\n"
+                              "pantalla de inicio, o a la biblioteca si tienes carpetas en ella."));
+        if (ImGui::MenuItem(tr("Trucos..."), nullptr, false, solo)) {
             out.cheatsFor = state.romPath;
             showCheats_ = true;
         }
-        if (ImGui::MenuItem("Opciones de este juego...", nullptr, false, solo)) {
+        if (ImGui::MenuItem(tr("Opciones de este juego..."), nullptr, false, solo)) {
             out.optionsFor = state.romPath;
             showGameOptions_ = true;
         }
-        ImGui::SeparatorText("Velocidad");
-        if (ImGui::MenuItem("Cámara lenta", "F9", state.slowMotion, solo)) out.toggleSlowMotion = true;
-        ImGui::TextDisabled("Rebobinar: mantén Retroceso (o el gatillo izquierdo)");
-        ImGui::TextDisabled("Avance rápido: mantén Tab (o el gatillo derecho)");
+        ImGui::SeparatorText(tr("Velocidad"));
+        if (ImGui::MenuItem(tr("Cámara lenta"), "F9", state.slowMotion, solo)) out.toggleSlowMotion = true;
+        ImGui::TextDisabled("%s", tr("Rebobinar: mantén Retroceso (o el gatillo izquierdo)"));
+        ImGui::TextDisabled("%s", tr("Avance rápido: mantén Tab (o el gatillo derecho)"));
         ImGui::SetNextItemWidth(160);
-        ImGui::SliderInt("Segundos de rebobinado", &settings_.rewindSeconds, 0, Settings::kMaxRewindSeconds,
-                         settings_.rewindSeconds ? "%d s" : "desactivado", ImGuiSliderFlags_AlwaysClamp);
+        ImGui::SliderInt(tr("Segundos de rebobinado"), &settings_.rewindSeconds, 0, Settings::kMaxRewindSeconds,
+                         settings_.rewindSeconds ? "%d s" : tr("desactivado"), ImGuiSliderFlags_AlwaysClamp);
         if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.rewindChanged = true;
         ImGui::SetNextItemWidth(160);
-        ImGui::SliderInt("Avance rápido", &settings_.fastForward, 2, 10, "%dx", ImGuiSliderFlags_AlwaysClamp);
+        ImGui::SliderInt(tr("Avance rápido"), &settings_.fastForward, 2, 10, "%dx", ImGuiSliderFlags_AlwaysClamp);
         if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
         ImGui::SetNextItemWidth(160);
-        ImGui::SliderInt("Cámara lenta##velocidad", &settings_.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+        ImGui::SliderInt(tr("Cámara lenta##velocidad"), &settings_.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
         if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Estado")) {
-        const std::string slot = " (ranura " + std::to_string(settings_.stateSlot) + ")";
-        if (ImGui::MenuItem(("Guardar estado" + slot).c_str(), "F5", false, state.romLoaded))
+    if (ImGui::BeginMenu(tr("Estado"))) {
+        if (ImGui::MenuItem(trf("Guardar estado (ranura %d)", settings_.stateSlot).c_str(), "F5", false, state.romLoaded))
             out.saveState = settings_.stateSlot;
         const bool used = settings_.stateSlot < static_cast<int>(state.slots.size()) &&
                           state.slots[static_cast<size_t>(settings_.stateSlot)].used;
-        if (ImGui::MenuItem(("Cargar estado" + slot).c_str(), "F8", false, state.romLoaded && used && !state.netPlaying))
+        if (ImGui::MenuItem(trf("Cargar estado (ranura %d)", settings_.stateSlot).c_str(), "F8", false, state.romLoaded && used && !state.netPlaying))
             out.loadState = settings_.stateSlot;
-        if (ImGui::MenuItem("Menú de estados...", "F4")) toggleStateMenu();
-        ImGui::SeparatorText("Ranura (F6 / F7)");
+        if (ImGui::MenuItem(tr("Menú de estados..."), "F4")) toggleStateMenu();
+        ImGui::SeparatorText(tr("Ranura (F6 / F7)"));
         for (int i = 0; i < static_cast<int>(state.slots.size()); ++i) {
             const SlotInfo& info = state.slots[static_cast<size_t>(i)];
-            const std::string label = std::to_string(i) + "  " + (info.used ? info.when : std::string("vacía"));
+            const std::string label = std::to_string(i) + "  " + (info.used ? info.when : std::string(tr("vacía")));
             if (ImGui::MenuItem(label.c_str(), nullptr, settings_.stateSlot == i)) {
                 settings_.stateSlot = i;
                 out.settingsChanged = true;
@@ -432,20 +445,19 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         }
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Consola")) {
-        static const char* regions[] = {"Automática (la de la ROM)", "Japón (NTSC)", "EE. UU. (NTSC)", "Europa (PAL)"};
+    if (ImGui::BeginMenu(tr("Consola"))) {
         ImGui::BeginDisabled(state.netPlaying);  // the host's console decides in a netplay game
-        ImGui::SeparatorText("Región");
+        ImGui::SeparatorText(tr("Región"));
         for (int i = 0; i < 4; ++i)
-            if (ImGui::MenuItem(regions[i], nullptr, static_cast<int>(settings_.region) == i)) {
+            if (ImGui::MenuItem(tr(kRegionNames[i]), nullptr, static_cast<int>(settings_.region) == i)) {
                 settings_.region = static_cast<Region>(i);
                 out.consoleChanged = out.settingsChanged = true;
             }
         for (int port = 0; port < 2; ++port) {
-            ImGui::SeparatorText(port == 0 ? "Mando 1" : "Mando 2");
+            ImGui::SeparatorText(port == 0 ? tr("Mando 1") : tr("Mando 2"));
             ImGui::PushID(port);
             for (PadType t : {PadType::ThreeButton, PadType::SixButton})
-                if (ImGui::MenuItem(t == PadType::ThreeButton ? "3 botones" : "6 botones", nullptr,
+                if (ImGui::MenuItem(t == PadType::ThreeButton ? tr("3 botones") : tr("6 botones"), nullptr,
                                     settings_.padType[static_cast<size_t>(port)] == t)) {
                     settings_.padType[static_cast<size_t>(port)] = t;
                     out.consoleChanged = out.settingsChanged = true;
@@ -454,38 +466,51 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         }
         ImGui::EndDisabled();
         ImGui::Separator();
-        if (ImGui::MenuItem("BIOS del Mega CD...", nullptr, showBios_)) showBios_ = true;
+        if (ImGui::MenuItem(tr("BIOS del Mega CD..."), nullptr, showBios_)) showBios_ = true;
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Red")) {
-        if (ImGui::MenuItem("Jugar en red...", nullptr, showNetplay_)) showNetplay_ = true;
-        if (ImGui::MenuItem("Salir de la partida en red", nullptr, false, state.netSession)) out.netLeave = true;
+    if (ImGui::BeginMenu(tr("Red"))) {
+        if (ImGui::MenuItem(tr("Jugar en red..."), nullptr, showNetplay_)) showNetplay_ = true;
+        if (ImGui::MenuItem(tr("Salir de la partida en red"), nullptr, false, state.netSession)) out.netLeave = true;
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Sonido")) {
+    if (ImGui::BeginMenu(tr("Sonido"))) {
         drawSoundMenu(state, out);
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Opciones")) {
-        if (ImGui::MenuItem("Controles...")) showControls_ = true;
-        if (ImGui::MenuItem("Vídeo...")) showVideo_ = true;
+    if (ImGui::BeginMenu(tr("Opciones"))) {
+        if (ImGui::MenuItem(tr("Controles..."))) showControls_ = true;
+        if (ImGui::MenuItem(tr("Vídeo..."))) showVideo_ = true;
         ImGui::Separator();
-        if (ImGui::MenuItem("Efecto 3D", nullptr, settings_.render.pseudo3d)) {
+        if (ImGui::MenuItem(tr("Efecto 3D"), nullptr, settings_.render.pseudo3d)) {
             settings_.render.pseudo3d = !settings_.render.pseudo3d;
             out.settingsChanged = true;
         }
-        if (ImGui::MenuItem("Pantalla completa", "F11", settings_.fullscreen)) {
+        if (ImGui::MenuItem(tr("Pantalla completa"), "F11", settings_.fullscreen)) {
             settings_.fullscreen = !settings_.fullscreen;
             out.fullscreenChanged = out.settingsChanged = true;
         }
-        if (ImGui::MenuItem("Barra de menús", "Esc", settings_.showMenu)) {
+        if (ImGui::MenuItem(tr("Barra de menús"), "Esc", settings_.showMenu)) {
             settings_.showMenu = !settings_.showMenu;
             out.settingsChanged = true;
         }
+        ImGui::Separator();
+        // "Language" too, for whoever cannot read the language it is in.
+        const std::string languageLabel =
+            std::string(tr("Idioma")) + (language() == "en" ? "" : " (Language)") + "###idioma";
+        if (ImGui::BeginMenu(languageLabel.c_str())) {
+            for (const LanguageInfo& lang : kLanguages)
+                if (ImGui::MenuItem(lang.name, nullptr, language() == lang.code)) {
+                    settings_.language = lang.code;
+                    applyLanguage(lang.code);
+                    out.settingsChanged = true;
+                }
+            ImGui::EndMenu();
+        }
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Ayuda")) {
-        if (ImGui::MenuItem("Acerca de plumsg")) showAbout_ = true;
+    if (ImGui::BeginMenu(tr("Ayuda"))) {
+        if (ImGui::MenuItem(tr("Acerca de plumsg"))) showAbout_ = true;
         ImGui::EndMenu();
     }
     ImGui::EndMainMenuBar();
@@ -493,59 +518,59 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
 
 // Volume, and the Roland sound: the FM and PSG music played on a SoundFont.
 void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
-    if (ImGui::MenuItem("Silenciar", "M", settings_.mute)) {
+    if (ImGui::MenuItem(tr("Silenciar"), "M", settings_.mute)) {
         settings_.mute = !settings_.mute;
         out.settingsChanged = true;
     }
     ImGui::SetNextItemWidth(160);
-    ImGui::SliderInt("Volumen", &settings_.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SliderInt(tr("Volumen"), &settings_.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
 
-    ImGui::SeparatorText("Música");
-    if (ImGui::MenuItem("Original (YM2612 y PSG)", nullptr, !settings_.roland)) {
+    ImGui::SeparatorText(tr("Música"));
+    if (ImGui::MenuItem(tr("Original (YM2612 y PSG)"), nullptr, !settings_.roland)) {
         settings_.roland = false;
         out.settingsChanged = out.soundChanged = true;
     }
-    if (ImGui::MenuItem("Sintetizador: la música con un SoundFont", nullptr, settings_.roland)) {
+    if (ImGui::MenuItem(tr("Sintetizador: la música con un SoundFont"), nullptr, settings_.roland)) {
         settings_.roland = true;
         out.settingsChanged = out.soundChanged = true;
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Las notas del YM2612 y del PSG suenan con instrumentos General MIDI del SoundFont\n"
+        ImGui::SetTooltip("%s", tr("Las notas del YM2612 y del PSG suenan con instrumentos General MIDI del SoundFont\n"
                           "elegido, como en un módulo SC-55. Las voces y la batería digital (el DAC) siguen siendo las del juego.\n"
                           "Cada sonido FM recibe un instrumento por reglas, que se cambia a mano en el\n"
-                          "Editor de instrumentos.");
+                          "Editor de instrumentos."));
     ImGui::BeginDisabled(!settings_.roland);
     if (state.disc && settings_.roland)
-        ImGui::TextDisabled("Los discos de Mega CD suenan siempre originales:\nsu música son pistas de audio del disco.");
-    if (ImGui::MenuItem("Efectos de sonido originales", nullptr, settings_.effectsOriginal)) {
+        ImGui::TextDisabled("%s", tr("Los discos de Mega CD suenan siempre originales:\nsu música son pistas de audio del disco."));
+    if (ImGui::MenuItem(tr("Efectos de sonido originales"), nullptr, settings_.effectsOriginal)) {
         settings_.effectsOriginal = !settings_.effectsOriginal;
         out.settingsChanged = out.soundChanged = true;
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Los efectos (anillos, saltos, golpes...) suenan como en la consola y solo la música\n"
+        ImGui::SetTooltip("%s", tr("Los efectos (anillos, saltos, golpes...) suenan como en la consola y solo la música\n"
                           "pasa por el SoundFont. Para saber cuáles son, usa antes Sacar canciones en el Editor\n"
-                          "de instrumentos. Cada efecto se puede cambiar también a mano en el editor.");
+                          "de instrumentos. Cada efecto se puede cambiar también a mano en el editor."));
     drawSoundfontMenu(out);
     ImGui::SetNextItemWidth(160);
-    ImGui::SliderInt("Sonido original", &settings_.chipMix, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cuánto se oye además la música original del YM2612 y el PSG.");
+    ImGui::SliderInt(tr("Sonido original"), &settings_.chipMix, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("Cuánto se oye además la música original del YM2612 y el PSG."));
     if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.soundChanged = true;
     ImGui::SetNextItemWidth(160);
-    ImGui::SliderInt("Reverb", &settings_.reverb, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SliderInt(tr("Reverb"), &settings_.reverb, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.soundChanged = true;
     ImGui::SetNextItemWidth(160);
-    ImGui::SliderInt("Chorus", &settings_.chorus, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SliderInt(tr("Chorus"), &settings_.chorus, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.soundChanged = true;
     ImGui::EndDisabled();
     ImGui::Separator();
-    if (ImGui::MenuItem("Editor de instrumentos...")) {
+    if (ImGui::MenuItem(tr("Editor de instrumentos..."))) {
         out.openEditor = true;
         out.editorFor = state.romLoaded ? state.romPath : std::string();
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
-                          "y elige con qué instrumento General MIDI suena en el sintetizador.");
+        ImGui::SetTooltip("%s", tr("Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
+                          "y elige con qué instrumento General MIDI suena en el sintetizador."));
 }
 
 void Ui::setSoundfonts(std::string included, std::string folder) {
@@ -559,8 +584,8 @@ void Ui::setSoundfonts(std::string included, std::string folder) {
 // the user's folder (read while it is open, so new downloads show up at once).
 void Ui::drawSoundfontMenu(UiActions& out) {
     drawSoundfontCombo(out);
-    if (ImGui::MenuItem("Abrir la carpeta de SoundFonts")) SDL_OpenURL(("file:///" + soundfontFolder_).c_str());
-    if (ImGui::MenuItem("Elegir otro (.sf2)...")) chooseSoundfont(out);
+    if (ImGui::MenuItem(tr("Abrir la carpeta de SoundFonts"))) SDL_OpenURL(("file:///" + soundfontFolder_).c_str());
+    if (ImGui::MenuItem(tr("Elegir otro (.sf2)..."))) chooseSoundfont(out);
 }
 
 void Ui::drawSoundfontCombo(UiActions& out, bool labelled) {
@@ -569,10 +594,10 @@ void Ui::drawSoundfontCombo(UiActions& out, bool labelled) {
         out.settingsChanged = out.soundChanged = true;
     };
     auto name = [](const std::string& path) { return std::filesystem::u8path(path).stem().u8string(); };
-    const std::string current = settings_.soundfont.empty() ? std::string("GeneralUser GS (incluido)") : name(settings_.soundfont);
+    const std::string current = settings_.soundfont.empty() ? std::string(tr("GeneralUser GS (incluido)")) : name(settings_.soundfont);
     ImGui::SetNextItemWidth(220);
     if (ImGui::BeginCombo(labelled ? "SoundFont" : "##soundfont", current.c_str())) {
-        if (ImGui::Selectable("GeneralUser GS (incluido)", settings_.soundfont.empty())) choose("");
+        if (ImGui::Selectable(tr("GeneralUser GS (incluido)"), settings_.soundfont.empty())) choose("");
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", includedSoundfont_.c_str());
         std::vector<std::string> fonts;
         std::error_code ec;
@@ -589,10 +614,10 @@ void Ui::drawSoundfontCombo(UiActions& out, bool labelled) {
             if (ImGui::Selectable(name(f).c_str(), on)) choose(f);
         }
         if (!listed) ImGui::Selectable(current.c_str(), true);  // chosen from elsewhere
-        if (fonts.empty()) ImGui::TextDisabled("Deja tus .sf2 en la carpeta de SoundFonts\ny aparecerán aquí.");
+        if (fonts.empty()) ImGui::TextDisabled("%s", tr("Deja tus .sf2 en la carpeta de SoundFonts\ny aparecerán aquí."));
         ImGui::EndCombo();
     }
-    if (!labelled && ImGui::IsItemHovered()) ImGui::SetTooltip("El SoundFont del sintetizador");
+    if (!labelled && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("El SoundFont del sintetizador"));
 }
 
 void Ui::chooseSoundfont(UiActions& out) {
@@ -627,28 +652,28 @@ void Ui::chooseTrack() {
 
 void Ui::drawControls(UiActions& out) {
     ImGui::SetNextWindowSize(ImVec2(760, 0), ImGuiCond_Appearing);
-    if (!ImGui::Begin("Controles", &showControls_)) {
+    if (!ImGui::Begin(tr("Controles"), &showControls_)) {
         ImGui::End();
         return;
     }
     if (!showControls_) capture_.active = false;
 
-    ImGui::TextWrapped("Pulsa una casilla y luego la tecla o el botón del mando. \"+\" añade otro, "
-                       "\"x\" lo borra, Esc cancela.");
+    ImGui::TextWrapped("%s", tr("Pulsa una casilla y luego la tecla o el botón del mando. \"+\" añade otro, "
+                       "\"x\" lo borra, Esc cancela."));
     InputConfig c = input_.config();
     bool changed = false;
 
     if (ImGui::BeginTable("bindings", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
-        ImGui::TableSetupColumn("Acción", ImGuiTableColumnFlags_WidthFixed, 170.0f);
-        ImGui::TableSetupColumn("Teclado (jugador 1)");
-        ImGui::TableSetupColumn("Teclado (jugador 2)");
-        ImGui::TableSetupColumn("Mando");
+        ImGui::TableSetupColumn(tr("Acción"), ImGuiTableColumnFlags_WidthFixed, 170.0f);
+        ImGui::TableSetupColumn(tr("Teclado (jugador 1)"));
+        ImGui::TableSetupColumn(tr("Teclado (jugador 2)"));
+        ImGui::TableSetupColumn(tr("Mando"));
         ImGui::TableHeadersRow();
         for (int row = 0; row < kRows; ++row) {
             ImGui::PushID(row);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::TextUnformatted(kRowNames[row]);
+            ImGui::TextUnformatted(tr(kRowNames[row]));
             for (int col = 0; col < 3; ++col) {
                 const bool pad = col == 2;
                 ImGui::TableNextColumn();
@@ -656,7 +681,7 @@ void Ui::drawControls(UiActions& out) {
                 ImGui::PushID(col);
                 std::string label;
                 if (capture_.active && capture_.row == row && capture_.column == col) {
-                    label = pad ? "Pulsa un botón..." : "Pulsa una tecla...";
+                    label = pad ? tr("Pulsa un botón...") : tr("Pulsa una tecla...");
                 } else if (pad) {
                     for (auto b : padOf(c, row)) label += (label.empty() ? "" : ", ") + std::string(padButtonName(b));
                 } else {
@@ -683,10 +708,10 @@ void Ui::drawControls(UiActions& out) {
     }
 
     ImGui::Spacing();
-    changed |= ImGui::Checkbox("Usar el stick izquierdo como cruceta", &c.stickAsDpad);
+    changed |= ImGui::Checkbox(tr("Usar el stick izquierdo como cruceta"), &c.stickAsDpad);
     ImGui::BeginDisabled(!c.stickAsDpad);
     int dead = c.stickDeadzone * 100 / 32767;
-    if (ImGui::SliderInt("Zona muerta del stick", &dead, 0, 95, "%d%%")) {
+    if (ImGui::SliderInt(tr("Zona muerta del stick"), &dead, 0, 95, "%d%%")) {
         c.stickDeadzone = dead * 32767 / 100;
         changed = true;
     }
@@ -694,14 +719,14 @@ void Ui::drawControls(UiActions& out) {
 
     const auto pads = input_.padNames();
     if (pads.empty()) {
-        ImGui::TextDisabled("No hay mandos conectados.");
+        ImGui::TextDisabled("%s", tr("No hay mandos conectados."));
     } else {
-        ImGui::Text("Mandos conectados:");
+        ImGui::Text("%s", tr("Mandos conectados:"));
         for (const auto& p : pads) ImGui::BulletText("%s", p.c_str());
     }
 
     ImGui::Spacing();
-    if (ImGui::Button("Restaurar predeterminados")) {
+    if (ImGui::Button(tr("Restaurar predeterminados"))) {
         const InputConfig d = InputConfig::defaults();
         c.keys = d.keys;
         c.keys2 = d.keys2;
@@ -722,13 +747,13 @@ void Ui::drawControls(UiActions& out) {
 
 void Ui::drawVideo(const UiState& state, UiActions& out) {
     ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Appearing);
-    if (!ImGui::Begin("Vídeo", &showVideo_)) {
+    if (!ImGui::Begin(tr("Vídeo"), &showVideo_)) {
         ImGui::End();
         return;
     }
     bool changed = false;
 
-    if (ImGui::BeginCombo("Vista", settings_.view.c_str())) {
+    if (ImGui::BeginCombo(tr("Vista"), settings_.view.c_str())) {
         for (const char* v : state.views) {
             if (ImGui::Selectable(v, settings_.view == v)) {
                 settings_.view = v;
@@ -738,44 +763,44 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
         ImGui::EndCombo();
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("2D: la imagen normal de la Mega Drive.\n"
+        ImGui::SetTooltip("%s", tr("2D: la imagen normal de la Mega Drive.\n"
                           "capas (depuración): pinta cada píxel según su capa (plano B azul, plano A\n"
                           "verde, ventana cian, sprites rojo, fondo gris; amarillento si tiene\n"
-                          "prioridad alta); no son los colores del juego.");
+                          "prioridad alta); no son los colores del juego."));
 
-    ImGui::SeparatorText("Imagen");
+    ImGui::SeparatorText(tr("Imagen"));
     int scale = static_cast<int>(settings_.render.scale);
-    changed |= ImGui::RadioButton("Escala entera", &scale, static_cast<int>(ScaleMode::Integer));
+    changed |= ImGui::RadioButton(tr("Escala entera"), &scale, static_cast<int>(ScaleMode::Integer));
     ImGui::SameLine();
-    changed |= ImGui::RadioButton("Ajustar", &scale, static_cast<int>(ScaleMode::Fit));
+    changed |= ImGui::RadioButton(tr("Ajustar"), &scale, static_cast<int>(ScaleMode::Fit));
     ImGui::SameLine();
-    changed |= ImGui::RadioButton("Estirar", &scale, static_cast<int>(ScaleMode::Stretch));
+    changed |= ImGui::RadioButton(tr("Estirar"), &scale, static_cast<int>(ScaleMode::Stretch));
     settings_.render.scale = static_cast<ScaleMode>(scale);
-    changed |= ImGui::Checkbox("Suavizar píxeles", &settings_.render.smooth);
-    changed |= ImGui::Checkbox("Píxeles cuadrados (sin estirar a 4:3)", &settings_.render.squarePixels);
+    changed |= ImGui::Checkbox(tr("Suavizar píxeles"), &settings_.render.smooth);
+    changed |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &settings_.render.squarePixels);
     int filter = static_cast<int>(settings_.render.filter);
-    ImGui::TextUnformatted("Filtro 2D:");
+    ImGui::TextUnformatted(tr("Filtro 2D:"));
     ImGui::SameLine();
-    changed |= ImGui::RadioButton("Ninguno", &filter, static_cast<int>(Filter2D::None));
+    changed |= ImGui::RadioButton(tr("Ninguno"), &filter, static_cast<int>(Filter2D::None));
     ImGui::SameLine();
-    changed |= ImGui::RadioButton("Scanlines", &filter, static_cast<int>(Filter2D::Scanlines));
+    changed |= ImGui::RadioButton(tr("Scanlines"), &filter, static_cast<int>(Filter2D::Scanlines));
     ImGui::SameLine();
-    changed |= ImGui::RadioButton("CRT", &filter, static_cast<int>(Filter2D::Crt));
+    changed |= ImGui::RadioButton(tr("CRT"), &filter, static_cast<int>(Filter2D::Crt));
     settings_.render.filter = static_cast<Filter2D>(filter);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Scanlines: las líneas oscuras entre las líneas de la imagen, como en una tele.\n"
+        ImGui::SetTooltip("%s", tr("Scanlines: las líneas oscuras entre las líneas de la imagen, como en una tele.\n"
                           "CRT: además, la pantalla un poco curva, la máscara de colores y las esquinas\n"
-                          "más oscuras. Solo en la vista 2D; se ve mejor a pantalla completa.");
+                          "más oscuras. Solo en la vista 2D; se ve mejor a pantalla completa."));
     ImGui::BeginDisabled(settings_.render.filter == Filter2D::None);
     float strength = settings_.render.filterStrength * 100.0f;
-    if (ImGui::SliderFloat("Intensidad del filtro", &strength, 0.0f, 100.0f, "%.0f %%"))
+    if (ImGui::SliderFloat(tr("Intensidad del filtro"), &strength, 0.0f, 100.0f, "%.0f %%"))
         settings_.render.filterStrength = strength / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     ImGui::EndDisabled();
 
-    ImGui::SeparatorText("Ventana");
+    ImGui::SeparatorText(tr("Ventana"));
     ImGui::BeginDisabled(settings_.fullscreen);
-    ImGui::TextUnformatted("Tamaño:");
+    ImGui::TextUnformatted(tr("Tamaño:"));
     for (int s = 1; s <= 6; ++s) {
         ImGui::SameLine();
         const std::string label = std::to_string(s) + "x";
@@ -786,78 +811,78 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
         }
     }
     ImGui::EndDisabled();
-    if (ImGui::Checkbox("Pantalla completa (F11)", &settings_.fullscreen)) {
+    if (ImGui::Checkbox(tr("Pantalla completa (F11)"), &settings_.fullscreen)) {
         out.fullscreenChanged = true;
         changed = true;
     }
-    changed |= ImGui::Checkbox("Mostrar la barra de menús (Esc)", &settings_.showMenu);
+    changed |= ImGui::Checkbox(tr("Mostrar la barra de menús (Esc)"), &settings_.showMenu);
 
-    ImGui::SeparatorText("Pseudo-3D");
+    ImGui::SeparatorText(tr("Pseudo-3D"));
     ImGui::BeginDisabled(!state.romLoaded);
     bool profile = state.hasProfile;
-    if (ImGui::Checkbox("Guardar el 3D solo para este juego", &profile)) out.profile = profile ? 1 : 0;
+    if (ImGui::Checkbox(tr("Guardar el 3D solo para este juego"), &profile)) out.profile = profile ? 1 : 0;
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip(state.romLoaded ? "Los ajustes de abajo (también el efecto 3D y la cámara) se guardan\n"
-                                            "para %s y se recuperan al abrirlo.\n"
-                                            "Al desmarcarlo, el juego vuelve a usar los ajustes generales."
-                                          : "Abre una ROM para guardarle un perfil 3D propio.",
-                          state.gameName.c_str());
+        ImGui::SetTooltip("%s", state.romLoaded ? trf("Los ajustes de abajo (también el efecto 3D y la cámara) se guardan\n"
+                                                      "para %s y se recuperan al abrirlo.\n"
+                                                      "Al desmarcarlo, el juego vuelve a usar los ajustes generales.",
+                                                      state.gameName.c_str()).c_str()
+                                                : tr("Abre una ROM para guardarle un perfil 3D propio."));
     if (state.hasProfile) {
         ImGui::SameLine();
-        ImGui::TextDisabled("(perfil de %s)", state.gameName.c_str());
+        ImGui::TextDisabled(tr("(perfil de %s)"), state.gameName.c_str());
     }
-    changed |= ImGui::Checkbox("Efecto 3D", &settings_.render.pseudo3d);
+    changed |= ImGui::Checkbox(tr("Efecto 3D"), &settings_.render.pseudo3d);
     ImGui::SameLine();
-    ImGui::TextDisabled("(atajo en Opciones > Controles)");
+    ImGui::TextDisabled("%s", tr("(atajo en Opciones > Controles)"));
     RenderOptions& r = settings_.render;
     ImGui::BeginDisabled(!r.pseudo3d);
     int style = static_cast<int>(r.style);
-    ImGui::TextUnformatted("Estilo:");
+    ImGui::TextUnformatted(tr("Estilo:"));
     ImGui::SameLine();
-    changed |= ImGui::RadioButton("Vóxeles", &style, static_cast<int>(Style3D::Voxels));
+    changed |= ImGui::RadioButton(tr("Vóxeles"), &style, static_cast<int>(Style3D::Voxels));
     ImGui::SameLine();
-    changed |= ImGui::RadioButton("Capas", &style, static_cast<int>(Style3D::Layers));
+    changed |= ImGui::RadioButton(tr("Capas"), &style, static_cast<int>(Style3D::Layers));
     r.style = static_cast<Style3D>(style);
     // Sliders save once released rather than on every frame of the drag.
     float depth = r.depth * 100.0f, thickness = r.thickness * 100.0f;
-    if (ImGui::SliderFloat("Profundidad", &depth, 0.0f, 100.0f, "%.0f %%")) r.depth = depth / 100.0f;
+    if (ImGui::SliderFloat(tr("Profundidad"), &depth, 0.0f, 100.0f, "%.0f %%")) r.depth = depth / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
-    changed |= ImGui::Checkbox("Inclinar la cámara", &r.tiltCamera);
+    changed |= ImGui::Checkbox(tr("Inclinar la cámara"), &r.tiltCamera);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Sin marcar, la cámara mira de frente y la imagen se ve como en 2D;\n"
-                          "la profundidad se nota con la iluminación y la cámara viva.");
+        ImGui::SetTooltip("%s", tr("Sin marcar, la cámara mira de frente y la imagen se ve como en 2D;\n"
+                          "la profundidad se nota con la iluminación y la cámara viva."));
     ImGui::BeginDisabled(!r.tiltCamera);
-    ImGui::SliderFloat("Inclinación", &r.tilt, kMinTilt, kMaxTilt, "%.0f°");
+    ImGui::SliderFloat(tr("Inclinación"), &r.tilt, kMinTilt, kMaxTilt, "%.0f°");
     changed |= ImGui::IsItemDeactivatedAfterEdit();
-    ImGui::SliderFloat("Giro", &r.yaw, -kMaxYaw, kMaxYaw, "%.0f°");
+    ImGui::SliderFloat(tr("Giro"), &r.yaw, -kMaxYaw, kMaxYaw, "%.0f°");
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     ImGui::EndDisabled();
-    ImGui::SliderFloat("Zoom", &r.zoom, kMinZoom, kMaxZoom, "%.2fx");
+    ImGui::SliderFloat(tr("Zoom"), &r.zoom, kMinZoom, kMaxZoom, "%.2fx");
     changed |= ImGui::IsItemDeactivatedAfterEdit();
-    if (ImGui::SliderFloat("Grosor", &thickness, 0.0f, 100.0f, "%.0f %%")) r.thickness = thickness / 100.0f;
+    if (ImGui::SliderFloat(tr("Grosor"), &thickness, 0.0f, 100.0f, "%.0f %%")) r.thickness = thickness / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     ImGui::BeginDisabled(r.style != Style3D::Voxels);
     float extrusion = r.extrusion * 100.0f;
-    if (ImGui::SliderFloat("Extrusión", &extrusion, 0.0f, 100.0f, "%.0f %%")) r.extrusion = extrusion / 100.0f;
+    if (ImGui::SliderFloat(tr("Extrusión"), &extrusion, 0.0f, 100.0f, "%.0f %%")) r.extrusion = extrusion / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     ImGui::EndDisabled();
-    changed |= ImGui::Checkbox("Iluminación", &r.lighting);
+    changed |= ImGui::Checkbox(tr("Iluminación"), &r.lighting);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Luz lateral sobre los bloques y sombras suaves de cada plano sobre los de detrás.\n"
-                          "Hace que el relieve se vea también con la cámara de frente.");
-    changed |= ImGui::Checkbox("Cámara viva", &r.liveCamera);
+        ImGui::SetTooltip("%s", tr("Luz lateral sobre los bloques y sombras suaves de cada plano sobre los de detrás.\n"
+                          "Hace que el relieve se vea también con la cámara de frente."));
+    changed |= ImGui::Checkbox(tr("Cámara viva"), &r.liveCamera);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("La cámara se balancea unos grados siguiendo la acción,\n"
-                          "así las capas se mueven entre sí aunque mires de frente.");
-    changed |= ImGui::Checkbox("Sombra de los sprites", &r.shadows);
-    changed |= ImGui::Checkbox("Plano B con prioridad delante", &r.highBInFront);
+        ImGui::SetTooltip("%s", tr("La cámara se balancea unos grados siguiendo la acción,\n"
+                          "así las capas se mueven entre sí aunque mires de frente."));
+    changed |= ImGui::Checkbox(tr("Sombra de los sprites"), &r.shadows);
+    changed |= ImGui::Checkbox(tr("Plano B con prioridad delante"), &r.highBInFront);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Los tiles del plano B con prioridad alta se ponen delante, con los del plano A.");
-    changed |= ImGui::Checkbox("Plano B plano (como el cielo)", &r.flatB);
+        ImGui::SetTooltip("%s", tr("Los tiles del plano B con prioridad alta se ponen delante, con los del plano A."));
+    changed |= ImGui::Checkbox(tr("Plano B plano (como el cielo)"), &r.flatB);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Para juegos que pintan el cielo en el plano B: no lo levanta en 3D.");
-    if (ImGui::Button("Valores por defecto")) {
+        ImGui::SetTooltip("%s", tr("Para juegos que pintan el cielo en el plano B: no lo levanta en 3D."));
+    if (ImGui::Button(tr("Valores por defecto"))) {
         const RenderOptions defaults;
         r.style = defaults.style;
         r.depth = defaults.depth;
@@ -874,8 +899,8 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
         r.flatB = defaults.flatB;
         changed = true;
     }
-    ImGui::TextDisabled("Cámara: arrastra con el ratón o usa el stick derecho para girar,\n"
-                        "la rueda para acercar y doble clic o el clic del stick para centrarla.");
+    ImGui::TextDisabled("%s", tr("Cámara: arrastra con el ratón o usa el stick derecho para girar,\n"
+                        "la rueda para acercar y doble clic o el clic del stick para centrarla."));
     ImGui::EndDisabled();
 
     out.settingsChanged |= changed;
@@ -890,12 +915,12 @@ void Ui::drawStateMenu(const UiState& state) {
     ImGui::SetNextWindowBgAlpha(0.92f);
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav;
-    if (!ImGui::Begin("Estados", &stateMenu_.open, flags)) {
+    if (!ImGui::Begin(tr("Estados"), &stateMenu_.open, flags)) {
         ImGui::End();
         return;
     }
-    if (!state.romLoaded) ImGui::TextDisabled("Abre una ROM para guardar estados.");
-    ImGui::TextDisabled("A / Intro: cargar   Y / Espacio: guardar   B / Esc: cerrar");
+    if (!state.romLoaded) ImGui::TextDisabled("%s", tr("Abre una ROM para guardar estados."));
+    ImGui::TextDisabled("%s", tr("A / Intro: cargar   Y / Espacio: guardar   B / Esc: cerrar"));
     ImGui::Separator();
     ImGui::BeginChild("ranuras");
     const float thumbH = 56.0f;
@@ -924,9 +949,9 @@ void Ui::drawStateMenu(const UiState& state) {
         else ImGui::Dummy(ImVec2(thumbW, thumbH));
         ImGui::SameLine();
         ImGui::BeginGroup();
-        ImGui::Text("Ranura %d%s", i, i == settings_.stateSlot ? "  (actual)" : "");
+        ImGui::Text(i == settings_.stateSlot ? tr("Ranura %d  (actual)") : tr("Ranura %d"), i);
         if (info.used) ImGui::TextUnformatted(info.when.c_str());
-        else ImGui::TextDisabled("vacía");
+        else ImGui::TextDisabled("%s", tr("vacía"));
         ImGui::EndGroup();
         ImGui::PopID();
     }
@@ -935,7 +960,7 @@ void Ui::drawStateMenu(const UiState& state) {
 }
 
 void Ui::drawAbout() {
-    if (!ImGui::Begin("Acerca de plumsg", &showAbout_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!ImGui::Begin(tr("Acerca de plumsg"), &showAbout_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
         return;
     }
@@ -949,25 +974,25 @@ void Ui::drawAbout() {
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (ImGui::GetContentRegionAvail().x - w) * 0.5f));
         ImGui::Image(static_cast<ImTextureID>(logoTexture_), ImVec2(w, w * logoHeight_ / logoWidth_));
     }
-    ImGui::TextUnformatted("plumsg, emulador de Sega Mega Drive / Genesis con efecto pseudo-3D.");
+    ImGui::TextUnformatted(tr("plumsg, emulador de Sega Mega Drive / Genesis con efecto pseudo-3D."));
     ImGui::Spacing();
-    ImGui::TextUnformatted("Arrastra una ROM a la ventana o usa Archivo > Abrir ROM.");
-    ImGui::SeparatorText("Atajos");
-    ImGui::BulletText("Ctrl+O  abrir ROM;  F10  biblioteca de juegos");
-    ImGui::BulletText("F1  reiniciar;  F12  parar la emulación y volver al inicio");
-    ImGui::BulletText("F2  cambiar de vista");
-    ImGui::BulletText("P  pausa");
-    ImGui::BulletText("M  silenciar el sonido");
-    ImGui::BulletText("F11  pantalla completa");
-    ImGui::BulletText("Esc  mostrar u ocultar la barra de menús");
-    ImGui::BulletText("F3  efecto 3D (se puede cambiar en Opciones > Controles)");
-    ImGui::BulletText("F5 / F8  guardar / cargar estado; F6 / F7  cambiar de ranura");
-    ImGui::BulletText("F4 o clic del stick izquierdo  menú de estados, manejable con el mando");
-    ImGui::BulletText("Retroceso o gatillo izquierdo (mantener)  rebobinar");
-    ImGui::BulletText("Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta");
-    ImGui::SeparatorText("Mando (teclado)");
-    ImGui::BulletText("Flechas  cruceta;  A S D  botones A B C;  Q W E  botones X Y Z");
-    ImGui::BulletText("Intro  Start;  Mayús derecha  Mode");
+    ImGui::TextUnformatted(tr("Arrastra una ROM a la ventana o usa Archivo > Abrir ROM."));
+    ImGui::SeparatorText(tr("Atajos"));
+    ImGui::BulletText("%s", tr("Ctrl+O  abrir ROM;  F10  biblioteca de juegos"));
+    ImGui::BulletText("%s", tr("F1  reiniciar;  F12  parar la emulación y volver al inicio"));
+    ImGui::BulletText("%s", tr("F2  cambiar de vista"));
+    ImGui::BulletText("%s", tr("P  pausa"));
+    ImGui::BulletText("%s", tr("M  silenciar el sonido"));
+    ImGui::BulletText("%s", tr("F11  pantalla completa"));
+    ImGui::BulletText("%s", tr("Esc  mostrar u ocultar la barra de menús"));
+    ImGui::BulletText("%s", tr("F3  efecto 3D (se puede cambiar en Opciones > Controles)"));
+    ImGui::BulletText("%s", tr("F5 / F8  guardar / cargar estado; F6 / F7  cambiar de ranura"));
+    ImGui::BulletText("%s", tr("F4 o clic del stick izquierdo  menú de estados, manejable con el mando"));
+    ImGui::BulletText("%s", tr("Retroceso o gatillo izquierdo (mantener)  rebobinar"));
+    ImGui::BulletText("%s", tr("Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta"));
+    ImGui::SeparatorText(tr("Mando (teclado)"));
+    ImGui::BulletText("%s", tr("Flechas  cruceta;  A S D  botones A B C;  Q W E  botones X Y Z"));
+    ImGui::BulletText("%s", tr("Intro  Start;  Mayús derecha  Mode"));
     ImGui::End();
 }
 
@@ -982,7 +1007,7 @@ void Ui::drawError() {
     ImGui::PopTextWrapPos();
     ImGui::Spacing();
     // The mouse may be hidden in full screen: Enter, Esc or the pad's A close it too.
-    bool close = ImGui::Button("Aceptar", ImVec2(ImGui::GetFontSize() * 8.0f, 0));
+    bool close = ImGui::Button(tr("Aceptar"), ImVec2(ImGui::GetFontSize() * 8.0f, 0));
     for (ImGuiKey key : {ImGuiKey_Enter, ImGuiKey_KeypadEnter, ImGuiKey_Escape, ImGuiKey_GamepadFaceDown})
         close |= ImGui::IsKeyPressed(key, false);
     if (close) {
@@ -1002,7 +1027,7 @@ void Ui::drawOverlays(const UiState& state) {
     if (!state.romLoaded) {
         // Behind every window, so it never shows through the option windows.
         // The marquee above the hint, as wide as it is or 60% of the window if narrower.
-        const char* hint = "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)";
+        const char* hint = tr("Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)");
         const ImVec2 size = ImGui::CalcTextSize(hint);
         const float logoW = logoTexture_ ? std::min(static_cast<float>(logoWidth_), vp->Size.x * 0.6f) : 0.0f;
         const float logoH = logoTexture_ ? logoW * logoHeight_ / logoWidth_ : 0.0f;
@@ -1028,7 +1053,7 @@ void Ui::drawOverlays(const UiState& state) {
     }
     const char* badge = nullptr;
     if (state.romLoaded) {
-        if (state.paused) badge = "PAUSA";
+        if (state.paused) badge = tr("PAUSA");
         else if (!state.speed.empty()) badge = state.speed.c_str();
     }
     if (badge) {
@@ -1182,7 +1207,7 @@ void Ui::drawLibraryFolders(UiActions& out) {
     int remove = -1;
     for (int i = 0; i < static_cast<int>(settings_.libraryFolders.size()); ++i) {
         ImGui::PushID(i);
-        if (ImGui::SmallButton("Quitar")) remove = i;
+        if (ImGui::SmallButton(tr("Quitar"))) remove = i;
         ImGui::SameLine();
         ImGui::TextUnformatted(settings_.libraryFolders[static_cast<size_t>(i)].c_str());
         ImGui::PopID();
@@ -1192,7 +1217,7 @@ void Ui::drawLibraryFolders(UiActions& out) {
         out.settingsChanged = true;
         rescanLibrary();
     }
-    if (ImGui::Button("Añadir carpeta...")) {
+    if (ImGui::Button(tr("Añadir carpeta..."))) {
         browseFor_ = BrowseFor::LibraryFolder;
         browser_.open(settings_.libraryFolders.empty() ? settings_.lastFolder : settings_.libraryFolders.back(), Pick::Folder);
     }
@@ -1206,7 +1231,7 @@ void Ui::drawLibrary(UiActions& out) {
     ImGui::SetNextWindowBgAlpha(0.96f);
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
-    if (!ImGui::Begin("Biblioteca", &showLibrary_, flags)) {
+    if (!ImGui::Begin(tr("Biblioteca"), &showLibrary_, flags)) {
         ImGui::End();
         return;
     }
@@ -1218,9 +1243,9 @@ void Ui::drawLibrary(UiActions& out) {
 
     if (settings_.libraryFolders.empty()) {
         ImGui::Spacing();
-        ImGui::TextUnformatted("Elige la carpeta donde tienes tus juegos de Mega Drive, 32X o Mega CD.");
-        ImGui::TextDisabled("Se buscan también en sus subcarpetas, y luego puedes añadir más carpetas.");
-        if (ImGui::Button("Elegir carpeta...")) {
+        ImGui::TextUnformatted(tr("Elige la carpeta donde tienes tus juegos de Mega Drive, 32X o Mega CD."));
+        ImGui::TextDisabled("%s", tr("Se buscan también en sus subcarpetas, y luego puedes añadir más carpetas."));
+        if (ImGui::Button(tr("Elegir carpeta..."))) {
             browseFor_ = BrowseFor::LibraryFolder;
             browser_.open(settings_.lastFolder, Pick::Folder);
         }
@@ -1229,8 +1254,8 @@ void Ui::drawLibrary(UiActions& out) {
     }
 
     const std::string foldersLabel = settings_.libraryFolders.size() == 1
-                                         ? "Carpeta: " + settings_.libraryFolders[0]
-                                         : std::to_string(settings_.libraryFolders.size()) + " carpetas";
+                                         ? trf("Carpeta: %s", settings_.libraryFolders[0].c_str())
+                                         : trf("%d carpetas", static_cast<int>(settings_.libraryFolders.size()));
     if (ImGui::TreeNodeEx("carpetas", showFolders_ ? ImGuiTreeNodeFlags_DefaultOpen : 0, "%s", foldersLabel.c_str())) {
         showFolders_ = true;
         drawLibraryFolders(out);
@@ -1238,21 +1263,21 @@ void Ui::drawLibrary(UiActions& out) {
     } else {
         showFolders_ = false;
     }
-    if (ImGui::Button("Volver a buscar")) rescanLibrary();
+    if (ImGui::Button(tr("Volver a buscar"))) rescanLibrary();
     ImGui::SameLine();
     int missing = 0;
     for (const auto& g : games) missing += g.cover == Library::Cover::Missing;
     ImGui::BeginDisabled(missing == 0 || library_.pending() > 0);
-    if (ImGui::Button("Descargar carátulas que faltan")) library_.downloadMissing();
+    if (ImGui::Button(tr("Descargar carátulas que faltan"))) library_.downloadMissing();
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("Busca las carátulas en libretro-thumbnails (internet) por el nombre de cada juego\n"
+        ImGui::SetTooltip("%s", tr("Busca las carátulas en libretro-thumbnails (internet) por el nombre de cada juego\n"
                           "y las guarda en la carpeta caratulas de plumsg. También puedes poner tus\n"
-                          "propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado.");
+                          "propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado."));
     ImGui::SameLine();
-    if (ImGui::Button("BIOS del Mega CD...")) showBios_ = true;
+    if (ImGui::Button(tr("BIOS del Mega CD..."))) showBios_ = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Abrir la biblioteca al empezar", &settings_.libraryAtStart)) out.settingsChanged = true;
+    if (ImGui::Checkbox(tr("Abrir la biblioteca al empezar"), &settings_.libraryAtStart)) out.settingsChanged = true;
 
     // One tab per console, with how many games each has.
     int counts[kSystemCount] = {};
@@ -1260,7 +1285,7 @@ void Ui::drawLibrary(UiActions& out) {
     if (ImGui::BeginTabBar("sistemas")) {
         for (int tab = -1; tab < kSystemCount; ++tab) {
             const int n = tab < 0 ? static_cast<int>(games.size()) : counts[tab];
-            const std::string label = std::string(tab < 0 ? "Todos" : systemName(static_cast<ConsoleSystem>(tab))) +
+            const std::string label = std::string(tab < 0 ? tr("Todos") : systemName(static_cast<ConsoleSystem>(tab))) +
                                       " (" + std::to_string(n) + ")###tab" + std::to_string(tab);
             // Tabs changed with the pad or the keyboard are selected by hand.
             const ImGuiTabItemFlags f =
@@ -1283,19 +1308,19 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.focusSearch = false;
     }
     ImGui::SetNextItemWidth(260);
-    if (ImGui::InputTextWithHint("##buscar", "Buscar (Ctrl+F o Y)", libraryView_.search, sizeof libraryView_.search))
+    if (ImGui::InputTextWithHint("##buscar", tr("Buscar (Ctrl+F o Y)"), libraryView_.search, sizeof libraryView_.search))
         libraryView_.selected = 0;
     ImGui::SameLine();
     const std::vector<size_t> visible = visibleGames();
-    if (library_.pending() > 0) ImGui::Text("%d juegos. Buscando carátulas, quedan %d...", static_cast<int>(visible.size()), library_.pending());
-    else ImGui::Text("%d juegos. %s", static_cast<int>(visible.size()), library_.downloadStatus().c_str());
-    ImGui::TextDisabled("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-                        "B o Esc: cerrar   L / R o RePág / AvPág: consola");
+    if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
+    else ImGui::Text(tr("%d juegos. %s"), static_cast<int>(visible.size()), library_.downloadStatus().c_str());
+    ImGui::TextDisabled("%s", tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
+                        "B o Esc: cerrar   L / R o RePág / AvPág: consola"));
     ImGui::Separator();
 
-    if (games.empty()) ImGui::TextDisabled("No hay juegos (.md, .bin, .gen, .smd, .32x, .zip, .cue, .chd, .iso) en estas carpetas.");
-    else if (visible.empty() && libraryView_.search[0]) ImGui::TextDisabled("Ningún juego coincide con la búsqueda.");
-    else if (visible.empty()) ImGui::TextDisabled("No hay juegos de esta consola en tus carpetas.");
+    if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .zip, .cue, .chd, .iso) en estas carpetas."));
+    else if (visible.empty() && libraryView_.search[0]) ImGui::TextDisabled("%s", tr("Ningún juego coincide con la búsqueda."));
+    else if (visible.empty()) ImGui::TextDisabled("%s", tr("No hay juegos de esta consola en tus carpetas."));
 
     const float coverW = 150.0f, coverH = 210.0f;
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -1378,11 +1403,11 @@ void Ui::drawLibrary(UiActions& out) {
             const Library::Game& g = games[visible[static_cast<size_t>(n)]];
             ImGui::TextDisabled("%s", g.title.c_str());
             ImGui::Separator();
-            static const char* items[LibraryView::kItems] = {"Jugar", "Trucos...", "Opciones de este juego...",
-                                                             "Editor de instrumentos...", "Buscar carátula..."};
+            static const char* items[LibraryView::kItems] = {N_("Jugar"), N_("Trucos..."), N_("Opciones de este juego..."),
+                                                             N_("Editor de instrumentos..."), N_("Buscar carátula...")};
             int picked = libraryView_.menuAction;
             for (int i = 0; i < LibraryView::kItems; ++i)
-                if (ImGui::Selectable(items[i], libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
+                if (ImGui::Selectable(tr(items[i]), libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
             switch (picked) {
                 case 0: libraryView_.load = n; break;
                 case 1: out.cheatsFor = g.path; showCheats_ = true; break;
@@ -1441,7 +1466,7 @@ void Ui::drawCoverSearch() {
     const bool valid = showLibrary_ && coverSearch_.game < games.size() && games[coverSearch_.game].path == coverSearch_.path;
     if (!valid) showCoverSearch_ = false;
     ImGui::SetNextWindowSize(ImVec2(720, 460), ImGuiCond_Appearing);
-    if (showCoverSearch_ && ImGui::Begin("Buscar carátula", &showCoverSearch_, ImGuiWindowFlags_NoCollapse)) {
+    if (showCoverSearch_ && ImGui::Begin(tr("Buscar carátula"), &showCoverSearch_, ImGuiWindowFlags_NoCollapse)) {
         Library::Game& g = games[coverSearch_.game];
         const Library::CoverSearch& search = library_.coverSearch();
         ImGui::Text("%s", g.title.c_str());
@@ -1453,10 +1478,10 @@ void Ui::drawCoverSearch() {
             coverSearch_.focus = false;
         }
         ImGui::SetNextItemWidth(-90.0f);
-        bool go = ImGui::InputTextWithHint("##nombre", "Nombre del juego", coverSearch_.query, sizeof coverSearch_.query,
+        bool go = ImGui::InputTextWithHint("##nombre", tr("Nombre del juego"), coverSearch_.query, sizeof coverSearch_.query,
                                            ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::SameLine();
-        go |= ImGui::Button("Buscar", ImVec2(-1, 0));
+        go |= ImGui::Button(tr("Buscar"), ImVec2(-1, 0));
         if (go && coverSearch_.query[0]) startCoverSearch();
         if (coverSearch_.autoPreview && !search.busy) {
             coverSearch_.autoPreview = false;
@@ -1465,9 +1490,9 @@ void Ui::drawCoverSearch() {
                 library_.previewCover(g.system, search.names[0]);
             }
         }
-        if (search.busy) ImGui::TextDisabled("Buscando...");
+        if (search.busy) ImGui::TextDisabled("%s", tr("Buscando..."));
         else if (!search.status.empty()) ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.4f, 1.0f), "%s", search.status.c_str());
-        else ImGui::TextDisabled("%d parecidas. Pulsa una para verla.", static_cast<int>(search.names.size()));
+        else ImGui::TextDisabled(tr("%d parecidas. Pulsa una para verla."), static_cast<int>(search.names.size()));
 
         const float previewW = 220.0f;
         ImGui::BeginChild("nombres", ImVec2(-previewW - ImGui::GetStyle().ItemSpacing.x, 0), ImGuiChildFlags_Borders);
@@ -1499,7 +1524,7 @@ void Ui::drawCoverSearch() {
         }
         ImGui::Dummy(ImVec2(previewW, boxH));
         ImGui::BeginDisabled(!shown || search.busy);
-        if (ImGui::Button("Usar esta carátula", ImVec2(previewW, 0)) && library_.useCover(coverSearch_.game))
+        if (ImGui::Button(tr("Usar esta carátula"), ImVec2(previewW, 0)) && library_.useCover(coverSearch_.game))
             showCoverSearch_ = false;
         ImGui::EndDisabled();
         ImGui::EndGroup();
@@ -1513,20 +1538,20 @@ void Ui::drawCoverSearch() {
 // The Mega CD BIOS of each region. plumsg cannot include them: they are Sega's.
 void Ui::drawBios(UiActions& out) {
     ImGui::SetNextWindowSize(ImVec2(680, 0), ImGuiCond_Appearing);
-    if (!ImGui::Begin("BIOS del Mega CD", &showBios_)) {
+    if (!ImGui::Begin(tr("BIOS del Mega CD"), &showBios_)) {
         ImGui::End();
         return;
     }
     if (ImGui::IsWindowAppearing()) biosChecked_.clear();  // the files may have changed meanwhile
-    ImGui::TextWrapped("El Mega CD necesita la BIOS de la consola para arrancar los discos, y plumsg no la "
+    ImGui::TextWrapped("%s", tr("El Mega CD necesita la BIOS de la consola para arrancar los discos, y plumsg no la "
                        "incluye. Indica dónde tienes la de cada región (un archivo de 128 KB, como "
-                       "bios_CD_U.bin); cada disco usa la de su región.");
+                       "bios_CD_U.bin); cada disco usa la de su región."));
     ImGui::Spacing();
-    static const char* regionNames[3] = {"Japón (Mega-CD)", "EE. UU. (Sega CD)", "Europa (Mega-CD)"};
+    static const char* regionNames[3] = {N_("Japón (Mega-CD)"), N_("EE. UU. (Sega CD)"), N_("Europa (Mega-CD)")};
     static const Region regions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
     if (ImGui::BeginTable("bios", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
-        ImGui::TableSetupColumn("Región", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-        ImGui::TableSetupColumn("Archivo");
+        ImGui::TableSetupColumn(tr("Región"), ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn(tr("Archivo"));
         ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 150.0f);
         ImGui::TableHeadersRow();
         for (int i = 0; i < 3; ++i) {
@@ -1534,10 +1559,10 @@ void Ui::drawBios(UiActions& out) {
             ImGui::PushID(i);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::TextUnformatted(regionNames[i]);
+            ImGui::TextUnformatted(tr(regionNames[i]));
             ImGui::TableNextColumn();
             if (path.empty()) {
-                ImGui::TextDisabled("Sin elegir");
+                ImGui::TextDisabled("%s", tr("Sin elegir"));
             } else {
                 ImGui::TextUnformatted(fileName(path).c_str());
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", path.c_str());
@@ -1545,16 +1570,16 @@ void Ui::drawBios(UiActions& out) {
                 if (checked == biosChecked_.end()) checked = biosChecked_.emplace(path, identifyCdBiosFile(path)).first;
                 const BiosInfo& info = checked->second;
                 if (!info.valid) {
-                    ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "No parece una BIOS: %s", info.problem.c_str());
+                    ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), tr("No parece una BIOS: %s"), info.problem.c_str());
                 } else if (info.region != Region::Auto && info.region != regions[i]) {
-                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Parece de otra región");
+                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "%s", tr("Parece de otra región"));
                 } else {
-                    ImGui::TextColored(ImVec4(0.5f, 0.9f, 0.5f, 1.0f), "Correcta%s%s", info.name.empty() ? "" : ": ",
+                    ImGui::TextColored(ImVec4(0.5f, 0.9f, 0.5f, 1.0f), tr("Correcta%s%s"), info.name.empty() ? "" : ": ",
                                        info.name.c_str());
                 }
             }
             ImGui::TableNextColumn();
-            if (ImGui::Button("Elegir...")) {
+            if (ImGui::Button(tr("Elegir..."))) {
                 biosSlot_ = i;
                 browseFor_ = BrowseFor::CdBios;
                 std::string start = path.empty() ? (settings_.libraryFolders.empty() ? settings_.lastFolder
@@ -1573,7 +1598,7 @@ void Ui::drawBios(UiActions& out) {
             }
             if (!path.empty()) {
                 ImGui::SameLine();
-                if (ImGui::Button("Quitar")) {
+                if (ImGui::Button(tr("Quitar"))) {
                     path.clear();
                     out.settingsChanged = true;
                 }
@@ -1584,7 +1609,7 @@ void Ui::drawBios(UiActions& out) {
     }
     ImGui::Spacing();
     ImGui::BeginDisabled(settings_.libraryFolders.empty());
-    if (ImGui::Button("Buscar en las carpetas de la biblioteca")) {
+    if (ImGui::Button(tr("Buscar en las carpetas de la biblioteca"))) {
         const std::array<std::string, 3> found = findCdBios(settings_.libraryFolders);
         int added = 0;
         for (size_t i = 0; i < 3; ++i)
@@ -1594,13 +1619,13 @@ void Ui::drawBios(UiActions& out) {
             }
         if (added) out.settingsChanged = true;
         const int total = static_cast<int>(!found[0].empty()) + !found[1].empty() + !found[2].empty();
-        biosStatus_ = total == 0 ? "No se ha encontrado ninguna BIOS del Mega CD en esas carpetas."
-                                 : "Encontradas " + std::to_string(total) + " de 3.";
+        biosStatus_ = total == 0 ? std::string(tr("No se ha encontrado ninguna BIOS del Mega CD en esas carpetas."))
+                                 : trf("Encontradas %d de 3.", total);
     }
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("Busca archivos de 128 KB con la cabecera de la BIOS del Mega CD en las carpetas\n"
-                          "de la biblioteca y sus subcarpetas, y elige una para cada región.");
+        ImGui::SetTooltip("%s", tr("Busca archivos de 128 KB con la cabecera de la BIOS del Mega CD en las carpetas\n"
+                          "de la biblioteca y sus subcarpetas, y elige una para cada región."));
     if (!biosStatus_.empty()) {
         ImGui::SameLine();
         ImGui::TextUnformatted(biosStatus_.c_str());
@@ -1609,7 +1634,7 @@ void Ui::drawBios(UiActions& out) {
 }
 
 void Ui::drawNetplay(const UiState& state, UiActions& out) {
-    if (!ImGui::Begin("Jugar en red", &showNetplay_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!ImGui::Begin(tr("Jugar en red"), &showNetplay_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
         return;
     }
@@ -1622,48 +1647,48 @@ void Ui::drawNetplay(const UiState& state, UiActions& out) {
         ImGui::TextWrapped("%s", state.netStatus.c_str());
         if (state.netProgress >= 0) ImGui::ProgressBar(state.netProgress, ImVec2(ImGui::GetFontSize() * 36.0f, 0));
         ImGui::Spacing();
-        if (ImGui::Button("Salir de la partida")) out.netLeave = true;
+        if (ImGui::Button(tr("Salir de la partida"))) out.netLeave = true;
         ImGui::PopTextWrapPos();
         ImGui::End();
         return;
     }
-    ImGui::TextWrapped("Dos jugadores, cada uno en su ordenador y con el mismo juego abierto (la misma ROM). "
+    ImGui::TextWrapped("%s", tr("Dos jugadores, cada uno en su ordenador y con el mismo juego abierto (la misma ROM). "
                        "Quien aloja es el jugador 1 y quien se une, el jugador 2; cada uno juega con sus "
-                       "controles del jugador 1. La partida empieza donde la tenga el anfitrión.");
+                       "controles del jugador 1. La partida empieza donde la tenga el anfitrión."));
     if (!state.romLoaded)
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Abre primero el juego.");
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "%s", tr("Abre primero el juego."));
     ImGui::BeginDisabled(!state.romLoaded);
 
-    ImGui::SeparatorText("Alojar la partida (jugador 1)");
+    ImGui::SeparatorText(tr("Alojar la partida (jugador 1)"));
     ImGui::SetNextItemWidth(120);
-    if (ImGui::InputInt("Puerto UDP", &settings_.netPort, 0, 0)) settings_.netPort = std::clamp(settings_.netPort, 1, 65535);
+    if (ImGui::InputInt(tr("Puerto UDP"), &settings_.netPort, 0, 0)) settings_.netPort = std::clamp(settings_.netPort, 1, 65535);
     if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
     ImGui::SameLine();
-    if (ImGui::Button("Alojar")) out.netHost = out.settingsChanged = true;
+    if (ImGui::Button(tr("Alojar"))) out.netHost = out.settingsChanged = true;
     if (!localAddresses_.empty())
-        ImGui::TextWrapped("En casa, tu amigo se une a %s:%d.", localAddresses_.front().c_str(), settings_.netPort);
-    ImGui::TextDisabled("Por internet: abre (redirige) el puerto UDP %d de tu router hacia este ordenador y "
+        ImGui::TextWrapped(tr("En casa, tu amigo se une a %s:%d."), localAddresses_.front().c_str(), settings_.netPort);
+    ImGui::TextDisabled(tr("Por internet: abre (redirige) el puerto UDP %d de tu router hacia este ordenador y "
                         "dale tu IP pública; o usad los dos una red privada como Tailscale o ZeroTier "
-                        "y no hace falta abrir nada.", settings_.netPort);
+                        "y no hace falta abrir nada."), settings_.netPort);
 
-    ImGui::SeparatorText("Unirse a una partida (jugador 2)");
+    ImGui::SeparatorText(tr("Unirse a una partida (jugador 2)"));
     ImGui::SetNextItemWidth(300);
-    const bool enter = ImGui::InputTextWithHint("Anfitrión", "IP o nombre, y :puerto si no es el de arriba",
+    const bool enter = ImGui::InputTextWithHint(tr("Anfitrión"), tr("IP o nombre, y :puerto si no es el de arriba"),
                                                 netAddress_, sizeof netAddress_, ImGuiInputTextFlags_EnterReturnsTrue);
     ImGui::SameLine();
-    if ((ImGui::Button("Unirse") || enter) && netAddress_[0]) {
+    if ((ImGui::Button(tr("Unirse")) || enter) && netAddress_[0]) {
         settings_.netAddress = netAddress_;
         out.netJoin = out.settingsChanged = true;
     }
 
-    ImGui::SeparatorText("Ajustes");
+    ImGui::SeparatorText(tr("Ajustes"));
     ImGui::SetNextItemWidth(160);
-    ImGui::SliderInt("Retardo de los mandos", &settings_.netInputDelay, 0, 6, "%d fotogramas", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SliderInt(tr("Retardo de los mandos"), &settings_.netInputDelay, 0, 6, tr("%d fotogramas"), ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Cuántos fotogramas tarda en hacer efecto lo que pulsas. Con más retardo hay menos\n"
+        ImGui::SetTooltip("%s", tr("Cuántos fotogramas tarda en hacer efecto lo que pulsas. Con más retardo hay menos\n"
                           "saltos cuando la conexión es lenta; con 0 responde al instante pero salta más.\n"
-                          "Vale el del anfitrión. 2 va bien casi siempre.");
+                          "Vale el del anfitrión. 2 va bien casi siempre."));
     ImGui::EndDisabled();
     ImGui::PopTextWrapPos();
     ImGui::End();
@@ -1672,25 +1697,25 @@ void Ui::drawNetplay(const UiState& state, UiActions& out) {
 void Ui::drawCheats(const UiState& state, UiActions& out) {
     ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
     if (cheatsRefit_ > 0) ImGui::SetNextWindowSize(ImVec2(cheatsWidth_, 0));  // grow to fit the list that arrived
-    if (!ImGui::Begin("Trucos", &showCheats_)) {
+    if (!ImGui::Begin(tr("Trucos"), &showCheats_)) {
         ImGui::End();
         return;
     }
     if (!state.cheats) {
-        ImGui::TextDisabled("Abre una ROM, o elige un juego en la biblioteca con el botón derecho.");
+        ImGui::TextDisabled("%s", tr("Abre una ROM, o elige un juego en la biblioteca con el botón derecho."));
         ImGui::End();
         return;
     }
     std::vector<Cheat>& cheats = *state.cheats;
-    ImGui::TextWrapped("Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. "
-                       "Se guardan para este juego y se activan al abrirlo.", state.cheatsGame.c_str());
+    ImGui::TextWrapped(tr("Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. "
+                       "Se guardan para este juego y se activan al abrirlo."), state.cheatsGame.c_str());
     ImGui::Spacing();
     int remove = -1;
-    if (cheats.empty()) ImGui::TextDisabled("Este juego no tiene trucos todavía.");
+    if (cheats.empty()) ImGui::TextDisabled("%s", tr("Este juego no tiene trucos todavía."));
     else if (ImGui::BeginTable("trucos", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
         ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight());
-        ImGui::TableSetupColumn("Código", ImGuiTableColumnFlags_WidthFixed, 130.0f);
-        ImGui::TableSetupColumn("Nombre");
+        ImGui::TableSetupColumn(tr("Código"), ImGuiTableColumnFlags_WidthFixed, 130.0f);
+        ImGui::TableSetupColumn(tr("Nombre"));
         ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight());
         for (int i = 0; i < static_cast<int>(cheats.size()); ++i) {
             Cheat& c = cheats[static_cast<size_t>(i)];
@@ -1723,17 +1748,17 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
         out.cheatsChanged = true;
     }
 
-    ImGui::SeparatorText("Añadir");
+    ImGui::SeparatorText(tr("Añadir"));
     ImGui::SetNextItemWidth(130);
-    bool add = ImGui::InputTextWithHint("##codigo", "Código", cheatCode_, sizeof cheatCode_,
+    bool add = ImGui::InputTextWithHint("##codigo", tr("Código"), cheatCode_, sizeof cheatCode_,
                                         ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CharsUppercase);
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(-ImGui::CalcTextSize("Añadir").x - ImGui::GetStyle().FramePadding.x * 2 -
+    ImGui::SetNextItemWidth(-ImGui::CalcTextSize(tr("Añadir")).x - ImGui::GetStyle().FramePadding.x * 2 -
                             ImGui::GetStyle().ItemSpacing.x);
-    add |= ImGui::InputTextWithHint("##nombre_nuevo", "Nombre (opcional)", cheatName_, sizeof cheatName_,
+    add |= ImGui::InputTextWithHint("##nombre_nuevo", tr("Nombre (opcional)"), cheatName_, sizeof cheatName_,
                                     ImGuiInputTextFlags_EnterReturnsTrue);
     ImGui::SameLine();
-    add |= ImGui::Button("Añadir");
+    add |= ImGui::Button(tr("Añadir"));
     if (add) {
         std::vector<CheatPatch> patches;
         if (decodeCheatCodes(cheatCode_, &patches, &cheatError_)) {
@@ -1745,8 +1770,8 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
     }
     if (!cheatError_.empty()) ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", cheatError_.c_str());
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Los Game Genie cambian la ROM; los Action Replay fijan un valor en la RAM en cada cuadro. "
-                       "Algunos juegos comprueban la ROM al arrancar: si no arranca con un truco, reinicia sin él.");
+    ImGui::TextWrapped("%s", tr("Los Game Genie cambian la ROM; los Action Replay fijan un valor en la RAM en cada cuadro. "
+                       "Algunos juegos comprueban la ROM al arrancar: si no arranca con un truco, reinicia sin él."));
     ImGui::PopStyleColor();
     drawCheatDatabase(state, out);
     ImGui::End();
@@ -1755,7 +1780,7 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
 // The game's ready-made cheat lists from libretro-database, looked for when the window
 // is opened for it: pick a list (the one named like the ROM comes first) and add codes.
 void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
-    ImGui::SeparatorText("Trucos de internet");
+    ImGui::SeparatorText(tr("Trucos de internet"));
     if (cheatDb_.view().game != state.cheatsPath) {
         cheatFilter_[0] = '\0';
         cheatDb_.search(state.cheatsPath);
@@ -1770,35 +1795,35 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
     std::vector<Cheat>& cheats = *state.cheats;
 
     if (db.files.size() > 1 || (!db.files.empty() && db.file != db.files.front())) {
-        ImGui::SetNextItemWidth(-ImGui::CalcTextSize("Lista").x - ImGui::GetStyle().ItemInnerSpacing.x);
-        if (ImGui::BeginCombo("Lista", db.file.c_str())) {
+        ImGui::SetNextItemWidth(-ImGui::CalcTextSize(tr("Lista")).x - ImGui::GetStyle().ItemInnerSpacing.x);
+        if (ImGui::BeginCombo(tr("Lista"), db.file.c_str())) {
             for (const std::string& f : db.files)
                 if (ImGui::Selectable(f.c_str(), f == db.file)) cheatDb_.load(f);
             ImGui::EndCombo();
         }
     } else if (!db.file.empty()) {
-        ImGui::TextDisabled("Lista: %s", db.file.c_str());
+        ImGui::TextDisabled(tr("Lista: %s"), db.file.c_str());
     }
     if (db.busy) {
         static const char* dots[] = {"", ".", "..", "..."};
-        ImGui::TextDisabled("Buscando en la base de trucos de libretro%s", dots[(SDL_GetTicks() / 300) % 4]);
+        ImGui::TextDisabled(tr("Buscando en la base de trucos de libretro%s"), dots[(SDL_GetTicks() / 300) % 4]);
     }
     if (!db.status.empty()) ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f), "%s", db.status.c_str());
-    if (!db.busy && !db.status.empty() && ImGui::Button("Reintentar")) cheatDb_.search(state.cheatsPath);
+    if (!db.busy && !db.status.empty() && ImGui::Button(tr("Reintentar"))) cheatDb_.search(state.cheatsPath);
 
     if (!db.cheats.empty()) {
         ImGui::SetNextItemWidth(-1);
-        ImGui::InputTextWithHint("##filtro", "Filtrar (lives, energy, invincible...)", cheatFilter_, sizeof cheatFilter_);
+        ImGui::InputTextWithHint("##filtro", tr("Filtrar (lives, energy, invincible...)"), cheatFilter_, sizeof cheatFilter_);
         const std::string filter = searchKey(cheatFilter_);
         const float rowH = ImGui::GetFrameHeightWithSpacing();
         const float height = std::min(static_cast<float>(db.cheats.size()) * rowH + rowH, rowH * 9.5f);
         if (ImGui::BeginTable("trucos_libretro", 3,
                               ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY,
                               ImVec2(0, height))) {
-            const float addW = ImGui::CalcTextSize("Añadido").x + ImGui::GetStyle().FramePadding.x * 2;
+            const float addW = ImGui::CalcTextSize(tr("Añadido")).x + ImGui::GetStyle().FramePadding.x * 2;
             ImGui::TableSetupScrollFreeze(0, 1);
-            ImGui::TableSetupColumn("Truco");
-            ImGui::TableSetupColumn("Código", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+            ImGui::TableSetupColumn(tr("Truco"));
+            ImGui::TableSetupColumn(tr("Código"), ImGuiTableColumnFlags_WidthFixed, 130.0f);
             ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, addW);
             ImGui::TableHeadersRow();
             int shown = 0;
@@ -1810,7 +1835,7 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextUnformatted(c.name.empty() ? "(sin nombre)" : c.name.c_str());
+                ImGui::TextUnformatted(c.name.empty() ? tr("(sin nombre)") : c.name.c_str());
                 if (ImGui::IsItemHovered() && ImGui::CalcTextSize(c.name.c_str()).x > ImGui::GetColumnWidth())
                     ImGui::SetTooltip("%s", c.name.c_str());
                 ImGui::TableNextColumn();
@@ -1826,13 +1851,13 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
                 bool added = false;
                 for (const Cheat& mine : cheats) added |= mine.code == c.code;
                 if (!valid) {
-                    ImGui::TextDisabled("No vale");
+                    ImGui::TextDisabled("%s", tr("No vale"));
                     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", error.c_str());
                 } else if (added) {
                     ImGui::BeginDisabled();
-                    ImGui::Button("Añadido", ImVec2(-1, 0));
+                    ImGui::Button(tr("Añadido"), ImVec2(-1, 0));
                     ImGui::EndDisabled();
-                } else if (ImGui::Button("Añadir", ImVec2(-1, 0))) {
+                } else if (ImGui::Button(tr("Añadir"), ImVec2(-1, 0))) {
                     cheats.push_back({c.code, c.name, true});
                     out.cheatsChanged = true;
                     // Many games check the ROM and stop (Sonic's red screen) unless the
@@ -1845,7 +1870,7 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
                         for (const Cheat& mine : cheats) have |= mine.code == m.code;
                         if (!have) {
                             cheats.push_back({m.code, m.name, true});
-                            notify("Añadido también su código maestro, sin el que el juego no arrancaría");
+                            notify(tr("Añadido también su código maestro, sin el que el juego no arrancaría"));
                         }
                     }
                 }
@@ -1854,15 +1879,15 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
             if (shown == 0) {
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
-                ImGui::TextDisabled("Ningún truco tiene ese nombre.");
+                ImGui::TextDisabled("%s", tr("Ningún truco tiene ese nombre."));
             }
             ImGui::EndTable();
         }
     }
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Listas de libretro-database, la base de trucos de RetroArch (licencia CC BY-SA 4.0). "
+    ImGui::TextWrapped("%s", tr("Listas de libretro-database, la base de trucos de RetroArch (licencia CC BY-SA 4.0). "
                        "Los nombres vienen en inglés; los añadidos quedan activados en la lista de arriba, "
-                       "con el código maestro (Master Code) del juego cuando lo pide.");
+                       "con el código maestro (Master Code) del juego cuando lo pide."));
     ImGui::PopStyleColor();
 }
 
@@ -1871,19 +1896,19 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
 // game has its own value (edited here); unticked, it follows the general one (shown greyed).
 void Ui::drawGameOptions(const UiState& state, UiActions& out) {
     ImGui::SetNextWindowSize(ImVec2(520, 0), ImGuiCond_Appearing);
-    if (!ImGui::Begin("Opciones de este juego", &showGameOptions_)) {
+    if (!ImGui::Begin(tr("Opciones de este juego"), &showGameOptions_)) {
         ImGui::End();
         return;
     }
     const GameOptionsView& v = state.gameOptions;
     if (v.game.empty() || !v.values || !v.own || !v.general) {
-        ImGui::TextDisabled("Abre un juego, o elige uno en la biblioteca con el botón derecho.");
+        ImGui::TextDisabled("%s", tr("Abre un juego, o elige uno en la biblioteca con el botón derecho."));
         ImGui::End();
         return;
     }
-    ImGui::TextWrapped("Opciones propias de %s. Marca una opción para que este juego use su propio valor; "
-                       "las que no marques siguen a las generales.", v.game.c_str());
-    if (v.loaded && state.netPlaying) ImGui::TextDisabled("En una partida en red no se pueden cambiar.");
+    ImGui::TextWrapped(tr("Opciones propias de %s. Marca una opción para que este juego use su propio valor; "
+                       "las que no marques siguen a las generales."), v.game.c_str());
+    if (v.loaded && state.netPlaying) ImGui::TextDisabled("%s", tr("En una partida en red no se pueden cambiar."));
     ImGui::BeginDisabled(v.loaded && state.netPlaying);
     Settings& s = *v.values;
     std::set<std::string>& own = *v.own;
@@ -1892,7 +1917,7 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
         const std::string key = opt.key;
         if (group != opt.group) {
             group = opt.group;
-            ImGui::SeparatorText(opt.group);
+            ImGui::SeparatorText(tr(opt.group));
         }
         ImGui::PushID(opt.key);
         bool mine = own.count(key) != 0;
@@ -1905,12 +1930,12 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
             }
             edited = true;
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip(mine ? "Propio de este juego" : "Usa el valor general");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", mine ? tr("Propio de este juego") : tr("Usa el valor general"));
         ImGui::SameLine();
         ImGui::BeginDisabled(!mine);
         ImGui::SetNextItemWidth(220);
         if (key == "vista") {
-            if (ImGui::BeginCombo(opt.label, s.view.c_str())) {
+            if (ImGui::BeginCombo(tr(opt.label), s.view.c_str())) {
                 for (const char* view : state.views)
                     if (ImGui::Selectable(view, s.view == view)) {
                         s.view = view;
@@ -1919,79 +1944,78 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
                 ImGui::EndCombo();
             }
         } else if (key == "escalado") {
-            static const char* names[] = {"Escala entera", "Ajustar", "Estirar"};
+            static const char* names[] = {N_("Escala entera"), N_("Ajustar"), N_("Estirar")};
             int i = static_cast<int>(s.render.scale);
-            if (ImGui::Combo(opt.label, &i, names, 3)) {
+            if (comboTr(tr(opt.label), &i, names, 3)) {
                 s.render.scale = static_cast<ScaleMode>(i);
                 edited = true;
             }
         } else if (key == "suavizado") {
-            edited |= ImGui::Checkbox("Suavizar píxeles", &s.render.smooth);
+            edited |= ImGui::Checkbox(tr("Suavizar píxeles"), &s.render.smooth);
         } else if (key == "filtro") {
-            static const char* names[] = {"Ninguno", "Scanlines", "CRT"};
+            static const char* names[] = {N_("Ninguno"), N_("Scanlines"), "CRT"};
             int i = static_cast<int>(s.render.filter);
-            if (ImGui::Combo(opt.label, &i, names, 3)) {
+            if (comboTr(tr(opt.label), &i, names, 3)) {
                 s.render.filter = static_cast<Filter2D>(i);
                 edited = true;
             }
         } else if (key == "intensidad_filtro") {
             float strength = s.render.filterStrength * 100.0f;
-            if (ImGui::SliderFloat(opt.label, &strength, 0.0f, 100.0f, "%.0f %%")) s.render.filterStrength = strength / 100.0f;
+            if (ImGui::SliderFloat(tr(opt.label), &strength, 0.0f, 100.0f, "%.0f %%")) s.render.filterStrength = strength / 100.0f;
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "pixeles_cuadrados") {
-            edited |= ImGui::Checkbox("Píxeles cuadrados (sin estirar a 4:3)", &s.render.squarePixels);
+            edited |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &s.render.squarePixels);
         } else if (key == "perfil_3d") {
-            ImGui::TextUnformatted(opt.label);
+            ImGui::TextUnformatted(tr(opt.label));
             ImGui::SameLine();
-            ImGui::TextDisabled(v.loaded ? "(se ajustan en Opciones > Vídeo)" : "(se ajustan en Vídeo con el juego abierto)");
+            ImGui::TextDisabled("%s", v.loaded ? tr("(se ajustan en Opciones > Vídeo)") : tr("(se ajustan en Vídeo con el juego abierto)"));
         } else if (key == "volumen") {
-            ImGui::SliderInt(opt.label, &s.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SliderInt(tr(opt.label), &s.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "silencio") {
-            edited |= ImGui::Checkbox("Silenciar", &s.mute);
+            edited |= ImGui::Checkbox(tr("Silenciar"), &s.mute);
         } else if (key == "modo") {
             int i = s.roland ? 1 : 0;
-            static const char* names[] = {"Original (YM2612 y PSG)", "Sintetizador (SoundFont)"};
-            if (ImGui::Combo(opt.label, &i, names, 2)) {
+            static const char* names[] = {N_("Original (YM2612 y PSG)"), N_("Sintetizador (SoundFont)")};
+            if (comboTr(tr(opt.label), &i, names, 2)) {
                 s.roland = i == 1;
                 edited = true;
             }
         } else if (key == "soundfont") {
             char path[512];
             std::snprintf(path, sizeof path, "%s", s.soundfont.c_str());
-            if (ImGui::InputTextWithHint(opt.label, "el incluido", path, sizeof path)) s.soundfont = path;
+            if (ImGui::InputTextWithHint(tr(opt.label), tr("el incluido"), path, sizeof path)) s.soundfont = path;
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "mezcla_chip" || key == "reverb" || key == "chorus") {
             int& v = key == "mezcla_chip" ? s.chipMix : key == "reverb" ? s.reverb : s.chorus;
-            ImGui::SliderInt(opt.label, &v, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SliderInt(tr(opt.label), &v, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "region") {
-            static const char* names[] = {"Automática (la de la ROM)", "Japón (NTSC)", "EE. UU. (NTSC)", "Europa (PAL)"};
             int i = static_cast<int>(s.region);
-            if (ImGui::Combo(opt.label, &i, names, 4)) {
+            if (comboTr(tr(opt.label), &i, kRegionNames, 4)) {
                 s.region = static_cast<Region>(i);
                 edited = true;
             }
         } else if (key == "mandos") {
-            static const char* names[] = {"3 botones", "6 botones"};
+            static const char* names[] = {N_("3 botones"), N_("6 botones")};
             for (size_t port = 0; port < 2; ++port) {
                 if (port) ImGui::SameLine();
                 int i = s.padType[port] == PadType::ThreeButton ? 0 : 1;
                 ImGui::SetNextItemWidth(110);
-                if (ImGui::Combo(port ? "Mando 2" : "Mando 1", &i, names, 2)) {
+                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names, 2)) {
                     s.padType[port] = i == 0 ? PadType::ThreeButton : PadType::SixButton;
                     edited = true;
                 }
             }
         } else if (key == "rebobinado_segundos") {
-            ImGui::SliderInt(opt.label, &s.rewindSeconds, 0, Settings::kMaxRewindSeconds,
-                             s.rewindSeconds ? "%d s" : "desactivado", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SliderInt(tr(opt.label), &s.rewindSeconds, 0, Settings::kMaxRewindSeconds,
+                             s.rewindSeconds ? "%d s" : tr("desactivado"), ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "avance_rapido") {
-            ImGui::SliderInt(opt.label, &s.fastForward, 2, 10, "%dx", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SliderInt(tr(opt.label), &s.fastForward, 2, 10, "%dx", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "camara_lenta") {
-            ImGui::SliderInt(opt.label, &s.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SliderInt(tr(opt.label), &s.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         }
         ImGui::EndDisabled();

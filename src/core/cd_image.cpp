@@ -1,5 +1,7 @@
 #include "cd_image.h"
 
+#include "i18n.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -206,7 +208,7 @@ bool CdImage::parseCue(const std::string& text, const std::vector<uint64_t>& fil
             ++file;
             bigEndian = w.size() > 2 && upper(w[2]) == "MOTOROLA";
         } else if (key == "TRACK" && w.size() >= 3) {
-            if (file < 0) return fail("la hoja .cue tiene una pista antes de su archivo");
+            if (file < 0) return fail(tr("la hoja .cue tiene una pista antes de su archivo"));
             CueTrack t;
             t.number = std::atoi(w[1].c_str());
             t.file = file;
@@ -215,23 +217,23 @@ bool CdImage::parseCue(const std::string& text, const std::vector<uint64_t>& fil
             t.bigEndian = t.audio && bigEndian;
             if (mode == "MODE1/2048") t.sectorBytes = 2048;
             else if (mode == "AUDIO" || mode == "MODE1/2352" || mode == "MODE2/2352") t.sectorBytes = 2352;
-            else return fail("la hoja .cue usa un tipo de pista que plumsg no lee (" + w[2] + ")");
+            else return fail(trf("la hoja .cue usa un tipo de pista que plumsg no lee (%s)", w[2].c_str()));
             cue.push_back(t);
         } else if (key == "INDEX" && w.size() >= 3 && !cue.empty()) {
             const int n = std::atoi(w[1].c_str());
             const int at = parseMsf(w[2]);
-            if (at < 0) return fail("la hoja .cue tiene un tiempo mal escrito (" + w[2] + ")");
+            if (at < 0) return fail(trf("la hoja .cue tiene un tiempo mal escrito (%s)", w[2].c_str()));
             if (n == 0) cue.back().index0 = at;
             if (n == 1) cue.back().index1 = at;
         } else if (key == "PREGAP" && w.size() >= 2 && !cue.empty()) {
             const int at = parseMsf(w[1]);
-            if (at < 0) return fail("la hoja .cue tiene un tiempo mal escrito (" + w[1] + ")");
+            if (at < 0) return fail(trf("la hoja .cue tiene un tiempo mal escrito (%s)", w[1].c_str()));
             cue.back().pregap = at;
         }
     }
-    if (cue.empty()) return fail("la hoja .cue no tiene pistas");
+    if (cue.empty()) return fail(tr("la hoja .cue no tiene pistas"));
     if (static_cast<size_t>(file + 1) != fileSizes.size())
-        return fail("la hoja .cue no encaja con sus archivos");
+        return fail(tr("la hoja .cue no encaja con sus archivos"));
 
     tracks.clear();
     int32_t fileBase = 0;
@@ -244,9 +246,9 @@ bool CdImage::parseCue(const std::string& text, const std::vector<uint64_t>& fil
         int prevSector = 0, prevBytes = cue[first].sectorBytes;
         for (size_t i = first; i <= last; ++i) {
             const CueTrack& c = cue[i];
-            if (c.index1 < 0) return fail("a la pista " + std::to_string(c.number) + " le falta su INDEX 01");
+            if (c.index1 < 0) return fail(trf("a la pista %d le falta su INDEX 01", c.number));
             const int firstSector = c.index0 >= 0 ? c.index0 : c.index1;
-            if (firstSector < prevSector) return fail("los tiempos de la hoja .cue van hacia atrás");
+            if (firstSector < prevSector) return fail(tr("los tiempos de la hoja .cue van hacia atrás"));
             byteOffset += static_cast<uint64_t>(firstSector - prevSector) * static_cast<uint64_t>(prevBytes);
             prevSector = firstSector;
             prevBytes = c.sectorBytes;
@@ -276,7 +278,7 @@ bool CdImage::parseCue(const std::string& text, const std::vector<uint64_t>& fil
         for (size_t i = first; i <= last; ++i) {
             Track& t = tracks[i];
             t.end = i < last ? tracks[i + 1].begin - 1 : t.dataEnd;
-            if (t.end < t.start) return fail("la pista " + std::to_string(t.number) + " está vacía");
+            if (t.end < t.start) return fail(trf("la pista %d está vacía", t.number));
         }
         fileBase = tracks[last].end + 1;
         first = last + 1;
@@ -287,7 +289,7 @@ bool CdImage::parseCue(const std::string& text, const std::vector<uint64_t>& fil
 bool CdImage::openCue(const std::string& path, std::string* error) {
     std::FILE* f = openFileUtf8(path, "rb");
     if (!f) {
-        if (error) *error = "no se puede abrir " + path;
+        if (error) *error = trf("no se puede abrir %s", path.c_str());
         return false;
     }
     std::string text;
@@ -307,13 +309,13 @@ bool CdImage::openCue(const std::string& path, std::string* error) {
         const std::string name = (folder / fs::u8path(w[1])).u8string();
         std::FILE* data = openFileUtf8(name, "rb");
         if (!data) {
-            if (error) *error = "no se encuentra " + w[1] + ", que la hoja .cue necesita";
+            if (error) *error = trf("no se encuentra %s, que la hoja .cue necesita", w[1].c_str());
             return false;
         }
         files_.push_back(data);
         uint64_t base = 0, size = fileSize(data);
         if (w.size() > 2 && upper(w[2]) == "WAVE" && !waveData(data, base, size)) {
-            if (error) *error = w[1] + " no es un .wav que plumsg sepa leer";
+            if (error) *error = trf("%s no es un .wav que plumsg sepa leer", w[1].c_str());
             return false;
         }
         bases.push_back(base);
@@ -327,7 +329,7 @@ bool CdImage::openCue(const std::string& path, std::string* error) {
 bool CdImage::openPlain(const std::string& path, std::string* error) {
     std::FILE* f = openFileUtf8(path, "rb");
     if (!f) {
-        if (error) *error = "no se puede abrir " + path;
+        if (error) *error = trf("no se puede abrir %s", path.c_str());
         return false;
     }
     files_.push_back(f);
@@ -344,7 +346,7 @@ bool CdImage::openPlain(const std::string& path, std::string* error) {
     t.dataEnd = static_cast<int32_t>(size / static_cast<uint64_t>(t.sectorBytes)) - 1;
     t.end = t.dataEnd;
     if (t.end < 16) {
-        if (error) *error = "el archivo es demasiado pequeño para ser un disco";
+        if (error) *error = tr("el archivo es demasiado pequeño para ser un disco");
         return false;
     }
     tracks_.push_back(t);
@@ -358,16 +360,16 @@ bool CdImage::openChd(const std::string& path, std::string* error) {
     };
     chd_ = std::make_unique<Chd>();
     chd_->stdio = openFileUtf8(path, "rb");
-    if (!chd_->stdio) return fail("no se puede abrir " + path);
+    if (!chd_->stdio) return fail(trf("no se puede abrir %s", path.c_str()));
     if (chd_open_file(chd_->stdio, CHD_OPEN_READ, nullptr, &chd_->file) != CHDERR_NONE) {
         chd_->file = nullptr;
-        return fail("el .chd está dañado o es de un tipo que plumsg no lee");
+        return fail(tr("el .chd está dañado o es de un tipo que plumsg no lee"));
     }
     const chd_header* h = chd_get_header(chd_->file);
     chd_->hunkBytes = h->hunkbytes;
     chd_->hunks = h->totalhunks;
     chd_->framesPerHunk = h->hunkbytes / CD_FRAME_SIZE;
-    if (chd_->framesPerHunk == 0 || h->hunkbytes % CD_FRAME_SIZE != 0) return fail("el .chd no es de un CD");
+    if (chd_->framesPerHunk == 0 || h->hunkbytes % CD_FRAME_SIZE != 0) return fail(tr("el .chd no es de un CD"));
     chd_->hunk.resize(h->hunkbytes);
 
     int64_t frame = 0;
@@ -381,11 +383,11 @@ bool CdImage::openChd(const std::string& path, std::string* error) {
             CHDERR_NONE) {
             if (std::sscanf(meta, CDROM_TRACK_METADATA2_FORMAT, &number, type, subtype, &frames, &pregap, pgtype, pgsub,
                             &postgap) != 8)
-                return fail("el .chd tiene una pista que plumsg no entiende");
+                return fail(tr("el .chd tiene una pista que plumsg no entiende"));
         } else if (chd_get_metadata(chd_->file, CDROM_TRACK_METADATA_TAG, i, meta, sizeof meta - 1, &len, nullptr,
                                     nullptr) == CHDERR_NONE) {
             if (std::sscanf(meta, CDROM_TRACK_METADATA_FORMAT, &number, type, subtype, &frames) != 4)
-                return fail("el .chd tiene una pista que plumsg no entiende");
+                return fail(tr("el .chd tiene una pista que plumsg no entiende"));
         } else {
             break;
         }
@@ -396,7 +398,7 @@ bool CdImage::openChd(const std::string& path, std::string* error) {
         t.bigEndian = t.audio;
         if (kind == "MODE1" || kind == "MODE2_FORM1") t.sectorBytes = 2048;
         else if (kind == "MODE1_RAW" || kind == "MODE2_RAW" || kind == "AUDIO") t.sectorBytes = 2352;
-        else return fail("el .chd usa un tipo de pista que plumsg no lee (" + kind + ")");
+        else return fail(trf("el .chd usa un tipo de pista que plumsg no lee (%s)", kind.c_str()));
         const bool pregapStored = pgtype[0] == 'V';
         const int storedPregap = pregapStored ? pregap : 0;
         if (tracks_.empty()) {
@@ -411,12 +413,12 @@ bool CdImage::openChd(const std::string& path, std::string* error) {
         t.dataBegin = pregapStored ? lba : t.start;
         t.dataEnd = t.dataBegin + frames - 1;
         t.end = t.start + (frames - storedPregap) - 1 + postgap;
-        if (t.end < t.start) return fail("el .chd tiene una pista vacía");
+        if (t.end < t.start) return fail(tr("el .chd tiene una pista vacía"));
         tracks_.push_back(t);
         lba = t.end + 1;
         frame += (frames + 3) & ~3;  // tracks are padded to 4 frames
     }
-    if (tracks_.empty()) return fail("el .chd no es de un CD");
+    if (tracks_.empty()) return fail(tr("el .chd no es de un CD"));
     return true;
 }
 

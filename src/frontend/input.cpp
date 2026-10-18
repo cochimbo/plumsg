@@ -1,5 +1,7 @@
 #include "input.h"
 
+#include "../core/i18n.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -288,7 +290,7 @@ std::vector<std::string> Input::padNames() const {
     std::vector<std::string> names;
     for (auto* p : pads_) {
         const char* n = SDL_GameControllerName(p);
-        names.push_back(n ? n : "Mando");
+        names.push_back(n ? n : tr("Mando"));
     }
     return names;
 }

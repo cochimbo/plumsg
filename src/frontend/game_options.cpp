@@ -4,6 +4,7 @@
 #include <cctype>
 #include <sstream>
 
+#include "../core/i18n.h"
 #include "../render/profile3d.h"
 
 namespace plumsg {
@@ -28,30 +29,30 @@ std::string optionFor(const std::string& key) { return key == "mando1" || key ==
 
 const std::vector<GameOption>& gameOptions() {
     static const std::vector<GameOption> options = {
-        {"vista", "Vista", "Vídeo", [](const Settings& f, Settings& t) { t.view = f.view; }},
-        {"escalado", "Escalado", "Vídeo", [](const Settings& f, Settings& t) { t.render.scale = f.render.scale; }},
-        {"suavizado", "Suavizado", "Vídeo", [](const Settings& f, Settings& t) { t.render.smooth = f.render.smooth; }},
-        {"filtro", "Filtro 2D", "Vídeo", [](const Settings& f, Settings& t) { t.render.filter = f.render.filter; }},
-        {"intensidad_filtro", "Intensidad del filtro", "Vídeo",
+        {"vista", N_("Vista"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.view = f.view; }},
+        {"escalado", N_("Escalado"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.scale = f.render.scale; }},
+        {"suavizado", N_("Suavizado"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.smooth = f.render.smooth; }},
+        {"filtro", N_("Filtro 2D"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.filter = f.render.filter; }},
+        {"intensidad_filtro", N_("Intensidad del filtro"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.filterStrength = f.render.filterStrength; }},
-        {"pixeles_cuadrados", "Píxeles cuadrados", "Vídeo",
+        {"pixeles_cuadrados", N_("Píxeles cuadrados"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.squarePixels = f.render.squarePixels; }},
-        {"perfil_3d", "Todos los ajustes del 3D", "3D", [](const Settings& f, Settings& t) { copy3D(f.render, t.render); }},
-        {"volumen", "Volumen", "Sonido", [](const Settings& f, Settings& t) { t.volume = f.volume; }},
-        {"silencio", "Silencio", "Sonido", [](const Settings& f, Settings& t) { t.mute = f.mute; }},
-        {"modo", "Sintetizador", "Sonido", [](const Settings& f, Settings& t) { t.roland = f.roland; }},
-        {"soundfont", "SoundFont", "Sonido", [](const Settings& f, Settings& t) { t.soundfont = f.soundfont; }},
-        {"mezcla_chip", "Sonido original mezclado", "Sonido", [](const Settings& f, Settings& t) { t.chipMix = f.chipMix; }},
-        {"reverb", "Reverb", "Sonido", [](const Settings& f, Settings& t) { t.reverb = f.reverb; }},
-        {"chorus", "Chorus", "Sonido", [](const Settings& f, Settings& t) { t.chorus = f.chorus; }},
-        {"efectos", "Efectos de sonido originales", "Sonido",
+        {"perfil_3d", N_("Todos los ajustes del 3D"), "3D", [](const Settings& f, Settings& t) { copy3D(f.render, t.render); }},
+        {"volumen", N_("Volumen"), N_("Sonido"), [](const Settings& f, Settings& t) { t.volume = f.volume; }},
+        {"silencio", N_("Silencio"), N_("Sonido"), [](const Settings& f, Settings& t) { t.mute = f.mute; }},
+        {"modo", N_("Sintetizador"), N_("Sonido"), [](const Settings& f, Settings& t) { t.roland = f.roland; }},
+        {"soundfont", N_("SoundFont"), N_("Sonido"), [](const Settings& f, Settings& t) { t.soundfont = f.soundfont; }},
+        {"mezcla_chip", N_("Sonido original mezclado"), N_("Sonido"), [](const Settings& f, Settings& t) { t.chipMix = f.chipMix; }},
+        {"reverb", N_("Reverb"), N_("Sonido"), [](const Settings& f, Settings& t) { t.reverb = f.reverb; }},
+        {"chorus", N_("Chorus"), N_("Sonido"), [](const Settings& f, Settings& t) { t.chorus = f.chorus; }},
+        {"efectos", N_("Efectos de sonido originales"), N_("Sonido"),
          [](const Settings& f, Settings& t) { t.effectsOriginal = f.effectsOriginal; }},
-        {"region", "Región", "Consola", [](const Settings& f, Settings& t) { t.region = f.region; }},
-        {"mandos", "Tipo de mando", "Consola", [](const Settings& f, Settings& t) { t.padType = f.padType; }},
-        {"rebobinado_segundos", "Segundos de rebobinado", "Velocidad",
+        {"region", N_("Región"), N_("Consola"), [](const Settings& f, Settings& t) { t.region = f.region; }},
+        {"mandos", N_("Tipo de mando"), N_("Consola"), [](const Settings& f, Settings& t) { t.padType = f.padType; }},
+        {"rebobinado_segundos", N_("Segundos de rebobinado"), N_("Velocidad"),
          [](const Settings& f, Settings& t) { t.rewindSeconds = f.rewindSeconds; }},
-        {"avance_rapido", "Avance rápido", "Velocidad", [](const Settings& f, Settings& t) { t.fastForward = f.fastForward; }},
-        {"camara_lenta", "Cámara lenta", "Velocidad", [](const Settings& f, Settings& t) { t.slowMotion = f.slowMotion; }},
+        {"avance_rapido", N_("Avance rápido"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.fastForward = f.fastForward; }},
+        {"camara_lenta", N_("Cámara lenta"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.slowMotion = f.slowMotion; }},
     };
     return options;
 }

@@ -1,5 +1,7 @@
 #include "cartridge.h"
 
+#include "i18n.h"
+
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -28,7 +30,7 @@ bool hasRomExtension(std::string name) {
 bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std::string* error) {
     mz_zip_archive zip{};
     if (!mz_zip_reader_init_mem(&zip, data.data(), data.size(), 0)) {
-        if (error) *error = "el zip está dañado: " + path;
+        if (error) *error = trf("el zip está dañado: %s", path.c_str());
         return false;
     }
     bool found = false;
@@ -39,7 +41,7 @@ bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std:
         size_t size = 0;
         void* rom = mz_zip_reader_extract_to_heap(&zip, i, &size, 0);
         if (!rom) {
-            if (error) *error = std::string("no se puede descomprimir ") + st.m_filename + " de " + path;
+            if (error) *error = trf("no se puede descomprimir %s de %s", st.m_filename, path.c_str());
             mz_zip_reader_end(&zip);
             return false;
         }
@@ -50,7 +52,7 @@ bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std:
         found = true;
     }
     mz_zip_reader_end(&zip);
-    if (!found && error) *error = "el zip no contiene ninguna ROM (.md, .gen, .bin, .smd o .32x): " + path;
+    if (!found && error) *error = trf("el zip no contiene ninguna ROM (.md, .gen, .bin, .smd o .32x): %s", path.c_str());
     return found;
 }
 
@@ -97,7 +99,7 @@ uint32_t be32(const std::vector<uint8_t>& r, size_t at) {
 bool Cartridge::loadFile(const std::string& path, std::string* error) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {
-        if (error) *error = "no se puede abrir " + path;
+        if (error) *error = trf("no se puede abrir %s", path.c_str());
         return false;
     }
     std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
@@ -105,7 +107,7 @@ bool Cartridge::loadFile(const std::string& path, std::string* error) {
     if (isSmd(data)) data = deinterleaveSmd(data);
     else if (data.size() % 0x4000 == 512) data.erase(data.begin(), data.begin() + 512);  // copier header
     if (data.size() < 0x200) {
-        if (error) *error = "el archivo es demasiado pequeño para ser una ROM de Mega Drive: " + path;
+        if (error) *error = trf("el archivo es demasiado pequeño para ser una ROM de Mega Drive: %s", path.c_str());
         return false;
     }
     loadData(std::move(data));

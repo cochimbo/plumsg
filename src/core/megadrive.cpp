@@ -1,5 +1,7 @@
 #include "megadrive.h"
 
+#include "i18n.h"
+
 #include <algorithm>
 #include <cstring>
 
@@ -73,7 +75,7 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
     std::vector<uint8_t> header(2048);
     disc->readData(0, header.data());
     if (std::memcmp(header.data(), "SEGADISCSYSTEM", 14) != 0) {
-        if (error) *error = "no es un disco de Mega CD";
+        if (error) *error = tr("no es un disco de Mega CD");
         return false;
     }
     // The disc's first sector has a header like a cartridge's: it stands in for the
@@ -88,10 +90,11 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
                                                   : Region::UsaNtsc;
     const int slot = wanted == Region::JapanNtsc ? 0 : wanted == Region::EuropePal ? 2 : 1;
     if (cdBios_[static_cast<size_t>(slot)].size() != 0x20000) {
-        static const char* const kNames[3] = {"Japón", "EE. UU.", "Europa"};
-        if (error)
-            *error = std::string("Falta la BIOS del Mega CD de ") + kNames[slot] +
-                     ": elígela en Consola > BIOS del Mega CD.";
+        static const char* const kMessages[3] = {
+            N_("Falta la BIOS del Mega CD de Japón: elígela en Consola > BIOS del Mega CD."),
+            N_("Falta la BIOS del Mega CD de EE. UU.: elígela en Consola > BIOS del Mega CD."),
+            N_("Falta la BIOS del Mega CD de Europa: elígela en Consola > BIOS del Mega CD.")};
+        if (error) *error = tr(kMessages[slot]);
         return false;
     }
     cart_ = std::move(loaded);
@@ -706,17 +709,17 @@ namespace {
 
 // Unpacks a savestate file into its body. Returns an empty string on success.
 std::string unpackState(const std::vector<uint8_t>& in, std::vector<uint8_t>& body) {
-    if (in.size() < 12) return "el archivo no es un estado de plumsg";
+    if (in.size() < 12) return tr("el archivo no es un estado de plumsg");
     StateReader header(in.data(), 12);
     uint32_t magic = 0, version = 0, rawSize = 0;
     header(magic, version, rawSize);
-    if (magic != kStateMagic) return "el archivo no es un estado de plumsg";
-    if (version > kStateVersion) return "el estado es de una versión más nueva de plumsg";
-    if (rawSize == 0 || rawSize > kMaxStateSize) return "el estado está dañado";
+    if (magic != kStateMagic) return tr("el archivo no es un estado de plumsg");
+    if (version > kStateVersion) return tr("el estado es de una versión más nueva de plumsg");
+    if (rawSize == 0 || rawSize > kMaxStateSize) return tr("el estado está dañado");
     body.resize(rawSize);
     mz_ulong size = rawSize;
     if (mz_uncompress(body.data(), &size, in.data() + 12, static_cast<mz_ulong>(in.size() - 12)) != MZ_OK || size != rawSize)
-        return "el estado está dañado";
+        return tr("el estado está dañado");
     return {};
 }
 
@@ -736,8 +739,8 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     uint8_t region = 0;
     uint64_t frames = 0;
     r(crc, region, frames);
-    if (!r.ok()) return fail("el estado está dañado");
-    if (crc != cart_.crc32()) return fail("el estado es de otra ROM");
+    if (!r.ok()) return fail(tr("el estado está dañado"));
+    if (crc != cart_.crc32()) return fail(tr("el estado es de otra ROM"));
 
     // Keep the current state so a bad block cannot leave the console half loaded.
     std::vector<uint8_t> backup;
@@ -801,7 +804,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
             loadState(backup, &ignored);
             loadedThumbnail_ = std::move(keptThumbnail);
         }
-        return fail("el estado está dañado o es de una versión incompatible");
+        return fail(tr("el estado está dañado o es de una versión incompatible"));
     }
     configureFor(static_cast<Region>(region & 3));
     if (!hasMixer) mixer_.reset();

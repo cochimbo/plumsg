@@ -1,5 +1,7 @@
 #include "cheats.h"
 
+#include "i18n.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -103,7 +105,7 @@ bool decodeCheat(const std::string& code, CheatPatch* out, std::string* error) {
         return false;
     };
     const std::string s = normalizeCheat(code);
-    if (s.empty()) return fail("Escribe un código.");
+    if (s.empty()) return fail(tr("Escribe un código."));
 
     // Action Replay: 6 hex digits of address, then 4 (a word) or 2 (a byte) of value,
     // with or without a ':' between them. Eight hex digits with no separator are only
@@ -123,17 +125,17 @@ bool decodeCheat(const std::string& code, CheatPatch* out, std::string* error) {
     }
     if (!address.empty() || colon != std::string::npos) {
         if (address.size() != 6 || !allHex(address) || (value.size() != 4 && value.size() != 2) || !allHex(value))
-            return fail("Un código Action Replay es como FF0A12:0009 (6 cifras hexadecimales y luego 4, o 2 para un byte).");
+            return fail(tr("Un código Action Replay es como FF0A12:0009 (6 cifras hexadecimales y luego 4, o 2 para un byte)."));
         CheatPatch p;
         p.address = parseHex(address);
         p.value = static_cast<uint16_t>(parseHex(value));
         p.byte = value.size() == 2;
         if (p.address >= 0x400000 && p.address < 0xE00000)
-            return fail("El código apunta fuera de la ROM y de la RAM.");
+            return fail(tr("El código apunta fuera de la ROM y de la RAM."));
         // An odd address with a value that fits in a byte ("FF0205:0005") is a byte
         // write, as Genesis Plus GX takes it: the cheat lists are full of them.
         if (!p.byte && (p.address & 1) && p.value <= 0xFF) p.byte = true;
-        if (!p.byte && (p.address & 1)) return fail("Un código de 4 cifras necesita una dirección par.");
+        if (!p.byte && (p.address & 1)) return fail(tr("Un código de 4 cifras necesita una dirección par."));
         *out = p;
         return true;
     }
@@ -141,13 +143,13 @@ bool decodeCheat(const std::string& code, CheatPatch* out, std::string* error) {
     std::string letters = s;
     if (letters.size() == 9 && letters[4] == '-') letters.erase(4, 1);
     if (letters.size() != 8)
-        return fail("Un código Game Genie tiene 8 letras (ABCD-EFGH) y uno Action Replay es como FF0A12:0009.");
+        return fail(tr("Un código Game Genie tiene 8 letras (ABCD-EFGH) y uno Action Replay es como FF0A12:0009."));
     for (char c : letters)
-        if (genieValue(c) < 0) return fail("Los códigos Game Genie no usan las letras I, O, Q ni U.");
+        if (genieValue(c) < 0) return fail(tr("Los códigos Game Genie no usan las letras I, O, Q ni U."));
     CheatPatch p;
     decodeGenie(letters, &p);
-    if (p.address >= 0x400000) return fail("El código Game Genie apunta fuera de la ROM.");
-    if (p.address & 1) return fail("El código Game Genie apunta a una dirección impar.");
+    if (p.address >= 0x400000) return fail(tr("El código Game Genie apunta fuera de la ROM."));
+    if (p.address & 1) return fail(tr("El código Game Genie apunta a una dirección impar."));
     *out = p;
     return true;
 }
@@ -170,7 +172,7 @@ bool decodeCheatCodes(const std::string& code, std::vector<CheatPatch>* out, std
         start = plus + 1;
     }
     if (out->empty()) {
-        if (error) *error = "Escribe un código.";
+        if (error) *error = tr("Escribe un código.");
         return false;
     }
     return true;

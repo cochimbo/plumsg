@@ -69,7 +69,9 @@ void Settings::parse(std::istream& in, Settings& s) {
         const std::string key = lower(trim(line.substr(0, eq)));
         const std::string value = trim(line.substr(eq + 1));
 
-        if (section == "video") {
+        if (section == "interfaz") {
+            if (key == "idioma") s.language = lower(value);
+        } else if (section == "video") {
             if (key == "vista") s.view = value;
             else if (key == "escalado") {
                 for (int i = 0; i < 3; ++i)
@@ -140,7 +142,10 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
 
 void Settings::write(std::ostream& out) const {
     auto flag = [](bool b) { return b ? "si" : "no"; };
-    out << "\n[video]\n"
+    out << "\n[interfaz]\n"
+        << "# idioma: es (español), en (English), fr (français) o pt (português); vacío: el del sistema.\n"
+        << "idioma = " << language << "\n"
+        << "\n[video]\n"
         << "# vista: 2D o capas (depuración, no son los colores del juego). escalado: entero, ajustar o estirar.\n"
         << "vista = " << view << "\n"
         << "escalado = " << kScaleNames[static_cast<int>(render.scale)] << "\n"

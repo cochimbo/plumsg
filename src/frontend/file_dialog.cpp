@@ -6,6 +6,7 @@
 #include <iterator>
 #include <system_error>
 
+#include "../core/i18n.h"
 #include "../core/system.h"
 #include "imgui.h"
 
@@ -57,14 +58,22 @@ DialogResult openFileDialog(SDL_Window* window, const std::string& startFolder, 
     OPENFILENAMEW ofn{};
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = owner;
-    ofn.lpstrFilter = pick == Pick::Game
-                          ? L"Juegos (*.md, *.gen, *.smd, *.bin, *.32x, *.zip, *.cue, *.chd, *.iso)\0"
-                            L"*.md;*.gen;*.smd;*.bin;*.32x;*.zip;*.cue;*.chd;*.iso\0Todos los archivos\0*.*\0"
-                          : L"Todos los archivos\0*.*\0";
+    // Name and patterns of each filter, each ended by a 0, and one more 0 at the end.
+    std::wstring filter;
+    auto addFilter = [&](const std::string& name, const wchar_t* patterns) {
+        filter += widen(name) + L'\0' + patterns + L'\0';
+    };
+    if (pick == Pick::Game)
+        addFilter(std::string(tr("Juegos")) + " (*.md, *.gen, *.smd, *.bin, *.32x, *.zip, *.cue, *.chd, *.iso)",
+                  L"*.md;*.gen;*.smd;*.bin;*.32x;*.zip;*.cue;*.chd;*.iso");
+    addFilter(tr("Todos los archivos"), L"*.*");
+    filter += L'\0';
+    ofn.lpstrFilter = filter.c_str();
     ofn.lpstrFile = file;
     ofn.nMaxFile = static_cast<DWORD>(std::size(file));
     ofn.lpstrInitialDir = folder.empty() ? nullptr : folder.c_str();
-    ofn.lpstrTitle = pick == Pick::Game ? L"Abrir juego" : L"Elegir archivo";
+    const std::wstring title = widen(pick == Pick::Game ? tr("Abrir juego") : tr("Elegir archivo"));
+    ofn.lpstrTitle = title.c_str();
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
     if (!GetOpenFileNameW(&ofn)) return DialogResult::Cancelled;
     *chosen = narrow(file);
@@ -174,9 +183,12 @@ bool FileBrowser::handleEvent(const SDL_Event& e) {
 
 bool FileBrowser::draw(std::string* chosen) {
     const bool pickFolder = pick_ == Pick::Folder;
-    const char* title = pickFolder ? "Elegir carpeta" : pick_ == Pick::Game ? "Abrir juego" : "Elegir archivo";
+    // The same id in every language, so a language change does not lose the popup.
+    const std::string title =
+        std::string(pickFolder ? tr("Elegir carpeta") : pick_ == Pick::Game ? tr("Abrir juego") : tr("Elegir archivo")) +
+        "###explorador";
     if (justOpened_) {
-        ImGui::OpenPopup(title);
+        ImGui::OpenPopup(title.c_str());
         justOpened_ = false;
     }
     bool picked = false;
@@ -185,19 +197,19 @@ bool FileBrowser::draw(std::string* chosen) {
                             ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(std::min(640.0f, vp->Size.x - 40), std::min(480.0f, vp->Size.y - 40)),
                              ImGuiCond_Appearing);
-    if (ImGui::BeginPopupModal(title, &open_)) {
-        ImGui::TextWrapped("%s", drives_ ? "Unidades" : folder_.c_str());
-        if (ImGui::Button("Subir")) up();
+    if (ImGui::BeginPopupModal(title.c_str(), &open_)) {
+        ImGui::TextWrapped("%s", drives_ ? tr("Unidades") : folder_.c_str());
+        if (ImGui::Button(tr("Subir"))) up();
         if (pickFolder && !drives_) {
             ImGui::SameLine();
-            if (ImGui::Button("Usar esta carpeta")) {
+            if (ImGui::Button(tr("Usar esta carpeta"))) {
                 *chosen = folder_;
                 picked = true;
             }
         }
         ImGui::SameLine();
-        ImGui::TextDisabled(pickFolder ? "A / Intro: entrar   B / Retroceso: subir   Esc: cerrar"
-                                        : "A / Intro: abrir   B / Retroceso: subir   Esc: cerrar");
+        ImGui::TextDisabled("%s", pickFolder ? tr("A / Intro: entrar   B / Retroceso: subir   Esc: cerrar")
+                                              : tr("A / Intro: abrir   B / Retroceso: subir   Esc: cerrar"));
         ImGui::Separator();
         std::string next;
         auto choose = [&](const Entry& e) {
@@ -226,7 +238,7 @@ bool FileBrowser::draw(std::string* chosen) {
                 ImGui::PopID();
             }
             if (entries_.empty())
-                ImGui::TextDisabled(pickFolder ? "No hay carpetas dentro de esta." : "No hay ROMs en esta carpeta.");
+                ImGui::TextDisabled("%s", pickFolder ? tr("No hay carpetas dentro de esta.") : tr("No hay ROMs en esta carpeta."));
         }
         ImGui::EndChild();
         if (activate_) {
@@ -235,7 +247,7 @@ bool FileBrowser::draw(std::string* chosen) {
                 choose(entries_[static_cast<size_t>(selected_)]);
         }
         if (!next.empty()) list(next);
-        if (ImGui::Button("Cancelar")) open_ = false;
+        if (ImGui::Button(tr("Cancelar"))) open_ = false;
         if (picked) open_ = false;
         if (!open_) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();

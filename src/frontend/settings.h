@@ -14,12 +14,13 @@
 namespace plumsg {
 
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
-// the [teclado] / [mando] sections, under [video], [audio], [consola], [velocidad],
-// [estados], [biblioteca], [bios], [red] and [recientes].
+// the [teclado] / [mando] sections, under [interfaz], [video], [audio], [consola],
+// [velocidad], [estados], [biblioteca], [bios], [red] and [recientes].
 struct Settings {
     static constexpr size_t kMaxRecent = 10;
     static constexpr int kMaxRewindSeconds = 60;
 
+    std::string language;  // "es", "en", "fr" or "pt"; empty: the system's, decided at start
     std::string view = "2D";  // Renderer::name() of the active view
     RenderOptions render;
     int windowScale = 3;

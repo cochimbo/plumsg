@@ -281,6 +281,12 @@ La pantalla completa y la región que se dan así valen solo para esa vez: `plum
 sigue como estaba. En LaunchBox, por ejemplo, se añade plumsg como emulador con la ruta
 de `plumsg.exe` y `--pantalla-completa` en los parámetros de la línea de comandos.
 
+### Idioma
+
+plumsg está en español, inglés, francés y portugués. La primera vez usa el idioma del
+sistema (o inglés si no es ninguno de esos), y se cambia en **Opciones > Idioma**. Cómo
+añadir textos o idiomas: [src/frontend/lang/README.md](src/frontend/lang/README.md).
+
 ## Compilar
 
 Hace falta CMake 3.16+, un compilador de C++17 y SDL2 (si no está instalado, CMake lo
