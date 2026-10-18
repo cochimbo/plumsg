@@ -156,10 +156,10 @@ struct App {
     }
 
     // The options `game` keeps of its own, over `general`.
-    GameOverrides readOverrides(const std::string& game, const Settings& general) const {
+    GameOverrides readOverrides(const std::string& game, const Settings& general, const InputConfig& generalInput) const {
         std::vector<uint8_t> data;
-        if (game.empty() || !readFile(profilePath(game), data)) return {{}, general};
-        return parseGameOverrides(std::string(data.begin(), data.end()), general);
+        if (game.empty() || !readFile(profilePath(game), data)) return {{}, general, generalInput};
+        return parseGameOverrides(std::string(data.begin(), data.end()), general, generalInput);
     }
 
     void writeOverrides(const std::string& game, const GameOverrides& o) const {
@@ -331,6 +331,7 @@ struct CommandLine {
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
     bool coverSearch = false;     // --buscar-caratula: with --biblioteca, look for the first game's cover
     bool cheats = false;          // --trucos: start with the game's Trucos window open
+    int gameOptions = 0;          // --opciones-juego [controles]: start with its Opciones de este juego window open (2 on Controles)
     bool editor = false;          // --instrumentos: start with the instrument editor open
     std::string track;            // --pista f.vgm: and this track in it
     // For launchers (LaunchBox, Playnite, frontends of arcade cabinets). These last only
@@ -359,6 +360,8 @@ const char* kHelp =
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
     "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
     "  --trucos               abrir los trucos del juego, con sus listas de internet\n"
+    "  --opciones-juego       abrir las opciones propias del juego\n"
+    "  --opciones-juego controles   ...en la pestaña de sus controles\n"
     "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
     "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
     "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
@@ -382,6 +385,13 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--bios") c.bios = true;
         else if (a == "--buscar-caratula") c.coverSearch = true;
         else if (a == "--trucos") c.cheats = true;
+        else if (a == "--opciones-juego") {
+            c.gameOptions = 1;
+            if (i + 1 < argc && std::string(argv[i + 1]) == "controles") {
+                c.gameOptions = 2;
+                ++i;
+            }
+        }
         else if (a == "--instrumentos") c.editor = true;
         else if (a == "--pista") c.track = next();
         else if (a == "--filtro") {
@@ -460,7 +470,7 @@ int main(int argc, char** argv) {
     // The general values of the options a game can have its own of. While a game with
     // some of its own is loaded, settings holds the game's and the general ones wait here.
     Settings general = toSave(settings);
-    GameOverrides game{{}, general};  // the loaded game's own options
+    GameOverrides game{{}, general, input->config()};  // the loaded game's own options
 
     // OpenGL 3.3 core everywhere; macOS only hands out core contexts marked forward compatible.
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -567,10 +577,13 @@ int main(int argc, char** argv) {
     };
     setRewindLimits();
     // A game takes its own options where it has them, and the general ones elsewhere.
+    // Its own buttons go over the general ones in Input, which keeps those for plumsg.ini.
+    auto applyControls = [&] { input->setGameButtons(game.has(kGameControls) ? &game.controls : nullptr); };
     auto useGameOptions = [&](const std::string& path) {
         game.restore(general, settings);
-        game = app->readOverrides(path, general);
+        game = app->readOverrides(path, general, input->config());
         game.applyTo(settings);
+        applyControls();
         applyConsole();
         applySound();
         applyInstruments(path);
@@ -683,7 +696,7 @@ int main(int argc, char** argv) {
     std::vector<Cheat> otherCheats;
     auto openGameOptions = [&](const std::string& path) {
         optionsGame = path;
-        if (path != app->romPath || !app->romLoaded) otherOptions = app->readOverrides(path, general);
+        if (path != app->romPath || !app->romLoaded) otherOptions = app->readOverrides(path, general, input->config());
     };
     auto openCheats = [&](const std::string& path) {
         cheatsGame = path;
@@ -692,6 +705,10 @@ int main(int argc, char** argv) {
     if (cmd.cheats && app->romLoaded) {
         openCheats(app->romPath);
         ui->openCheats();
+    }
+    if (cmd.gameOptions && app->romLoaded) {
+        openGameOptions(app->romPath);
+        ui->openGameOptions(cmd.gameOptions == 2);
     }
     // Netplay. The session talks through the socket, so it goes first on the way out.
     std::unique_ptr<UdpTransport> netSocket;
@@ -884,6 +901,7 @@ int main(int argc, char** argv) {
         uiState.gameOptions.values = optionsLoaded ? &settings : &otherOptions.values;
         uiState.gameOptions.own = optionsLoaded ? &game.own : &otherOptions.own;
         uiState.gameOptions.general = &general;
+        uiState.gameOptions.controls = optionsLoaded ? &game.controls : &otherOptions.controls;
         uiState.gameOptions.loaded = optionsLoaded;
         uiState.editor.loadedGame = app->romLoaded ? app->romPath : std::string();
         uiState.editor.recording = recording;
@@ -955,6 +973,7 @@ int main(int argc, char** argv) {
         }
         if (!act.optionsFor.empty()) openGameOptions(act.optionsFor);
         if (act.gameOptionsChanged && optionsLoaded) {
+            applyControls();
             save();
             if (act.rewindChanged) setRewindLimits();
         } else if (act.gameOptionsChanged && !optionsGame.empty()) {
