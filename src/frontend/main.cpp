@@ -125,8 +125,8 @@ struct App {
     void applyCheats() {
         std::vector<CheatPatch> patches;
         for (const Cheat& c : cheats) {
-            CheatPatch p;
-            if (c.enabled && decodeCheat(c.code, &p, nullptr)) patches.push_back(p);
+            std::vector<CheatPatch> p;
+            if (c.enabled && decodeCheatCodes(c.code, &p, nullptr)) patches.insert(patches.end(), p.begin(), p.end());
         }
         console.setCheats(patches);
     }
@@ -330,6 +330,7 @@ struct CommandLine {
     bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
     bool coverSearch = false;     // --buscar-caratula: with --biblioteca, look for the first game's cover
+    bool cheats = false;          // --trucos: start with the game's Trucos window open
     bool editor = false;          // --instrumentos: start with the instrument editor open
     std::string track;            // --pista f.vgm: and this track in it
     // For launchers (LaunchBox, Playnite, frontends of arcade cabinets). These last only
@@ -357,6 +358,7 @@ const char* kHelp =
     "  --biblioteca carpeta   abrir la biblioteca de esa carpeta (se puede repetir)\n"
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
     "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
+    "  --trucos               abrir los trucos del juego, con sus listas de internet\n"
     "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
     "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
     "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
@@ -379,6 +381,7 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--descargar-caratulas") c.downloadCovers = true;
         else if (a == "--bios") c.bios = true;
         else if (a == "--buscar-caratula") c.coverSearch = true;
+        else if (a == "--trucos") c.cheats = true;
         else if (a == "--instrumentos") c.editor = true;
         else if (a == "--pista") c.track = next();
         else if (a == "--filtro") {
@@ -685,6 +688,10 @@ int main(int argc, char** argv) {
         cheatsGame = path;
         if (path != app->romPath || !app->romLoaded) otherCheats = app->readCheats(path);
     };
+    if (cmd.cheats && app->romLoaded) {
+        openCheats(app->romPath);
+        ui->openCheats();
+    }
     // Netplay. The session talks through the socket, so it goes first on the way out.
     std::unique_ptr<UdpTransport> netSocket;
     std::unique_ptr<NetplaySession> net;
@@ -870,6 +877,7 @@ int main(int argc, char** argv) {
         const bool cheatsLoaded = app->romLoaded && cheatsGame == app->romPath;
         uiState.cheats = cheatsGame.empty() ? nullptr : cheatsLoaded ? &app->cheats : &otherCheats;
         uiState.cheatsGame = cheatsGame.empty() ? std::string() : fileName(cheatsGame);
+        uiState.cheatsPath = cheatsGame;
         const bool optionsLoaded = app->romLoaded && optionsGame == app->romPath;
         uiState.gameOptions.game = optionsGame.empty() ? std::string() : fileName(optionsGame);
         uiState.gameOptions.values = optionsLoaded ? &settings : &otherOptions.values;
@@ -1096,7 +1104,7 @@ int main(int argc, char** argv) {
         // library one for its covers.
         const bool libraryReady =
             loops > 3 && (!ui->libraryOpen() || (!downloadCovers && !coverSearch && ui->library().pending() == 0 && loops > 20)) &&
-            !ui->coverSearchBusy();
+            !ui->coverSearchBusy() && !ui->cheatsBusy();
         if (capturing && libraryReady &&
             (framesRun >= cmd.frames || !app->romLoaded || ui->libraryOpen() ||
              (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {

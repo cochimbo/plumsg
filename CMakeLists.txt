@@ -167,6 +167,7 @@ add_executable(plumsg WIN32
   src/frontend/library.cpp
   src/frontend/library_names.cpp
   src/frontend/http.cpp
+  src/frontend/cheat_database.cpp
   src/render/gl.cpp
   src/render/gl_renderers.cpp
 )

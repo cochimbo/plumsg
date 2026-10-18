@@ -223,7 +223,10 @@ double wordMatch(const std::string& q, const std::string& n) {
 
 }  // namespace
 
-std::vector<std::string> parseCoverList(const std::string& listing) {
+std::vector<std::string> parseCoverList(const std::string& listing) { return parseFileList(listing, ".png"); }
+
+std::vector<std::string> parseFileList(const std::string& listing, const std::string& extension) {
+    const std::string ext = lowerCase(extension);
     std::vector<std::string> out;
     const bool json = listing.find("\"path\"") != std::string::npos;
     const std::string marker = json ? "\"path\"" : "href=\"";
@@ -242,8 +245,8 @@ std::vector<std::string> parseCoverList(const std::string& listing) {
         }
         const size_t slash = name.find_last_of('/');
         if (slash != std::string::npos) name = name.substr(slash + 1);
-        if (name.size() <= 4 || lowerCase(name.substr(name.size() - 4)) != ".png") continue;
-        out.push_back(name.substr(0, name.size() - 4));
+        if (name.size() <= ext.size() || lowerCase(name.substr(name.size() - ext.size())) != ext) continue;
+        out.push_back(name.substr(0, name.size() - ext.size()));
     }
     std::sort(out.begin(), out.end());
     out.erase(std::unique(out.begin(), out.end()), out.end());
@@ -275,6 +278,24 @@ std::vector<std::string> similarCoverNames(const std::vector<std::string>& names
     std::stable_sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
     std::vector<std::string> out;
     for (size_t i = 0; i < scored.size() && out.size() < max; ++i) out.push_back(names[scored[i].second]);
+    return out;
+}
+
+std::vector<std::string> cheatFileNames(const std::vector<std::string>& index, const std::string& fileStem, size_t max) {
+    std::vector<std::string> out;
+    auto add = [&](const std::string& n) {
+        if (std::binary_search(index.begin(), index.end(), n) && std::find(out.begin(), out.end(), n) == out.end())
+            out.push_back(n);
+    };
+    for (const std::string& n : coverNames(fileStem)) {
+        add(n);
+        add(n + " (Action Replay)");
+    }
+    // The "(Rumbles)" files are mostly pad vibration settings, not codes: last.
+    std::vector<std::string> similar = similarCoverNames(index, fileStem, max);
+    std::stable_partition(similar.begin(), similar.end(),
+                          [](const std::string& n) { return n.find("(Rumbles)") == std::string::npos; });
+    for (const std::string& n : similar) add(n);
     return out;
 }
 

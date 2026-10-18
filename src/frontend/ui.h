@@ -9,6 +9,7 @@
 
 #include "../core/cheats.h"
 #include "../core/system.h"
+#include "cheat_database.h"
 #include "file_dialog.h"
 #include "input.h"
 #include "instrument_editor.h"
@@ -79,6 +80,7 @@ struct UiState {
     std::vector<SlotInfo> slots;     // one per slot, 0-9
     std::vector<Cheat>* cheats = nullptr;  // the cheats of the Trucos window's game, edited in place
     std::string cheatsGame;                // that game's file name
+    std::string cheatsPath;                // and its path
     GameOptionsView gameOptions;
     // Netplay: a session exists (hosting, joining or playing), and what to say about it.
     bool netSession = false;
@@ -119,6 +121,12 @@ public:
     // "Buscar carátula..." for the library's game `game`.
     void openCoverSearch(size_t game);
     bool coverSearchBusy() const { return showCoverSearch_ && (coverSearch_.autoPreview || library_.coverSearch().busy); }
+    // The Trucos window, for the game main() handed it.
+    void openCheats() { showCheats_ = true; }
+    // Its lists from internet are still being looked for (or not asked for yet).
+    bool cheatsBusy() const {
+        return showCheats_ && (cheatDb_.view().busy || cheatDb_.view().game.empty() || cheatsRefit_ > 0);
+    }
     void openNetplay() { showNetplay_ = true; }
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
@@ -149,6 +157,7 @@ private:
     void drawAbout();
     void drawError();
     void drawCheats(const UiState& state, UiActions& out);
+    void drawCheatDatabase(const UiState& state, UiActions& out);
     void drawGameOptions(const UiState& state, UiActions& out);
     void drawLibrary(UiActions& out);
     void drawLibraryFolders(UiActions& out);
@@ -172,6 +181,7 @@ private:
     Input& input_;
     FileBrowser browser_;
     Library library_;
+    CheatDatabase cheatDb_;
     InstrumentEditor* editor_ = nullptr;
     unsigned int logoTexture_ = 0;  // the PLUMSG marquee, 0 if it could not be decoded
     int logoWidth_ = 0, logoHeight_ = 0;
@@ -235,6 +245,9 @@ private:
     char cheatCode_[64] = "";
     char cheatName_[96] = "";
     std::string cheatError_;
+    char cheatFilter_[64] = "";  // over the downloaded list
+    int cheatsRefit_ = 0;        // frames left to fit the Trucos window to its new height
+    float cheatsWidth_ = 560;
     std::string error_;  // showError(), until acknowledged
     std::string toast_;
     Uint32 toastUntil_ = 0;

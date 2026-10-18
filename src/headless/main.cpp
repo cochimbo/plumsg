@@ -56,7 +56,7 @@ Running
   --bios FILE           Mega CD BIOS; its region comes from its header (else: all)
   --bios-dir DIR        look for Mega CD BIOS files in DIR and its subfolders
   --load-state FILE     start from this savestate (after loading the game)
-  --cheat CODE          Game Genie or Action Replay code (can repeat)
+  --cheat CODE          Game Genie or Action Replay code, several joined with + (can repeat)
 
 Input
   --input FILE          input script (see below)
@@ -621,13 +621,13 @@ int main(int argc, char** argv) {
     if (!cheats.empty()) {
         std::vector<CheatPatch> patches;
         for (const std::string& code : cheats) {
-            CheatPatch p;
+            std::vector<CheatPatch> p;
             std::string error;
-            if (!decodeCheat(code, &p, &error)) {
+            if (!decodeCheatCodes(code, &p, &error)) {
                 std::fprintf(stderr, "bad cheat %s: %s\n", code.c_str(), error.c_str());
                 return 2;
             }
-            patches.push_back(p);
+            patches.insert(patches.end(), p.begin(), p.end());
         }
         md.setCheats(patches);
     }

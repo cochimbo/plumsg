@@ -24,6 +24,13 @@ std::vector<std::string> coverNames(const std::string& fileStem);
 // the HTML index of thumbnails.libretro.com (href="...png", percent-encoded) or the
 // JSON of GitHub's git trees API ("path": "...png"). Sorted, without repeats.
 std::vector<std::string> parseCoverList(const std::string& listing);
+// The same for any listing and file extension (".cht" for the cheat lists).
+std::vector<std::string> parseFileList(const std::string& listing, const std::string& extension);
+// The cheat files (names without ".cht") of a libretro-database cht folder, `index`
+// as sorted by parseFileList(), to offer for the ROM `fileStem`: the ones named like
+// coverNames() would try, each followed by its "(Action Replay)" list, then the `max`
+// similarCoverNames() ("(Rumbles)" ones last). Best first, without repeats.
+std::vector<std::string> cheatFileNames(const std::vector<std::string>& index, const std::string& fileStem, size_t max);
 // The `max` names of `names` that look most like `query` (a game's name as the user
 // typed it), best first. Words are compared without case or punctuation, a word may
 // be the start of another or have a typo, and roman numerals match digits ("II" is
