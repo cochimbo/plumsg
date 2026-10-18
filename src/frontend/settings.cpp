@@ -87,12 +87,12 @@ void Settings::parse(std::istream& in, Settings& s) {
         } else if (section == "audio") {
             if (key == "volumen") s.volume = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "silencio") s.mute = yes(value);
-            else if (key == "modo") s.roland = lower(value) == "roland";
+            else if (key == "modo") s.roland = lower(value) == "sintetizador" || lower(value) == "roland";
             else if (key == "soundfont") s.soundfont = value;
             else if (key == "mezcla_chip") s.chipMix = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "reverb") s.reverb = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "chorus") s.chorus = std::clamp(std::atoi(value.c_str()), 0, 100);
-            else if (key == "efectos") s.effectsOriginal = lower(value) != "roland";
+            else if (key == "efectos") s.effectsOriginal = lower(value) == "original";
         } else if (section == "consola") {
             if (key == "region") {
                 for (int i = 0; i < 4; ++i)
@@ -158,17 +158,17 @@ void Settings::write(std::ostream& out) const {
         << "# volumen: de 0 a 100.\n"
         << "volumen = " << volume << "\n"
         << "silencio = " << flag(mute) << "\n"
-        << "# modo: original (el YM2612 y el PSG) o roland (su música con un SoundFont, como una SC-55).\n"
+        << "# modo: original (el YM2612 y el PSG) o sintetizador (su música con un SoundFont, como una SC-55).\n"
         << "# soundfont: un .sf2 propio (vacío: el que viene con plumsg). mezcla_chip: cuánto se oye\n"
-        << "# el sonido original además del Roland, de 0 a 100. reverb y chorus: de 0 a 100.\n"
-        << "modo = " << (roland ? "roland" : "original") << "\n"
+        << "# el sonido original además del sintetizador, de 0 a 100. reverb y chorus: de 0 a 100.\n"
+        << "modo = " << (roland ? "sintetizador" : "original") << "\n"
         << "soundfont = " << soundfont << "\n"
         << "mezcla_chip = " << chipMix << "\n"
         << "reverb = " << reverb << "\n"
         << "chorus = " << chorus << "\n"
-        << "# efectos: original (los efectos de sonido suenan como en la consola) o roland. Hace falta\n"
+        << "# efectos: original (los efectos de sonido suenan como en la consola) o sintetizador. Hace falta\n"
         << "# haber usado Sacar canciones en el juego para saber cuáles son sus efectos.\n"
-        << "efectos = " << (effectsOriginal ? "original" : "roland") << "\n"
+        << "efectos = " << (effectsOriginal ? "original" : "sintetizador") << "\n"
         << "\n[consola]\n"
         << "# region: auto (la de la ROM), japon, usa o europa. mando1/mando2: 3 o 6 botones.\n"
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"

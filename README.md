@@ -149,15 +149,17 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   curva, la máscara de colores y las esquinas oscuras), con su intensidad. Se notan más
   cuanto más grande es la ventana, mejor a pantalla completa.
 - **Sonido**: volumen, silenciar y el modo de la música. **Original** es el sonido de los
-  chips. **Roland** toca la música del FM y del PSG como notas General MIDI sobre un
-  SoundFont, como sonaría en un Roland SC-55; las voces y la batería digitalizada (el DAC)
+  chips. **Sintetizador** toca la música del FM y del PSG como notas General MIDI sobre un
+  SoundFont, como sonaría en un módulo como el Roland SC-55; las voces y la batería digitalizada (el DAC)
   siguen sonando como en la consola. El control **Sonido original** deja oír también el FM y el PSG
   por debajo, y **Reverb** y **Chorus** añaden ambiente. Cada instrumento del juego recibe
   un instrumento General MIDI con unas reglas automáticas, que se cambian a mano en el
   **Editor de instrumentos**. Todo esto se puede cambiar solo para un juego desde sus opciones.
 
-  plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable, y con **Elegir
-  SoundFont (.sf2)...** se puede usar otro (**Usar el incluido** vuelve a él):
+  plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable. Los `.sf2` que se
+  dejen en `sonido\soundfonts\` (**Abrir la carpeta de SoundFonts** la abre) salen en el
+  desplegable **SoundFont** para elegir uno con un clic, y **Elegir otro (.sf2)...** abre
+  uno de cualquier sitio:
   - Formato **SoundFont 2** (`.sf2`). No valen los `.sf3` (comprimidos), `.sfz` ni `.dls`;
     un `.sf3` se puede pasar a `.sf2` con Polyphone.
   - Tiene que estar ordenado como **General MIDI**: los 128 instrumentos en el banco 0 y la
@@ -192,7 +194,7 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     (**Carpeta** la abre). Desde entonces, la lista **Pista** de ese juego trae cada canción
     por su nombre, como "Green Hill Zone", junto a las grabaciones. También vale el sound
     test del juego: se pone a grabar y se van tocando sus canciones.
-  - **Tocar** la reproduce con el juego en pausa. **Original** y **Roland** cambian entre
+  - **Tocar** la reproduce con el juego en pausa. **Original** y **Sintetizador** cambian entre
     los dos sonidos en el mismo punto, para comparar. Cada canal (FM 1-6, DAC, PSG 1-3 y
     ruido) tiene **Solo** y **Silencio**.
   - La lista enseña los instrumentos de la pista, con sus canales y sus notas. Los que suenan

@@ -517,6 +517,7 @@ int main(int argc, char** argv) {
     bool rolandFontOk = false;
     InstrumentEditor editor(paths.sound);
     ui->setEditor(&editor);
+    ui->setSoundfonts(paths.soundfont, paths.sound + "soundfonts/");
     auto loadSoundfont = [&] {
         const std::string path = settings.soundfont.empty() ? paths.soundfont : settings.soundfont;
         if (path == rolandFont) return rolandFontOk;

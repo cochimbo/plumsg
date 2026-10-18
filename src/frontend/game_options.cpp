@@ -39,7 +39,7 @@ const std::vector<GameOption>& gameOptions() {
         {"perfil_3d", "Todos los ajustes del 3D", "3D", [](const Settings& f, Settings& t) { copy3D(f.render, t.render); }},
         {"volumen", "Volumen", "Sonido", [](const Settings& f, Settings& t) { t.volume = f.volume; }},
         {"silencio", "Silencio", "Sonido", [](const Settings& f, Settings& t) { t.mute = f.mute; }},
-        {"modo", "Sonido Roland", "Sonido", [](const Settings& f, Settings& t) { t.roland = f.roland; }},
+        {"modo", "Sintetizador", "Sonido", [](const Settings& f, Settings& t) { t.roland = f.roland; }},
         {"soundfont", "SoundFont", "Sonido", [](const Settings& f, Settings& t) { t.soundfont = f.soundfont; }},
         {"mezcla_chip", "Sonido original mezclado", "Sonido", [](const Settings& f, Settings& t) { t.chipMix = f.chipMix; }},
         {"reverb", "Reverb", "Sonido", [](const Settings& f, Settings& t) { t.reverb = f.reverb; }},

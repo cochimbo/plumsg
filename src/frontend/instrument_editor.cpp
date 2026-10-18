@@ -536,7 +536,7 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!soundfontReady_);
-    if (ImGui::RadioButton("Roland", rolandOutput_)) {
+    if (ImGui::RadioButton("Sintetizador", rolandOutput_)) {
         rolandOutput_ = true;
         player_.setRolandOutput(true);
         applyListening();

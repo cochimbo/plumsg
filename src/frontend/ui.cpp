@@ -1,7 +1,9 @@
 #include "ui.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <filesystem>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -474,18 +476,18 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
     ImGui::SliderInt("Volumen", &settings_.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
 
-    ImGui::SeparatorText("Sonido Roland (SC-55)");
+    ImGui::SeparatorText("Música");
     if (ImGui::MenuItem("Original (YM2612 y PSG)", nullptr, !settings_.roland)) {
         settings_.roland = false;
         out.settingsChanged = out.soundChanged = true;
     }
-    if (ImGui::MenuItem("Roland: la música con un SoundFont", nullptr, settings_.roland)) {
+    if (ImGui::MenuItem("Sintetizador: la música con un SoundFont", nullptr, settings_.roland)) {
         settings_.roland = true;
         out.settingsChanged = out.soundChanged = true;
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Las notas del YM2612 y del PSG suenan con instrumentos General MIDI, como en una\n"
-                          "Roland SC-55. Las voces y la batería digital (el DAC) siguen siendo las del juego.\n"
+        ImGui::SetTooltip("Las notas del YM2612 y del PSG suenan con instrumentos General MIDI del SoundFont\n"
+                          "elegido, como en un módulo SC-55. Las voces y la batería digital (el DAC) siguen siendo las del juego.\n"
                           "Cada sonido FM recibe un instrumento por reglas, que se cambia a mano en el\n"
                           "Editor de instrumentos.");
     ImGui::BeginDisabled(!settings_.roland);
@@ -499,13 +501,7 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
         ImGui::SetTooltip("Los efectos (anillos, saltos, golpes...) suenan como en la consola y solo la música\n"
                           "pasa por el SoundFont. Para saber cuáles son, usa antes Sacar canciones en el Editor\n"
                           "de instrumentos. Cada efecto se puede cambiar también a mano en el editor.");
-    const std::string font = settings_.soundfont.empty() ? std::string("GeneralUser GS (incluido)") : fileName(settings_.soundfont);
-    ImGui::TextDisabled("SoundFont: %s", font.c_str());
-    if (ImGui::MenuItem("Elegir SoundFont (.sf2)...")) chooseSoundfont(out);
-    if (ImGui::MenuItem("Usar el incluido", nullptr, false, !settings_.soundfont.empty())) {
-        settings_.soundfont.clear();
-        out.settingsChanged = out.soundChanged = true;
-    }
+    drawSoundfontMenu(out);
     ImGui::SetNextItemWidth(160);
     ImGui::SliderInt("Sonido original", &settings_.chipMix, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cuánto se oye además la música original del YM2612 y el PSG.");
@@ -524,7 +520,49 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
     }
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
-                          "y elige con qué instrumento General MIDI suena en el sonido Roland.");
+                          "y elige con qué instrumento General MIDI suena en el sintetizador.");
+}
+
+void Ui::setSoundfonts(std::string included, std::string folder) {
+    includedSoundfont_ = std::move(included);
+    soundfontFolder_ = std::move(folder);
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::u8path(soundfontFolder_), ec);
+}
+
+// The SoundFonts to choose from, in a drop-down: the included one, and every .sf2 in
+// the user's folder (read while it is open, so new downloads show up at once).
+void Ui::drawSoundfontMenu(UiActions& out) {
+    auto choose = [&](const std::string& path) {
+        settings_.soundfont = path;
+        out.settingsChanged = out.soundChanged = true;
+    };
+    auto name = [](const std::string& path) { return std::filesystem::u8path(path).stem().u8string(); };
+    const std::string current = settings_.soundfont.empty() ? std::string("GeneralUser GS (incluido)") : name(settings_.soundfont);
+    ImGui::SetNextItemWidth(220);
+    if (ImGui::BeginCombo("SoundFont", current.c_str())) {
+        if (ImGui::Selectable("GeneralUser GS (incluido)", settings_.soundfont.empty())) choose("");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", includedSoundfont_.c_str());
+        std::vector<std::string> fonts;
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(std::filesystem::u8path(soundfontFolder_), ec)) {
+            std::string ext = e.path().extension().u8string();
+            for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (e.is_regular_file(ec) && ext == ".sf2") fonts.push_back(e.path().u8string());
+        }
+        std::sort(fonts.begin(), fonts.end());
+        bool listed = settings_.soundfont.empty();
+        for (const std::string& f : fonts) {
+            const bool on = settings_.soundfont == f;
+            listed = listed || on;
+            if (ImGui::Selectable(name(f).c_str(), on)) choose(f);
+        }
+        if (!listed) ImGui::Selectable(current.c_str(), true);  // chosen from elsewhere
+        if (fonts.empty()) ImGui::TextDisabled("Deja tus .sf2 en la carpeta de SoundFonts\ny aparecerán aquí.");
+        ImGui::EndCombo();
+    }
+    if (ImGui::MenuItem("Abrir la carpeta de SoundFonts")) SDL_OpenURL(("file:///" + soundfontFolder_).c_str());
+    if (ImGui::MenuItem("Elegir otro (.sf2)...")) chooseSoundfont(out);
 }
 
 void Ui::chooseSoundfont(UiActions& out) {
@@ -1676,7 +1714,7 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
             edited |= ImGui::Checkbox("Silenciar", &s.mute);
         } else if (key == "modo") {
             int i = s.roland ? 1 : 0;
-            static const char* names[] = {"Original (YM2612 y PSG)", "Roland (SoundFont)"};
+            static const char* names[] = {"Original (YM2612 y PSG)", "Sintetizador (SoundFont)"};
             if (ImGui::Combo(opt.label, &i, names, 2)) {
                 s.roland = i == 1;
                 edited = true;
