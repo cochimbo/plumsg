@@ -135,7 +135,11 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   libretro-thumbnails, en el juego de carátulas de cada consola, y las guarda en
   `caratulas\` junto a `states\` (las de 32X en `caratulas\32X\` y las de Mega CD en
   `caratulas\MegaCD\`). También vale una imagen propia: un `.png` o `.jpg` con el nombre
-  del juego a su lado, o en una carpeta `caratulas` o `covers` de la carpeta de juegos. Si
+  del juego a su lado, o en una carpeta `caratulas` o `covers` de la carpeta de juegos.
+  Si una no sale, o sale la que no es, **Buscar carátula...** en el menú del juego (botón
+  derecho, X en el mando o la tecla de menú) deja cambiar el nombre que se busca y lista
+  las carátulas de nombre parecido (vale con parte del nombre, una errata o `2` por `II`);
+  al pulsar una se ve, y **Usar esta carátula** la guarda como la del juego. Si
   hay carpetas elegidas, la biblioteca se abre al arrancar sin juego.
 - **Consola > BIOS del Mega CD** (o el botón de la biblioteca): el archivo de la BIOS de
   cada región (Japón, EE. UU. y Europa, 128 KB, como `bios_CD_U.bin`). plumsg dice si el
@@ -311,7 +315,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   `plumsg rom.md --3d --inclinacion 30 --cuadros 120 --captura 3d.png`, con
   `--filtro crt` o `--filtro scanlines`, o de la biblioteca con
   `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`
-  (`--biblioteca` se puede repetir, y `--bios` abre la ventana de las BIOS).
+  (`--biblioteca` se puede repetir, `--bios` abre la ventana de las BIOS y
+  `--buscar-caratula` la búsqueda de carátula del primer juego de la biblioteca).
 
 ## Sin ventana: `plumsg-headless`
 

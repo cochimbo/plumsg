@@ -56,6 +56,26 @@ public:
     // Status of the last download round, for the window ("12 carátulas descargadas...").
     std::string downloadStatus() const;
 
+    // Looking for one game's cover by hand ("Buscar carátula..." in its menu): the
+    // names of the console's box art set that look like what the user typed, a preview
+    // of the one picked, and using it. The set's list of names is downloaded once.
+    struct CoverSearch {
+        bool busy = false;               // listing, ranking or downloading a preview
+        std::string status;              // an error, or empty
+        std::vector<std::string> names;  // best first
+        std::string previewName;         // the cover in `preview`
+        unsigned int preview = 0;        // texture, 0 while there is none
+        int width = 0, height = 0;
+    };
+    void searchCovers(ConsoleSystem s, const std::string& query);
+    void previewCover(ConsoleSystem s, const std::string& name);
+    // Saves the previewed cover as `game`'s own (in the covers folder, where it is
+    // looked for first) and shows it in the grid.
+    bool useCover(size_t game);
+    // Forgets the search and frees the preview.
+    void endCoverSearch();
+    const CoverSearch& coverSearch() const { return search_; }
+
     // Main thread, once a frame: uploads a few decoded covers as textures.
     void update();
     void clearTextures();
@@ -76,7 +96,28 @@ private:
         int width, height;
     };
 
+    // One request to the search thread; a newer one replaces it if it has not started.
+    struct SearchTask {
+        enum Kind { Names, Preview } kind;
+        unsigned serial;
+        ConsoleSystem system;
+        std::string text;  // the query, or the name to preview
+    };
+    struct SearchReply {
+        SearchTask::Kind kind;
+        unsigned serial;
+        std::string status;
+        std::vector<std::string> names;
+        std::string name;
+        std::vector<uint8_t> image;  // the preview's file
+        std::vector<uint32_t> pixels;
+        int width = 0, height = 0;
+    };
+
     void work();
+    void searchWork();
+    bool loadCoverIndex(ConsoleSystem s, std::string* error);
+    void askSearch(SearchTask task);
     bool findLocal(const Job& job, std::string* coverPath) const;
     bool fetch(const Job& job, std::string* coverPath);
     void queue(Job job);
@@ -99,6 +140,16 @@ private:
     bool libretroDown_ = false;  // thumbnails.libretro.com failed: use GitHub's copy
     bool stop_ = false;
     std::thread worker_;
+
+    CoverSearch search_;            // main thread only
+    std::vector<uint8_t> previewImage_;
+    unsigned searchSerial_ = 0;     // the latest request; older replies are dropped
+    bool hasTask_ = false, hasReply_ = false;  // guarded by mutex_
+    SearchTask task_;
+    SearchReply reply_;
+    std::condition_variable searchWake_;
+    std::vector<std::string> coverIndex_[kSystemCount];  // search thread only
+    std::thread searcher_;
 };
 
 }  // namespace plumsg

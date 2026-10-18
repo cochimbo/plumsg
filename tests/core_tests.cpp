@@ -1105,6 +1105,27 @@ void testLibraryNames() {
     check(!bare.empty() && bare[0] == "Golden Axe III (USA)", "library: a bare name tries the usual regions");
     check(urlEncode("Columns (USA, Europe)") == "Columns%20%28USA%2C%20Europe%29", "library: URL encoding");
     check(searchKey("Dr. Robotnik's  Mean-Bean") == "dr robotnik s mean bean", "library: search key");
+
+    const std::string html = "<a href=\"../\">../</a>\n<a href=\"Sonic%20The%20Hedgehog%202%20%28World%29.png\">Sonic...</a>\n"
+                             "<a href=\"Ecco%20the%20Dolphin%20%28USA%29.png\">Ecco</a>\n<a href=\"Tools.txt\">x</a>";
+    const auto fromHtml = parseCoverList(html);
+    check(fromHtml.size() == 2 && fromHtml[0] == "Ecco the Dolphin (USA)" && fromHtml[1] == "Sonic The Hedgehog 2 (World)",
+          "library: cover list from libretro's index");
+    const std::string json = "{\"tree\":[{\"path\": \"Pok\\u00e9mon (Japan).png\",\"type\":\"blob\"},"
+                             "{\"path\":\"Golden Axe II (World).png\"}]}";
+    const auto fromJson = parseCoverList(json);
+    check(fromJson.size() == 2 && fromJson[0] == "Golden Axe II (World)" && fromJson[1] == "Pok\xc3\xa9mon (Japan)",
+          "library: cover list from GitHub's tree");
+    const std::vector<std::string> set = {"Golden Axe (World)", "Golden Axe II (World)", "Golden Axe III (Japan)",
+                                          "Sonic The Hedgehog (USA, Europe)", "Sonic The Hedgehog 2 (World)",
+                                          "Sonic The Hedgehog 3 (USA)", "Streets of Rage 2 (USA)", "Lion King, The (World)"};
+    auto similar = similarCoverNames(set, "Golden Axe 2", 3);
+    check(!similar.empty() && similar[0] == "Golden Axe II (World)", "library: '2' finds the 'II' cover first");
+    similar = similarCoverNames(set, "sonic hedgehod 3", 2);
+    check(!similar.empty() && similar[0] == "Sonic The Hedgehog 3 (USA)", "library: a typo still finds the cover");
+    similar = similarCoverNames(set, "The Lion King (Europe)", 5);
+    check(!similar.empty() && similar[0] == "Lion King, The (World)", "library: ', The' and other regions");
+    check(similarCoverNames(set, "Columns", 5).empty(), "library: nothing alike, no suggestions");
 }
 
 void testSystems() {

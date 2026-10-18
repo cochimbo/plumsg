@@ -250,6 +250,7 @@ UiActions Ui::frame(const UiState& state) {
     if (showGameOptions_) drawGameOptions(state, out);
     library_.update();
     if (showLibrary_) drawLibrary(out);
+    if (showCoverSearch_) drawCoverSearch();
     if (showBios_) drawBios(out);
     if (showNetplay_) drawNetplay(state, out);
     if (editor_ && editor_->isOpen()) {
@@ -301,7 +302,7 @@ UiActions Ui::frame(const UiState& state) {
 // the system pointer when it is None.
 void Ui::hideIdleCursor(const UiState& state) {
     const bool windowOpen = showControls_ || showVideo_ || showAbout_ || showCheats_ || showGameOptions_ || showLibrary_ ||
-                            showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
+                            showCoverSearch_ || showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
                             (editor_ && editor_->isOpen()) ||
                             !error_.empty() || capture_.active ||
                             ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) || ImGui::GetIO().WantCaptureMouse;
@@ -1012,7 +1013,7 @@ bool Ui::handleLibrary(const SDL_Event& e) {
     if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_KEYUP &&
         e.type != SDL_CONTROLLERBUTTONUP && e.type != SDL_TEXTINPUT)
         return false;
-    if (browser_.isOpen() || showBios_ || showCheats_ || showGameOptions_) return false;
+    if (browser_.isOpen() || showBios_ || showCheats_ || showGameOptions_ || showCoverSearch_) return false;
     const bool typing = ImGui::GetIO().WantTextInput;
     if (typing && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_CONTROLLERBUTTONUP) {
         // The search box gets the keys; Enter or the arrows hand them back to the grid.
@@ -1311,7 +1312,7 @@ void Ui::drawLibrary(UiActions& out) {
             ImGui::TextDisabled("%s", g.title.c_str());
             ImGui::Separator();
             static const char* items[LibraryView::kItems] = {"Jugar", "Trucos...", "Opciones de este juego...",
-                                                             "Editor de instrumentos..."};
+                                                             "Editor de instrumentos...", "Buscar carátula..."};
             int picked = libraryView_.menuAction;
             for (int i = 0; i < LibraryView::kItems; ++i)
                 if (ImGui::Selectable(items[i], libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
@@ -1324,6 +1325,7 @@ void Ui::drawLibrary(UiActions& out) {
                     out.openEditor = true;
                     showLibrary_ = false;
                     break;
+                case 4: openCoverSearch(visible[static_cast<size_t>(n)]); break;
                 default: break;
             }
             if (picked >= 0) {
@@ -1343,6 +1345,102 @@ void Ui::drawLibrary(UiActions& out) {
     }
     libraryView_.load = -1;
     ImGui::End();
+}
+
+void Ui::openCoverSearch(size_t game) {
+    const auto& games = library_.games();
+    if (game >= games.size()) return;
+    const Library::Game& g = games[game];
+    coverSearch_.game = game;
+    coverSearch_.path = g.path;
+    std::snprintf(coverSearch_.query, sizeof coverSearch_.query, "%s", g.title.c_str());
+    coverSearch_.focus = true;
+    library_.endCoverSearch();
+    startCoverSearch();
+    showCoverSearch_ = true;
+}
+
+void Ui::startCoverSearch() {
+    coverSearch_.selected = -1;
+    coverSearch_.autoPreview = true;
+    library_.searchCovers(library_.games()[coverSearch_.game].system, coverSearch_.query);
+}
+
+// Looking for a game's cover by hand: the search term can be changed, and the box art
+// names that look like it are listed, the closest one shown; clicking another shows
+// that one, and the one shown can be used.
+void Ui::drawCoverSearch() {
+    auto& games = library_.games();
+    const bool valid = showLibrary_ && coverSearch_.game < games.size() && games[coverSearch_.game].path == coverSearch_.path;
+    if (!valid) showCoverSearch_ = false;
+    ImGui::SetNextWindowSize(ImVec2(720, 460), ImGuiCond_Appearing);
+    if (showCoverSearch_ && ImGui::Begin("Buscar carátula", &showCoverSearch_, ImGuiWindowFlags_NoCollapse)) {
+        Library::Game& g = games[coverSearch_.game];
+        const Library::CoverSearch& search = library_.coverSearch();
+        ImGui::Text("%s", g.title.c_str());
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g.path.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("(%s)", systemName(g.system));
+        if (coverSearch_.focus) {
+            ImGui::SetKeyboardFocusHere();
+            coverSearch_.focus = false;
+        }
+        ImGui::SetNextItemWidth(-90.0f);
+        bool go = ImGui::InputTextWithHint("##nombre", "Nombre del juego", coverSearch_.query, sizeof coverSearch_.query,
+                                           ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SameLine();
+        go |= ImGui::Button("Buscar", ImVec2(-1, 0));
+        if (go && coverSearch_.query[0]) startCoverSearch();
+        if (coverSearch_.autoPreview && !search.busy) {
+            coverSearch_.autoPreview = false;
+            if (!search.names.empty()) {
+                coverSearch_.selected = 0;
+                library_.previewCover(g.system, search.names[0]);
+            }
+        }
+        if (search.busy) ImGui::TextDisabled("Buscando...");
+        else if (!search.status.empty()) ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.4f, 1.0f), "%s", search.status.c_str());
+        else ImGui::TextDisabled("%d parecidas. Pulsa una para verla.", static_cast<int>(search.names.size()));
+
+        const float previewW = 220.0f;
+        ImGui::BeginChild("nombres", ImVec2(-previewW - ImGui::GetStyle().ItemSpacing.x, 0), ImGuiChildFlags_Borders);
+        for (int i = 0; i < static_cast<int>(search.names.size()); ++i) {
+            const std::string& name = search.names[static_cast<size_t>(i)];
+            if (ImGui::Selectable(name.c_str(), coverSearch_.selected == i)) {
+                coverSearch_.selected = i;
+                library_.previewCover(g.system, name);
+            }
+        }
+        ImGui::EndChild();
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        const float boxH = ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing();
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        draw->AddRectFilled(pos, ImVec2(pos.x + previewW, pos.y + boxH), IM_COL32(40, 44, 56, 255), 4.0f);
+        const bool shown = search.preview && search.height > 0 && coverSearch_.selected >= 0 &&
+                           coverSearch_.selected < static_cast<int>(search.names.size()) &&
+                           search.previewName == search.names[static_cast<size_t>(coverSearch_.selected)];
+        if (shown) {
+            float w = previewW, h = previewW * static_cast<float>(search.height) / static_cast<float>(search.width);
+            if (h > boxH) {
+                h = boxH;
+                w = boxH * static_cast<float>(search.width) / static_cast<float>(search.height);
+            }
+            const ImVec2 a(pos.x + (previewW - w) * 0.5f, pos.y + (boxH - h) * 0.5f);
+            draw->AddImage(static_cast<ImTextureID>(search.preview), a, ImVec2(a.x + w, a.y + h));
+        }
+        ImGui::Dummy(ImVec2(previewW, boxH));
+        ImGui::BeginDisabled(!shown || search.busy);
+        if (ImGui::Button("Usar esta carátula", ImVec2(previewW, 0)) && library_.useCover(coverSearch_.game))
+            showCoverSearch_ = false;
+        ImGui::EndDisabled();
+        ImGui::EndGroup();
+        ImGui::End();
+    } else if (showCoverSearch_) {
+        ImGui::End();
+    }
+    if (!showCoverSearch_) library_.endCoverSearch();
 }
 
 // The Mega CD BIOS of each region. plumsg cannot include them: they are Sega's.
