@@ -211,8 +211,9 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     por su nombre, como "Green Hill Zone", junto a las grabaciones. También vale el sound
     test del juego: se pone a grabar y se van tocando sus canciones.
   - **Tocar** la reproduce con el juego en pausa. **Original** y **Sintetizador** cambian entre
-    los dos sonidos en el mismo punto, para comparar. Cada canal (FM 1-6, DAC, PSG 1-3 y
-    ruido) tiene **Solo** y **Silencio**.
+    los dos sonidos en el mismo punto, para comparar, y la lista **SoundFont** de debajo (la
+    misma de **Sonido**) cambia de SoundFont sin salir del editor. Cada canal (FM 1-6, DAC,
+    PSG 1-3 y ruido) tiene **Solo** y **Silencio**.
   - La lista enseña los instrumentos de la pista, con sus canales y sus notas. Los que suenan
     en ese momento salen en verde. A cada uno se le puede dar un **Instrumento** General
     MIDI (con octava y volumen), una pieza de la **Batería** GM, o dejarle su **Sonido

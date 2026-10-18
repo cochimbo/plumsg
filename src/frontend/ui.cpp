@@ -279,7 +279,9 @@ UiActions Ui::frame(const UiState& state) {
     if (showNetplay_) drawNetplay(state, out);
     if (editor_ && editor_->isOpen()) {
         EditorRequests r;
-        editor_->draw(state.editor, r);
+        EditorView view = state.editor;
+        view.drawSoundfont = [&] { drawSoundfontCombo(out, false); };  // the same list as Sonido's
+        editor_->draw(view, r);
         if (r.chooseTrack) chooseTrack();
         if (!r.load.empty()) out.load = r.load;
         out.startRecording = r.startRecording;
@@ -556,6 +558,12 @@ void Ui::setSoundfonts(std::string included, std::string folder) {
 // The SoundFonts to choose from, in a drop-down: the included one, and every .sf2 in
 // the user's folder (read while it is open, so new downloads show up at once).
 void Ui::drawSoundfontMenu(UiActions& out) {
+    drawSoundfontCombo(out);
+    if (ImGui::MenuItem("Abrir la carpeta de SoundFonts")) SDL_OpenURL(("file:///" + soundfontFolder_).c_str());
+    if (ImGui::MenuItem("Elegir otro (.sf2)...")) chooseSoundfont(out);
+}
+
+void Ui::drawSoundfontCombo(UiActions& out, bool labelled) {
     auto choose = [&](const std::string& path) {
         settings_.soundfont = path;
         out.settingsChanged = out.soundChanged = true;
@@ -563,7 +571,7 @@ void Ui::drawSoundfontMenu(UiActions& out) {
     auto name = [](const std::string& path) { return std::filesystem::u8path(path).stem().u8string(); };
     const std::string current = settings_.soundfont.empty() ? std::string("GeneralUser GS (incluido)") : name(settings_.soundfont);
     ImGui::SetNextItemWidth(220);
-    if (ImGui::BeginCombo("SoundFont", current.c_str())) {
+    if (ImGui::BeginCombo(labelled ? "SoundFont" : "##soundfont", current.c_str())) {
         if (ImGui::Selectable("GeneralUser GS (incluido)", settings_.soundfont.empty())) choose("");
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", includedSoundfont_.c_str());
         std::vector<std::string> fonts;
@@ -584,8 +592,7 @@ void Ui::drawSoundfontMenu(UiActions& out) {
         if (fonts.empty()) ImGui::TextDisabled("Deja tus .sf2 en la carpeta de SoundFonts\ny aparecerán aquí.");
         ImGui::EndCombo();
     }
-    if (ImGui::MenuItem("Abrir la carpeta de SoundFonts")) SDL_OpenURL(("file:///" + soundfontFolder_).c_str());
-    if (ImGui::MenuItem("Elegir otro (.sf2)...")) chooseSoundfont(out);
+    if (!labelled && ImGui::IsItemHovered()) ImGui::SetTooltip("El SoundFont del sintetizador");
 }
 
 void Ui::chooseSoundfont(UiActions& out) {

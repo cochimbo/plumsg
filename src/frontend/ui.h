@@ -188,6 +188,7 @@ private:
     InstrumentEditor* editor_ = nullptr;
     std::string includedSoundfont_, soundfontFolder_;
     void drawSoundfontMenu(UiActions& out);
+    void drawSoundfontCombo(UiActions& out, bool labelled = true);
     unsigned int logoTexture_ = 0;  // the PLUMSG marquee, 0 if it could not be decoded
     int logoWidth_ = 0, logoHeight_ = 0;
     unsigned int iconTexture_ = 0;  // the plum, 0 if it could not be decoded

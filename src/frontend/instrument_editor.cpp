@@ -544,11 +544,19 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
     }
     ImGui::EndDisabled();
     if (!soundfontReady_ && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("No se ha podido abrir el SoundFont (Sonido > Elegir SoundFont).");
+        ImGui::SetTooltip("No se ha podido abrir el SoundFont: elige otro en la lista de al lado.");
     ImGui::EndDisabled();
-    if (player_.loaded() && !player_.file().game.empty())
+    if (view.drawSoundfont) {  // which one the synthesizer plays, to compare them here
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("SoundFont");
+        ImGui::SameLine();
+        view.drawSoundfont();
+    }
+    if (player_.loaded() && !player_.file().game.empty()) {
+        if (view.drawSoundfont) ImGui::SameLine();
         ImGui::TextDisabled("%s%s%s", player_.file().game.c_str(), player_.file().title.empty() ? "" : " - ",
                             player_.file().title.c_str());
+    }
 }
 
 void InstrumentEditor::startExtraction() {

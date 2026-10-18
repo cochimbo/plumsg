@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -22,6 +23,7 @@ struct EditorView {
     bool recording = false;
     double recordedSeconds = 0;
     bool soundfontReady = false;  // the Roland sound can play
+    std::function<void()> drawSoundfont;  // the SoundFont drop-down, next to Sintetizador
 };
 
 // What the editor asks of the emulator this frame.
