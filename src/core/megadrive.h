@@ -48,6 +48,14 @@ public:
     bool loadDisc(const std::string& path, std::string* error);
     // A disc already open (tests and tools); false without a BIOS for its region.
     bool loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error);
+    // MSU-MD: a cartridge patched to play its music from a CD. loadRom() does it by
+    // itself when a .cue of the same name sits next to the cartridge (Sonic.md and
+    // Sonic.cue): the cartridge boots with the Mega CD attached, which needs a BIOS of
+    // any region. Without one the cartridge still loads, on its own, and loadNotice()
+    // says why there is no CD music.
+    void loadRomDataWithDisc(std::vector<uint8_t> rom, std::unique_ptr<CdImage> disc);  // tests and tools
+    bool hasMsuMd() const { return mcd_ && mcd_->cartridgeMode(); }
+    const std::string& loadNotice() const { return loadNotice_; }  // empty when all went well
     void reset();       // the console's reset button: CPUs, VDP and sound; RAM is kept
     void powerCycle();  // also clears memory
 
@@ -153,6 +161,8 @@ private:
     void updateIrq() { cpu_.setIrqLevel(vdp_.irqLevel()); }
     void applyRegion();
     void configureFor(Region r);  // clocks, PAL/NTSC and version register
+    int cdBiosSlot(Region r) const;  // the BIOS for `r`, or with a cartridge any there is; -1 for none
+    void attachCd(std::unique_ptr<CdImage> disc, bool cartridge);
     void setUpMars();             // adds or removes the 32X to suit the cartridge
     std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
@@ -177,6 +187,7 @@ private:
     std::unique_ptr<CdImage> disc_;
     std::unique_ptr<MegaCd> mcd_;
     std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe
+    std::string loadNotice_;
 
     std::array<uint8_t, 0x10000> ram_{};
     std::array<uint8_t, 0x2000> zram_{};

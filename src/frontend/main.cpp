@@ -176,7 +176,7 @@ struct App {
     // Cartridge SRAM, or the Mega CD's backup RAM, next to the game.
     void saveBattery() {
         if (!romLoaded || hostsBattery) return;
-        if (MegaCd* cd = console.megaCd()) {
+        if (MegaCd* cd = console.megaCd(); cd && !console.hasMsuMd()) {
             if (cd->backupRamChanged() &&
                 writeFile(savePath(), std::vector<uint8_t>(cd->backupRam().begin(), cd->backupRam().end())))
                 cd->clearBackupRamChanged();
@@ -187,7 +187,7 @@ struct App {
 
     void loadBattery() {
         MegaCd* cd = console.megaCd();
-        if (!cd) {
+        if (!cd || console.hasMsuMd()) {  // an MSU-MD game saves on its cartridge
             console.cartridge().loadSave(savePath());
             return;
         }
@@ -541,7 +541,8 @@ int main(int argc, char** argv) {
     };
     auto applySound = [&] {
         // A Mega CD disc's music is CD audio, already better than a SoundFont: there the
-        // FM and PSG only play sound effects, which stay as they are.
+        // FM and PSG only play sound effects, which stay as they are. So for an MSU-MD
+        // cartridge, which plays its music from CD tracks too.
         const bool on = settings.roland && !app->console.megaCd() && loadSoundfont();
         roland->setEffects(settings.reverb, settings.chorus);
         app->console.setRoland(on ? roland.get() : nullptr, settings.chipMix);
@@ -588,8 +589,9 @@ int main(int argc, char** argv) {
     auto load = [&](const std::string& path) {
         stopRecording();
         const ConsoleSystem system = detectSystem(path);
-        if (system == ConsoleSystem::MegaCD) {
-            // Discs boot with the BIOS of their region, from the files the user chose.
+        if (system == ConsoleSystem::MegaCD || !msuMdCue(path).empty()) {
+            // Discs boot with the BIOS of their region, from the files the user chose, and
+            // MSU-MD cartridges with any of them.
             static const Region regions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
             for (size_t i = 0; i < 3; ++i) {
                 std::vector<uint8_t> bios;
@@ -603,6 +605,8 @@ int main(int argc, char** argv) {
             applySound();  // now it is known whether it is a disc
             settings.addRecent(path);
             if (!game.own.empty()) ui->notify("Opciones propias de " + fileName(path));
+            if (!app->console.loadNotice().empty()) ui->notify(app->console.loadNotice());
+            else if (app->console.hasMsuMd()) ui->notify("Música en CD (MSU-MD)");
             rewind.clear();
             setRewindLimits();
         } else {
