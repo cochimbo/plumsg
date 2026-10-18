@@ -1,5 +1,6 @@
 #include "cheats.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <sstream>
@@ -129,6 +130,9 @@ bool decodeCheat(const std::string& code, CheatPatch* out, std::string* error) {
         p.byte = value.size() == 2;
         if (p.address >= 0x400000 && p.address < 0xE00000)
             return fail("El código apunta fuera de la ROM y de la RAM.");
+        // An odd address with a value that fits in a byte ("FF0205:0005") is a byte
+        // write, as Genesis Plus GX takes it: the cheat lists are full of them.
+        if (!p.byte && (p.address & 1) && p.value <= 0xFF) p.byte = true;
         if (!p.byte && (p.address & 1)) return fail("Un código de 4 cifras necesita una dirección par.");
         *out = p;
         return true;
@@ -145,6 +149,30 @@ bool decodeCheat(const std::string& code, CheatPatch* out, std::string* error) {
     if (p.address >= 0x400000) return fail("El código Game Genie apunta fuera de la ROM.");
     if (p.address & 1) return fail("El código Game Genie apunta a una dirección impar.");
     *out = p;
+    return true;
+}
+
+bool decodeCheatCodes(const std::string& code, std::vector<CheatPatch>* out, std::string* error) {
+    out->clear();
+    const std::string s = normalizeCheat(code);
+    size_t start = 0;
+    while (start <= s.size()) {
+        size_t plus = s.find('+', start);
+        if (plus == std::string::npos) plus = s.size();
+        if (plus > start) {
+            CheatPatch p;
+            if (!decodeCheat(s.substr(start, plus - start), &p, error)) {
+                out->clear();
+                return false;
+            }
+            out->push_back(p);
+        }
+        start = plus + 1;
+    }
+    if (out->empty()) {
+        if (error) *error = "Escribe un código.";
+        return false;
+    }
     return true;
 }
 
@@ -180,6 +208,42 @@ std::vector<Cheat> parseCheats(const std::string& text) {
         c.name = trim(rest);
         out.push_back(std::move(c));
     }
+    return out;
+}
+
+std::vector<Cheat> parseChtFile(const std::string& text) {
+    // cheat0_desc = "Infinite lives"
+    // cheat0_code = "HADT-BEW6+AJ0T-CA9Y"
+    std::vector<std::pair<int, Cheat>> found;
+    auto entry = [&](int n) -> Cheat& {
+        for (auto& f : found)
+            if (f.first == n) return f.second;
+        found.push_back({n, Cheat{}});
+        found.back().second.enabled = false;
+        return found.back().second;
+    };
+    std::istringstream in(text);
+    std::string line;
+    while (std::getline(in, line)) {
+        line = trim(line);
+        if (line.compare(0, 5, "cheat") != 0) continue;
+        size_t i = 5;
+        int n = 0;
+        while (i < line.size() && std::isdigit(static_cast<unsigned char>(line[i]))) n = n * 10 + (line[i++] - '0');
+        if (i == 5 || i >= line.size() || line[i] != '_') continue;
+        const size_t equals = line.find('=', i);
+        if (equals == std::string::npos) continue;
+        const std::string key = trim(line.substr(i + 1, equals - i - 1));
+        if (key != "desc" && key != "code") continue;
+        std::string value = trim(line.substr(equals + 1));
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"') value = value.substr(1, value.size() - 2);
+        if (key == "desc") entry(n).name = trim(value);
+        else entry(n).code = normalizeCheat(value);
+    }
+    std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<Cheat> out;
+    for (auto& f : found)
+        if (!f.second.code.empty()) out.push_back(std::move(f.second));
     return out;
 }
 

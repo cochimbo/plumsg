@@ -45,6 +45,28 @@ std::string fileName(const std::string& path) {
     return slash == std::string::npos ? path : path.substr(slash + 1);
 }
 
+// A code of several joined with '+' shown as its first and how many more ("AJ0T-CA9Y +5").
+std::string shortCode(const std::string& code) {
+    const size_t plus = code.find('+');
+    if (plus == std::string::npos) return code;
+    size_t more = 0;
+    for (char c : code) more += c == '+';
+    return code.substr(0, plus) + " +" + std::to_string(more);
+}
+
+// What a code writes, one line per write, for its tooltip.
+std::string describePatches(const std::vector<CheatPatch>& patches) {
+    std::string out;
+    char line[64];
+    for (const CheatPatch& p : patches) {
+        std::snprintf(line, sizeof line, "%s%s %06X = %0*X (%s)", out.empty() ? "" : "\n", p.address >= 0xE00000 ? "RAM" : "ROM",
+                      static_cast<unsigned>(p.address), p.byte ? 2 : 4, static_cast<unsigned>(p.value),
+                      p.byte ? "byte" : "palabra");
+        out += line;
+    }
+    return out;
+}
+
 }  // namespace
 
 Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& input)
@@ -1604,6 +1626,7 @@ void Ui::drawNetplay(const UiState& state, UiActions& out) {
 
 void Ui::drawCheats(const UiState& state, UiActions& out) {
     ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
+    if (cheatsRefit_ > 0) ImGui::SetNextWindowSize(ImVec2(cheatsWidth_, 0));  // grow to fit the list that arrived
     if (!ImGui::Begin("Trucos", &showCheats_)) {
         ImGui::End();
         return;
@@ -1631,19 +1654,13 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
             ImGui::TableNextColumn();
             if (ImGui::Checkbox("##activo", &c.enabled)) out.cheatsChanged = true;
             ImGui::TableNextColumn();
-            CheatPatch patch;
+            std::vector<CheatPatch> patches;
             std::string error;
-            const bool valid = decodeCheat(c.code, &patch, &error);
-            if (valid) ImGui::TextUnformatted(c.code.c_str());
-            else ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", c.code.c_str());
-            if (ImGui::IsItemHovered()) {
-                if (valid)
-                    ImGui::SetTooltip("%s %06X = %0*X (%s)", patch.address >= 0xE00000 ? "RAM" : "ROM",
-                                      static_cast<unsigned>(patch.address), patch.byte ? 2 : 4,
-                                      static_cast<unsigned>(patch.value), patch.byte ? "byte" : "palabra");
-                else
-                    ImGui::SetTooltip("%s", error.c_str());
-            }
+            const bool valid = decodeCheatCodes(c.code, &patches, &error);
+            const std::string shown = shortCode(c.code);
+            if (valid) ImGui::TextUnformatted(shown.c_str());
+            else ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", shown.c_str());
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", valid ? describePatches(patches).c_str() : error.c_str());
             ImGui::TableNextColumn();
             char name[96];
             std::snprintf(name, sizeof name, "%s", c.name.c_str());
@@ -1673,8 +1690,8 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
     ImGui::SameLine();
     add |= ImGui::Button("Añadir");
     if (add) {
-        CheatPatch patch;
-        if (decodeCheat(cheatCode_, &patch, &cheatError_)) {
+        std::vector<CheatPatch> patches;
+        if (decodeCheatCodes(cheatCode_, &patches, &cheatError_)) {
             cheats.push_back({normalizeCheat(cheatCode_), cheatName_, true});
             cheatCode_[0] = cheatName_[0] = '\0';
             cheatError_.clear();
@@ -1686,7 +1703,122 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
     ImGui::TextWrapped("Los Game Genie cambian la ROM; los Action Replay fijan un valor en la RAM en cada cuadro. "
                        "Algunos juegos comprueban la ROM al arrancar: si no arranca con un truco, reinicia sin él.");
     ImGui::PopStyleColor();
+    drawCheatDatabase(state, out);
     ImGui::End();
+}
+
+// The game's ready-made cheat lists from libretro-database, looked for when the window
+// is opened for it: pick a list (the one named like the ROM comes first) and add codes.
+void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
+    ImGui::SeparatorText("Trucos de internet");
+    if (cheatDb_.view().game != state.cheatsPath) {
+        cheatFilter_[0] = '\0';
+        cheatDb_.search(state.cheatsPath);
+    }
+    const bool wasBusy = cheatDb_.view().busy;
+    cheatDb_.update();
+    const CheatDatabase::View& db = cheatDb_.view();
+    // Two frames: the first lays the list out, the second fits the window to it.
+    if (cheatsRefit_ > 0) --cheatsRefit_;
+    if (wasBusy && !db.busy) cheatsRefit_ = 2;
+    cheatsWidth_ = ImGui::GetWindowWidth();
+    std::vector<Cheat>& cheats = *state.cheats;
+
+    if (db.files.size() > 1 || (!db.files.empty() && db.file != db.files.front())) {
+        ImGui::SetNextItemWidth(-ImGui::CalcTextSize("Lista").x - ImGui::GetStyle().ItemInnerSpacing.x);
+        if (ImGui::BeginCombo("Lista", db.file.c_str())) {
+            for (const std::string& f : db.files)
+                if (ImGui::Selectable(f.c_str(), f == db.file)) cheatDb_.load(f);
+            ImGui::EndCombo();
+        }
+    } else if (!db.file.empty()) {
+        ImGui::TextDisabled("Lista: %s", db.file.c_str());
+    }
+    if (db.busy) {
+        static const char* dots[] = {"", ".", "..", "..."};
+        ImGui::TextDisabled("Buscando en la base de trucos de libretro%s", dots[(SDL_GetTicks() / 300) % 4]);
+    }
+    if (!db.status.empty()) ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f), "%s", db.status.c_str());
+    if (!db.busy && !db.status.empty() && ImGui::Button("Reintentar")) cheatDb_.search(state.cheatsPath);
+
+    if (!db.cheats.empty()) {
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputTextWithHint("##filtro", "Filtrar (lives, energy, invincible...)", cheatFilter_, sizeof cheatFilter_);
+        const std::string filter = searchKey(cheatFilter_);
+        const float rowH = ImGui::GetFrameHeightWithSpacing();
+        const float height = std::min(static_cast<float>(db.cheats.size()) * rowH + rowH, rowH * 9.5f);
+        if (ImGui::BeginTable("trucos_libretro", 3,
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY,
+                              ImVec2(0, height))) {
+            const float addW = ImGui::CalcTextSize("Añadido").x + ImGui::GetStyle().FramePadding.x * 2;
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::TableSetupColumn("Truco");
+            ImGui::TableSetupColumn("Código", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, addW);
+            ImGui::TableHeadersRow();
+            int shown = 0;
+            for (size_t i = 0; i < db.cheats.size(); ++i) {
+                const Cheat& c = db.cheats[i];
+                if (!filter.empty() && searchKey(c.name).find(filter) == std::string::npos) continue;
+                ++shown;
+                ImGui::PushID(static_cast<int>(i));
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted(c.name.empty() ? "(sin nombre)" : c.name.c_str());
+                if (ImGui::IsItemHovered() && ImGui::CalcTextSize(c.name.c_str()).x > ImGui::GetColumnWidth())
+                    ImGui::SetTooltip("%s", c.name.c_str());
+                ImGui::TableNextColumn();
+                std::vector<CheatPatch> patches;
+                std::string error;
+                const bool valid = decodeCheatCodes(c.code, &patches, &error);
+                const std::string code = shortCode(c.code);
+                ImGui::AlignTextToFramePadding();
+                if (valid) ImGui::TextUnformatted(code.c_str());
+                else ImGui::TextDisabled("%s", code.c_str());
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", valid ? describePatches(patches).c_str() : error.c_str());
+                ImGui::TableNextColumn();
+                bool added = false;
+                for (const Cheat& mine : cheats) added |= mine.code == c.code;
+                if (!valid) {
+                    ImGui::TextDisabled("No vale");
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", error.c_str());
+                } else if (added) {
+                    ImGui::BeginDisabled();
+                    ImGui::Button("Añadido", ImVec2(-1, 0));
+                    ImGui::EndDisabled();
+                } else if (ImGui::Button("Añadir", ImVec2(-1, 0))) {
+                    cheats.push_back({c.code, c.name, true});
+                    out.cheatsChanged = true;
+                    // Many games check the ROM and stop (Sonic's red screen) unless the
+                    // list's master code goes with the codes that patch it.
+                    bool patchesRom = false;
+                    for (const CheatPatch& p : patches) patchesRom |= p.address < 0x400000;
+                    for (const Cheat& m : db.cheats) {
+                        if (!patchesRom || searchKey(m.name).find("master code") == std::string::npos) continue;
+                        bool have = false;
+                        for (const Cheat& mine : cheats) have |= mine.code == m.code;
+                        if (!have) {
+                            cheats.push_back({m.code, m.name, true});
+                            notify("Añadido también su código maestro, sin el que el juego no arrancaría");
+                        }
+                    }
+                }
+                ImGui::PopID();
+            }
+            if (shown == 0) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextDisabled("Ningún truco tiene ese nombre.");
+            }
+            ImGui::EndTable();
+        }
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextWrapped("Listas de libretro-database, la base de trucos de RetroArch (licencia CC BY-SA 4.0). "
+                       "Los nombres vienen en inglés; los añadidos quedan activados en la lista de arriba, "
+                       "con el código maestro (Master Code) del juego cuando lo pide.");
+    ImGui::PopStyleColor();
 }
 
 

@@ -1067,7 +1067,9 @@ void testCheats() {
           "cheats: Action Replay byte");
     check(decodeCheat("FF0A120009", &p, &error) && p.address == 0xFF0A12 && p.value == 9,
           "cheats: Action Replay without separator");
-    check(!decodeCheat("FF0A13:0009", &p, &error), "cheats: word write to an odd address refused");
+    check(!decodeCheat("FF0A13:1009", &p, &error), "cheats: word write to an odd address refused");
+    check(decodeCheat("FF0A13:0009", &p, &error) && p.address == 0xFF0A13 && p.value == 9 && p.byte,
+          "cheats: an odd address with a byte-sized value writes the byte");
     check(!decodeCheat("A10000:0001", &p, &error), "cheats: address outside ROM and RAM refused");
 
     MegaDrive md;
@@ -1088,6 +1090,22 @@ void testCheats() {
     check(back.size() == 2 && back[0].code == "ABCD-EFGH" && back[0].name == "Vidas infinitas" && back[0].enabled &&
               back[1].code == "FF0A12:0009" && back[1].name.empty() && !back[1].enabled,
           "cheats: cheat file round trip");
+
+    std::vector<CheatPatch> many;
+    check(decodeCheatCodes("ajxt-ca80 + FF0A12:0009", &many, &error) && many.size() == 2 && many[1].address == 0xFF0A12,
+          "cheats: codes joined with + give all their writes");
+    check(!decodeCheatCodes("AJXT-CA80+FF0A12:XX", &many, &error) && many.empty(), "cheats: one bad part refuses the whole code");
+    check(!decodeCheatCodes("+", &many, &error), "cheats: nothing between the + is no code");
+    const std::string cht = "cheats = 3\n\ncheat0_desc = \"Infinite lives\"\ncheat0_code = \"HADT-BEW6\"\n"
+                            "cheat0_enable = false\n\ncheat1_desc = \"Rumble\"\ncheat1_code = \"\"\ncheat1_handler = 1\n"
+                            "cheat2_desc = \"Infinite Energy\"\r\ncheat2_code = \"aj0t-ca9y+FFA3C5:0006\"\r\ncheat2_enable = true\r\n";
+    const std::vector<Cheat> fromCht = parseChtFile(cht);
+    check(fromCht.size() == 2 && fromCht[0].name == "Infinite lives" && fromCht[0].code == "HADT-BEW6" && !fromCht[0].enabled &&
+              fromCht[1].code == "AJ0T-CA9Y+FFA3C5:0006" && !fromCht[1].enabled,
+          "cheats: RetroArch .cht lists, without the entries that have no code");
+    const std::vector<Cheat> kept = parseCheats(formatCheats(fromCht));
+    check(kept.size() == 2 && kept[1].code == fromCht[1].code && kept[1].name == "Infinite Energy",
+          "cheats: a joined code survives the cheat file");
 }
 
 void testLibraryNames() {
@@ -1126,6 +1144,19 @@ void testLibraryNames() {
     similar = similarCoverNames(set, "The Lion King (Europe)", 5);
     check(!similar.empty() && similar[0] == "Lion King, The (World)", "library: ', The' and other regions");
     check(similarCoverNames(set, "Columns", 5).empty(), "library: nothing alike, no suggestions");
+
+    const std::string tree = "{\"tree\":[{\"path\":\"Sonic The Hedgehog (USA, Europe).cht\"},"
+                             "{\"path\":\"Sonic The Hedgehog 2 (World) (Rev A).cht\"},{\"path\":\"Sonic The Hedgehog 2 (World).cht\"},"
+                             "{\"path\":\"Sonic The Hedgehog 2 (World) (Action Replay).cht\"},{\"path\":\"cover.png\"}]}";
+    const auto chts = parseFileList(tree, ".cht");
+    check(chts.size() == 4 && std::is_sorted(chts.begin(), chts.end()), "library: cheat lists from GitHub's tree");
+    auto lists = cheatFileNames(chts, "Sonic The Hedgehog 2 (World)", 5);
+    check(lists.size() == 4 && lists[0] == "Sonic The Hedgehog 2 (World)" &&
+              lists[1] == "Sonic The Hedgehog 2 (World) (Action Replay)",
+          "library: the cheat list named like the ROM first, then its Action Replay one, then similar ones");
+    lists = cheatFileNames(chts, "Sonic The Hedgehog 2 (Europe)", 5);
+    check(!lists.empty() && lists[0] == "Sonic The Hedgehog 2 (World)", "library: another region's cheat list");
+    check(cheatFileNames(chts, "Columns (World)", 5).empty(), "library: no cheat lists for an unknown game");
 }
 
 void testSystems() {

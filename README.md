@@ -50,7 +50,8 @@ Primera versión. Lo que hay:
 - **Perfiles 3D por juego**: cada ROM puede guardar sus propios ajustes del 3D.
 - **Rebobinado, avance rápido y cámara lenta**.
 - **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
-- **Trucos** Game Genie y Action Replay, guardados por juego.
+- **Trucos** Game Genie y Action Replay, guardados por juego, con las listas de trucos de
+  cada juego de libretro-database para elegirlos de un menú.
 - **Biblioteca de juegos** con carátulas, que se descargan solas de libretro-thumbnails,
   con varias carpetas y una pestaña por consola (Mega Drive, 32X y Mega CD).
 - **BIOS del Mega CD**: se indica dónde está la de cada región (no viene con plumsg), y
@@ -148,6 +149,14 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
 - **Juego > Trucos**: códigos Game Genie (`ABCD-EFGH`, cambian la ROM) y Action Replay
   (`FF0A12:0009`, o `FF0A12:09` para un byte; fijan ese valor de la RAM en cada cuadro).
   Cada uno se activa o desactiva con su casilla y se guarda para ese juego en `trucos\`.
+  Un código puede ser varios unidos con `+` (`AJ0T-CA9Y+FFA3C5:0006`).
+  En **Trucos de internet** salen los de la lista del juego en
+  [libretro-database](https://github.com/libretro/libretro-database) (la base de trucos de
+  RetroArch, casi 2.100 listas de Mega Drive, más las de 32X y Mega CD), que se descarga al
+  abrir la ventana: la del nombre de la ROM primero y en **Lista** otras de nombre parecido
+  (las de Action Replay, otras regiones). Se filtran por nombre (vienen en inglés) y
+  **Añadir** pone el truco en la lista del juego, activado. Si el juego comprueba la ROM
+  (Sonic se queda en rojo), se añade también su **Master Code**.
 - **Opciones > Vídeo > Filtro 2D**: **Scanlines** (las líneas oscuras entre líneas de la
   tele, más finas donde la imagen es brillante) o **CRT** (además, la pantalla un poco
   curva, la máscara de colores y las esquinas oscuras), con su intensidad. Se notan más
@@ -316,7 +325,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   `--filtro crt` o `--filtro scanlines`, o de la biblioteca con
   `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`
   (`--biblioteca` se puede repetir, `--bios` abre la ventana de las BIOS y
-  `--buscar-caratula` la búsqueda de carátula del primer juego de la biblioteca).
+  `--buscar-caratula` la búsqueda de carátula del primer juego de la biblioteca;
+  `plumsg rom.md --trucos --captura trucos.png` abre los trucos del juego con su lista).
 
 ## Sin ventana: `plumsg-headless`
 
@@ -395,4 +405,5 @@ miniz (MIT, en `third_party/miniz`), stb_image (dominio público o MIT, en `thir
 ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
 `third_party/tsf`). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
 propia licencia libre (`soundfonts\GeneralUser-GS-LICENSE.txt` en la instalación). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de
-[ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas son de libretro-thumbnails y no van en el repositorio.
+[ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas son de libretro-thumbnails y las listas de trucos de libretro-database
+(CC BY-SA 4.0); se descargan al usarlas y no van en el repositorio.
