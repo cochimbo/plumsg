@@ -741,6 +741,11 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         // 3. Every number in turn.
         p.total = static_cast<int>(numbers.size());
         std::set<uint64_t> heard;  // how each song found starts, to skip the same song twice
+        auto opening = [](const NoteTracker& t) {
+            uint64_t h = 1469598103934665603ull;
+            for (size_t i = 0; i < std::min<size_t>(t.notes.size(), 64); ++i) h = (h ^ t.notes[i].key) * 1099511628211ull;
+            return h;
+        };
         std::set<uint32_t> musicSounds, shortSounds;
         std::vector<uint32_t> silent;  // numbers that played nothing
         struct Effects {  // worked out however run() ends from here
@@ -771,6 +776,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             int lastNote = -1, firstNote = -1;
             int loopStart = -1, loopEnd = -1;
             bool same = false;  // it only adds a few notes to what was playing
+            bool again = false;  // it starts as a song found already
             for (int f = 0; f < kLongest; ++f) {
                 marks.push_back(w.mark(md->masterClocks()));
                 frame();
@@ -792,6 +798,11 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
                     }
                 }
                 if (lastNote >= 0 && f - lastNote >= kSilentFrames) break;  // it ended
+                // A song found already starts the same: no need to hear it all again.
+                if (had < 64 && tracker.notes.size() >= 64 && heard.count(opening(tracker))) {
+                    again = true;
+                    break;
+                }
                 if (f % kFps == 0) {
                     const auto [start, end] = findLoop(tracker.notes, f, kShortestLoop);
                     if (start >= 0 && end <= f) {
@@ -815,12 +826,13 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             // that goes round): songs play on more.
             std::set<uint32_t> channels;
             for (const auto& note : tracker.notes) channels.insert(note.key >> 24);
-            if (firstNote >= 0 && lastNote - firstNote >= kShortest && channels.size() < 3) {
+            if (again) {
+                // (Cut short: the checks below need it all.)
+            } else if (firstNote >= 0 && lastNote - firstNote >= kShortest && channels.size() < 3) {
                 say(hex(number, digits) + ": un sonido largo");
                 instruments(shortSounds);
                 continue;
-            }
-            if (firstNote < 0 || lastNote - firstNote < kShortest) {
+            } else if (firstNote < 0 || lastNote - firstNote < kShortest) {
                 if (firstNote >= 0) say(hex(number, digits) + ": un sonido corto");
                 if (firstNote >= 0) instruments(shortSounds);
                 else silent.push_back(number);
@@ -829,16 +841,13 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             std::map<uint32_t, int> opened;
             for (const auto& note : tracker.notes)
                 if (note.frame < kCheckFrames) ++opened[note.key];
-            if (extra(opened, before) < 8) {
+            if (!again && extra(opened, before) < 8) {
                 say(hex(number, digits) + ": suena lo mismo que sin pedir nada");
                 continue;
             }
             // The same song as one found already (several numbers for one song)?
-            uint64_t opening = 1469598103934665603ull;
-            for (size_t i = 0; i < std::min<size_t>(tracker.notes.size(), 64); ++i)
-                opening = (opening ^ tracker.notes[i].key) * 1099511628211ull;
             instruments(musicSounds);
-            if (!heard.insert(opening).second) {
+            if (again || !heard.insert(opening(tracker)).second) {
                 say(hex(number, digits) + ": repetida");
                 // Every number the same song: the driver does not take the number from here.
                 if (heard.size() == 1 && ++repeated >= 8) {
