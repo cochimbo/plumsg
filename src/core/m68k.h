@@ -37,6 +37,16 @@ public:
     // Holds the program where it is now, running only its interrupts (song extraction:
     // the sound driver plays from VBlank while the game stays put). It lets VBlank in.
     void holdMain(bool on);
+    // Song extraction, for sound drivers asked by calling a routine (the number in a
+    // register): calls to `entry` from the game return at once, without running it. 0: none.
+    uint32_t skipRoutine = 0;
+    // Calls the routine at `entry` from where the program is, as the program would, with
+    // the registers given (d0-d7, then a0-a6; `keep` in one keeps it as it is) and
+    // interrupts masked. It runs as the console goes on; on its return every register is
+    // put back as it was and the program carries on. inRoutine(): not back yet.
+    void callRoutine(uint32_t entry, const uint32_t (&regs)[15], uint32_t keep);
+    bool inRoutine() const { return calling_; }
+    void forgetRoutine() { calling_ = false; }  // a state loaded: not in one any more
 
     // a[7] is the active stack pointer; the other one is kept in otherSp.
     uint32_t d[8]{};
@@ -64,6 +74,13 @@ public:
     }
 
 private:
+    // What callRoutine() puts back.
+    bool calling_ = false;
+    uint32_t savedD_[8]{}, savedA_[8]{}, savedOtherSp_ = 0, savedPc_ = 0;
+    uint16_t savedSr_ = 0;
+    bool savedStopped_ = false, savedHolding_ = false;
+    void returnFromRoutine();
+
     struct Ea {
         enum Kind : uint8_t { DataReg, AddrReg, Memory, Immediate } kind;
         uint8_t reg;

@@ -759,8 +759,10 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
             break;
         }
         StateReader b(data.data(), data.size());
-        if (id == fourcc("M68K")) cpu_.state(b);
-        else if (id == fourcc("Z80 ")) z80_.state(b);
+        if (id == fourcc("M68K")) {
+            cpu_.state(b);
+            cpu_.forgetRoutine();
+        } else if (id == fourcc("Z80 ")) z80_.state(b);
         else if (id == fourcc("VDP ")) vdp_.state(b);
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);

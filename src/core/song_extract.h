@@ -19,6 +19,11 @@ namespace plumsg {
 // first request, asks for every number in turn while keeping the game's own requests
 // out. Each one that plays music for a while is recorded to a VGM, until it loops back
 // (one pass, with its loop point) or ends.
+//
+// Other drivers (Streets of Rage 2's) are asked by calling one of their routines with
+// the number in a register. Those routines are found in the ROM, where the game calls
+// them from many places with a different number each time; the extractor then calls
+// them itself, from a moment the game was quiet.
 class SongExtractor {
 public:
     struct Song {
