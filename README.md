@@ -196,7 +196,8 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     parecidos), una rutina del driver a la que el juego llama con el número en un registro
     (como Streets of Rage 2), o un anillo de órdenes en la memoria del Z80 donde el juego
     deja mensajes (el GEMS de los juegos de Sega of America, como Sonic Spinball). Luego le va pidiendo cada número. Probado con Sonic 1, 2 y 3,
-    Gunstar Heroes, Ristar, Shinobi III, Golden Axe y Streets of Rage 2. Lo que suena en uno
+    Gunstar Heroes, Ristar, Shinobi III, Golden Axe, Streets of Rage 2, Sonic Spinball,
+    Earthworm Jim y Taz in Escape from Mars. Lo que suena en uno
     o dos canales, aunque dure (un motor, una alarma), cuenta como efecto y no como canción.
     Tarda unos minutos, con una barra de progreso, y se puede parar.
   - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,
