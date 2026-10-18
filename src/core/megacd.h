@@ -31,6 +31,10 @@ public:
     bool hasBios() const { return bios_.size() >= 0x20000; }
     // The disc in the tray (null for none); it is not owned.
     void insert(CdImage* disc);
+    // With a cartridge in the slot the console boots it, and the Mega CD's BIOS and
+    // memory move up to 0x400000 (mode 1, as MSU-MD games use it for their CD music).
+    void setCartridgeMode(bool on) { cartridgeMode_ = on; }
+    bool cartridgeMode() const { return cartridgeMode_; }
 
     void powerOn();  // clears memory (but not the backup RAM)
     void reset();    // the console's reset button
@@ -151,6 +155,9 @@ private:
     uint16_t readExternalIo(uint32_t addr);
     void writeExternalIo(uint32_t addr, uint16_t value, bool upper, bool lower);
     uint32_t wordRamIndex(uint32_t addr) const;  // console address to word RAM word
+    // A console address in the Mega CD's 4 MB (0x000000 up, or 0x400000 up with a
+    // cartridge) as an offset into it; false outside it.
+    bool localAddress(uint32_t& addr) const;
 
     void step(int clocks);  // runs everything but the CPU for `clocks` sub CPU cycles
     void updateIrq();
@@ -196,6 +203,7 @@ private:
     M68000 sub_{*this};
     std::vector<uint8_t> bios_;
     CdImage* disc_ = nullptr;
+    bool cartridgeMode_ = false;
     std::array<uint8_t, 0x80000> prg_{};
     std::array<uint16_t, 0x20000> wram_{};  // 1 Mbit mode: the two banks alternate word by word
     std::array<uint8_t, 0x2000> bram_{};

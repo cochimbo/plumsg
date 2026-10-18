@@ -517,7 +517,7 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
                           "Editor de instrumentos.");
     ImGui::BeginDisabled(!settings_.roland);
     if (state.disc && settings_.roland)
-        ImGui::TextDisabled("Los discos de Mega CD suenan siempre originales:\nsu música son pistas de audio del disco.");
+        ImGui::TextDisabled("Los discos de Mega CD y los juegos MSU-MD suenan\nsiempre originales: su música son pistas de audio del CD.");
     if (ImGui::MenuItem("Efectos de sonido originales", nullptr, settings_.effectsOriginal)) {
         settings_.effectsOriginal = !settings_.effectsOriginal;
         out.settingsChanged = out.soundChanged = true;

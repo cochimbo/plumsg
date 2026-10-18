@@ -886,6 +886,68 @@ void testMegaCd() {
     check(soundHash(md.audio().samples()) == sound && cd.sub().pc == pc, "Mega CD: tras cargar el estado sigue igual");
 }
 
+// MSU-MD: a cartridge that boots with the Mega CD attached (mode 1) and plays CD tracks.
+void testMsuMd() {
+    std::vector<uint8_t> bios(kMegaCdProgram, kMegaCdProgram + sizeof kMegaCdProgram);
+    bios.resize(0x20000);
+    const std::vector<uint8_t> cart(kMegaCdCartridge, kMegaCdCartridge + sizeof kMegaCdCartridge);
+
+    MegaDrive md;
+    md.setSampleRate(44100);
+    md.setCdBios(Region::EuropePal, bios);  // a cartridge takes a BIOS of any region
+    md.setRegion(Region::UsaNtsc);
+    md.loadRomDataWithDisc(cart, testDisc());
+    check(md.hasMsuMd() && md.region() == Region::UsaNtsc, "MSU-MD: el cartucho arranca con el Mega CD, en su región");
+    check(md.peek16(0x200) == 0x46FC && md.peek16(0x400100) == 0x5345 && md.peek16(0x400102) == 0x4741,
+          "MSU-MD: el cartucho en 0, la BIOS en 0x400000");
+    MegaCd& cd = *md.megaCd();
+    int frames = 0;
+    for (; frames < 600 && cd.status()[7] != 0xD0; ++frames) md.runFrame();
+    for (int i = 0; i < 10; ++i) md.runFrame();
+    const auto& prg = cd.programRam();
+    check(cd.status()[0] == 0x1234 && prg[0x7F001] == 1,
+          "MSU-MD: el cartucho carga el programa de la CPU secundaria en 0x420000");
+    check(md.workRam()[0] == 0x60 && md.workRam()[1] == 0x0D && md.workRam()[2] == 0x55 && md.workRam()[3] == 0x55,
+          "MSU-MD: la memoria de palabras en 0x600000");
+    int lo = 0, hi = 0;
+    for (int i = 0; i < 150; ++i) {
+        md.audio().clearSamples();
+        md.runFrame();
+        for (size_t j = 0; j < md.audio().samples().size(); j += 2) {
+            lo = std::min<int>(lo, md.audio().samples()[j]);
+            hi = std::max<int>(hi, md.audio().samples()[j]);
+        }
+    }
+    check(hi - lo > 8000, "MSU-MD: suena la pista de audio del CD");
+
+    // On disk: Juego.md with Juego.cue next to it.
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "plumsg_msu_test";
+    std::filesystem::create_directories(dir);
+    std::ofstream(dir / "Juego.md", std::ios::binary).write(reinterpret_cast<const char*>(cart.data()), cart.size());
+    std::ofstream(dir / "Juego.cue") << "FILE \"Juego.iso\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n";
+    std::vector<uint8_t> iso(40 * 2048);
+    std::ofstream(dir / "Juego.iso", std::ios::binary).write(reinterpret_cast<const char*>(iso.data()), iso.size());
+    std::ofstream(dir / "Disco.bin", std::ios::binary).write(reinterpret_cast<const char*>(iso.data()), iso.size());
+    std::ofstream(dir / "Disco.cue") << "FILE \"Disco.bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n";
+    std::ofstream(dir / "Solo.md", std::ios::binary).write(reinterpret_cast<const char*>(cart.data()), cart.size());
+    check(msuMdCue((dir / "Juego.md").u8string()) == (dir / "Juego.cue").u8string() &&
+              msuMdCue((dir / "Solo.md").u8string()).empty() && msuMdCue((dir / "Disco.bin").u8string()).empty(),
+          "MSU-MD: el .cue con el nombre del cartucho, no el de un disco");
+    std::string error;
+    MegaDrive withBios;
+    withBios.setCdBios(Region::JapanNtsc, bios);
+    check(withBios.loadRom((dir / "Juego.md").u8string(), &error) && withBios.hasMsuMd() &&
+              withBios.loadNotice().empty(),
+          "MSU-MD: se reconoce al abrir el cartucho");
+    MegaDrive noBios;
+    check(noBios.loadRom((dir / "Juego.md").u8string(), &error) && !noBios.isMegaCd() &&
+              noBios.loadNotice().find("BIOS") != std::string::npos,
+          "MSU-MD: sin BIOS el cartucho va solo y dice por qué no hay música en CD");
+    check(withBios.loadRom((dir / "Solo.md").u8string(), &error) && !withBios.isMegaCd(),
+          "MSU-MD: un cartucho sin .cue va solo");
+    std::filesystem::remove_all(dir);
+}
+
 }  // namespace
 
 void testRewindBuffer() {
@@ -1589,6 +1651,7 @@ int main() {
     testMarsProgram();
     testCdImage();
     testMegaCd();
+    testMsuMd();
     testNetplay();
     testRoland();
     testVgm();

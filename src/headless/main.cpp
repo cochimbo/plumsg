@@ -618,6 +618,7 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "cannot load %s: %s\n", game.c_str(), error.c_str());
             return 1;
         }
+        if (!md.loadNotice().empty()) std::fprintf(stderr, "%s\n", md.loadNotice().c_str());
     }
     if (!cheats.empty()) {
         std::vector<CheatPatch> patches;
@@ -878,7 +879,7 @@ int main(int argc, char** argv) {
         failures.push_back("sound hash " + hex8(audioHash) + ", expected " + hex8(expectAudio));
     if (divergence >= 0) failures.push_back("frame " + std::to_string(divergence) + ": " + divergenceWhat);
 
-    const char* system = md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : "megadrive";
+    const char* system = md.hasMsuMd() ? "msu-md" : md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : "megadrive";
     const double fps = seconds > 0 ? ran / seconds : 0;
     if (!quiet) {
         std::printf("title: %s\nsystem: %s  region: %s\nframes: %ld  size: %dx%d  hash: %08x\n",

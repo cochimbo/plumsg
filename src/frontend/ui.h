@@ -69,7 +69,7 @@ struct GameOptionsView {
 
 struct UiState {
     bool romLoaded = false;
-    bool disc = false;  // the game is a Mega CD disc: its music is the disc's audio, never Roland
+    bool disc = false;  // a Mega CD disc or an MSU-MD cartridge: its music is CD audio, never Roland
     std::string romPath;
     bool paused = false;
     bool slowMotion = false;

@@ -41,6 +41,12 @@ Primera versión. Lo que hay:
   emulada a nivel de órdenes, el chip gráfico que gira y escala sellos, el temporizador,
   el chip PCM RF5C164 y el audio de CD, todo mezclado con el FM y el PSG. Necesita la BIOS
   de la región del disco (ver abajo).
+- **MSU-MD**: cartuchos parcheados por la comunidad para tocar su música desde pistas de
+  CD. Basta con dejar junto al cartucho un `.cue` con su mismo nombre (`Sonic.md` y
+  `Sonic.cue`, con las pistas que nombre): el juego arranca con el Mega CD conectado, como
+  en una consola de verdad (modo 1). Vale la BIOS del Mega CD de cualquier región; sin
+  ninguna el juego va solo, sin música en CD, y plumsg lo dice. En la biblioteca ese `.cue`
+  no sale como un disco aparte, y la partida se guarda en el cartucho.
 - **Mandos** de 3 y 6 botones, dos jugadores, región automática o forzada.
 - **Estados**: 10 ranuras por juego con fecha y miniatura.
 - **Pseudo-3D**: cinco planos (cielo, plano B, plano A, sprites y tiles con prioridad),
@@ -204,8 +210,8 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     golpes...): los instrumentos FM que suenan en los sonidos cortos y en ninguna canción.
     Con **Sonido > Efectos de sonido originales** (la opción de serie) suenan como en la
     consola y solo la música pasa por el SoundFont. Se guardan en `sonido\<juego>.efectos`.
-  - Los discos de **Mega CD** suenan siempre originales: su música son pistas de audio del
-    disco, y el FM y el PSG solo hacen efectos.
+  - Los discos de **Mega CD** y los juegos **MSU-MD** suenan siempre originales: su música
+    son pistas de audio del CD, y el FM y el PSG solo hacen efectos.
   - La ROM no trae sus canciones con nombre (cada juego guarda su música a su manera), pero
     [vgmrips](https://vgmrips.net) tiene casi todas: su `.zip` de un juego, o sus `.vgm` y
     `.vgz`, se abren con **Abrir .vgm...** y se guardan en `sonido\pistas\<juego>\`
@@ -316,7 +322,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   (`tests/megacd/main.s` hace de BIOS y carga `sub.s` en la CPU secundaria) que prueba
   la comunicación entre ellas, interrupciones, la memoria de guardado, las órdenes a la
   unidad, la lectura de un sector por el controlador y por DMA, el chip gráfico, el PCM,
-  el audio de CD y los estados. Se recompila con `tests/megacd/build.sh` (hace falta
+  el audio de CD y los estados; el mismo programa como cartucho prueba el modo 1 de los
+  juegos MSU-MD (el Mega CD en 0x400000) y cómo se encuentra su `.cue`. Se recompila con `tests/megacd/build.sh` (hace falta
   `binutils-m68k-linux-gnu`).
   Del juego en red: dos sesiones conectadas por una red simulada que retrasa, desordena,
   duplica y pierde paquetes tienen que ver los mismos fotogramas entre sí y que una sola

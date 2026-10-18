@@ -154,6 +154,9 @@ void Library::scan(const std::vector<std::string>& folders) {
             if (lower(it->path().extension().u8string()) == ".cue")
                 for (const std::string& t : cueFiles(it->path().u8string()))
                     tracks.push_back(lower(fs::weakly_canonical(fs::u8path(t), ec).u8string()));
+            // An MSU-MD cartridge's .cue is its music, not a game of its own.
+            else if (const std::string cue = msuMdCue(it->path().u8string()); !cue.empty())
+                tracks.push_back(lower(fs::weakly_canonical(fs::u8path(cue), ec).u8string()));
         }
         ec.clear();
     }
