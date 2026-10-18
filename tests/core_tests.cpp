@@ -12,6 +12,7 @@
 #include <fstream>
 #include <memory>
 #include <random>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -1484,6 +1485,17 @@ void testSongExtract() {
     VgmFile file;
     check(!songs.empty() && file.parse(songs[1].vgz, &error) && file.title == "Canción 2" && file.loop != 0,
           "Canciones: el archivo dice su título y dónde vuelve");
+    // The sound effects play an instrument no song plays: that one is an effect, and it
+    // keeps its chip sound when effects are to sound original.
+    const std::set<uint32_t> effects = extractor.effectInstruments();
+    check(effects.size() == 1, "Canciones: el instrumento de los efectos se reconoce como efecto");
+    RolandSound roland;
+    roland.setSoundEffects(effects, true);
+    check(!effects.empty() && roland.assignmentFor(*effects.begin()).original,
+          "Canciones: con efectos originales, el efecto suena como en la consola");
+    roland.setSoundEffects(effects, false);
+    check(!effects.empty() && !roland.assignmentFor(*effects.begin()).original,
+          "Canciones: con efectos Roland, el efecto pasa por el SoundFont");
     std::filesystem::remove(path);
 }
 

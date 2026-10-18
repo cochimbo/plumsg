@@ -7,6 +7,7 @@
 #include <set>
 
 #include "megadrive.h"
+#include "roland.h"
 #include "vgm.h"
 
 namespace plumsg {
@@ -174,6 +175,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     auto say = [&](const std::string& s) {
         if (log_) log_(s);
     };
+    effects_.clear();
     auto md = std::make_unique<MegaDrive>();
     if (!md->loadRom(romPath, error)) return false;
     if (md->isMegaCd()) return fail("Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip.");
@@ -351,9 +353,28 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     const auto before = listen(kCheckFrames);
     checkpoints.clear();
 
-    // 3. Every number in turn.
+    // 3. Every number in turn. The Roland sound listens (without a SoundFont, so silent)
+    // for the FM instruments of each one: those of the short sounds that no song plays
+    // are the sound effects.
     p.total = last - first + 1;
     std::set<uint64_t> heard;  // how each song found starts, to skip the same song twice
+    RolandSound ear;
+    md->setRoland(&ear, 100);
+    std::set<uint32_t> musicSounds, shortSounds;
+    std::vector<int> silent;  // numbers that played nothing
+    struct Effects {  // worked out however run() ends from here
+        SongExtractor& x;
+        std::set<uint32_t>& music;
+        std::set<uint32_t>& sounds;
+        ~Effects() {
+            for (uint32_t fp : sounds)
+                if (!music.count(fp)) x.effects_.insert(fp);
+        }
+    } effects{*this, musicSounds, shortSounds};
+    auto instruments = [&](std::set<uint32_t>& into) {
+        for (const auto& [fp, seen] : ear.seen())
+            if (seen.kind == RolandSound::Kind::Fm) into.insert(fp);
+    };
     for (int number = first; number <= last; ++number) {
         p.tried = number - first;
         if (!report("Probando el " + std::to_string(p.tried + 1))) return fail("");
@@ -361,6 +382,8 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
         md->poke(ask->address, static_cast<uint8_t>(number));
         md->cpu().holdMain(hold);
+        ear.allNotesOff();
+        ear.clearSeen();
         VgmWriter w;
         md->setVgmWriter(&w);
         std::vector<VgmWriter::Mark> marks;
@@ -391,6 +414,8 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         md->setVgmWriter(nullptr);
         if (firstNote < 0 || lastNote - firstNote < kShortest) {
             if (firstNote >= 0) say(hex(number, 2) + ": un sonido corto");
+            if (firstNote >= 0) instruments(shortSounds);
+            else silent.push_back(number);
             continue;
         }
         std::map<uint32_t, int> opened;
@@ -404,6 +429,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         uint64_t opening = 1469598103934665603ull;
         for (size_t i = 0; i < std::min<size_t>(tracker.notes.size(), 64); ++i)
             opening = (opening ^ tracker.notes[i].key) * 1099511628211ull;
+        instruments(musicSounds);
         if (!heard.insert(opening).second) {
             say(hex(number, 2) + ": repetida");
             continue;
@@ -432,7 +458,41 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
                                   : ", sin vuelta"));
         if (onSong) onSong(song);
     }
+
+    // 4. Some drivers play sound effects only over music (Sonic's, after the fade out
+    // that comes before a level's song): the numbers that played nothing, once more with
+    // the game's own song started. What they add to it are their instruments.
     p.tried = p.total;
+    if (!silent.empty() && report("Buscando los efectos de sonido")) {
+        uint8_t song = ask->requests.front().second;
+        for (const auto& r : ask->requests)
+            if (r.first == start) song = r.second;
+        md->loadState(origin, nullptr);
+        md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
+        md->poke(ask->address, song);
+        md->cpu().holdMain(hold);
+        for (int f = 0; f < kFps; ++f) frame();
+        std::vector<uint8_t> playing;
+        md->saveState(playing, true);
+        auto over = [&](int number) {
+            md->loadState(playing, nullptr);
+            md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
+            if (number) md->poke(ask->address, static_cast<uint8_t>(number));
+            md->cpu().holdMain(hold);
+            ear.allNotesOff();
+            ear.clearSeen();
+            for (int f = 0; f < kCheckFrames; ++f) frame();
+            std::set<uint32_t> heard;
+            instruments(heard);
+            return heard;
+        };
+        const std::set<uint32_t> alone = over(0);
+        for (int number : silent) {
+            if (!report("Buscando los efectos de sonido")) break;
+            for (uint32_t fp : over(number))
+                if (!alone.count(fp)) shortSounds.insert(fp);
+        }
+    }
     report("Hecho");
     if (p.found == 0) return fail("El juego responde a las peticiones, pero ninguna ha sonado como una canción.");
     return true;

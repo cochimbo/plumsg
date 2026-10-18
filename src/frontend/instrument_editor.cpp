@@ -100,6 +100,23 @@ RolandSound::Assignments InstrumentEditor::assignmentsFor(const std::string& sou
     return all;
 }
 
+std::set<uint32_t> InstrumentEditor::effectsFor(const std::string& soundFolder, const std::string& game) {
+    std::set<uint32_t> out;
+    if (game.empty()) return out;
+    const std::string text = readText(soundFolder + withoutExtension(fileName(game)) + ".efectos");
+    size_t pos = 0;
+    while (pos < text.size()) {
+        size_t end = text.find('\n', pos);
+        if (end == std::string::npos) end = text.size();
+        const std::string line = text.substr(pos, end - pos);
+        pos = end + 1;
+        char* stop = nullptr;
+        const unsigned long fp = std::strtoul(line.c_str(), &stop, 16);
+        if (stop != line.c_str() && fp) out.insert(static_cast<uint32_t>(fp));
+    }
+    return out;
+}
+
 std::string InstrumentEditor::gamePath() const { return folder_ + gameName_ + ".ini"; }
 
 void InstrumentEditor::open(const std::string& game) {
@@ -483,7 +500,7 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
         }
     }
 
-    drawExtraction();
+    drawExtraction(out);
 
     // Transport.
     ImGui::BeginDisabled(!player_.loaded() || view.recording);
@@ -540,7 +557,8 @@ void InstrumentEditor::startExtraction() {
     message_.clear();
     Extraction* x = extraction_.get();
     const std::string rom = game_, game = gameName_, folder = gameTracksFolder();
-    x->thread = std::thread([x, rom, game, folder]() {
+    const std::string effectsPath = folder_ + gameName_ + ".efectos";
+    x->thread = std::thread([x, rom, game, folder, effectsPath]() {
         SongExtractor extractor;
         std::string error;
         int saved = 0;
@@ -559,6 +577,16 @@ void InstrumentEditor::startExtraction() {
                 x->saved = ++saved;
             },
             &error);
+        // The sound effects it heard, for Sonido > Efectos de sonido originales.
+        if (!extractor.effectInstruments().empty()) {
+            std::string text = "; Los efectos de sonido de " + game + " (huellas de instrumentos FM), de Sacar canciones.\n";
+            char line[16];
+            for (uint32_t fp : extractor.effectInstruments()) {
+                std::snprintf(line, sizeof line, "%08x\n", fp);
+                text += line;
+            }
+            if (writeBytes(effectsPath, text.data(), text.size())) x->effects = true;
+        }
         std::lock_guard<std::mutex> lock(x->mutex);
         if (!ok) x->error = error;
         x->done = true;
@@ -572,7 +600,7 @@ void InstrumentEditor::endExtraction() {
     extraction_.reset();
 }
 
-void InstrumentEditor::drawExtraction() {
+void InstrumentEditor::drawExtraction(EditorRequests& out) {
     if (!extraction_) return;
     SongExtractor::Progress p;
     int saved = 0;
@@ -590,6 +618,7 @@ void InstrumentEditor::drawExtraction() {
             if (!tracks_.empty()) loadTrack(tracks_.front());
     }
     if (extraction_->done) {
+        if (extraction_->effects) out.assignmentsChanged = true;  // the game's effects are known now
         if (!extraction_->stop) {
             if (!error.empty())
                 message_ = error;

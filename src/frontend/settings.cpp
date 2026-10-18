@@ -92,6 +92,7 @@ void Settings::parse(std::istream& in, Settings& s) {
             else if (key == "mezcla_chip") s.chipMix = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "reverb") s.reverb = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "chorus") s.chorus = std::clamp(std::atoi(value.c_str()), 0, 100);
+            else if (key == "efectos") s.effectsOriginal = lower(value) != "roland";
         } else if (section == "consola") {
             if (key == "region") {
                 for (int i = 0; i < 4; ++i)
@@ -165,6 +166,9 @@ void Settings::write(std::ostream& out) const {
         << "mezcla_chip = " << chipMix << "\n"
         << "reverb = " << reverb << "\n"
         << "chorus = " << chorus << "\n"
+        << "# efectos: original (los efectos de sonido suenan como en la consola) o roland. Hace falta\n"
+        << "# haber usado Sacar canciones en el juego para saber cuáles son sus efectos.\n"
+        << "efectos = " << (effectsOriginal ? "original" : "roland") << "\n"
         << "\n[consola]\n"
         << "# region: auto (la de la ROM), japon, usa o europa. mando1/mando2: 3 o 6 botones.\n"
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"

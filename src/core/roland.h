@@ -83,6 +83,9 @@ public:
     // instrument's next note.
     void setAssignments(Assignments assigned);
     const Assignments& assignments() const { return assigned_; }
+    // The game's sound effects (FM instruments, as Sacar canciones finds them) and
+    // whether they keep their own sound from the chip, unless assigned by hand.
+    void setSoundEffects(std::set<uint32_t> effects, bool original);
     // What an instrument plays now: its assignment, or what the rules give it.
     Assignment assignmentFor(uint32_t fingerprint) const;
 
@@ -188,6 +191,8 @@ private:
     std::array<uint8_t, 2> address_{};  // the register each YM2612 port points at
     std::map<uint32_t, int> rules_;     // FM fingerprint -> program the rules gave it
     Assignments assigned_;              // chosen by hand
+    std::set<uint32_t> effects_;        // the game's sound effects
+    bool effectsOriginal_ = false;      // and they sound as on the chip
     std::map<uint32_t, Seen> seen_;
     uint32_t mutedVoices_ = 0;
     std::set<uint32_t> silenced_;

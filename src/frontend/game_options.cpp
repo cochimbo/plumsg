@@ -44,6 +44,8 @@ const std::vector<GameOption>& gameOptions() {
         {"mezcla_chip", "Sonido original mezclado", "Sonido", [](const Settings& f, Settings& t) { t.chipMix = f.chipMix; }},
         {"reverb", "Reverb", "Sonido", [](const Settings& f, Settings& t) { t.reverb = f.reverb; }},
         {"chorus", "Chorus", "Sonido", [](const Settings& f, Settings& t) { t.chorus = f.chorus; }},
+        {"efectos", "Efectos de sonido originales", "Sonido",
+         [](const Settings& f, Settings& t) { t.effectsOriginal = f.effectsOriginal; }},
         {"region", "Región", "Consola", [](const Settings& f, Settings& t) { t.region = f.region; }},
         {"mandos", "Tipo de mando", "Consola", [](const Settings& f, Settings& t) { t.padType = f.padType; }},
         {"rebobinado_segundos", "Segundos de rebobinado", "Velocidad",

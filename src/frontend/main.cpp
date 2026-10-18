@@ -514,8 +514,15 @@ int main(int argc, char** argv) {
             ui->showError("No se pudo abrir el SoundFont " + path + ".\nSe oye el sonido original.");
         return rolandFontOk;
     };
+    // The game's instruments: those chosen by hand, and its sound effects.
+    auto applyInstruments = [&](const std::string& path) {
+        roland->setAssignments(InstrumentEditor::assignmentsFor(paths.sound, path));
+        roland->setSoundEffects(InstrumentEditor::effectsFor(paths.sound, path), settings.effectsOriginal);
+    };
     auto applySound = [&] {
-        const bool on = settings.roland && loadSoundfont();
+        // A Mega CD disc's music is CD audio, already better than a SoundFont: there the
+        // FM and PSG only play sound effects, which stay as they are.
+        const bool on = settings.roland && !app->console.megaCd() && loadSoundfont();
         roland->setEffects(settings.reverb, settings.chorus);
         app->console.setRoland(on ? roland.get() : nullptr, settings.chipMix);
     };
@@ -546,7 +553,7 @@ int main(int argc, char** argv) {
         game.applyTo(settings);
         applyConsole();
         applySound();
-        roland->setAssignments(InstrumentEditor::assignmentsFor(paths.sound, path));
+        applyInstruments(path);
     };
     // The instrument editor records the game's music while it is played.
     VgmWriter recorder;
@@ -573,6 +580,7 @@ int main(int argc, char** argv) {
         }
         useGameOptions(path);  // before loading: the region may be the game's own
         if (app->load(path, capturing ? nullptr : window)) {
+            applySound();  // now it is known whether it is a disc
             settings.addRecent(path);
             if (!game.own.empty()) ui->notify("Opciones propias de " + fileName(path));
             rewind.clear();
@@ -839,6 +847,7 @@ int main(int argc, char** argv) {
         uiState.editor.recording = recording;
         uiState.editor.recordedSeconds = recorder.secondsAt(app->console.masterClocks());
         uiState.editor.soundfontReady = rolandFontOk;
+        uiState.disc = app->romLoaded && app->console.megaCd();
         uiState.netSession = net != nullptr;
         uiState.netPlaying = netPlaying();
         uiState.netProgress = -1;
@@ -910,6 +919,7 @@ int main(int argc, char** argv) {
         }
         if (act.settingsChanged) save();
         if (act.soundChanged) applySound();
+        if (act.soundChanged && app->romLoaded) applyInstruments(app->romPath);
         if (act.soundChanged && editor.isOpen() && loadSoundfont())
             editor.useSoundfont(*roland, settings.reverb, settings.chorus);
         if (act.openEditor) {
@@ -923,8 +933,7 @@ int main(int argc, char** argv) {
             paused = false;
         }
         if (act.stopRecording || (recording && !editor.isOpen())) stopRecording();
-        if (act.assignmentsChanged && app->romLoaded)
-            roland->setAssignments(InstrumentEditor::assignmentsFor(paths.sound, app->romPath));
+        if (act.assignmentsChanged && app->romLoaded) applyInstruments(app->romPath);
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
         if (!sizedForMenu && !settings.fullscreen) {
             applyWindowScale(window, settings.windowScale, ui->menuHeight());
