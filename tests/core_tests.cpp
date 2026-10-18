@@ -31,6 +31,8 @@
 #include "cd_image.h"
 #include "netplay.h"
 #include "pad_test_rom.h"
+#include "music_rom.h"
+#include "song_extract.h"
 
 using namespace plumsg;
 
@@ -1457,6 +1459,34 @@ void testVgm() {
     check(!file.parse({1, 2, 3}, &error) && !error.empty(), "VGM: un archivo que no lo es se rechaza");
 }
 
+void testSongExtract() {
+    // The music test ROM asks for its songs like Sonic does: the extractor finds where,
+    // and takes out its four songs, each once round with its loop.
+    const std::string path = (std::filesystem::temp_directory_path() / "plumsg-music-test.md").string();
+    {
+        const std::vector<uint8_t> rom = testrom::buildMusic();
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(rom.data()), static_cast<std::streamsize>(rom.size()));
+    }
+    SongExtractor extractor;
+    std::vector<std::string> log;
+    extractor.setLog([&](const std::string& s) { log.push_back(s); });
+    std::vector<SongExtractor::Song> songs;
+    std::string error;
+    const bool ok = extractor.run(path, "Prueba", nullptr, [&](const SongExtractor::Song& s) { songs.push_back(s); }, &error);
+    for (const std::string& s : log) std::printf("     %s\n", s.c_str());
+    check(ok, "Canciones: la extracción encuentra la cola de peticiones");
+    check(songs.size() == 4 && songs[0].number == 0x81 && songs[3].number == 0x84,
+          "Canciones: salen las cuatro canciones y ningún efecto");
+    bool loops = !songs.empty();
+    for (const auto& s : songs) loops = loops && std::fabs(s.loopSeconds - 8.0) < 0.1 && s.seconds < 9.0;
+    check(loops, "Canciones: cada una dura una vuelta, con su punto de vuelta");
+    VgmFile file;
+    check(!songs.empty() && file.parse(songs[1].vgz, &error) && file.title == "Canción 2" && file.loop != 0,
+          "Canciones: el archivo dice su título y dónde vuelve");
+    std::filesystem::remove(path);
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -1488,6 +1518,7 @@ int main() {
     testNetplay();
     testRoland();
     testVgm();
+    testSongExtract();
     {
         // The Z80's reset also resets the YM2612; what it already played must stay.
         Ym2612 ym;

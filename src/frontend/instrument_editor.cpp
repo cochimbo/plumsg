@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -88,6 +89,8 @@ InstrumentEditor::InstrumentEditor(std::string soundFolder) : folder_(std::move(
     player_.setRoland(&synth_);
 }
 
+InstrumentEditor::~InstrumentEditor() { endExtraction(); }
+
 RolandSound::Assignments InstrumentEditor::assignmentsFor(const std::string& soundFolder, const std::string& game) {
     RolandSound::Assignments all = RolandSound::parseAssignments(readText(soundFolder + "cache.ini"));
     if (!game.empty())
@@ -103,6 +106,7 @@ void InstrumentEditor::open(const std::string& game) {
     open_ = true;
     if (game == game_ && !tracks_.empty()) return;
     stop();
+    if (game != game_) endExtraction();
     game_ = game;
     gameName_ = withoutExtension(fileName(game));
     message_.clear();
@@ -396,8 +400,9 @@ void InstrumentEditor::draw(const EditorView& view, EditorRequests& out) {
     }
     if (list.empty()) {
         ImGui::TextWrapped(
-            "Graba un trozo del juego (abre el juego, pulsa Grabar y juega hasta que suene la música que quieres "
-            "probar) o abre un .vgm con su música, de vgmrips.net por ejemplo. Aquí saldrán sus instrumentos.");
+            "Saca las canciones de la ROM del juego (Sacar canciones), graba un trozo del juego (abre el juego, pulsa "
+            "Grabar y juega hasta que suene la música que quieres probar) o abre un .vgm con su música, de "
+            "vgmrips.net por ejemplo. Aquí saldrán sus instrumentos.");
         ImGui::End();
         return;
     }
@@ -447,6 +452,14 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("La carpeta de las canciones de este juego: lo que pongas en ella (.vgm, .vgz o\n"
                               "el .zip de vgmrips) sale en la lista.\n%s", gameTracksFolder().c_str());
+        ImGui::SameLine();
+        ImGui::BeginDisabled(extraction_ != nullptr && !extraction_->done);
+        if (ImGui::Button("Sacar canciones")) startExtraction();
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Busca las canciones en la ROM del juego y las graba una a una, sin nombre\n"
+                              "(Canción 1, Canción 2...), con las pistas del juego. Sirve para los juegos\n"
+                              "con un driver de sonido como el de Sonic (SMPS) y parecidos. Tarda unos minutos.");
     }
     const bool canRecord = !view.loadedGame.empty() && view.loadedGame == game_;
     if (view.recording || !game_.empty()) ImGui::SameLine();
@@ -469,6 +482,8 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Abre el juego; luego pulsa Grabar del juego aquí.");
         }
     }
+
+    drawExtraction();
 
     // Transport.
     ImGui::BeginDisabled(!player_.loaded() || view.recording);
@@ -516,6 +531,89 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
     if (player_.loaded() && !player_.file().game.empty())
         ImGui::TextDisabled("%s%s%s", player_.file().game.c_str(), player_.file().title.empty() ? "" : " - ",
                             player_.file().title.c_str());
+}
+
+void InstrumentEditor::startExtraction() {
+    endExtraction();
+    extraction_ = std::make_unique<Extraction>();
+    extractionSeen_ = 0;
+    message_.clear();
+    Extraction* x = extraction_.get();
+    const std::string rom = game_, game = gameName_, folder = gameTracksFolder();
+    x->thread = std::thread([x, rom, game, folder]() {
+        SongExtractor extractor;
+        std::string error;
+        int saved = 0;
+        const bool ok = extractor.run(
+            rom, game,
+            [x](const SongExtractor::Progress& p) {
+                std::lock_guard<std::mutex> lock(x->mutex);
+                x->progress = p;
+                return !x->stop.load();
+            },
+            [&](const SongExtractor::Song& song) {
+                char name[32];
+                std::snprintf(name, sizeof name, "Canción %02d.vgz", saved + 1);
+                if (!writeBytes(folder + name, song.vgz.data(), song.vgz.size())) return;
+                std::lock_guard<std::mutex> lock(x->mutex);
+                x->saved = ++saved;
+            },
+            &error);
+        std::lock_guard<std::mutex> lock(x->mutex);
+        if (!ok) x->error = error;
+        x->done = true;
+    });
+}
+
+void InstrumentEditor::endExtraction() {
+    if (!extraction_) return;
+    extraction_->stop = true;
+    if (extraction_->thread.joinable()) extraction_->thread.join();
+    extraction_.reset();
+}
+
+void InstrumentEditor::drawExtraction() {
+    if (!extraction_) return;
+    SongExtractor::Progress p;
+    int saved = 0;
+    std::string error;
+    {
+        std::lock_guard<std::mutex> lock(extraction_->mutex);
+        p = extraction_->progress;
+        saved = extraction_->saved;
+        error = extraction_->error;
+    }
+    if (saved != extractionSeen_) {  // new songs: into the list, and the first one open
+        extractionSeen_ = saved;
+        listTracks();
+        if (!player_.loaded() || track_.path.empty())
+            if (!tracks_.empty()) loadTrack(tracks_.front());
+    }
+    if (extraction_->done) {
+        if (!extraction_->stop) {
+            if (!error.empty())
+                message_ = error;
+            else
+                message_ = saved == 1 ? "He sacado 1 canción de la ROM: está en la lista de pistas."
+                                      : "He sacado " + std::to_string(saved) +
+                                            " canciones de la ROM: están en la lista de pistas.";
+        }
+        extraction_->thread.join();
+        extraction_.reset();
+        return;
+    }
+    const float fraction = p.total > 0 ? static_cast<float>(p.tried) / static_cast<float>(p.total) : 0.0f;
+    const std::string label = p.total > 0 ? "Probando " + std::to_string(p.tried) + " de " + std::to_string(p.total) +
+                                                ": " + std::to_string(saved) +
+                                                (saved == 1 ? " canción" : " canciones")
+                                          : p.doing;
+    ImGui::ProgressBar(p.total > 0 ? fraction : -1.0f * static_cast<float>(ImGui::GetTime()), ImVec2(360, 0),
+                       label.c_str());
+    ImGui::SameLine();
+    if (ImGui::Button("Parar")) {
+        extraction_->stop = true;
+        message_ = saved ? "Parado: las canciones sacadas hasta ahora se quedan en la lista." : "";
+    }
 }
 
 void InstrumentEditor::drawInstruments(const std::vector<Instrument>& list) {

@@ -38,6 +38,22 @@ public:
     // `game` goes in the file's tag.
     std::vector<uint8_t> finish(uint64_t clock, const std::string& game, bool compress = true);
 
+    // A point of the recording, taken at master clock `clock`: to end the file there, or
+    // to loop back to it.
+    struct Mark {
+        size_t bytes = 0;
+        uint64_t samples = 0;
+    };
+    Mark mark(uint64_t clock);
+    // The commands written so far.
+    const std::vector<uint8_t>& commands() const { return data_; }
+    struct Tag {
+        std::string title, game, notes = "Grabado jugando";
+    };
+    // Like finish() above, ending at `end` (at `clock` when null) and looping back to
+    // `loop` (when not null).
+    std::vector<uint8_t> finish(uint64_t clock, const Tag& tag, bool compress, const Mark* end, const Mark* loop);
+
 private:
     void wait(uint64_t clock);
     void ymWrite(int port, uint8_t reg, uint8_t value);

@@ -209,7 +209,25 @@ void VgmWriter::fmReset(uint64_t clock) {
 }
 
 std::vector<uint8_t> VgmWriter::finish(uint64_t clock, const std::string& game, bool compress) {
+    Tag tag;
+    tag.game = game;
+    return finish(clock, tag, compress, nullptr, nullptr);
+}
+
+VgmWriter::Mark VgmWriter::mark(uint64_t clock) {
     wait(clock);
+    return {data_.size(), samples_};
+}
+
+std::vector<uint8_t> VgmWriter::finish(uint64_t clock, const Tag& tag, bool compress, const Mark* end,
+                                       const Mark* loop) {
+    if (end && end->bytes <= data_.size()) {
+        data_.resize(end->bytes);
+        samples_ = end->samples;
+    } else {
+        wait(clock);
+    }
+    if (loop && (loop->bytes > data_.size() || loop->samples >= samples_)) loop = nullptr;
     recording_ = false;
     std::vector<uint8_t> file(0x40, 0);
     std::memcpy(file.data(), "Vgm ", 4);
@@ -221,21 +239,25 @@ std::vector<uint8_t> VgmWriter::finish(uint64_t clock, const std::string& game, 
     file[0x2A] = 16;
     put32(file, 0x2C, static_cast<uint32_t>(std::lround(master_ / 7)));
     put32(file, 0x34, 0x40 - 0x34);
+    if (loop) {
+        put32(file, 0x1C, static_cast<uint32_t>(0x40 + loop->bytes - 0x1C));
+        put32(file, 0x20, static_cast<uint32_t>(samples_ - loop->samples));
+    }
     file.insert(file.end(), data_.begin(), data_.end());
     file.push_back(0x66);
     data_.clear();
     // The tag: title, game and system (each in English and Japanese), author, date,
     // who made the file, notes.
     put32(file, 0x14, static_cast<uint32_t>(file.size() - 0x14));
-    std::vector<uint8_t> tag;
-    for (const std::string& s : {std::string(), std::string(), game, std::string(), std::string("Sega Mega Drive / Genesis"),
+    std::vector<uint8_t> gd3;
+    for (const std::string& s : {tag.title, std::string(), tag.game, std::string(), std::string("Sega Mega Drive / Genesis"),
                                  std::string(), std::string(), std::string(), std::string(), std::string("plumsg"),
-                                 std::string("Grabado jugando")})
-        appendUtf16(tag, s);
+                                 tag.notes})
+        appendUtf16(gd3, s);
     file.insert(file.end(), {'G', 'd', '3', ' '});
     append32(file, 0x100);
-    append32(file, static_cast<uint32_t>(tag.size()));
-    file.insert(file.end(), tag.begin(), tag.end());
+    append32(file, static_cast<uint32_t>(gd3.size()));
+    file.insert(file.end(), gd3.begin(), gd3.end());
     put32(file, 0x04, static_cast<uint32_t>(file.size() - 4));
     return compress ? gzip(file) : file;
 }

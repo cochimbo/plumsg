@@ -89,6 +89,7 @@ add_library(plumsg_core STATIC
   src/core/audio_mixer.cpp
   src/core/roland.cpp
   src/core/vgm.cpp
+  src/core/song_extract.cpp
   src/core/megadrive.cpp
   src/core/rewind.cpp
   src/core/cheats.cpp
