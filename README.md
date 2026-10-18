@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/marquesina.png" alt="PLUMSG" width="640"></p>
+<p align="center"><img src="src/frontend/assets/icon.png" alt="La ciruela de plumsg" width="128"><br><img src="docs/marquesina.png" alt="PLUMSG" width="640"></p>
 
 # plumsg
 
@@ -82,6 +82,7 @@ Arrastra una ROM o un disco a la ventana, usa **Archivo > Abrir ROM** o abre la 
 | Tab (mando: gatillo derecho), mantener | Avance rápido |
 | F9 | Cámara lenta (activar / desactivar) |
 | F1 | Reiniciar |
+| F12 | Parar la emulación: cierra el juego y vuelve a la pantalla de inicio (o a la biblioteca) |
 | F2 | Cambiar de vista (2D / capas de depuración) |
 | P | Pausa |
 | M | Silenciar |
@@ -97,7 +98,10 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   para cargar, Y (o Espacio) para guardar y B (o Esc) para cerrar. Los estados están en `%APPDATA%\plumsg\plumsg\states\` (o en `states\` junto
   al ejecutable si hay un `plumsg.ini` a su lado, modo portátil). Un estado de otra ROM o
   dañado se rechaza sin tocar la partida. Cargar un estado restaura también la SRAM en
-  memoria; el `.sav` se sigue escribiendo al salir o al cambiar de ROM.
+  memoria; el `.sav` se sigue escribiendo al salir, al cambiar de ROM o al parar la emulación.
+- **Juego > Parar emulación** (F12): cierra el juego sin cerrar plumsg. Guarda su partida de
+  cartucho, sale de la partida en red si la hay y vuelve a la pantalla de inicio, o a la
+  biblioteca si tiene carpetas.
 - **Juego > Velocidad**: cámara lenta y cuántos segundos se pueden rebobinar (20 por
   defecto, hasta 60; 0 lo desactiva), a qué velocidad va el avance rápido (4x) y la cámara
   lenta (50 %). El sonido acompaña: más agudo al acelerar y más grave a cámara lenta. Al

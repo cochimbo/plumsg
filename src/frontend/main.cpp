@@ -225,6 +225,19 @@ struct App {
         return true;
     }
 
+    // Closes the game: its cartridge save is written and nothing runs until another is loaded.
+    void unload(SDL_Window* window) {
+        if (!romLoaded) return;
+        saveBattery();
+        romLoaded = false;
+        romPath.clear();
+        hostsBattery = false;
+        cheats.clear();
+        console.setCheats({});
+        if (window) SDL_SetWindowTitle(window, "plumsg");
+        refreshSlots();
+    }
+
     // Reads every slot's date and thumbnail for the Estado menu.
     void refreshSlots() {
         for (int i = 0; i < kSlots; ++i) refreshSlot(i);
@@ -708,6 +721,21 @@ int main(int argc, char** argv) {
         ui->notify(host ? "Esperando al otro jugador en el puerto " + std::to_string(settings.netPort)
                         : "Conectando con " + settings.netAddress);
     };
+    // Parar emulación: back to the start screen (or the library) without closing plumsg.
+    auto stop = [&] {
+        if (!app->romLoaded) return;
+        stopNet("Has salido de la partida en red", false);
+        stopRecording();
+        save();  // the game's own options, while they are still its
+        app->unload(capturing ? nullptr : window);
+        useGameOptions(std::string());
+        roland->allNotesOff();
+        rewind.clear();
+        paused = slowMotion = false;
+        save();
+        ui->notify("Emulación parada");
+        if (!settings.libraryFolders.empty() && !ui->libraryOpen()) ui->toggleLibrary();
+    };
     auto selectSlot = [&](int delta) {
         settings.stateSlot = (settings.stateSlot + delta + kSlots) % kSlots;
         const SlotInfo& s = app->slots[static_cast<size_t>(settings.stateSlot)];
@@ -749,6 +777,7 @@ int main(int argc, char** argv) {
                 case Hotkey::NextSlot: selectSlot(1); break;
                 case Hotkey::StateMenu: ui->toggleStateMenu(); break;
                 case Hotkey::Library: ui->toggleLibrary(); break;
+                case Hotkey::Stop: stop(); break;
                 case Hotkey::SlowMotion:
                     if (app->romLoaded && !netPlaying()) toggleSlowMotion();
                     break;
@@ -887,6 +916,7 @@ int main(int argc, char** argv) {
         if (act.netLeave) stopNet("Has salido de la partida en red", false);
         const bool netBusy = netPlaying();
         if (act.reset && !netBusy) app->console.reset();
+        if (act.stop) stop();
         if (act.togglePause && !netBusy) paused = !paused;
         if (act.quit) running = false;
         if (act.fullscreenChanged) setFullscreen();
@@ -1045,7 +1075,7 @@ int main(int argc, char** argv) {
         const Viewport game{0, 0, w, std::max(1, h - ui->menuHeight())};
         Renderer& view = settings.render.pseudo3d ? *pseudo3d : *renderers[viewIndex()];
         view.setOptions(settings.render);
-        view.draw(app->console.frame(), game);
+        if (app->romLoaded) view.draw(app->console.frame(), game);  // stopped: the start screen
         ui->render();
         ++loops;
         if (downloadCovers && ui->library().pending() == 0 && loops > 5) {

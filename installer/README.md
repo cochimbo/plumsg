@@ -9,7 +9,9 @@
   `.bin`, `.zip`) sin cambiar el programa que las abre por defecto (`.md` también son
   documentos Markdown).
 - Se instala sin pedir permisos de administrador (o para todos los usuarios, si se elige).
-- Está en español e inglés, con la marquesina de plumsg (`wizard.bmp`, `wizard-2x.bmp`) en las páginas de bienvenida y final.
+- Está en español e inglés, con la ciruela y la marquesina de plumsg (`wizard.bmp`, `wizard-2x.bmp`) en las
+  páginas de bienvenida y final, la ciruela en las demás (`wizard-small.bmp`, `wizard-small-2x.bmp`) y el
+  icono de plumsg (`src/frontend/assets/plumsg.ico`) en el propio instalador.
 
 ## Compilación automática
 
