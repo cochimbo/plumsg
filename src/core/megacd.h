@@ -102,6 +102,13 @@ public:
         for (auto& c : pcm_.channels) ar(c.enable, c.envelope, c.pan, c.step, c.loop, c.start, c.address);
         ar(out_.pcm.next, out_.pcm.prevL, out_.pcm.prevR, out_.cdda.next, out_.cdda.prevL, out_.cdda.prevR);
         ar(out_.pcmOut, out_.cddaOut);
+        // Added in 0.0.7.2; older states end before it.
+        if constexpr (Ar::kLoading) {
+            modeWritePending_ = false;
+            if (!ar.atEnd()) ar(modeWritePending_, modeWrite_);
+        } else {
+            ar(modeWritePending_, modeWrite_);
+        }
         out_.mixed.clear();
         cachedLba_ = kNoSector;
         updateIrq();
@@ -136,6 +143,8 @@ private:
     void subWrite(uint32_t addr, uint16_t value, bool upper, bool lower);
     uint16_t readIo(uint32_t addr, bool upper, bool lower);
     void writeIo(uint32_t addr, uint16_t value, bool upper, bool lower);
+    void writeMemoryMode(uint8_t low);
+    void landModeWrite();
     // Console side.
     uint16_t readExternal(uint32_t addr);
     void writeExternal(uint32_t addr, uint16_t value, bool upper, bool lower);
@@ -195,6 +204,11 @@ private:
     double master_ = 53693175.0;
     uint64_t subClock_ = 0;  // sub CPU cycles run since the last rebase
     bool resetPending_ = true;  // the sub CPU fetches its vectors when it next runs
+    // A sub CPU write to the memory mode register lands at the end of its instruction, as on the
+    // real bus: the console only sees it once the sub clock has passed that point. Silpheed's main
+    // CPU reads RET twice after handing over word RAM and hangs if the sub already took it back.
+    bool modeWritePending_ = false;
+    uint8_t modeWrite_ = 0;
 
     struct Counter {
         uint32_t divider = 0, dma = 0;
