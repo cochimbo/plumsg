@@ -40,8 +40,12 @@ OutputBaseFilename={#AppName}-{#AppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; La marquesina en la columna izquierda de las páginas de bienvenida y final (100% y 200%).
+; La ciruela y la marquesina en la columna izquierda de las páginas de bienvenida y final,
+; y la ciruela arriba a la derecha en las demás (100% y 200%).
 WizardImageFile=wizard.bmp,wizard-2x.bmp
+WizardSmallImageFile=wizard-small.bmp,wizard-small-2x.bmp
+; El icono del propio instalador (plumsg-<versión>-setup.exe).
+SetupIconFile=..\src\frontend\assets\plumsg.ico
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Permite instalar sin permisos de administrador (en el perfil del usuario).

@@ -8,6 +8,7 @@
 #include "imgui_impl_opengl3.h"
 #include "game_options.h"
 #include "library_names.h"
+#include "icon_png.h"
 #include "logo_png.h"
 #include "../core/system.h"
 #include "../net/udp.h"
@@ -27,8 +28,8 @@ constexpr const char* kRowNames[kRows] = {"Arriba", "Abajo", "Izquierda", "Derec
                                           "X", "Y", "Z", "Mode", "Efecto 3D", "Guardar estado", "Cargar estado",
                                           "Ranura anterior", "Ranura siguiente", "Menú de estados",
                                           "Rebobinar (mantener)", "Avance rápido (mantener)", "Cámara lenta",
-                                          "Biblioteca"};
-static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 10, "update kRowNames");
+                                          "Biblioteca", "Parar emulación"};
+static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 11, "update kRowNames");
 
 std::vector<SDL_Scancode>& keysOf(InputConfig& c, int row, int player) {
     if (row >= InputConfig::kButtons) return c.hotkeyKeys[row - InputConfig::kButtons];
@@ -70,25 +71,41 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
 Ui::~Ui() {
     library_.clearTextures();
     if (logoTexture_) gl::DeleteTextures(1, &logoTexture_);
+    if (iconTexture_) gl::DeleteTextures(1, &iconTexture_);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 }
 
-void Ui::loadLogo() {
-    int w = 0, h = 0, n = 0;
-    stbi_uc* rgba = stbi_load_from_memory(kLogoPng, static_cast<int>(sizeof(kLogoPng)), &w, &h, &n, 4);
-    if (!rgba) return;
-    gl::GenTextures(1, &logoTexture_);
-    gl::BindTexture(gl::TEXTURE_2D, logoTexture_);
+// An RGBA texture from an embedded PNG; 0 if it cannot be decoded. With `window`, the
+// image is also the window's icon.
+static unsigned int textureFromPng(const unsigned char* png, size_t size, int* w, int* h, SDL_Window* window = nullptr) {
+    int n = 0;
+    stbi_uc* rgba = stbi_load_from_memory(png, static_cast<int>(size), w, h, &n, 4);
+    if (!rgba) return 0;
+    unsigned int texture = 0;
+    gl::GenTextures(1, &texture);
+    gl::BindTexture(gl::TEXTURE_2D, texture);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
-    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8, w, h, 0, gl::RGBA, gl::UNSIGNED_BYTE, rgba);
+    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8, *w, *h, 0, gl::RGBA, gl::UNSIGNED_BYTE, rgba);
+    if (window) {
+        if (SDL_Surface* s = SDL_CreateRGBSurfaceWithFormatFrom(rgba, *w, *h, 32, *w * 4, SDL_PIXELFORMAT_RGBA32)) {
+            SDL_SetWindowIcon(window, s);
+            SDL_FreeSurface(s);
+        }
+    }
     stbi_image_free(rgba);
-    logoWidth_ = w;
-    logoHeight_ = h;
+    return texture;
+}
+
+void Ui::loadLogo() {
+    logoTexture_ = textureFromPng(kLogoPng, sizeof(kLogoPng), &logoWidth_, &logoHeight_);
+    // The plum is also the window's icon (on Windows the .exe's icon already is).
+    int w = 0, h = 0;
+    iconTexture_ = textureFromPng(kIconPng, sizeof(kIconPng), &w, &h, window_);
 }
 
 bool Ui::handleEvent(const SDL_Event& e) {
@@ -334,6 +351,10 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         const bool solo = state.romLoaded && !state.netPlaying;
         if (ImGui::MenuItem("Pausa", "P", state.paused, solo)) out.togglePause = true;
         if (ImGui::MenuItem("Reiniciar", "F1", false, solo)) out.reset = true;
+        if (ImGui::MenuItem("Parar emulación", "F12", false, state.romLoaded)) out.stop = true;
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Cierra el juego (guarda su partida de cartucho) y vuelve a la\n"
+                              "pantalla de inicio, o a la biblioteca si tienes carpetas en ella.");
         if (ImGui::MenuItem("Trucos...", nullptr, false, solo)) {
             out.cheatsFor = state.romPath;
             showCheats_ = true;
@@ -840,6 +861,11 @@ void Ui::drawAbout() {
         ImGui::End();
         return;
     }
+    if (iconTexture_) {
+        const float w = ImGui::GetFontSize() * 6.0f;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (ImGui::GetContentRegionAvail().x - w) * 0.5f));
+        ImGui::Image(static_cast<ImTextureID>(iconTexture_), ImVec2(w, w));
+    }
     if (logoTexture_) {
         const float w = ImGui::GetFontSize() * 22.0f;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (ImGui::GetContentRegionAvail().x - w) * 0.5f));
@@ -850,7 +876,7 @@ void Ui::drawAbout() {
     ImGui::TextUnformatted("Arrastra una ROM a la ventana o usa Archivo > Abrir ROM.");
     ImGui::SeparatorText("Atajos");
     ImGui::BulletText("Ctrl+O  abrir ROM;  F10  biblioteca de juegos");
-    ImGui::BulletText("F1  reiniciar");
+    ImGui::BulletText("F1  reiniciar;  F12  parar la emulación y volver al inicio");
     ImGui::BulletText("F2  cambiar de vista");
     ImGui::BulletText("P  pausa");
     ImGui::BulletText("M  silenciar el sonido");
@@ -903,13 +929,23 @@ void Ui::drawOverlays(const UiState& state) {
         const float logoW = logoTexture_ ? std::min(static_cast<float>(logoWidth_), vp->Size.x * 0.6f) : 0.0f;
         const float logoH = logoTexture_ ? logoW * logoHeight_ / logoWidth_ : 0.0f;
         const float gap = logoTexture_ ? size.y * 1.5f : 0.0f;
-        const float y = top + (vp->Size.y - menuHeight_ - logoH - gap - size.y) * 0.5f;
+        // The plum above it, if the window is tall enough to leave the game area some room.
+        const float room = vp->Size.y - menuHeight_ - logoH - gap - size.y;
+        const float iconS = iconTexture_ ? std::min(logoW * 0.45f, room * 0.45f) : 0.0f;
+        const float iconGap = iconS > size.y * 3.0f ? size.y : 0.0f;
+        const float plum = iconGap > 0.0f ? iconS : 0.0f;
+        const float y = top + (room - plum - iconGap) * 0.5f;
         ImDrawList* draw = ImGui::GetBackgroundDrawList();
+        if (plum > 0.0f) {
+            const ImVec2 a(vp->Pos.x + (vp->Size.x - plum) * 0.5f, y);
+            draw->AddImage(static_cast<ImTextureID>(iconTexture_), a, ImVec2(a.x + plum, a.y + plum));
+        }
+        const float logoY = y + plum + iconGap;
         if (logoTexture_) {
-            const ImVec2 a(vp->Pos.x + (vp->Size.x - logoW) * 0.5f, y);
+            const ImVec2 a(vp->Pos.x + (vp->Size.x - logoW) * 0.5f, logoY);
             draw->AddImage(static_cast<ImTextureID>(logoTexture_), a, ImVec2(a.x + logoW, a.y + logoH));
         }
-        const ImVec2 pos(vp->Pos.x + (vp->Size.x - size.x) * 0.5f, y + logoH + gap);
+        const ImVec2 pos(vp->Pos.x + (vp->Size.x - size.x) * 0.5f, logoY + logoH + gap);
         draw->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text), hint);
     }
     const char* badge = nullptr;

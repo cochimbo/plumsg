@@ -17,7 +17,7 @@ enum class MdButton { Up, Down, Left, Right, A, B, C, Start, X, Y, Z, Mode, Coun
 // Emulator actions that can be bound like console buttons. Most fire once per press;
 // Rewind and FastForward last while held.
 enum class Hotkey {
-    Toggle3D, SaveState, LoadState, PrevSlot, NextSlot, StateMenu, Rewind, FastForward, SlowMotion, Library, Count
+    Toggle3D, SaveState, LoadState, PrevSlot, NextSlot, StateMenu, Rewind, FastForward, SlowMotion, Library, Stop, Count
 };
 
 // SDL reports the pad's triggers as axes; bindings keep them as two extra buttons.

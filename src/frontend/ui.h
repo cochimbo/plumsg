@@ -21,6 +21,7 @@ namespace plumsg {
 struct UiActions {
     std::string load;            // ROM to open
     bool reset = false;
+    bool stop = false;           // close the game and go back to the start screen
     bool togglePause = false;
     bool quit = false;
     int windowScale = 0;         // resize the window to this many times 320x224
@@ -168,6 +169,7 @@ private:
     InstrumentEditor* editor_ = nullptr;
     unsigned int logoTexture_ = 0;  // the PLUMSG marquee, 0 if it could not be decoded
     int logoWidth_ = 0, logoHeight_ = 0;
+    unsigned int iconTexture_ = 0;  // the plum, 0 if it could not be decoded
 
     bool showControls_ = false;
     bool showVideo_ = false;
