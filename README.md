@@ -98,6 +98,11 @@ Arrastra una ROM o un disco a la ventana, usa **Archivo > Abrir ROM** o abre la 
 
 Todo se puede cambiar en **Opciones > Controles**. El primer mando conectado es el
 jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por defecto.
+Cada juego puede tener además **sus propios botones**: en **Juego > Opciones de este
+juego**, pestaña **Controles**, marca *Botones propios de este juego* y asigna las teclas y
+los botones del mando que quieras; mientras ese juego está abierto sustituyen a los
+generales (los atajos como guardar estado o rebobinar siguen siendo los generales).
+**Volver a los generales** los quita. Se guardan en el `.ini` del juego en `perfiles\`.
 
 - **Estado**: guardar, cargar y elegir ranura; al pasar el ratón sobre una ranura se ve su
   miniatura. El **menú de estados** (F4, o el clic del stick izquierdo del mando) pausa el
@@ -328,6 +333,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   Del juego en red: dos sesiones conectadas por una red simulada que retrasa, desordena,
   duplica y pierde paquetes tienen que ver los mismos fotogramas entre sí y que una sola
   consola con los dos mandos, aunque vuelvan atrás muchas veces.
+- `frontend_tests` (solo con la interfaz, necesita SDL2): las opciones propias de cada
+  juego y sus botones, leídos y escritos en su archivo de `perfiles\`.
 - `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la
@@ -341,7 +348,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`
   (`--biblioteca` se puede repetir, `--bios` abre la ventana de las BIOS y
   `--buscar-caratula` la búsqueda de carátula del primer juego de la biblioteca;
-  `plumsg rom.md --trucos --captura trucos.png` abre los trucos del juego con su lista).
+  `plumsg rom.md --trucos --captura trucos.png` abre los trucos del juego con su lista y
+  `--opciones-juego` sus opciones propias, o `--opciones-juego controles` sus botones).
 
 ## Sin ventana: `plumsg-headless`
 
