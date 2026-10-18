@@ -145,6 +145,9 @@ public:
     void setEditor(InstrumentEditor* editor) { editor_ = editor; }
     // RetroAchievements' menu, windows and notices (not owned).
     void setAchievements(Achievements* achievements);
+    void openAchievements() {
+        if (achievements_) achievements_->openAccount();
+    }
     void showAchievement(const Achievements::Notice& notice) {
         if (achievements_) achievements_->show(notice);
     }

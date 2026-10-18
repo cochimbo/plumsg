@@ -344,6 +344,7 @@ struct CommandLine {
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
     bool coverSearch = false;     // --buscar-caratula: with --biblioteca, look for the first game's cover
     bool cheats = false;          // --trucos: start with the game's Trucos window open
+    bool achievements = false;    // --logros: start with the RetroAchievements window open
     int gameOptions = 0;          // --opciones-juego [controles]: start with its Opciones de este juego window open (2 on Controles)
     bool editor = false;          // --instrumentos: start with the instrument editor open
     std::string track;            // --pista f.vgm: and this track in it
@@ -373,6 +374,7 @@ const char* kHelp =
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
     "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
     "  --trucos               abrir los trucos del juego, con sus listas de internet\n"
+    "  --logros               abrir la ventana de RetroAchievements\n"
     "  --opciones-juego       abrir las opciones propias del juego\n"
     "  --opciones-juego controles   ...en la pestaña de sus controles\n"
     "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
@@ -398,6 +400,7 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--bios") c.bios = true;
         else if (a == "--buscar-caratula") c.coverSearch = true;
         else if (a == "--trucos") c.cheats = true;
+        else if (a == "--logros") c.achievements = true;
         else if (a == "--opciones-juego") {
             c.gameOptions = 1;
             if (i + 1 < argc && std::string(argv[i + 1]) == "controles") {
@@ -534,7 +537,7 @@ int main(int argc, char** argv) {
     app->cheatsDir = paths.cheats;
     ui->library().setCoversFolder(paths.covers);
     auto audio = std::make_unique<Audio>();
-    // RetroAchievements, never in a screenshot run.
+    // RetroAchievements: a screenshot run shows its windows but never logs in.
     Achievements achievements([](const std::string& url, const std::string& post, const std::string& agent,
                                  std::string& body) {
         std::vector<uint8_t> data;
@@ -542,7 +545,7 @@ int main(int argc, char** argv) {
         body.assign(data.begin(), data.end());
         return status;
     });
-    if (!capturing) ui->setAchievements(&achievements);
+    ui->setAchievements(&achievements);
     auto hardcore = [&] { return !capturing && settings.achievements && settings.raHardcore; };
     app->noCheats = hardcore();
     // Logs in (with the token kept from the last time) and identifies the loaded game,
@@ -683,6 +686,7 @@ int main(int argc, char** argv) {
     if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolders.empty()))
         ui->toggleLibrary();
     if (cmd.bios) ui->openBios();
+    if (cmd.achievements) ui->openAchievements();
     if (cmd.editor) {
         loadSoundfont();
         editor.useSoundfont(*roland, settings.reverb, settings.chorus);

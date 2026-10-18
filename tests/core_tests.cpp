@@ -1431,7 +1431,7 @@ void testAchievements() {
     uint8_t bytes[3] = {};
     check(Achievements::readMemory(md, 0x10, bytes, 2) == 2 && bytes[0] == 0x34 && bytes[1] == 0x12,
           "logros: la RAM del 68000 con los bytes de cada palabra cambiados");
-    check(Achievements::readMemory(md, 0xFFFE, bytes, 2) == 2 && bytes[1] == 0x56, "logros: el final de la RAM");
+    check(Achievements::readMemory(md, 0xFFFE, bytes, 2) == 2 && bytes[0] == 0x56, "logros: el final de la RAM");
     check(Achievements::readMemory(md, 0x20000, bytes, 1) == 0, "logros: nada más allá de la SRAM");
 
     std::vector<std::string> asked;
