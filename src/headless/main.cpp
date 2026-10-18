@@ -43,7 +43,8 @@ const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom> 
   --play-vgm FILE       no game: play this .vgm or .vgz for --frames sixtieths of a
                         second, for --wav and --roland, and list its instruments
   --extract-songs DIR   take the game's songs out of its ROM (sound drivers like
-                        Sonic's), one .vgz each in DIR, saying what it finds
+                        Sonic's or Streets of Rage 2's), one .vgz each in DIR,
+                        saying what it finds
   --test-rom            the built-in test program (planes, sprites, scroll, a tone)
   --pad-test-rom        the built-in pad test: the backdrop shows the pressed buttons
   --two-pad-test-rom    the built-in two-pad test: every frame depends on all that both

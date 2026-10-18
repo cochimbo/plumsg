@@ -162,15 +162,17 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   curva, la máscara de colores y las esquinas oscuras), con su intensidad. Se notan más
   cuanto más grande es la ventana, mejor a pantalla completa.
 - **Sonido**: volumen, silenciar y el modo de la música. **Original** es el sonido de los
-  chips. **Roland** toca la música del FM y del PSG como notas General MIDI sobre un
-  SoundFont, como sonaría en un Roland SC-55; las voces y la batería digitalizada (el DAC)
+  chips. **Sintetizador** toca la música del FM y del PSG como notas General MIDI sobre un
+  SoundFont, como sonaría en un módulo como el Roland SC-55; las voces y la batería digitalizada (el DAC)
   siguen sonando como en la consola. El control **Sonido original** deja oír también el FM y el PSG
   por debajo, y **Reverb** y **Chorus** añaden ambiente. Cada instrumento del juego recibe
   un instrumento General MIDI con unas reglas automáticas, que se cambian a mano en el
   **Editor de instrumentos**. Todo esto se puede cambiar solo para un juego desde sus opciones.
 
-  plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable, y con **Elegir
-  SoundFont (.sf2)...** se puede usar otro (**Usar el incluido** vuelve a él):
+  plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable. Los `.sf2` que se
+  dejen en `sonido\soundfonts\` (**Abrir la carpeta de SoundFonts** la abre) salen en el
+  desplegable **SoundFont** para elegir uno con un clic, y **Elegir otro (.sf2)...** abre
+  uno de cualquier sitio:
   - Formato **SoundFont 2** (`.sf2`). No valen los `.sf3` (comprimidos), `.sfz` ni `.dls`;
     un `.sf3` se puede pasar a `.sf2` con Polyphone.
   - Tiene que estar ordenado como **General MIDI**: los 128 instrumentos en el banco 0 y la
@@ -188,11 +190,14 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     grabación se guarda en `sonido\pistas\` (junto a `states\`) como `.vgz`.
   - **Sacar canciones** busca las canciones en la ROM del juego y las graba una a una en
     `sonido\pistas\<juego>\`, sin nombre ("Canción 1", "Canción 2"...), cada una con una
-    vuelta y su punto de vuelta para que siga sonando. Arranca el juego por su cuenta, mira
-    dónde le pide la música al driver de sonido y le va pidiendo cada número. Funciona con
-    los juegos cuyo driver toma las peticiones así: el SMPS de Sonic 1, 2 y 3 y de muchos
-    juegos de Sega, y otros parecidos como el de Gunstar Heroes. Tarda unos minutos, con
-    una barra de progreso, y se puede parar.
+    vuelta y su punto de vuelta para que siga sonando. Arranca el juego por su cuenta y
+    localiza su driver de sonido (el código que toca el chip FM, o el Z80) y cómo le pide
+    el juego la música: un byte que el juego escribe y el driver vacía (el SMPS de Sega y
+    parecidos), o una rutina del driver a la que el juego llama con el número en un registro
+    (como Streets of Rage 2). Luego le va pidiendo cada número. Probado con Sonic 1, 2 y 3,
+    Gunstar Heroes, Ristar, Shinobi III, Golden Axe y Streets of Rage 2. Lo que suena en uno
+    o dos canales, aunque dure (un motor, una alarma), cuenta como efecto y no como canción.
+    Tarda unos minutos, con una barra de progreso, y se puede parar.
   - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,
     golpes...): los instrumentos FM que suenan en los sonidos cortos y en ninguna canción.
     Con **Sonido > Efectos de sonido originales** (la opción de serie) suenan como en la
@@ -205,7 +210,7 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     (**Carpeta** la abre). Desde entonces, la lista **Pista** de ese juego trae cada canción
     por su nombre, como "Green Hill Zone", junto a las grabaciones. También vale el sound
     test del juego: se pone a grabar y se van tocando sus canciones.
-  - **Tocar** la reproduce con el juego en pausa. **Original** y **Roland** cambian entre
+  - **Tocar** la reproduce con el juego en pausa. **Original** y **Sintetizador** cambian entre
     los dos sonidos en el mismo punto, para comparar. Cada canal (FM 1-6, DAC, PSG 1-3 y
     ruido) tiene **Solo** y **Silencio**.
   - La lista enseña los instrumentos de la pista, con sus canales y sus notas. Los que suenan

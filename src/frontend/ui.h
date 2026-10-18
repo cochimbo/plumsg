@@ -132,6 +132,9 @@ public:
     Library& library() { return library_; }
     // The instrument editor's window, drawn with the rest (not owned).
     void setEditor(InstrumentEditor* editor) { editor_ = editor; }
+    // Where the SoundFonts to choose from are: the one that comes with plumsg, and the
+    // user's folder (created if missing), listed in Sonido > SoundFont.
+    void setSoundfonts(std::string included, std::string folder);
     // The states menu: a list of the slots that the pad (or the keyboard) can drive.
     void toggleStateMenu();
     bool stateMenuOpen() const { return stateMenu_.open; }
@@ -183,6 +186,8 @@ private:
     Library library_;
     CheatDatabase cheatDb_;
     InstrumentEditor* editor_ = nullptr;
+    std::string includedSoundfont_, soundfontFolder_;
+    void drawSoundfontMenu(UiActions& out);
     unsigned int logoTexture_ = 0;  // the PLUMSG marquee, 0 if it could not be decoded
     int logoWidth_ = 0, logoHeight_ = 0;
     unsigned int iconTexture_ = 0;  // the plum, 0 if it could not be decoded

@@ -559,6 +559,7 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
         zram_[addr & 0x1FFF] = value;
     } else if (addr < 0x6000) {
         syncSound();
+        if (watch_ && fromM68k_) watch_(0xA04000 | (addr & 3), value, true);  // who drives the YM2612
         ym_.write(addr & 3, value);
         if (vgm_) vgm_->fm(addr & 3, value, now_);
         if (roland_) {
@@ -758,8 +759,10 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
             break;
         }
         StateReader b(data.data(), data.size());
-        if (id == fourcc("M68K")) cpu_.state(b);
-        else if (id == fourcc("Z80 ")) z80_.state(b);
+        if (id == fourcc("M68K")) {
+            cpu_.state(b);
+            cpu_.forgetRoutine();
+        } else if (id == fourcc("Z80 ")) z80_.state(b);
         else if (id == fourcc("VDP ")) vdp_.state(b);
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);

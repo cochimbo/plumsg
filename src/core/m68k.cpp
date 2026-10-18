@@ -1,5 +1,6 @@
 #include "m68k.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace plumsg {
@@ -402,6 +403,44 @@ void M68000::holdMain(bool on) {
     if (on && ((sr >> 8) & 7) >= 6) setSr(static_cast<uint16_t>((sr & ~0x0700) | 0x0300));
 }
 
+namespace {
+constexpr uint32_t kBackFromRoutine = 0xF00000;  // a return address no code is at
+}
+
+void M68000::callRoutine(uint32_t entry, const uint32_t (&regs)[15], uint32_t keep) {
+    std::copy(d, d + 8, savedD_);
+    std::copy(a, a + 8, savedA_);
+    savedOtherSp_ = otherSp;
+    savedPc_ = pc;
+    savedSr_ = sr;
+    savedStopped_ = stopped;
+    savedHolding_ = holding;
+    for (int i = 0; i < 15; ++i)
+        if (regs[i] != keep) (i < 8 ? d[i] : a[i - 8]) = regs[i];
+    setSr(static_cast<uint16_t>(sr | 0x2700));
+    a[7] -= 0x100;  // clear of what the program had on the stack
+    stopped = holding = false;
+    calling_ = true;
+    try {
+        push32(kBackFromRoutine);
+    } catch (const AddressError&) {
+        returnFromRoutine();
+        return;
+    }
+    pc = entry;
+}
+
+void M68000::returnFromRoutine() {
+    std::copy(savedD_, savedD_ + 8, d);
+    sr = savedSr_;  // with the stack pointers as they were
+    std::copy(savedA_, savedA_ + 8, a);
+    otherSp = savedOtherSp_;
+    pc = savedPc_;
+    stopped = savedStopped_;
+    holding = savedHolding_;
+    calling_ = false;
+}
+
 int M68000::step() {
     if (halted) return 4;
     cycles_ = 0;
@@ -418,6 +457,14 @@ int M68000::step() {
         }
         if (stopped) return 4;
         if (holding && (!supervisor() || a[7] >= holdSp)) return 4;
+        if (calling_ && pc == kBackFromRoutine) {
+            returnFromRoutine();
+            return 4;
+        }
+        if (skipRoutine && pc == skipRoutine && !calling_) {
+            pc = pop32();  // RTS
+            return 16;
+        }
         const bool trace = (sr & 0x8000) != 0;
         instrPc_ = pc;
         faultPcAdjust_ = 0;
