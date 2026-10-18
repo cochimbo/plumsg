@@ -144,6 +144,27 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   tele, más finas donde la imagen es brillante) o **CRT** (además, la pantalla un poco
   curva, la máscara de colores y las esquinas oscuras), con su intensidad. Se notan más
   cuanto más grande es la ventana, mejor a pantalla completa.
+- **Sonido**: volumen, silenciar y el modo de la música. **Original** es el sonido de los
+  chips. **Roland** toca la música del FM y del PSG como notas General MIDI sobre un
+  SoundFont, como sonaría en un Roland SC-55; las voces y la batería digitalizada (el DAC)
+  siguen sonando como en la consola. El control **Sonido original** deja oír también el FM y el PSG
+  por debajo, y **Reverb** y **Chorus** añaden ambiente. Cada instrumento del juego recibe
+  un instrumento General MIDI con unas reglas automáticas (el editor para cambiarlos a mano
+  llegará más adelante). Todo esto se puede cambiar solo para un juego desde sus opciones.
+
+  plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable, y con **Elegir
+  SoundFont (.sf2)...** se puede usar otro (**Usar el incluido** vuelve a él):
+  - Formato **SoundFont 2** (`.sf2`). No valen los `.sf3` (comprimidos), `.sfz` ni `.dls`;
+    un `.sf3` se puede pasar a `.sf2` con Polyphone.
+  - Tiene que estar ordenado como **General MIDI**: los 128 instrumentos en el banco 0 y la
+    batería en el banco 128. Los SoundFonts GM, GS y XG lo cumplen; uno de un solo
+    instrumento sonará igual en todos los canales o en silencio.
+  - Se carga entero en memoria y ocupa unas dos veces lo que pesa: uno de 30 MB va al
+    instante, uno de 500 MB tarda unos segundos y necesita 1 GB libre.
+  - Si el archivo no se puede leer o no es un SoundFont, plumsg avisa con un mensaje.
+
+  Algunos que suenan bien: GeneralUser GS (el incluido), FluidR3 GM y los que imitan el
+  SC-55 o el SC-88.
 - A pantalla completa, **Abrir ROM** usa el explorador propio de plumsg (también con el
   mando) en vez del diálogo de Windows, que se quedaba escondido detrás del juego.
 
@@ -327,5 +348,7 @@ sus capturas, sonido y hashes como artefacto.
 
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
 miniz (MIT, en `third_party/miniz`), stb_image (dominio público o MIT, en `third_party/stb`),
-ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de
+ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
+`third_party/tsf`). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
+propia licencia libre (`soundfonts\GeneralUser-GS-LICENSE.txt` en la instalación). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de
 [ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas son de libretro-thumbnails y no van en el repositorio.

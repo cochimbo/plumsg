@@ -38,6 +38,7 @@ struct UiActions {
     std::string cheatsFor;         // open the Trucos window for this game
     std::string optionsFor;        // open the Opciones de este juego window for this game
     bool gameOptionsChanged = false;  // a game's own options were edited: save them (and apply if loaded)
+    bool soundChanged = false;        // the Roland sound was switched or retuned
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -126,6 +127,8 @@ private:
     };
 
     void drawMenuBar(const UiState& state, UiActions& out);
+    void drawSoundMenu(UiActions& out);
+    void chooseSoundfont(UiActions& out);
     void drawControls(UiActions& out);
     void drawVideo(const UiState& state, UiActions& out);
     void drawAbout();
@@ -167,7 +170,7 @@ private:
     std::vector<std::string> localAddresses_;  // this computer's, for the host to share
     bool showFolders_ = false;  // the library's list of folders, unfolded
     // What the file browser (or the system dialog) is choosing a file or folder for.
-    enum class BrowseFor { Game, LibraryFolder, CdBios };
+    enum class BrowseFor { Game, LibraryFolder, CdBios, Soundfont };
     BrowseFor browseFor_ = BrowseFor::Game;
     int biosSlot_ = 0;  // the region whose BIOS is being chosen
     std::string biosStatus_;

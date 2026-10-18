@@ -74,6 +74,9 @@ Output
   --png-every N         a PNG every N frames, as frame_000123.png in --out-dir
   --out-dir DIR         where screenshots without a name go (default: .)
   --wav FILE            the whole run's sound (44100 Hz stereo)
+  --roland SF2          play the FM and PSG music as General MIDI on this SoundFont,
+                        as the Roland sound does (the DAC stays as it is)
+  --midi-log FILE       with --roland: the notes it played, one event per line
   --save-state FILE     a savestate after the last frame
   --dump-ram FILE       the 68000's work RAM (64 KB) after the last frame
   --hash-log FILE       one line per frame: frame, picture hash, sound hash
@@ -344,7 +347,7 @@ bool readLog(const std::string& path, std::vector<LogLine>& log) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string game, png, layers, wav, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir;
+    std::string game, png, layers, wav, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir;
     std::string outDir = ".";
     std::vector<std::string> bios, cheats, scripts, lines;
     long frames = 600, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
@@ -401,6 +404,8 @@ int main(int argc, char** argv) {
         else if (a == "--png-every") number(&pngEvery);
         else if (a == "--out-dir") outDir = next();
         else if (a == "--wav") wav = next();
+        else if (a == "--roland") roland = next();
+        else if (a == "--midi-log") midiLog = next();
         else if (a == "--save-state") stateOut = next();
         else if (a == "--dump-ram") ramOut = next();
         else if (a == "--hash-log") hashLog = next();
@@ -563,6 +568,18 @@ int main(int argc, char** argv) {
         std::fprintf(log, "# frame picture sound\n");
     }
 
+    RolandSound rolandSound;
+    std::vector<std::string> midiEvents;
+    if (!roland.empty()) {
+        std::vector<uint8_t> font;
+        if (!readFile(roland, font) || !rolandSound.loadSoundfont(font)) {
+            std::fprintf(stderr, "%s is not a SoundFont\n", roland.c_str());
+            return 1;
+        }
+        if (!midiLog.empty()) rolandSound.setLog(&midiEvents);
+        md.setRoland(&rolandSound, 0);
+    }
+
     constexpr int kRate = 44100;
     md.setSampleRate(kRate);
     md.audio().clearSamples();
@@ -672,7 +689,10 @@ int main(int argc, char** argv) {
             if (frame < c.first || frame > c.last) continue;
             switch (c.kind) {
                 case Command::Buttons: orPad(pads[0], c.pad[0]), orPad(pads[1], c.pad[1]); break;
-                case Command::LoadState: if (!loadState(c.file)) ioError = true; break;
+                case Command::LoadState:
+                    if (!loadState(c.file)) ioError = true;
+                    rolandSound.allNotesOff();
+                    break;
                 case Command::Reset: md.reset(); break;
                 case Command::Power: md.powerCycle(); break;
                 default: break;
@@ -718,6 +738,11 @@ int main(int argc, char** argv) {
             if (!writePng(layers + name, layer, f.width, f.height, VideoFrameMd::kMaxWidth)) ioError = true;
     }
     if (!wav.empty() && !writeWav(wav, sound, kRate)) ioError = true;
+    if (!midiLog.empty()) {
+        std::ofstream out(midiLog);
+        for (const std::string& e : midiEvents) out << e << "\n";
+        if (!out) ioError = true;
+    }
     if (!stateOut.empty() && !saveState(stateOut)) ioError = true;
     if (!ramOut.empty() && !dumpRam(ramOut)) ioError = true;
 

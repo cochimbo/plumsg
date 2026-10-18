@@ -30,6 +30,12 @@ public:
     const std::vector<int16_t>& samples() const { return samples_; }
     void clearSamples() { samples_.clear(); }
 
+    // What each channel is set to play: tone period (for the noise channel, its
+    // control bits) and attenuation, 0 loudest .. 15 silent.
+    uint16_t period(int channel) const { return period_[static_cast<size_t>(channel & 3)]; }
+    uint8_t attenuation(int channel) const { return attenuation_[static_cast<size_t>(channel & 3)]; }
+    double clock() const { return clock_; }
+
     template <class Ar>
     void state(Ar& ar) {
         ar(period_, attenuation_, counter_, output_, lfsr_, latched_, stereo_, cycleRemainder_, samplePhase_,

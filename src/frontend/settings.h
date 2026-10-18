@@ -27,6 +27,12 @@ struct Settings {
     bool showMenu = true;
     int volume = 80;  // 0-100
     bool mute = false;
+    // The Roland sound: the FM and PSG music played as General MIDI on a SoundFont.
+    bool roland = false;
+    std::string soundfont;  // empty: the one that comes with plumsg
+    int chipMix = 0;        // how much of the chips' own music stays, 0-100
+    int reverb = 40;        // 0-100
+    int chorus = 20;        // 0-100
     Region region = Region::Auto;
     std::array<PadType, 2> padType{PadType::SixButton, PadType::SixButton};
     int stateSlot = 0;  // 0-9

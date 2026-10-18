@@ -28,6 +28,8 @@ public:
     // Interleaved stereo samples at outputRate() produced since clearSamples().
     const std::vector<int16_t>& samples() const { return out_; }
     void clearSamples() { out_.clear(); }
+    // The same, to add more sound into (the Roland sound).
+    std::vector<int16_t>& output() { return out_; }
 
     // The resampler's phase and what waits in the queues, so sound continues exactly
     // the same after loading a savestate.

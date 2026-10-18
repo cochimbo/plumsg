@@ -70,7 +70,10 @@ struct Paths {
     std::string profiles;  // folder for the games' 3D profiles, ending in a separator
     std::string cheats;    // folder for the games' cheat lists
     std::string covers;    // folder for the library's downloaded covers
+    std::string soundfont; // the SoundFont that comes with plumsg, next to the executable
 };
+
+const char* const kSoundfont = "soundfonts/GeneralUser-GS.sf2";
 
 Paths findPaths() {
     std::string base;
@@ -80,15 +83,15 @@ Paths findPaths() {
         const std::string portable = base + "plumsg.ini";
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
-            return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/"};
+            return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
-        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/"};
+        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/", base + kSoundfont};
     }
-    return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/"};
+    return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont};
 }
 
 struct App {
@@ -472,6 +475,7 @@ int main(int argc, char** argv) {
 
     input->openAll();
     auto ui = std::make_unique<Ui>(window, context, settings, *input);
+    auto roland = std::make_unique<RolandSound>();  // before the console, which points at it
     auto app = std::make_unique<App>();
     app->statesDir = paths.states;
     app->profilesDir = paths.profiles;
@@ -485,6 +489,26 @@ int main(int argc, char** argv) {
         app->console.setPadType(1, settings.padType[1]);
     };
     applyConsole();
+    // The Roland sound, when chosen and its SoundFont opens; else the chips' own.
+    std::string rolandFont;  // the SoundFont loaded (or tried)
+    bool rolandFontOk = false;
+    auto applySound = [&] {
+        bool on = settings.roland;
+        if (on) {
+            const std::string path = settings.soundfont.empty() ? paths.soundfont : settings.soundfont;
+            if (path != rolandFont) {
+                rolandFont = path;
+                std::vector<uint8_t> data;
+                rolandFontOk = readFile(path, data) && roland->loadSoundfont(data);
+                if (!rolandFontOk && !capturing)
+                    ui->showError("No se pudo abrir el SoundFont " + path + ".\nSe oye el sonido original.");
+            }
+            on = rolandFontOk;
+        }
+        roland->setEffects(settings.reverb, settings.chorus);
+        app->console.setRoland(on ? roland.get() : nullptr, settings.chipMix);
+    };
+    applySound();
     // Each option goes to the game's file if the game has its own value of it, else to plumsg.ini.
     auto save = [&] {
         if (capturing) return;
@@ -510,6 +534,7 @@ int main(int argc, char** argv) {
         game = app->readOverrides(path, general);
         game.applyTo(settings);
         applyConsole();
+        applySound();
     };
     auto load = [&](const std::string& path) {
         const ConsoleSystem system = detectSystem(path);
@@ -543,6 +568,7 @@ int main(int argc, char** argv) {
         load(cmd.rom);
         applyCommandLine();  // over the game's profile too
         if (cmd.slot >= 0 && app->romLoaded) ui->notify(app->loadState(cmd.slot));
+        roland->allNotesOff();
     }
     bool openStateMenu = cmd.stateMenu;
     if (!cmd.library.empty()) settings.libraryFolders = cmd.library;
@@ -573,6 +599,7 @@ int main(int argc, char** argv) {
     };
     auto loadState = [&](int slot) {
         if (app->romLoaded) ui->notify(app->loadState(slot));
+        roland->allNotesOff();  // what was playing is not what the state plays
     };
     auto toggleSlowMotion = [&] {
         slowMotion = !slowMotion;
@@ -849,6 +876,7 @@ int main(int argc, char** argv) {
             app->writeOverrides(optionsGame, otherOptions);
         }
         if (act.settingsChanged) save();
+        if (act.soundChanged) applySound();
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
         if (!sizedForMenu && !settings.fullscreen) {
             applyWindowScale(window, settings.windowScale, ui->menuHeight());
@@ -913,6 +941,7 @@ int main(int argc, char** argv) {
                 std::vector<uint8_t> snapshot;
                 std::string error;
                 if (rewind.pop(snapshot) && app->console.loadState(snapshot, &error)) {
+                    roland->allNotesOff();
                     app->console.setPads(PadState{}, PadState{});
                     app->console.runFrame();
                     app->console.audio().clearSamples();

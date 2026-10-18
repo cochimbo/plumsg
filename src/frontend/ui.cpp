@@ -252,6 +252,10 @@ UiActions Ui::frame(const UiState& state) {
                 out.settingsChanged = true;
                 rescanLibrary();
                 break;
+            case BrowseFor::Soundfont:
+                settings_.soundfont = picked;
+                out.settingsChanged = out.soundChanged = true;
+                break;
             case BrowseFor::CdBios: {
                 settings_.cdBios[static_cast<size_t>(biosSlot_)] = picked;
                 out.settingsChanged = true;
@@ -397,19 +401,13 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         if (ImGui::MenuItem("Salir de la partida en red", nullptr, false, state.netSession)) out.netLeave = true;
         ImGui::EndMenu();
     }
+    if (ImGui::BeginMenu("Sonido")) {
+        drawSoundMenu(out);
+        ImGui::EndMenu();
+    }
     if (ImGui::BeginMenu("Opciones")) {
         if (ImGui::MenuItem("Controles...")) showControls_ = true;
         if (ImGui::MenuItem("Vídeo...")) showVideo_ = true;
-        if (ImGui::BeginMenu("Sonido")) {
-            if (ImGui::MenuItem("Silenciar", "M", settings_.mute)) {
-                settings_.mute = !settings_.mute;
-                out.settingsChanged = true;
-            }
-            ImGui::SetNextItemWidth(160);
-            ImGui::SliderInt("Volumen", &settings_.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
-            if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
-            ImGui::EndMenu();
-        }
         ImGui::Separator();
         if (ImGui::MenuItem("Efecto 3D", nullptr, settings_.render.pseudo3d)) {
             settings_.render.pseudo3d = !settings_.render.pseudo3d;
@@ -430,6 +428,67 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         ImGui::EndMenu();
     }
     ImGui::EndMainMenuBar();
+}
+
+// Volume, and the Roland sound: the FM and PSG music played on a SoundFont.
+void Ui::drawSoundMenu(UiActions& out) {
+    if (ImGui::MenuItem("Silenciar", "M", settings_.mute)) {
+        settings_.mute = !settings_.mute;
+        out.settingsChanged = true;
+    }
+    ImGui::SetNextItemWidth(160);
+    ImGui::SliderInt("Volumen", &settings_.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+
+    ImGui::SeparatorText("Sonido Roland (SC-55)");
+    if (ImGui::MenuItem("Original (YM2612 y PSG)", nullptr, !settings_.roland)) {
+        settings_.roland = false;
+        out.settingsChanged = out.soundChanged = true;
+    }
+    if (ImGui::MenuItem("Roland: la música con un SoundFont", nullptr, settings_.roland)) {
+        settings_.roland = true;
+        out.settingsChanged = out.soundChanged = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Las notas del YM2612 y del PSG suenan con instrumentos General MIDI, como en una\n"
+                          "Roland SC-55. Las voces y la batería digital (el DAC) siguen siendo las del juego.\n"
+                          "Cada sonido FM recibe un instrumento por reglas; el editor para elegirlos a mano\n"
+                          "llegará más adelante.");
+    ImGui::BeginDisabled(!settings_.roland);
+    const std::string font = settings_.soundfont.empty() ? std::string("GeneralUser GS (incluido)") : fileName(settings_.soundfont);
+    ImGui::TextDisabled("SoundFont: %s", font.c_str());
+    if (ImGui::MenuItem("Elegir SoundFont (.sf2)...")) chooseSoundfont(out);
+    if (ImGui::MenuItem("Usar el incluido", nullptr, false, !settings_.soundfont.empty())) {
+        settings_.soundfont.clear();
+        out.settingsChanged = out.soundChanged = true;
+    }
+    ImGui::SetNextItemWidth(160);
+    ImGui::SliderInt("Sonido original", &settings_.chipMix, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cuánto se oye además la música original del YM2612 y el PSG.");
+    if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.soundChanged = true;
+    ImGui::SetNextItemWidth(160);
+    ImGui::SliderInt("Reverb", &settings_.reverb, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.soundChanged = true;
+    ImGui::SetNextItemWidth(160);
+    ImGui::SliderInt("Chorus", &settings_.chorus, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.soundChanged = true;
+    ImGui::EndDisabled();
+}
+
+void Ui::chooseSoundfont(UiActions& out) {
+    const std::string start = settings_.soundfont.empty() ? settings_.lastFolder
+                                                          : settings_.soundfont.substr(0, settings_.soundfont.find_last_of("/\\"));
+    std::string chosen;
+    browseFor_ = BrowseFor::Soundfont;
+    const bool fullscreen = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+    switch (fullscreen ? DialogResult::Unavailable : openFileDialog(window_, start, Pick::AnyFile, &chosen)) {
+        case DialogResult::Chosen:
+            settings_.soundfont = chosen;
+            out.settingsChanged = out.soundChanged = true;
+            break;
+        case DialogResult::Cancelled: break;
+        case DialogResult::Unavailable: browser_.open(start, Pick::AnyFile); break;
+    }
 }
 
 void Ui::drawControls(UiActions& out) {
@@ -1528,6 +1587,22 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "silencio") {
             edited |= ImGui::Checkbox("Silenciar", &s.mute);
+        } else if (key == "modo") {
+            int i = s.roland ? 1 : 0;
+            static const char* names[] = {"Original (YM2612 y PSG)", "Roland (SoundFont)"};
+            if (ImGui::Combo(opt.label, &i, names, 2)) {
+                s.roland = i == 1;
+                edited = true;
+            }
+        } else if (key == "soundfont") {
+            char path[512];
+            std::snprintf(path, sizeof path, "%s", s.soundfont.c_str());
+            if (ImGui::InputTextWithHint(opt.label, "el incluido", path, sizeof path)) s.soundfont = path;
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else if (key == "mezcla_chip" || key == "reverb" || key == "chorus") {
+            int& v = key == "mezcla_chip" ? s.chipMix : key == "reverb" ? s.reverb : s.chorus;
+            ImGui::SliderInt(opt.label, &v, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "region") {
             static const char* names[] = {"Automática (la de la ROM)", "Japón (NTSC)", "EE. UU. (NTSC)", "Europa (PAL)"};
             int i = static_cast<int>(s.region);
@@ -1563,6 +1638,7 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
         out.gameOptionsChanged = true;
         if (v.loaded && (key == "region" || key == "mandos")) out.consoleChanged = true;
         if (v.loaded && key == "rebobinado_segundos") out.rewindChanged = true;
+        if (v.loaded && std::string(opt.group) == "Sonido") out.soundChanged = true;
     }
     ImGui::EndDisabled();
     ImGui::End();
