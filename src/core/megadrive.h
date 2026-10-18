@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -111,6 +112,20 @@ public:
     uint8_t peek(uint32_t addr) { return read8(addr); }
     uint16_t peek16(uint32_t addr) { return read16(addr & ~1u); }
     const std::array<uint8_t, 0x10000>& workRam() const { return ram_; }
+    const std::array<uint8_t, 0x2000>& z80Ram() const { return zram_; }
+
+    // Song extraction (SongExtractor). The watch hears every byte written to work RAM
+    // (0xFF0000 up) and to the Z80's RAM (0xA00000 up), and whether the 68000 wrote it;
+    // empty for none.
+    using MemoryWatch = std::function<void(uint32_t addr, uint8_t value, bool m68k)>;
+    void setMemoryWatch(MemoryWatch watch);
+    // Keeps the game from asking for music and sounds: the 68000's writes to
+    // [addr, addr + count) of anything but 0 or 0x80 are dropped. count 0: none.
+    void lockSoundRequests(uint32_t addr, int count);
+    // Writes a byte of work RAM or Z80 RAM directly, past the lock.
+    void poke(uint32_t addr, uint8_t value);
+    // Runs without drawing the picture (faster, for when only the sound matters).
+    void setDrawing(bool on) { drawing_ = on; }
 
 private:
     // 68000 bus.
@@ -183,7 +198,15 @@ private:
     std::vector<uint8_t> loadedThumbnail_;
     std::vector<CheatPatch> ramCheats_;
     std::vector<std::pair<uint32_t, uint8_t>> romOriginal_;  // bytes the ROM cheats replaced
-    void applyRamCheats();  // THMB of the last loaded state, until a frame runs
+    void applyRamCheats();
+    // A write the watch or the lock looks at; false when the lock drops it.
+    bool watchWrite(uint32_t addr, uint8_t value, bool m68k);
+    MemoryWatch watch_;
+    uint32_t lockAddr_ = 0;
+    int lockCount_ = 0;
+    bool watching_ = false;  // watch_ or a lock
+    bool drawing_ = true;
+    bool fromM68k_ = false;  // the Z80 bus write being made comes from the 68000  // THMB of the last loaded state, until a frame runs
 };
 
 }  // namespace plumsg

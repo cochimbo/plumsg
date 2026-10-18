@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -27,6 +28,7 @@
 #include "net/udp.h"
 #include "netplay.h"
 #include "pad_test_rom.h"
+#include "song_extract.h"
 #include "system.h"
 #include "test_rom.h"
 
@@ -39,6 +41,8 @@ const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom> 
   game                  cartridge (.md .gen .bin .smd .32x .zip) or disc (.cue .chd .iso)
   --play-vgm FILE       no game: play this .vgm or .vgz for --frames sixtieths of a
                         second, for --wav and --roland, and list its instruments
+  --extract-songs DIR   take the game's songs out of its ROM (sound drivers like
+                        Sonic's), one .vgz each in DIR, saying what it finds
   --test-rom            the built-in test program (planes, sprites, scroll, a tone)
   --pad-test-rom        the built-in pad test: the backdrop shows the pressed buttons
   --two-pad-test-rom    the built-in two-pad test: every frame depends on all that both
@@ -349,6 +353,44 @@ bool readLog(const std::string& path, std::vector<LogLine>& log) {
 
 }  // namespace
 
+// --extract-songs: the instrument editor's Sacar canciones, without a window.
+int extractSongs(const std::string& game, const std::string& dir) {
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    SongExtractor extractor;
+    extractor.setLog([](const std::string& s) {
+        std::printf("%s\n", s.c_str());
+        std::fflush(stdout);
+    });
+    const auto started = std::chrono::steady_clock::now();
+    std::string error;
+    std::string last;
+    std::string name = game.substr(game.find_last_of("/\\") == std::string::npos ? 0 : game.find_last_of("/\\") + 1);
+    name = name.substr(0, name.find_last_of('.'));  // the tag says the game's name, not its path
+    const bool ok = extractor.run(
+        game, name,
+        [&](const SongExtractor::Progress& p) {
+            if (p.doing.compare(0, 8, "Probando") != 0 && p.doing != last) std::printf("%s\n", p.doing.c_str());
+            last = p.doing;
+            return true;
+        },
+        [&](const SongExtractor::Song& song) {
+            char name[64];
+            std::snprintf(name, sizeof name, "/Cancion %02X.vgz", song.number);
+            std::ofstream out(dir + name, std::ios::binary);
+            out.write(reinterpret_cast<const char*>(song.vgz.data()), static_cast<std::streamsize>(song.vgz.size()));
+            if (!out) std::fprintf(stderr, "cannot write %s%s\n", dir.c_str(), name);
+        },
+        &error);
+    const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    std::printf("%.0f s\n", took);
+    if (!ok) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return 1;
+    }
+    return 0;
+}
+
 // --play-vgm: the instrument editor's player, without a window.
 int playVgmFile(const std::string& path, long frames, const std::string& wav, const std::string& roland,
                 const std::string& midiLog) {
@@ -395,7 +437,7 @@ int playVgmFile(const std::string& path, long frames, const std::string& wav, co
 }
 
 int main(int argc, char** argv) {
-    std::string game, playVgm, vgmOut, png, layers, wav, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir;
+    std::string game, playVgm, vgmOut, png, layers, wav, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir, extractDir;
     std::string outDir = ".";
     std::vector<std::string> bios, cheats, scripts, lines;
     long frames = 600, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
@@ -456,6 +498,7 @@ int main(int argc, char** argv) {
         else if (a == "--midi-log") midiLog = next();
         else if (a == "--vgm") vgmOut = next();
         else if (a == "--play-vgm") playVgm = next();
+        else if (a == "--extract-songs") extractDir = next();
         else if (a == "--save-state") stateOut = next();
         else if (a == "--dump-ram") ramOut = next();
         else if (a == "--hash-log") hashLog = next();
@@ -495,6 +538,7 @@ int main(int argc, char** argv) {
         std::fputs(kUsage, stderr);
         return 2;
     }
+    if (!extractDir.empty()) return extractSongs(game, extractDir);
     const bool netplay = netHost || !netJoin.empty();
     if (netHost && !netJoin.empty()) {
         std::fprintf(stderr, "--netplay-host and --netplay-join: one side or the other\n");

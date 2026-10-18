@@ -316,7 +316,7 @@ void MegaDrive::runFrame() {
             z80_.setIrqLine(vdp_.z80Irq());
         }
         runUntil(lineStart_ + VdpMd::kActiveClocks);
-        if (line < vdp_.activeLines()) {
+        if (line < vdp_.activeLines() && drawing_) {
             vdp_.renderLine(line);
             if (mars_) mars_->renderLine(line, vdp_.frame());
         }
@@ -384,7 +384,33 @@ uint8_t MegaDrive::readZ80Area(uint32_t addr) {
 
 void MegaDrive::writeZ80Area(uint32_t addr, uint8_t value) {
     if (!z80BusFree()) return;
+    fromM68k_ = true;
     write(static_cast<uint16_t>(addr & 0x7FFF), value);
+    fromM68k_ = false;
+}
+
+void MegaDrive::setMemoryWatch(MemoryWatch watch) {
+    watch_ = std::move(watch);
+    watching_ = watch_ || lockCount_ > 0;
+}
+
+void MegaDrive::lockSoundRequests(uint32_t addr, int count) {
+    lockAddr_ = addr;
+    lockCount_ = count;
+    watching_ = watch_ || lockCount_ > 0;
+}
+
+void MegaDrive::poke(uint32_t addr, uint8_t value) {
+    if (addr >= 0xFF0000)
+        ram_[addr & 0xFFFF] = value;
+    else if (addr >= 0xA00000 && addr < 0xA04000)
+        zram_[addr & 0x1FFF] = value;
+}
+
+bool MegaDrive::watchWrite(uint32_t addr, uint8_t value, bool m68k) {
+    if (m68k && value != 0 && value != 0x80 && addr - lockAddr_ < static_cast<uint32_t>(lockCount_)) return false;
+    if (watch_) watch_(addr, value, m68k);
+    return true;
 }
 
 void MegaDrive::writeBusControl(uint32_t addr, bool set) {
@@ -459,6 +485,7 @@ void MegaDrive::write8(uint32_t addr, uint8_t value) {
     if (mars_ && mars_->write68k(addr, static_cast<uint16_t>(value << 8 | value), !(addr & 1), (addr & 1) != 0)) return;
     if (mcd_ && mcd_->write68k(addr & ~1u, static_cast<uint16_t>(value << 8 | value), !(addr & 1), (addr & 1) != 0)) return;
     if (addr >= 0xE00000) {
+        if (watching_ && !watchWrite(0xFF0000 | addr, value, true)) return;
         ram_[addr & 0xFFFF] = value;
     } else if (addr < 0x400000) {
         cart_.write8(addr, value);
@@ -480,6 +507,13 @@ void MegaDrive::write16(uint32_t addr, uint16_t value) {
     if (mars_ && mars_->write68k(addr, value, true, true)) return;
     if (mcd_ && mcd_->write68k(addr, value, true, true)) return;
     if (addr >= 0xE00000) {
+        if (watching_) {
+            if (watchWrite(0xFF0000 | addr, static_cast<uint8_t>(value >> 8), true))
+                ram_[addr & 0xFFFF] = static_cast<uint8_t>(value >> 8);
+            if (watchWrite(0xFF0000 | (addr + 1), static_cast<uint8_t>(value), true))
+                ram_[(addr & 0xFFFF) + 1] = static_cast<uint8_t>(value);
+            return;
+        }
         ram_[addr & 0xFFFF] = static_cast<uint8_t>(value >> 8);
         ram_[(addr & 0xFFFF) + 1] = static_cast<uint8_t>(value);
     } else if (addr < 0x400000) {
@@ -521,6 +555,7 @@ uint8_t MegaDrive::read(uint16_t addr) {
 
 void MegaDrive::write(uint16_t addr, uint8_t value) {
     if (addr < 0x4000) {
+        if (watching_ && !watchWrite(0xA00000 | (addr & 0x1FFF), value, fromM68k_)) return;
         zram_[addr & 0x1FFF] = value;
     } else if (addr < 0x6000) {
         syncSound();

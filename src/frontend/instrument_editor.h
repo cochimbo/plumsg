@@ -1,12 +1,17 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../core/roland.h"
+#include "../core/song_extract.h"
 #include "../core/vgm.h"
 
 namespace plumsg {
@@ -39,6 +44,9 @@ struct EditorRequests {
 class InstrumentEditor {
 public:
     explicit InstrumentEditor(std::string soundFolder);
+    ~InstrumentEditor();
+    InstrumentEditor(const InstrumentEditor&) = delete;
+    InstrumentEditor& operator=(const InstrumentEditor&) = delete;
 
     // What a game's instruments play: the shared cache, with the game's own on top.
     static RolandSound::Assignments assignmentsFor(const std::string& soundFolder, const std::string& game);
@@ -95,6 +103,21 @@ private:
     void drawInstruments(const std::vector<Instrument>& list);
     void drawChannels();
     void drawAssignment(const std::vector<Instrument>& list, EditorRequests& out);
+    // Sacar canciones: the game's songs taken out of its ROM, on a thread of its own,
+    // into its track folder as they are found.
+    struct Extraction {
+        std::thread thread;
+        std::mutex mutex;
+        SongExtractor::Progress progress;  // these three under the mutex
+        int saved = 0;                     // songs written so far
+        std::string error;
+        std::atomic<bool> stop{false}, done{false};
+    };
+    void startExtraction();
+    void endExtraction();  // stops it if it is running, and waits
+    void drawExtraction();
+    std::unique_ptr<Extraction> extraction_;
+    int extractionSeen_ = 0;  // songs of it already in the list
 
     std::string folder_;  // sonido/, ending in a separator
     bool open_ = false;
