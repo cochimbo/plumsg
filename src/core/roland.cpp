@@ -18,6 +18,9 @@ namespace {
 
 constexpr int kBendRange = 12;  // semitones either way, so slides stay one note
 constexpr int kPsgDefault = 80;  // Lead 1 (square): what a PSG tone sounds like
+// A square lead on a GM module is far louder than the PSG next to the FM, and games
+// use the PSG for harmonies and echoes: at full volume it buries the melody.
+constexpr int kPsgVolume = 50;
 
 // The register of channel `ch` (0-5) for a per-channel base (0xA0, 0xA4, 0xB0, 0xB4).
 int chReg(int ch, int base) { return (ch / 3) * 0x100 + base + ch % 3; }
@@ -221,7 +224,10 @@ RolandSound::Assignment RolandSound::assignmentFor(uint32_t fingerprint) const {
     if (auto a = assigned_.find(fingerprint); a != assigned_.end()) return a->second;
     Assignment rules;
     switch (kindOf(fingerprint)) {
-        case Kind::PsgTone: rules.program = kPsgDefault; break;
+        case Kind::PsgTone:
+            rules.program = kPsgDefault;
+            rules.volume = kPsgVolume;
+            break;
         case Kind::PsgNoise: rules.drum = noiseDrum(static_cast<int>(fingerprint & 7)); break;
         case Kind::Fm: {
             auto r = rules_.find(fingerprint);
@@ -358,7 +364,7 @@ int RolandSound::programFor(const std::array<uint8_t, 28>& ops, uint8_t algorith
     if (algorithm == 7) return 16;              // Drawbar Organ
     if (attack < 18) return 48;                 // String Ensemble 1
     if (diesAway) return note >= 84 ? 9 : 4;    // Glockenspiel, Electric Piano 1
-    if (carriers >= 2) return 61;               // Brass Section
+    if (carriers >= 2) return 62;               // Synth Brass 1: Brass Section starts too softly to lead
     return feedback >= 6 ? 30 : 81;             // Distortion Guitar, Lead 2 (sawtooth)
 }
 
@@ -595,6 +601,7 @@ void RolandSound::psgWrite(const Psg& psg, uint64_t clock) {
             const uint32_t fp = psgToneFingerprint(c);
             Assignment rules;
             rules.program = kPsgDefault;
+            rules.volume = kPsgVolume;
             see(voice, fp, rules, static_cast<int>(std::lround(note)), nullptr, 0);
             noteOn(voice, fp, assignmentFor(fp), note, amplitude, 64, clock);
             continue;
