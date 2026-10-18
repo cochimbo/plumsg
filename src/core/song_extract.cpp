@@ -90,9 +90,10 @@ private:
 // must play the same notes again that long after, for two and a half loops (so that a
 // part a song plays twice before going on is not taken for it); the loop starts where
 // all of them have started going round. (Twice is enough for a loop of over 45 s.)
-std::pair<int, int> findLoopOf(const std::vector<NoteTracker::Note>& notes, int lastFrame, int shortestFrames) {
+std::pair<int, int> findLoopOf(const std::vector<NoteTracker::Note>& notes, int lastFrame, int shortestFrames,
+                               int shortestHeard = 0) {
     constexpr int kSlack = 3;  // frames
-    auto heard = [](int period) { return period < 45 * kFps ? period * 5 / 2 : period * 2; };
+    auto heard = [&](int period) { return std::max(shortestHeard, period < 45 * kFps ? period * 5 / 2 : period * 2); };
     std::map<uint32_t, std::vector<const NoteTracker::Note*>> channels;
     for (const auto& note : notes) channels[note.key >> 24].push_back(&note);
     // (An FM channel if there is one: their notes are never missed. A PSG note that
@@ -132,10 +133,13 @@ std::pair<int, int> findLoopOf(const std::vector<NoteTracker::Note>& notes, int 
                 if (in[static_cast<size_t>(i)]->frame + period + kSlack > lastFrame) continue;  // not due yet
                 ++checked;
                 if (!comesBack(in, static_cast<size_t>(i), period)) {
-                    if (++missed > 1 + checked / 32) break;
+                    ++missed;
+                    if (!shortestHeard && missed > 1 + checked / 32) break;
                     continue;
                 }
-                first = i;
+                // (Taken together, the odd few in a row can go missing where the driver
+                // gave a note's channel to another.)
+                if (missed <= 1 + checked / 32) first = i;
             }
             const int since = first < 0 ? lastFrame - period : in[static_cast<size_t>(first)]->frame;
             if (first < 0 && in.back()->frame + period + kSlack <= lastFrame) {
@@ -152,17 +156,17 @@ std::pair<int, int> findLoopOf(const std::vector<NoteTracker::Note>& notes, int 
 }
 
 // Some drivers (GEMS) play each note on whichever channel is free, so a note comes back a
-// loop later on another channel: then the notes of all FM channels, and of the PSG's
-// tone channels, are taken together.
+// loop later on another channel: then the notes of all FM channels are taken together
+// (without the PSG's, whose notes such a driver's envelopes blur), for a minute and a
+// half at least (taken together, a part of the song that repeats a bar looks like a
+// short loop for a while).
 std::pair<int, int> findLoop(const std::vector<NoteTracker::Note>& notes, int lastFrame, int shortestFrames) {
     const auto loop = findLoopOf(notes, lastFrame, shortestFrames);
     if (loop.first >= 0) return loop;
-    std::vector<NoteTracker::Note> pooled(notes);
-    for (auto& note : pooled) {
-        const uint32_t channel = note.key >> 24;
-        note.key = (note.key & 0xFFFFFF) | (channel < 8 ? 0u : channel < 11 ? 8u : channel) << 24;
-    }
-    return findLoopOf(pooled, lastFrame, shortestFrames);
+    std::vector<NoteTracker::Note> pooled;
+    for (const auto& note : notes)
+        if ((note.key >> 24) < 8) pooled.push_back({note.frame, note.key & 0xFFFFFF});
+    return findLoopOf(pooled, lastFrame, shortestFrames, 90 * kFps);
 }
 
 std::string hex(uint32_t v, int digits) {
