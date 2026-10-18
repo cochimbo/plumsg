@@ -394,9 +394,10 @@ void MegaDrive::setMemoryWatch(MemoryWatch watch) {
     watching_ = watch_ || lockCount_ > 0;
 }
 
-void MegaDrive::lockSoundRequests(uint32_t addr, int count) {
+void MegaDrive::lockSoundRequests(uint32_t addr, int count, bool all) {
     lockAddr_ = addr;
     lockCount_ = count;
+    lockAll_ = all;
     watching_ = watch_ || lockCount_ > 0;
 }
 
@@ -408,7 +409,7 @@ void MegaDrive::poke(uint32_t addr, uint8_t value) {
 }
 
 bool MegaDrive::watchWrite(uint32_t addr, uint8_t value, bool m68k) {
-    if (m68k && value != 0 && value != 0x80 && addr - lockAddr_ < static_cast<uint32_t>(lockCount_)) return false;
+    if (m68k && (lockAll_ || (value != 0 && value != 0x80)) && addr - lockAddr_ < static_cast<uint32_t>(lockCount_)) return false;
     if (watch_) watch_(addr, value, m68k);
     return true;
 }

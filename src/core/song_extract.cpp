@@ -21,7 +21,7 @@ constexpr int kCheckpointEvery = 30;       // frames between the boot's savestat
 constexpr int kCheckFrames = 2 * kFps;     // to tell whether a request makes sound
 constexpr int kSilentFrames = 4 * kFps;    // this long without a note: the song ended
 constexpr int kShortest = 2 * kFps;        // sounding less is a sound effect
-constexpr int kLongest = 4 * 60 * kFps;    // songs that do not loop are cut here
+constexpr int kLongest = 6 * 60 * kFps;    // songs that do not loop are cut here
 constexpr int kShortestLoop = 6 * kFps;
 constexpr int kMaxCandidates = 48;
 
@@ -89,9 +89,10 @@ private:
 // comes back, a loop's time later (give or take the driver's tempo). Then every channel
 // must play the same notes again that long after, for two and a half loops (so that a
 // part a song plays twice before going on is not taken for it); the loop starts where
-// all of them have started going round.
-std::pair<int, int> findLoop(const std::vector<NoteTracker::Note>& notes, int lastFrame, int shortestFrames) {
+// all of them have started going round. (Twice is enough for a loop of over 45 s.)
+std::pair<int, int> findLoopOf(const std::vector<NoteTracker::Note>& notes, int lastFrame, int shortestFrames) {
     constexpr int kSlack = 3;  // frames
+    auto heard = [](int period) { return period < 45 * kFps ? period * 5 / 2 : period * 2; };
     std::map<uint32_t, std::vector<const NoteTracker::Note*>> channels;
     for (const auto& note : notes) channels[note.key >> 24].push_back(&note);
     // (An FM channel if there is one: their notes are never missed. A PSG note that
@@ -118,7 +119,7 @@ std::pair<int, int> findLoop(const std::vector<NoteTracker::Note>& notes, int la
     for (int len = 1; 2 * len < n; ++len) {
         const int period = list[static_cast<size_t>(n - 1)]->frame - list[static_cast<size_t>(n - 1 - len)]->frame;
         if (period < shortestFrames) continue;
-        if (lastFrame < period * 5 / 2) return {-1, -1};
+        if (lastFrame < heard(period)) return {-1, -1};
         if (list[static_cast<size_t>(n - 1 - len)]->key != list[static_cast<size_t>(n - 1)]->key) continue;
         // Every channel: from where on do its notes come back a loop later?
         int start = 0;
@@ -144,10 +145,24 @@ std::pair<int, int> findLoop(const std::vector<NoteTracker::Note>& notes, int la
             start = std::max(start, since);
         }
         if (!ok) continue;
-        if (lastFrame - start < period * 5 / 2) continue;
+        if (lastFrame - start < heard(period)) continue;
         return {start, start + period};
     }
     return {-1, -1};
+}
+
+// Some drivers (GEMS) play each note on whichever channel is free, so a note comes back a
+// loop later on another channel: then the notes of all FM channels, and of the PSG's
+// tone channels, are taken together.
+std::pair<int, int> findLoop(const std::vector<NoteTracker::Note>& notes, int lastFrame, int shortestFrames) {
+    const auto loop = findLoopOf(notes, lastFrame, shortestFrames);
+    if (loop.first >= 0) return loop;
+    std::vector<NoteTracker::Note> pooled(notes);
+    for (auto& note : pooled) {
+        const uint32_t channel = note.key >> 24;
+        note.key = (note.key & 0xFFFFFF) | (channel < 8 ? 0u : channel < 11 ? 8u : channel) << 24;
+    }
+    return findLoopOf(pooled, lastFrame, shortestFrames);
 }
 
 std::string hex(uint32_t v, int digits) {
@@ -159,10 +174,14 @@ std::string hex(uint32_t v, int digits) {
 constexpr uint32_t kKeep = 0xFFFFFFFF;  // a register a call leaves as it is
 
 // Where the game asks for music: a byte it wrote a request to, which was then cleared,
-// or a routine of the driver it calls with the number in a register.
+// a routine of the driver it calls with the number in a register, or a ring of commands
+// in the Z80's memory that the game writes messages to (GEMS's).
 struct Candidate {
-    uint32_t address = 0;  // of the byte, or of the routine
+    uint32_t address = 0;  // of the byte, of the routine, or of the ring's write position
     bool call = false;
+    bool ring = false;
+    uint32_t ringStart = 0, ringMask = 0;  // where the ring is, and its size less one
+    std::vector<uint8_t> message;          // what goes before the number
     std::array<uint32_t, 15> regs{};  // a call's d0-d7 and a0-a6: what the game loads, or kKeep
     int numberReg = 0;                // and which of them holds the number
     std::vector<uint32_t> numbers;    // the numbers the game calls it with
@@ -214,11 +233,19 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         uint32_t address, askedFrom, takenFrom;  // takenFrom 0: by the Z80
     };
     std::vector<Taken> taken;
+    struct ZWrite {
+        uint64_t frame;
+        uint16_t address;
+        uint8_t value;
+    };
+    std::vector<ZWrite> z80Writes;  // what the 68000 writes to the Z80's memory, in order
     md->setMemoryWatch([&](uint32_t addr, uint8_t v, bool m68k) {
         if (addr >= 0xA04000 && addr < 0xA04004) {
             ++ymCode[md->cpu().pc >> 8];
             return;
         }
+        if (m68k && addr >= 0xA00000 && addr < 0xA02000 && z80Writes.size() < 500000)
+            z80Writes.push_back({md->frameCount(), static_cast<uint16_t>(addr & 0x1FFF), v});
         // (Not the stack: what the program pushes, and a routine it calls then overwrites.)
         if (m68k && addr >= 0xFF0000 && addr - (md->cpu().a[7] & 0xFFFFFF) < 0x100) return;
         const size_t i = addr >= 0xFF0000 ? (addr & 0xFFFF) : 0x10000 + (addr & 0x1FFF);
@@ -354,10 +381,107 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         std::sort(calls.begin(), calls.end(), [](const Candidate& a, const Candidate& b) { return a.driverTaken > b.driverTaken; });
         if (calls.size() > 4) calls.resize(4);
     }
+    // Other drivers (GEMS) take commands from a ring in the Z80's memory: the game writes a
+    // message (as FF 10 n, start song n) a byte at a time after the last, and then where
+    // the next will go, to a byte of its own. That byte: the one written right after other
+    // bytes of the Z80's memory, each time with where the next goes in a ring they are all
+    // in (the smallest that fits them).
+    std::vector<Candidate> rings;
+    {
+        std::map<uint64_t, int> perFrame;
+        for (const ZWrite& w : z80Writes) ++perFrame[w.frame];
+        auto loaded = [&](const ZWrite& w) { return perFrame[w.frame] > 64; };  // a program, or data
+        std::map<uint16_t, std::vector<std::pair<uint16_t, uint8_t>>> after;  // by position byte: byte written, its value
+        for (size_t i = 1; i < z80Writes.size(); ++i) {
+            const ZWrite &a = z80Writes[i - 1], &b = z80Writes[i];
+            if (a.address != b.address && a.frame == b.frame && !loaded(b)) after[b.address].push_back({a.address, b.value});
+        }
+        for (const auto& [position, pairs] : after) {
+            if (pairs.size() < 4) continue;
+            Candidate c;
+            for (uint32_t mask : {0x0Fu, 0x1Fu, 0x3Fu, 0x7Fu, 0xFFu}) {
+                std::set<uint32_t> starts;
+                for (const auto& [written, next] : pairs) starts.insert((written - ((next - 1u) & mask)) & 0x1FFF);
+                if (starts.size() != 1) continue;
+                c.ringStart = 0xA00000 | *starts.begin();
+                c.ringMask = mask;
+                break;
+            }
+            if (!c.ringMask) continue;
+            c.address = 0xA00000 | position;
+            c.ring = true;
+            // The messages written to the ring, those of each frame split where the byte most of
+            // them start with comes again.
+            std::vector<std::vector<uint8_t>> messages;
+            std::vector<uint64_t> when;
+            std::map<uint8_t, int> firsts;
+            uint64_t last = ~0ull;
+            for (const ZWrite& w : z80Writes) {
+                if (w.address < (c.ringStart & 0x1FFF) || w.address > (c.ringStart & 0x1FFF) + c.ringMask || loaded(w))
+                    continue;
+                if (w.frame != last) {
+                    messages.emplace_back();
+                    when.push_back(w.frame);
+                    ++firsts[w.value];
+                    last = w.frame;
+                }
+                messages.back().push_back(w.value);
+            }
+            if (messages.empty()) continue;
+            const uint8_t lead = std::max_element(firsts.begin(), firsts.end(), [](const auto& a, const auto& b) {
+                                     return a.second < b.second;
+                                 })->first;
+            // Each kind of message (all but its last byte) and the numbers it ends with.
+            std::map<std::vector<uint8_t>, std::vector<std::pair<uint64_t, uint32_t>>> kinds;
+            for (size_t m = 0; m < messages.size(); ++m) {
+                std::vector<uint8_t> one;
+                for (size_t i = 0; i <= messages[m].size(); ++i) {
+                    if (i == messages[m].size() || (i > 0 && messages[m][i] == lead)) {
+                        if (one.size() >= 2)
+                            kinds[std::vector<uint8_t>(one.begin(), one.end() - 1)].push_back({when[m], one.back()});
+                        one.clear();
+                    }
+                    if (i < messages[m].size()) one.push_back(messages[m][i]);
+                }
+            }
+            // The kind ending in most different numbers (GEMS's start song; not, say, its
+            // stop song).
+            const std::vector<uint8_t>* most = nullptr;
+            size_t mostNumbers = 1;
+            for (const auto& [message, requests] : kinds) {
+                std::set<uint32_t> numbers;
+                for (const auto& r : requests) numbers.insert(r.second);
+                if (numbers.size() > mostNumbers) {
+                    most = &message;
+                    mostNumbers = numbers.size();
+                }
+            }
+            for (const auto& [message, requests] : kinds) {
+                if (&message != most) continue;
+                std::set<uint32_t> numbers;
+                for (const auto& r : requests) numbers.insert(r.second);
+                Candidate k = c;
+                k.message = message;
+                k.numbers.assign(numbers.begin(), numbers.end());
+                k.requests = requests;
+                if (k.requests.size() > 64) k.requests.resize(64);
+                k.firstFrame = requests.front().first;
+                k.driverTaken = static_cast<int>(requests.size());
+                rings.push_back(k);
+            }
+        }
+        std::sort(rings.begin(), rings.end(), [](const Candidate& a, const Candidate& b) { return a.numbers.size() > b.numbers.size(); });
+        if (rings.size() > 4) rings.resize(4);
+    }
+    z80Writes.clear();
+    z80Writes.shrink_to_fit();
+
     // Keeping the game's own requests out, and asking.
     auto lock = [&](const Candidate& c, uint32_t from, uint32_t to) {
         if (c.call)
             md->cpu().skipRoutine = c.address;
+        else if (c.ring)
+            md->lockSoundRequests(c.address, 1, true);  // where the next goes may be 0
         else
             md->lockSoundRequests(from, static_cast<int>(to - from));
     };
@@ -367,6 +491,14 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             std::copy(c.regs.begin(), c.regs.end(), regs);
             regs[c.numberReg] = number;
             md->cpu().callRoutine(c.address, regs, kKeep);
+        } else if (c.ring) {
+            // After the last message, and then where the next goes.
+            const uint32_t at = md->peek(c.address);
+            std::vector<uint8_t> bytes(c.message);
+            bytes.push_back(static_cast<uint8_t>(number));
+            for (size_t i = 0; i < bytes.size(); ++i)
+                md->poke(c.ringStart + ((at + i) & c.ringMask), bytes[i]);
+            md->poke(c.address, static_cast<uint8_t>((at + bytes.size()) & c.ringMask));
         } else {
             md->poke(c.address, static_cast<uint8_t>(number));
         }
@@ -438,12 +570,14 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     std::map<uint64_t, int> starting;
     for (const auto& [addr, c] : found) ++starting[c.firstFrame];
     std::vector<Candidate> list(calls);
+    list.insert(list.end(), rings.begin(), rings.end());
     for (auto& [addr, c] : found)
         if (c.requests.size() > 1 || starting[c.firstFrame] < 16) list.push_back(c);
     // The driver's routines first, then those the driver took, then in the order the game
     // first used them.
     std::sort(list.begin(), list.end(), [](const Candidate& a, const Candidate& b) {
         if (a.call != b.call) return a.call;
+        if (a.ring != b.ring) return a.ring;
         if ((a.driverTaken > 0) != (b.driverTaken > 0)) return a.driverTaken > 0;
         return a.firstFrame != b.firstFrame ? a.firstFrame < b.firstFrame : a.address < b.address;
     });
@@ -453,6 +587,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             for (size_t i = 0; i < c.requests.size() && i < 12; ++i)
                 r += " " + hex(c.requests[i].second, 2) + "@" + std::to_string(c.requests[i].first);
             say("  " + hex(c.address, 6) + (c.call ? " (rutina, d" + std::to_string(c.numberReg) + ")" : "") +
+                (c.ring ? " (anillo en " + hex(c.ringStart, 6) + ")" : "") +
                 (c.driverTaken ? " (driver " + std::to_string(c.driverTaken) + ")" : "") + ":" + r);
         }
     if (list.size() > kMaxCandidates) list.resize(kMaxCandidates);
@@ -487,8 +622,8 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     md->cpu().skipRoutine = 0;
     if (queues.empty())
         return fail("No he encontrado cómo pide la música este juego. Por ahora sé sacarla de los juegos cuyo driver toma "
-                    "las peticiones de un byte de la memoria (como el de Sonic, SMPS) o de una llamada a una rutina suya "
-                    "(como el de Streets of Rage 2).");
+                    "las peticiones de un byte de la memoria (como el de Sonic, SMPS), de una llamada a una rutina suya "
+                    "(como el de Streets of Rage 2) o de mensajes en la memoria del Z80 (GEMS).");
 
     // Where the driver takes the requests first, then where asking made most music. A
     // queue where no number plays a song (a variable of the game that only looked like
@@ -508,11 +643,11 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         const Candidate& c = chosen;
         const uint64_t start = c.soundFrame;
         uint32_t lockFrom = c.address, lockTo = c.address + 1;
-        if (!c.call)
+        if (!c.call && !c.ring)
             for (const Candidate& o : queues)
                 // The same queue (where the game asks: not a byte the driver passes requests on
                 // to, which it must still write).
-                if (!o.call && o.driverTaken > 0 && o.address + 8 > c.address && o.address < c.address + 8) {
+                if (!o.call && !o.ring && o.driverTaken > 0 && o.address + 8 > c.address && o.address < c.address + 8) {
                     lockFrom = std::min(lockFrom, o.address);
                     lockTo = std::max(lockTo, o.address + 1);
                 }
@@ -526,6 +661,11 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             for (const auto& [kind, top] : kinds)
                 for (uint32_t low = kind ? 0 : 1; low <= std::min<uint32_t>(0xFF, top + 0x10); ++low)
                     numbers.push_back(kind << 8 | low);
+        } else if (c.ring) {
+            // Not the byte messages start with.
+            const uint32_t top = std::min<uint32_t>(0xFE, c.numbers.back() + 0x20);
+            for (uint32_t n = 0; n <= top; ++n)
+                if (c.message.empty() || n != c.message.front()) numbers.push_back(n);
         } else {
             bool high = true;
             for (const auto& r : c.requests) high = high && r.second >= 0x81;
@@ -536,7 +676,13 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             say("Pido las canciones llamando a " + hex(c.address, 6) + " con el número en d" + std::to_string(c.numberReg) +
                 ", del " + hex(numbers.front(), digits) + " al " + hex(numbers.back(), digits) + ", desde el cuadro " +
                 std::to_string(start) + "; las llamadas del juego no pasan");
-        else
+        else if (c.ring) {
+            std::string m;
+            for (uint8_t b : c.message) m += hex(b, 2) + " ";
+            say("Pido las canciones con el mensaje " + m + "n en el anillo de " + hex(c.ringStart, 6) + ", del " +
+                hex(numbers.front(), 2) + " al " + hex(numbers.back(), 2) + ", desde el cuadro " + std::to_string(start) +
+                "; los mensajes del juego no pasan");
+        } else
             say("Pido las canciones en " + hex(c.address, 6) + ", del " + hex(numbers.front(), 2) + " al " +
                 hex(numbers.back(), 2) + ", desde el cuadro " + std::to_string(start) + "; las peticiones del juego en " +
                 hex(lockFrom, 6) + "-" + hex(lockTo - 1, 6) + " no pasan");
@@ -603,6 +749,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             }
         } effects{*this, musicSounds, shortSounds};
         uint32_t firstSong = 0;  // the number of the first song found
+        int repeated = 0;        // numbers that played it again
         for (size_t at = 0; at < numbers.size(); ++at) {
             const uint32_t number = numbers[at];
             p.tried = static_cast<int>(at);
@@ -689,6 +836,11 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             instruments(musicSounds);
             if (!heard.insert(opening).second) {
                 say(hex(number, digits) + ": repetida");
+                // Every number the same song: the driver does not take the number from here.
+                if (heard.size() == 1 && ++repeated >= 8) {
+                    say("Todas suenan igual; aquí no se elige la canción");
+                    break;
+                }
                 continue;
             }
             if (!firstSong) firstSong = number;
@@ -725,7 +877,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             md->loadState(origin, nullptr);
             lock(c, lockFrom, lockTo);
             md->cpu().holdMain(hold);
-            ask(c, c.call && firstSong ? firstSong : own);
+            ask(c, !c.call && !c.ring ? own : firstSong ? firstSong : own);
             for (int f = 0; f < kFps; ++f) frame();
             std::vector<uint8_t> playing;
             md->saveState(playing, true);
