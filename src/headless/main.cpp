@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -354,6 +355,8 @@ bool readLog(const std::string& path, std::vector<LogLine>& log) {
 
 // --extract-songs: the instrument editor's Sacar canciones, without a window.
 int extractSongs(const std::string& game, const std::string& dir) {
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
     SongExtractor extractor;
     extractor.setLog([](const std::string& s) {
         std::printf("%s\n", s.c_str());
@@ -362,8 +365,10 @@ int extractSongs(const std::string& game, const std::string& dir) {
     const auto started = std::chrono::steady_clock::now();
     std::string error;
     std::string last;
+    std::string name = game.substr(game.find_last_of("/\\") == std::string::npos ? 0 : game.find_last_of("/\\") + 1);
+    name = name.substr(0, name.find_last_of('.'));  // the tag says the game's name, not its path
     const bool ok = extractor.run(
-        game, game,
+        game, name,
         [&](const SongExtractor::Progress& p) {
             if (p.doing.compare(0, 8, "Probando") != 0 && p.doing != last) std::printf("%s\n", p.doing.c_str());
             last = p.doing;
@@ -374,6 +379,7 @@ int extractSongs(const std::string& game, const std::string& dir) {
             std::snprintf(name, sizeof name, "/Cancion %02X.vgz", song.number);
             std::ofstream out(dir + name, std::ios::binary);
             out.write(reinterpret_cast<const char*>(song.vgz.data()), static_cast<std::streamsize>(song.vgz.size()));
+            if (!out) std::fprintf(stderr, "cannot write %s%s\n", dir.c_str(), name);
         },
         &error);
     const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
