@@ -43,7 +43,7 @@ const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom> 
   --play-vgm FILE       no game: play this .vgm or .vgz for --frames sixtieths of a
                         second, for --wav and --roland, and list its instruments
   --extract-songs DIR   take the game's songs out of its ROM (sound drivers like
-                        Sonic's or Streets of Rage 2's), one .vgz each in DIR,
+                        Sonic's, Streets of Rage 2's or GEMS), one .vgz each in DIR,
                         saying what it finds
   --test-rom            the built-in test program (planes, sprites, scroll, a tone)
   --pad-test-rom        the built-in pad test: the backdrop shows the pressed buttons
@@ -618,6 +618,7 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "cannot load %s: %s\n", game.c_str(), error.c_str());
             return 1;
         }
+        if (!md.loadNotice().empty()) std::fprintf(stderr, "%s\n", md.loadNotice().c_str());
     }
     if (!cheats.empty()) {
         std::vector<CheatPatch> patches;
@@ -878,7 +879,7 @@ int main(int argc, char** argv) {
         failures.push_back("sound hash " + hex8(audioHash) + ", expected " + hex8(expectAudio));
     if (divergence >= 0) failures.push_back("frame " + std::to_string(divergence) + ": " + divergenceWhat);
 
-    const char* system = md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : "megadrive";
+    const char* system = md.hasMsuMd() ? "msu-md" : md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : "megadrive";
     const double fps = seconds > 0 ? ran / seconds : 0;
     if (!quiet) {
         std::printf("title: %s\nsystem: %s  region: %s\nframes: %ld  size: %dx%d  hash: %08x\n",

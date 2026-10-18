@@ -73,9 +73,12 @@ void GameOverrides::restore(const Settings& general, Settings& to) const {
         if (has(o.key)) o.copy(general, to);
 }
 
-GameOverrides parseGameOverrides(const std::string& text, const Settings& general) {
+GameOverrides parseGameOverrides(const std::string& text, const Settings& general, const InputConfig& generalInput) {
     GameOverrides o;
     o.values = general;
+    o.controls = generalInput;
+    std::istringstream controls(text);
+    if (InputConfig::parse(controls, o.controls)) o.own.insert(kGameControls);
     if (parseProfile(text, o.values.render)) o.own.insert("perfil_3d");
     // Settings::parse reads the values; which options the file has comes from its keys.
     std::istringstream keys(text);
@@ -88,7 +91,10 @@ GameOverrides parseGameOverrides(const std::string& text, const Settings& genera
             continue;
         }
         const size_t eq = line.find('=');
-        if (eq == std::string::npos || section == "perfil_3d") continue;
+        // The controls' sections share key names (avance_rapido...) with the options.
+        if (eq == std::string::npos || section == "perfil_3d" || section == "teclado" || section == "teclado2" ||
+            section == "mando")
+            continue;
         const std::string key = optionFor(lower(trim(line.substr(0, eq))));
         if (key != "perfil_3d" && findGameOption(key)) o.own.insert(key);
     }
@@ -108,6 +114,10 @@ std::string formatGameOverrides(const GameOverrides& o, const std::string& game)
     if (o.has("perfil_3d")) {
         out << "\n[perfil_3d]\n";
         write3D(out, o.values.render);
+    }
+    if (o.has(kGameControls)) {
+        out << "\n";
+        o.controls.writeButtons(out);
     }
     // The rest as plumsg.ini writes them, keeping only this game's keys and their sections.
     std::ostringstream all;

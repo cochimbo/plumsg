@@ -310,6 +310,9 @@ msgstr "Effacer la liste"
 msgid "Botella soplada"
 msgstr "Bouteille soufflée"
 
+msgid "Botones propios de este juego"
+msgstr "Boutons propres à ce jeu"
+
 msgid ""
 "Busca archivos de 128 KB con la cabecera de la BIOS del Mega CD en las carpetas\n"
 "de la biblioteca y sus subcarpetas, y elige una para cada región."
@@ -320,12 +323,14 @@ msgstr ""
 msgid ""
 "Busca las canciones en la ROM del juego y las graba una a una, sin nombre\n"
 "(Canción 1, Canción 2...), con las pistas del juego. Sirve para los juegos\n"
-"con un driver de sonido como el de Sonic (SMPS) o el de Streets of Rage 2.\n"
+"con un driver de sonido como el de Sonic (SMPS), el de Streets of Rage 2\n"
+"o el GEMS (Sonic Spinball, Earthworm Jim).\n"
 "Tarda unos minutos."
 msgstr ""
 "Cherche les morceaux dans la ROM du jeu et les enregistre un par un, sans nom\n"
 "(Morceau 1, Morceau 2...), avec les pistes du jeu. Cela marche pour les jeux\n"
-"avec un pilote sonore comme celui de Sonic (SMPS) ou de Streets of Rage 2.\n"
+"avec un pilote sonore comme celui de Sonic (SMPS), de Streets of Rage 2\n"
+"ou GEMS (Sonic Spinball, Earthworm Jim).\n"
 "Cela prend quelques minutes."
 
 msgid ""
@@ -564,6 +569,9 @@ msgstr "Code"
 msgid "Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. Se guardan para este juego y se activan al abrirlo."
 msgstr "Codes Game Genie (ABCD-EFGH) ou Action Replay (FF0A12:0009) de %s. Ils sont gardés pour ce jeu et s'activent à son ouverture."
 
+msgid "Deja de usar estos y vuelve a los de Opciones > Controles"
+msgstr "Cesse d'utiliser ceux-ci et revient à ceux d'Options > Commandes"
+
 msgid ""
 "Deja tus .sf2 en la carpeta de SoundFonts\n"
 "y aparecerán aquí."
@@ -681,6 +689,9 @@ msgstr "Le code Game Genie pointe hors de la ROM."
 
 msgid "El código apunta fuera de la ROM y de la RAM."
 msgstr "Le code pointe hors de la ROM et de la RAM."
+
+msgid "El juego abierto tiene sus propios botones (en Opciones de este juego); aquí cambias los generales."
+msgstr "Le jeu ouvert a ses propres boutons (dans Options de ce jeu) ; ici vous changez les généraux."
 
 msgid "El juego responde a las peticiones, pero ninguna ha sonado como una canción."
 msgstr "Le jeu répond aux demandes, mais aucune n'a sonné comme un morceau."
@@ -1082,6 +1093,9 @@ msgstr ""
 "La caméra oscille de quelques degrés en suivant l'action,\n"
 "ainsi les couches bougent entre elles même vues de face."
 
+msgid "La música en CD de este juego (MSU-MD) necesita una BIOS del Mega CD: elígela en Consola > BIOS del Mega CD."
+msgstr "La musique CD de ce jeu (MSU-MD) a besoin d'un BIOS du Mega CD : choisissez-le dans Console > BIOS du Mega CD."
+
 msgid "La partida se ha descompasado y no se puede recuperar."
 msgstr "La partie s'est désynchronisée et ne peut pas être récupérée."
 
@@ -1143,11 +1157,11 @@ msgid "Los códigos Game Genie no usan las letras I, O, Q ni U."
 msgstr "Les codes Game Genie n'utilisent pas les lettres I, O, Q ni U."
 
 msgid ""
-"Los discos de Mega CD suenan siempre originales:\n"
-"su música son pistas de audio del disco."
+"Los discos de Mega CD y los juegos MSU-MD suenan\n"
+"siempre originales: su música son pistas de audio del CD."
 msgstr ""
-"Les disques Mega CD sonnent toujours d'origine :\n"
-"leur musique, ce sont des pistes audio du disque."
+"Les disques Mega CD et les jeux MSU-MD sonnent toujours\n"
+"d'origine : leur musique, ce sont des pistes audio du CD."
 
 msgid ""
 "Los efectos (anillos, saltos, golpes...) suenan como en la consola y solo la música\n"
@@ -1216,6 +1230,9 @@ msgstr "Afficher la barre de menus (Échap)"
 msgid "Música"
 msgstr "Musique"
 
+msgid "Música en CD (MSU-MD)"
+msgstr "Musique CD (MSU-MD)"
+
 msgid "Ninguna carátula se parece a ese nombre."
 msgstr "Aucune jaquette ne ressemble à ce nom."
 
@@ -1246,8 +1263,8 @@ msgstr "Il n'y a pas de jeux de cette console dans vos dossiers."
 msgid "No hay mandos conectados."
 msgstr "Aucune manette connectée."
 
-msgid "No he encontrado cómo pide la música este juego. Por ahora sé sacarla de los juegos cuyo driver toma las peticiones de un byte de la memoria (como el de Sonic, SMPS) o de una llamada a una rutina suya (como el de Streets of Rage 2)."
-msgstr "Je n'ai pas trouvé comment ce jeu demande sa musique. Pour l'instant je sais l'extraire des jeux dont le pilote prend les demandes dans un octet de la mémoire (comme celui de Sonic, SMPS) ou par l'appel d'une de ses routines (comme celui de Streets of Rage 2)."
+msgid "No he encontrado cómo pide la música este juego. Por ahora sé sacarla de los juegos cuyo driver toma las peticiones de un byte de la memoria (como el de Sonic, SMPS), de una llamada a una rutina suya (como el de Streets of Rage 2) o de mensajes en la memoria del Z80 (GEMS)."
+msgstr "Je n'ai pas trouvé comment ce jeu demande sa musique. Pour l'instant je sais l'extraire des jeux dont le pilote prend les demandes dans un octet de la mémoire (comme celui de Sonic, SMPS), par l'appel d'une de ses routines (comme celui de Streets of Rage 2) ou par des messages dans la mémoire du Z80 (GEMS)."
 
 msgid "No parece una BIOS: %s"
 msgstr "Ne ressemble pas à un BIOS : %s"
@@ -1263,6 +1280,9 @@ msgstr "Impossible d'ouvrir la SoundFont : choisissez-en une autre dans la liste
 
 msgid "No se pudieron guardar las asignaciones en %s."
 msgstr "Impossible de sauvegarder les attributions dans %s."
+
+msgid "No se pudo abrir %s (%s): el juego suena sin su música en CD."
+msgstr "Impossible d'ouvrir %s (%s) : le jeu tourne sans sa musique CD."
 
 msgid "No se pudo abrir %s."
 msgstr "Impossible d'ouvrir %s."
@@ -1915,6 +1935,9 @@ msgstr "Rejoindre une partie (joueur 2)"
 msgid "Usa el valor general"
 msgstr "Utilise la valeur générale"
 
+msgid "Usa los de Opciones > Controles."
+msgstr "Utilise ceux d'Options > Commandes."
+
 msgid "Usar el stick izquierdo como cruceta"
 msgstr "Utiliser le stick gauche comme croix"
 
@@ -1971,6 +1994,9 @@ msgstr "Chercher à nouveau"
 
 msgid "Volver a la sugerencia"
 msgstr "Revenir à la suggestion"
+
+msgid "Volver a los generales"
+msgstr "Revenir aux généraux"
 
 msgid "Voz \"ooh\""
 msgstr "Voix \"ooh\""
@@ -2135,6 +2161,8 @@ msgid ""
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
 "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
 "  --trucos               abrir los trucos del juego, con sus listas de internet\n"
+"  --opciones-juego       abrir las opciones propias del juego\n"
+"  --opciones-juego controles   ...en la pestaña de sus controles\n"
 "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
 "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
 "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n"
@@ -2156,6 +2184,8 @@ msgstr ""
 "  --bios                 ouvrir la fenêtre des BIOS du Mega CD\n"
 "  --buscar-caratula      avec --biblioteca : chercher la jaquette du premier jeu\n"
 "  --trucos               ouvrir les codes du jeu, avec leurs listes d'internet\n"
+"  --opciones-juego       ouvrir les options propres au jeu\n"
+"  --opciones-juego controles   ...sur l'onglet de ses commandes\n"
 "  --instrumentos         ouvrir l'éditeur d'instruments (du jeu, s'il est donné)\n"
 "  --pista f.vgm          avec --instrumentos : ouvrir cette musique (.vgm ou .vgz)\n"
 "  --captura f.png        enregistrer une capture après --cuadros N images et quitter\n"

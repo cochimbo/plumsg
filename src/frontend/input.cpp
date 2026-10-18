@@ -127,6 +127,12 @@ InputConfig InputConfig::loadOrCreate(const std::string& path) {
         c.save(path);
         return c;
     }
+    parse(in, c);
+    return c;
+}
+
+bool InputConfig::parse(std::istream& in, InputConfig& c) {
+    bool buttons = false;
     std::string line, section;
     while (std::getline(in, line)) {
         line = trim(line);
@@ -172,9 +178,12 @@ InputConfig InputConfig::loadOrCreate(const std::string& path) {
                 SDL_GameControllerButton gb = padButtonFromName(name);
                 if (gb != SDL_CONTROLLER_BUTTON_INVALID) list.push_back(gb);
             }
+        } else {
+            continue;
         }
+        buttons |= b >= 0;
     }
-    return c;
+    return buttons;
 }
 
 bool InputConfig::save(const std::string& path) const {
@@ -184,16 +193,41 @@ bool InputConfig::save(const std::string& path) const {
     return static_cast<bool>(out);
 }
 
+namespace {
+
+void writeKeyList(std::ostream& out, const char* name, const std::vector<SDL_Scancode>& list) {
+    out << name << " = ";
+    for (size_t k = 0; k < list.size(); ++k) out << (k ? ", " : "") << SDL_GetScancodeName(list[k]);
+    out << "\n";
+}
+
+void writePadList(std::ostream& out, const char* name, const std::vector<SDL_GameControllerButton>& list) {
+    out << name << " = ";
+    for (size_t k = 0; k < list.size(); ++k) out << (k ? ", " : "") << padButtonName(list[k]);
+    out << "\n";
+}
+
+}  // namespace
+
+void InputConfig::writeButtons(std::ostream& out) const {
+    out << "[teclado]\n";
+    for (int i = 0; i < kButtons; ++i) writeKeyList(out, kButtonNames[i], keys[i]);
+    out << "\n[teclado2]\n";
+    for (int i = 0; i < kButtons; ++i) writeKeyList(out, kButtonNames[i], keys2[i]);
+    out << "\n[mando]\n";
+    for (int i = 0; i < kButtons; ++i) writePadList(out, kButtonNames[i], pad[i]);
+}
+
+void InputConfig::copyButtons(const InputConfig& from) {
+    keys = from.keys;
+    keys2 = from.keys2;
+    pad = from.pad;
+}
+
 void InputConfig::write(std::ostream& out) const {
-    auto keyList = [&](const char* name, const std::vector<SDL_Scancode>& list) {
-        out << name << " = ";
-        for (size_t k = 0; k < list.size(); ++k) out << (k ? ", " : "") << SDL_GetScancodeName(list[k]);
-        out << "\n";
-    };
+    auto keyList = [&](const char* name, const std::vector<SDL_Scancode>& list) { writeKeyList(out, name, list); };
     auto padList = [&](const char* name, const std::vector<SDL_GameControllerButton>& list) {
-        out << name << " = ";
-        for (size_t k = 0; k < list.size(); ++k) out << (k ? ", " : "") << padButtonName(list[k]);
-        out << "\n";
+        writePadList(out, name, list);
     };
     out << "# Controles de plumsg. Puedes poner varias teclas o botones separados por comas.\n"
            "# [teclado] es el jugador 1 y [teclado2] el jugador 2; el primer mando es el\n"
@@ -220,6 +254,11 @@ void InputConfig::write(std::ostream& out) const {
 
 Input::~Input() {
     for (auto* p : pads_) SDL_GameControllerClose(p);
+}
+
+void Input::setGameButtons(const InputConfig* buttons) {
+    if (buttons) gameButtons_ = *buttons;
+    else gameButtons_.reset();
 }
 
 void Input::openAll() {
@@ -310,13 +349,14 @@ void Input::rightStick(float* x, float* y) const {
 PadState Input::poll(int player, bool useKeyboard) const {
     std::array<bool, InputConfig::kButtons> down{};
     const Uint8* kb = SDL_GetKeyboardState(nullptr);
-    const auto& keys = player == 0 ? config_.keys : config_.keys2;
+    const InputConfig& buttons = gameButtons_ ? *gameButtons_ : config_;
+    const auto& keys = player == 0 ? buttons.keys : buttons.keys2;
     SDL_GameController* pad = static_cast<size_t>(player) < pads_.size() ? pads_[static_cast<size_t>(player)] : nullptr;
     for (int b = 0; b < InputConfig::kButtons; ++b) {
         if (useKeyboard)
             for (SDL_Scancode sc : keys[b]) down[b] = down[b] || kb[sc];
         if (pad)
-            for (SDL_GameControllerButton gb : config_.pad[b]) down[b] = down[b] || padDown(pad, gb);
+            for (SDL_GameControllerButton gb : buttons.pad[b]) down[b] = down[b] || padDown(pad, gb);
     }
     if (config_.stickAsDpad && pad) {
         const int x = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);

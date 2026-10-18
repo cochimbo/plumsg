@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 
 #include "miniz.h"
 #include "state_io.h"
@@ -39,20 +40,46 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
     Cartridge loaded;
     if (!loaded.loadFile(path, error)) return false;
     cart_ = std::move(loaded);
-    mcd_.reset();
-    disc_.reset();
-    romOriginal_.clear();
-    ramCheats_.clear();
-    setUpMars();
-    applyRegion();
-    powerCycle();
+    loadNotice_.clear();
+    std::unique_ptr<CdImage> disc;
+    const std::string cue = detectSystemFromData(cart_.rom()) == ConsoleSystem::MegaDrive ? msuMdCue(path) : "";
+    if (!cue.empty()) {
+        std::string why;
+        auto open = std::make_unique<CdImage>();
+        if (!open->open(cue, &why))
+            loadNotice_ = trf("No se pudo abrir %s (%s): el juego suena sin su música en CD.",
+                              std::filesystem::u8path(cue).filename().u8string().c_str(), why.c_str());
+        else if (std::all_of(cdBios_.begin(), cdBios_.end(), [](const auto& b) { return b.size() != 0x20000; }))
+            loadNotice_ = tr("La música en CD de este juego (MSU-MD) necesita una BIOS del Mega CD: elígela en Consola > "
+                             "BIOS del Mega CD.");
+        else
+            disc = std::move(open);
+    }
+    attachCd(std::move(disc), true);
     return true;
 }
 
 void MegaDrive::loadRomData(std::vector<uint8_t> rom) {
     cart_.loadData(std::move(rom));
+    loadNotice_.clear();
+    attachCd(nullptr, true);
+}
+
+void MegaDrive::loadRomDataWithDisc(std::vector<uint8_t> rom, std::unique_ptr<CdImage> disc) {
+    cart_.loadData(std::move(rom));
+    loadNotice_.clear();
+    attachCd(std::move(disc), true);
+}
+
+// Puts the disc in (none for a cartridge on its own) and starts the console afresh.
+void MegaDrive::attachCd(std::unique_ptr<CdImage> disc, bool cartridge) {
     mcd_.reset();
-    disc_.reset();
+    disc_ = std::move(disc);
+    if (disc_) {
+        mcd_ = std::make_unique<MegaCd>();
+        mcd_->setCartridgeMode(cartridge);
+        mcd_->insert(disc_.get());
+    }
     romOriginal_.clear();
     ramCheats_.clear();
     setUpMars();
@@ -98,15 +125,9 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
         return false;
     }
     cart_ = std::move(loaded);
-    disc_ = std::move(disc);
     discRegion_ = wanted;
-    mcd_ = std::make_unique<MegaCd>();
-    mcd_->insert(disc_.get());
-    romOriginal_.clear();
-    ramCheats_.clear();
-    setUpMars();
-    applyRegion();
-    powerCycle();
+    loadNotice_.clear();
+    attachCd(std::move(disc), false);
     return true;
 }
 
@@ -129,7 +150,7 @@ void MegaDrive::setRegion(Region r) {
 }
 
 void MegaDrive::applyRegion() {
-    if (mcd_) configureFor(discRegion_);
+    if (mcd_ && !mcd_->cartridgeMode()) configureFor(discRegion_);
     else configureFor(region_ == Region::Auto ? (cart_.loaded() ? cart_.preferredRegion() : Region::UsaNtsc) : region_);
 }
 
@@ -145,8 +166,8 @@ void MegaDrive::configureFor(Region r) {
     if (mcd_) {
         mcd_->setMasterClock(master);
         mcd_->setSampleRate(mixer_.outputRate());
-        const int slot = r == Region::JapanNtsc ? 0 : r == Region::EuropePal ? 2 : 1;
-        if (cdBios_[static_cast<size_t>(slot)].size() == 0x20000) mcd_->setBios(cdBios_[static_cast<size_t>(slot)]);
+        const int slot = cdBiosSlot(r);
+        if (slot >= 0) mcd_->setBios(cdBios_[static_cast<size_t>(slot)]);
     }
     // Version register: bit 7 overseas, bit 6 PAL, bit 5 no expansion unit; version 0
     // (no TMSS).
@@ -154,6 +175,16 @@ void MegaDrive::configureFor(Region r) {
     if (effectiveRegion_ != Region::JapanNtsc) version |= 0x80;
     if (isPal) version |= 0x40;
     io_.setVersion(version);
+}
+
+int MegaDrive::cdBiosSlot(Region r) const {
+    const int slot = r == Region::JapanNtsc ? 0 : r == Region::EuropePal ? 2 : 1;
+    if (cdBios_[static_cast<size_t>(slot)].size() == 0x20000) return slot;
+    // A cartridge boots by itself and does not check the BIOS's region: any will do.
+    if (mcd_ && mcd_->cartridgeMode())
+        for (int i = 0; i < 3; ++i)
+            if (cdBios_[static_cast<size_t>(i)].size() == 0x20000) return i;
+    return -1;
 }
 
 void MegaDrive::setSampleRate(double hz) {
@@ -397,9 +428,10 @@ void MegaDrive::setMemoryWatch(MemoryWatch watch) {
     watching_ = watch_ || lockCount_ > 0;
 }
 
-void MegaDrive::lockSoundRequests(uint32_t addr, int count) {
+void MegaDrive::lockSoundRequests(uint32_t addr, int count, bool all) {
     lockAddr_ = addr;
     lockCount_ = count;
+    lockAll_ = all;
     watching_ = watch_ || lockCount_ > 0;
 }
 
@@ -411,7 +443,7 @@ void MegaDrive::poke(uint32_t addr, uint8_t value) {
 }
 
 bool MegaDrive::watchWrite(uint32_t addr, uint8_t value, bool m68k) {
-    if (m68k && value != 0 && value != 0x80 && addr - lockAddr_ < static_cast<uint32_t>(lockCount_)) return false;
+    if (m68k && (lockAll_ || (value != 0 && value != 0x80)) && addr - lockAddr_ < static_cast<uint32_t>(lockCount_)) return false;
     if (watch_) watch_(addr, value, m68k);
     return true;
 }

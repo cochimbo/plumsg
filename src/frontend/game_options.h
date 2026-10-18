@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "input.h"
 #include "settings.h"
 
 namespace plumsg {
@@ -21,9 +22,14 @@ struct GameOption {
 const std::vector<GameOption>& gameOptions();
 const GameOption* findGameOption(const std::string& key);
 
+// The key in GameOverrides::own for a game's own console buttons (keyboard and pads),
+// kept in its file under [teclado], [teclado2] and [mando] as in plumsg.ini.
+constexpr const char* kGameControls = "controles";
+
 struct GameOverrides {
-    std::set<std::string> own;  // keys of gameOptions() this game has its own value for
+    std::set<std::string> own;  // keys of gameOptions() this game has its own value for, and kGameControls
     Settings values;            // those values; the rest are the general ones
+    InputConfig controls;       // its console buttons when it has its own (hotkeys stay general)
 
     bool has(const std::string& key) const { return own.count(key) != 0; }
     // Copies the game's own values onto `to`.
@@ -32,8 +38,9 @@ struct GameOverrides {
     void restore(const Settings& general, Settings& to) const;
 };
 
-// Reads a game's file: `values` start as `general` and take the file's keys on top.
-GameOverrides parseGameOverrides(const std::string& text, const Settings& general);
+// Reads a game's file: `values` start as `general` (and `controls` as `generalInput`)
+// and take the file's keys on top.
+GameOverrides parseGameOverrides(const std::string& text, const Settings& general, const InputConfig& generalInput);
 // The file for `o`, or an empty string when the game has nothing of its own.
 std::string formatGameOverrides(const GameOverrides& o, const std::string& game);
 

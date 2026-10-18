@@ -9,15 +9,21 @@
 // The game asks for $A5 at frame 30, song $81 at frame 60, the effects $A1-$A4 and $A6
 // at frames 200-600 and song $82 at frame 900, and sets and clears a byte of its own
 // ($FFF030) at frames 100 and 101.
-// byCall: the game asks by calling a routine of the driver with the number in d0, as
-// Streets of Rage 2 does (the driver, VBlank's code, is then at $8000, away from the
+// Asking::byCall: the game asks by calling a routine of the driver with the number in d0,
+// as Streets of Rage 2 does (the driver, VBlank's code, is then at $8000, away from the
 // game's).
+// Asking::byRing: the game writes FF 10 n to a ring of 64 bytes in the Z80's memory
+// ($A01B40), a byte at a time, each followed by where the next goes ($A00036), as GEMS
+// games do; the driver plays the last FF 10 n written.
 
 #include "test_rom.h"
 
 namespace plumsg::testrom {
 
-inline std::vector<uint8_t> buildMusic(bool byCall = false) {
+enum class Asking { byQueue, byCall, byRing };
+
+inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
+    const bool byCall = asking == Asking::byCall, byRing = asking == Asking::byRing;
     Emitter e;
     auto text = [&](uint32_t at, const char* s, size_t width) {
         for (size_t i = 0; i < width; ++i) e.rom[at + i] = static_cast<uint8_t>(i < std::strlen(s) ? s[i] : ' ');
@@ -43,6 +49,11 @@ inline std::vector<uint8_t> buildMusic(bool byCall = false) {
         if (byCall && addr == 0xF00A) {
             e.w16(0x303C); e.w16(value);               // move.w #value,d0
             e.w16(0x4EB9); calls.push_back(e.here()); e.w32(0);  // jsr    ask
+        } else if (byRing && addr == 0xF00A) {
+            for (uint16_t b : {uint16_t{0xFF}, uint16_t{0x10}, uint16_t{value}}) {
+                e.w16(0x303C); e.w16(b);               // move.w #b,d0
+                e.w16(0x6100); e.rel("put");           // bsr.w  put
+            }
         } else {
             e.w16(0x11FC); e.w16(value); e.w16(addr);  // move.b #value,(addr).w
         }
@@ -78,17 +89,47 @@ inline std::vector<uint8_t> buildMusic(bool byCall = false) {
     request(500, 0xA4, 0xF00A, "m8");
     request(600, 0xA6, 0xF00A, "m9");
     e.w16(0x6000); e.rel("main");                      // bra.w  main
+    e.label("put");                                    // d0 to the ring
+    e.w16(0x1439); e.w32(0xA00036);                    // move.b $A00036,d2
+    e.w16(0x41F9); e.w32(0xA01B40);                    // lea    $A01B40,a0
+    e.w16(0x0242); e.w16(0x003F);                      // and.w  #$3F,d2
+    e.w16(0x1180); e.w16(0x2000);                      // move.b d0,(a0,d2.w)
+    e.w16(0x5202);                                     // addq.b #1,d2
+    e.w16(0x0202); e.w16(0x003F);                      // and.b  #$3F,d2
+    e.w16(0x13C2); e.w32(0xA00036);                    // move.b d2,$A00036
+    e.w16(0x4E75);                                     // rts
 
-    if (byCall)
+    if (byCall || byRing)
         while (e.here() < 0x8000) e.w16(0x4E71);       // nop
     e.label("ask");
     e.w16(0x11C0); e.w16(0xF00A);                      // move.b d0,($F00A).w
     e.w16(0x4E75);                                     // rts
 
     e.label("vint");
-    e.w16(0x48E7); e.w16(0xE000);                      // movem.l d0-d2,-(sp)
+    e.w16(0x48E7); e.w16(0xE080);                      // movem.l d0-d2/a0,-(sp)
     e.w16(0x5278); e.w16(0xF020);                      // addq.w #1,($F020).w
-    e.w16(0x1038); e.w16(0xF00A);                      // move.b ($F00A).w,d0
+    if (byRing) {
+        // Something new in the ring: is the last of it FF 10 n?
+        e.w16(0x1439); e.w32(0xA00036);                // move.b $A00036,d2
+        e.w16(0xB438); e.w16(0xF040);                  // cmp.b  ($F040).w,d2
+        e.w16(0x6700); e.rel("play");                  // beq.w  play
+        e.w16(0x11C2); e.w16(0xF040);                  // move.b d2,($F040).w
+        e.w16(0x41F9); e.w32(0xA01B40);                // lea    $A01B40,a0
+        e.w16(0x5302);                                 // subq.b #1,d2
+        e.w16(0x0242); e.w16(0x003F);                  // and.w  #$3F,d2
+        e.w16(0x1030); e.w16(0x2000);                  // move.b (a0,d2.w),d0
+        e.w16(0x5302);                                 // subq.b #1,d2
+        e.w16(0x0242); e.w16(0x003F);                  // and.w  #$3F,d2
+        e.w16(0x0C30); e.w16(0x0010); e.w16(0x2000);   // cmp.b  #$10,(a0,d2.w)
+        e.w16(0x6600); e.rel("play");                  // bne.w  play
+        e.w16(0x5302);                                 // subq.b #1,d2
+        e.w16(0x0242); e.w16(0x003F);                  // and.w  #$3F,d2
+        e.w16(0x0C30); e.w16(0x00FF); e.w16(0x2000);   // cmp.b  #$FF,(a0,d2.w)
+        e.w16(0x6600); e.rel("play");                  // bne.w  play
+        e.w16(0x4A00);                                 // tst.b  d0
+    } else {
+        e.w16(0x1038); e.w16(0xF00A);                  // move.b ($F00A).w,d0
+    }
     e.w16(0x6700); e.rel("play");                      // beq.w  play
     e.w16(0x0C00); e.w16(0x0080);                      // cmp.b  #$80,d0
     e.w16(0x6700); e.rel("play");                      // beq.w  play
@@ -146,7 +187,7 @@ inline std::vector<uint8_t> buildMusic(bool byCall = false) {
     ym(0x28, 0x01);
     ym(0x28, 0x02);
     e.label("done");
-    e.w16(0x4CDF); e.w16(0x0007);                      // movem.l (sp)+,d0-d2
+    e.w16(0x4CDF); e.w16(0x0107);                      // movem.l (sp)+,d0-d2/a0
     e.w16(0x4E73);                                     // rte
     e.label("other");
     e.w16(0x4E73);                                     // rte

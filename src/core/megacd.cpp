@@ -437,9 +437,19 @@ void MegaCd::writeIo(uint32_t addr, uint16_t value, bool upper, bool lower) {
 // ---------------------------------------------------------------------------------
 // The console's side
 
+bool MegaCd::localAddress(uint32_t& addr) const {
+    addr &= 0xFFFFFF;
+    if (cartridgeMode_) {
+        if (addr < 0x400000 || addr >= 0x800000) return false;
+        addr -= 0x400000;
+        return true;
+    }
+    return addr < 0x400000;
+}
+
 bool MegaCd::read68k(uint32_t addr, uint16_t& value) {
-    if (addr < 0x400000) {
-        value = readExternal(addr & ~1u);
+    if (uint32_t local = addr; localAddress(local)) {
+        value = readExternal(local & ~1u);
         return true;
     }
     if ((addr & 0xFFFF00) == 0xA12000) {
@@ -450,8 +460,8 @@ bool MegaCd::read68k(uint32_t addr, uint16_t& value) {
 }
 
 bool MegaCd::write68k(uint32_t addr, uint16_t value, bool upper, bool lower) {
-    if (addr < 0x400000) {
-        writeExternal(addr & ~1u, value, upper, lower);
+    if (uint32_t local = addr; localAddress(local)) {
+        writeExternal(local & ~1u, value, upper, lower);
         return true;
     }
     if ((addr & 0xFFFF00) == 0xA12000) {
@@ -475,6 +485,7 @@ uint32_t MegaCd::wordRamIndex(uint32_t addr) const {
 }
 
 bool MegaCd::dmaRead(uint32_t addr, uint16_t& value) {
+    if (cartridgeMode_ && !localAddress(addr)) return false;
     addr &= 0x3BFFFE;
     if (addr < 0x200000 || addr >= 0x240000) return false;
     const uint32_t i = wordRamIndex(addr);
@@ -486,8 +497,9 @@ bool MegaCd::dmaRead(uint32_t addr, uint16_t& value) {
 uint16_t MegaCd::readExternal(uint32_t addr) {
     addr &= 0x3BFFFE;  // bits 18-20 are not decoded
     if (addr < 0x020000) {
-        if (addr == 0x70) return static_cast<uint16_t>(io_.vectorLevel4 >> 16);
-        if (addr == 0x72) return static_cast<uint16_t>(io_.vectorLevel4);
+        // The level 4 vector the BIOS points elsewhere is the cartridge's own in mode 1.
+        if (addr == 0x70 && !cartridgeMode_) return static_cast<uint16_t>(io_.vectorLevel4 >> 16);
+        if (addr == 0x72 && !cartridgeMode_) return static_cast<uint16_t>(io_.vectorLevel4);
         if (bios_.size() < 0x20000) return 0;
         return static_cast<uint16_t>(bios_[addr] << 8 | bios_[addr + 1]);
     }
