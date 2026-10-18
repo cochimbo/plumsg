@@ -34,6 +34,9 @@ public:
     // Interrupt priority level requested by the hardware, 0 (none) .. 7 (NMI).
     void setIrqLevel(int level) { irqLevel_ = level & 7; }
     int irqLevel() const { return irqLevel_; }
+    // Holds the program where it is now, running only its interrupts (song extraction:
+    // the sound driver plays from VBlank while the game stays put). It lets VBlank in.
+    void holdMain(bool on);
 
     // a[7] is the active stack pointer; the other one is kept in otherSp.
     uint32_t d[8]{};
@@ -43,6 +46,8 @@ public:
     uint16_t sr = 0x2700;
     bool stopped = false;  // STOP: waiting for an interrupt
     bool halted = false;   // double bus fault: the CPU is locked until reset
+    bool holding = false;  // holdMain(): only interrupt handlers run
+    uint32_t holdSp = 0;   // the stack pointer of the program held: deeper is a handler
     uint32_t addressErrors = 0;  // address error exceptions taken, for debugging
 
     bool supervisor() const { return (sr & 0x2000) != 0; }

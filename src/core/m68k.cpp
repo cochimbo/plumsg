@@ -396,6 +396,12 @@ bool M68000::privileged() {
     return true;
 }
 
+void M68000::holdMain(bool on) {
+    holding = on;
+    holdSp = a[7];
+    if (on && ((sr >> 8) & 7) >= 6) setSr(static_cast<uint16_t>((sr & ~0x0700) | 0x0300));
+}
+
 int M68000::step() {
     if (halted) return 4;
     cycles_ = 0;
@@ -411,6 +417,7 @@ int M68000::step() {
             return 44;
         }
         if (stopped) return 4;
+        if (holding && (!supervisor() || a[7] >= holdSp)) return 4;
         const bool trace = (sr & 0x8000) != 0;
         instrPc_ = pc;
         faultPcAdjust_ = 0;

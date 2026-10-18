@@ -169,6 +169,13 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   de la biblioteca): para elegir con qué suena cada instrumento sin tener que jugar a la vez.
   - **Grabar del juego** graba la música mientras juegas, hasta **Parar la grabación**. La
     grabación se guarda en `sonido\pistas\` (junto a `states\`) como `.vgz`.
+  - **Sacar canciones** busca las canciones en la ROM del juego y las graba una a una en
+    `sonido\pistas\<juego>\`, sin nombre ("Canción 1", "Canción 2"...), cada una con una
+    vuelta y su punto de vuelta para que siga sonando. Arranca el juego por su cuenta, mira
+    dónde le pide la música al driver de sonido y le va pidiendo cada número. Funciona con
+    los juegos cuyo driver toma las peticiones así: el SMPS de Sonic 1, 2 y 3 y de muchos
+    juegos de Sega, y otros parecidos como el de Gunstar Heroes. Tarda unos minutos, con
+    una barra de progreso, y se puede parar.
   - La ROM no trae sus canciones con nombre (cada juego guarda su música a su manera), pero
     [vgmrips](https://vgmrips.net) tiene casi todas: su `.zip` de un juego, o sus `.vgm` y
     `.vgz`, se abren con **Abrir .vgm...** y se guardan en `sonido\pistas\<juego>\`

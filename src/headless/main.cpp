@@ -355,7 +355,10 @@ bool readLog(const std::string& path, std::vector<LogLine>& log) {
 // --extract-songs: the instrument editor's Sacar canciones, without a window.
 int extractSongs(const std::string& game, const std::string& dir) {
     SongExtractor extractor;
-    extractor.setLog([](const std::string& s) { std::printf("%s\n", s.c_str()); });
+    extractor.setLog([](const std::string& s) {
+        std::printf("%s\n", s.c_str());
+        std::fflush(stdout);
+    });
     const auto started = std::chrono::steady_clock::now();
     std::string error;
     std::string last;
