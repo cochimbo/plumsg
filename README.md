@@ -149,8 +149,8 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
   SoundFont, como sonaría en un Roland SC-55; las voces y la batería digitalizada (el DAC)
   siguen sonando como en la consola. El control **Sonido original** deja oír también el FM y el PSG
   por debajo, y **Reverb** y **Chorus** añaden ambiente. Cada instrumento del juego recibe
-  un instrumento General MIDI con unas reglas automáticas (el editor para cambiarlos a mano
-  llegará más adelante). Todo esto se puede cambiar solo para un juego desde sus opciones.
+  un instrumento General MIDI con unas reglas automáticas, que se cambian a mano en el
+  **Editor de instrumentos**. Todo esto se puede cambiar solo para un juego desde sus opciones.
 
   plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable, y con **Elegir
   SoundFont (.sf2)...** se puede usar otro (**Usar el incluido** vuelve a él):
@@ -165,6 +165,28 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
 
   Algunos que suenan bien: GeneralUser GS (el incluido), FluidR3 GM y los que imitan el
   SC-55 o el SC-88.
+- **Sonido > Editor de instrumentos** (o **Editor de instrumentos...** en el menú de un juego
+  de la biblioteca): para elegir con qué suena cada instrumento sin tener que jugar a la vez.
+  - **Grabar del juego** graba la música mientras juegas, hasta **Parar la grabación**. La
+    grabación se guarda en `sonido\pistas\` (junto a `states\`) como `.vgz`.
+  - La ROM no trae sus canciones con nombre (cada juego guarda su música a su manera), pero
+    [vgmrips](https://vgmrips.net) tiene casi todas: su `.zip` de un juego, o sus `.vgm` y
+    `.vgz`, se abren con **Abrir .vgm...** y se guardan en `sonido\pistas\<juego>\`
+    (**Carpeta** la abre). Desde entonces, la lista **Pista** de ese juego trae cada canción
+    por su nombre, como "Green Hill Zone", junto a las grabaciones. También vale el sound
+    test del juego: se pone a grabar y se van tocando sus canciones.
+  - **Tocar** la reproduce con el juego en pausa. **Original** y **Roland** cambian entre
+    los dos sonidos en el mismo punto, para comparar. Cada canal (FM 1-6, DAC, PSG 1-3 y
+    ruido) tiene **Solo** y **Silencio**.
+  - La lista enseña los instrumentos de la pista, con sus canales y sus notas. Los que suenan
+    en ese momento salen en verde. A cada uno se le puede dar un **Instrumento** General
+    MIDI (con octava y volumen), una pieza de la **Batería** GM, o dejarle su **Sonido
+    original**. **Escuchar solo este** calla todo lo demás, y **Volver a la sugerencia**
+    deshace lo elegido.
+  - Lo elegido se oye al momento, también en el juego, y se guarda en
+    `sonido\<juego>.ini`. Con **Usar también en otros juegos** (marcado de entrada) va
+    además a `sonido\cache.ini`, que comparten todos los juegos: el mismo sonido FM en otro
+    juego saldrá ya asignado. Lo de cada juego manda sobre lo común.
 - A pantalla completa, **Abrir ROM** usa el explorador propio de plumsg (también con el
   mando) en vez del diálogo de Windows, que se quedaba escondido detrás del juego.
 

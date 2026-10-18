@@ -33,10 +33,14 @@ public:
     // The chip's registers as last written (0x000-0x0FF port 0, 0x100-0x1FF port 1).
     uint8_t reg(int index) const;
     bool dacEnabled() const;
+    // The operators keyed on in each channel (0-5), as last written to register 0x28
+    // (bits 4-7). Not kept in savestates.
+    uint8_t keys(int channel) const { return keys_[static_cast<size_t>(channel)]; }
     // Turns the FM channels in `mask` (bit 0 = channel 1) down to percent of their
-    // volume; the DAC is never touched. For the Roland sound, which plays them instead.
+    // volume, and the DAC with bit 6. For the Roland sound, which plays them instead,
+    // and for listening to some channels alone.
     void setMuted(uint32_t mask, int percent) {
-        muted_ = mask & 0x3F;
+        muted_ = mask & 0x7F;
         mutedLevel_ = percent * 256 / 100;
     }
 
@@ -54,6 +58,8 @@ private:
     double masterClock_ = 53693175.0;
     uint64_t position_ = 0;  // master clocks already turned into samples
     uint32_t muted_ = 0;
+    std::array<uint8_t, 2> address_{};
+    std::array<uint8_t, 6> keys_{};
     int32_t mutedLevel_ = 0;  // out of 256
     std::vector<int16_t> samples_;
 };

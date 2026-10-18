@@ -71,6 +71,7 @@ struct Paths {
     std::string cheats;    // folder for the games' cheat lists
     std::string covers;    // folder for the library's downloaded covers
     std::string soundfont; // the SoundFont that comes with plumsg, next to the executable
+    std::string sound;     // the instrument editor's folder: assignments and recordings
 };
 
 const char* const kSoundfont = "soundfonts/GeneralUser-GS.sf2";
@@ -83,15 +84,18 @@ Paths findPaths() {
         const std::string portable = base + "plumsg.ini";
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
-            return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont};
+            return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont,
+                    base + "sonido/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
-        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/", base + kSoundfont};
+        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/", base + kSoundfont,
+                dir + "sonido/"};
     }
-    return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont};
+    return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont,
+            base + "sonido/"};
 }
 
 struct App {
@@ -312,6 +316,8 @@ struct CommandLine {
     int filter = -1;         // --filtro ninguno|scanlines|crt
     bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
+    bool editor = false;          // --instrumentos: start with the instrument editor open
+    std::string track;            // --pista f.vgm: and this track in it
     // For launchers (LaunchBox, Playnite, frontends of arcade cabinets). These last only
     // for this session: the settings file keeps what it had.
     int fullscreen = -1;          // --pantalla-completa / --ventana
@@ -336,6 +342,8 @@ const char* kHelp =
     "  --unirse direccion     unirse a la partida en red de ese anfitrión (IP:puerto)\n"
     "  --biblioteca carpeta   abrir la biblioteca de esa carpeta (se puede repetir)\n"
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
+    "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
+    "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
     "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
     "La pantalla completa y la región dadas aquí valen solo para esta vez.";
 
@@ -355,6 +363,8 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--biblioteca") c.library.push_back(next());
         else if (a == "--descargar-caratulas") c.downloadCovers = true;
         else if (a == "--bios") c.bios = true;
+        else if (a == "--instrumentos") c.editor = true;
+        else if (a == "--pista") c.track = next();
         else if (a == "--filtro") {
             const std::string f = next();
             c.filter = f == "crt" ? 2 : f == "scanlines" ? 1 : 0;
@@ -492,19 +502,20 @@ int main(int argc, char** argv) {
     // The Roland sound, when chosen and its SoundFont opens; else the chips' own.
     std::string rolandFont;  // the SoundFont loaded (or tried)
     bool rolandFontOk = false;
+    InstrumentEditor editor(paths.sound);
+    ui->setEditor(&editor);
+    auto loadSoundfont = [&] {
+        const std::string path = settings.soundfont.empty() ? paths.soundfont : settings.soundfont;
+        if (path == rolandFont) return rolandFontOk;
+        rolandFont = path;
+        std::vector<uint8_t> data;
+        rolandFontOk = readFile(path, data) && roland->loadSoundfont(data);
+        if (!rolandFontOk && !capturing)
+            ui->showError("No se pudo abrir el SoundFont " + path + ".\nSe oye el sonido original.");
+        return rolandFontOk;
+    };
     auto applySound = [&] {
-        bool on = settings.roland;
-        if (on) {
-            const std::string path = settings.soundfont.empty() ? paths.soundfont : settings.soundfont;
-            if (path != rolandFont) {
-                rolandFont = path;
-                std::vector<uint8_t> data;
-                rolandFontOk = readFile(path, data) && roland->loadSoundfont(data);
-                if (!rolandFontOk && !capturing)
-                    ui->showError("No se pudo abrir el SoundFont " + path + ".\nSe oye el sonido original.");
-            }
-            on = rolandFontOk;
-        }
+        const bool on = settings.roland && loadSoundfont();
         roland->setEffects(settings.reverb, settings.chorus);
         app->console.setRoland(on ? roland.get() : nullptr, settings.chipMix);
     };
@@ -535,8 +546,20 @@ int main(int argc, char** argv) {
         game.applyTo(settings);
         applyConsole();
         applySound();
+        roland->setAssignments(InstrumentEditor::assignmentsFor(paths.sound, path));
+    };
+    // The instrument editor records the game's music while it is played.
+    VgmWriter recorder;
+    bool recording = false;
+    auto stopRecording = [&] {
+        if (!recording) return;
+        recording = false;
+        app->console.setVgmWriter(nullptr);
+        editor.saveRecording(recorder.finish(app->console.masterClocks(), withoutExtension(fileName(app->romPath))),
+                             app->romPath);
     };
     auto load = [&](const std::string& path) {
+        stopRecording();
         const ConsoleSystem system = detectSystem(path);
         if (system == ConsoleSystem::MegaCD) {
             // Discs boot with the BIOS of their region, from the files the user chose.
@@ -575,6 +598,12 @@ int main(int argc, char** argv) {
     if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolders.empty()))
         ui->toggleLibrary();
     if (cmd.bios) ui->openBios();
+    if (cmd.editor) {
+        loadSoundfont();
+        editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+        editor.open(app->romLoaded ? app->romPath : std::string());
+        if (!cmd.track.empty()) editor.openTrack(cmd.track);
+    }
     int loops = 0;
     bool downloadCovers = cmd.downloadCovers;
     bool sizedForMenu = false;
@@ -806,6 +835,10 @@ int main(int argc, char** argv) {
         uiState.gameOptions.own = optionsLoaded ? &game.own : &otherOptions.own;
         uiState.gameOptions.general = &general;
         uiState.gameOptions.loaded = optionsLoaded;
+        uiState.editor.loadedGame = app->romLoaded ? app->romPath : std::string();
+        uiState.editor.recording = recording;
+        uiState.editor.recordedSeconds = recorder.secondsAt(app->console.masterClocks());
+        uiState.editor.soundfontReady = rolandFontOk;
         uiState.netSession = net != nullptr;
         uiState.netPlaying = netPlaying();
         uiState.netProgress = -1;
@@ -877,6 +910,21 @@ int main(int argc, char** argv) {
         }
         if (act.settingsChanged) save();
         if (act.soundChanged) applySound();
+        if (act.soundChanged && editor.isOpen() && loadSoundfont())
+            editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+        if (act.openEditor) {
+            loadSoundfont();
+            editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+            editor.open(act.editorFor);
+        }
+        if (act.startRecording && app->romLoaded && !recording) {
+            recording = true;
+            app->console.setVgmWriter(&recorder);
+            paused = false;
+        }
+        if (act.stopRecording || (recording && !editor.isOpen())) stopRecording();
+        if (act.assignmentsChanged && app->romLoaded)
+            roland->setAssignments(InstrumentEditor::assignmentsFor(paths.sound, app->romPath));
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
         if (!sizedForMenu && !settings.fullscreen) {
             applyWindowScale(window, settings.windowScale, ui->menuHeight());
@@ -929,6 +977,13 @@ int main(int argc, char** argv) {
                 uiState.speed = net->phase() == NetplaySession::Phase::Syncing ? "Red: preparando la partida"
                                                                                : "Red: conectando";
             }
+            pacer.reset();
+        }
+        // The instrument editor is playing: the game waits, and its track is heard.
+        else if (editor.playing()) {
+            std::vector<int16_t> samples;
+            editor.play(frameSeconds, audio->rate(), samples);
+            audio->push(samples, settings.volume, settings.mute || capturing);
             pacer.reset();
         }
         // The game waits while the states menu, the library or the file browser is open.
@@ -1016,6 +1071,7 @@ int main(int argc, char** argv) {
     if (net) net->end();
     net.reset();
     netSocket.reset();
+    stopRecording();
     app->saveBattery();
     save();
     for (auto& s : app->slots)

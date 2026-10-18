@@ -1352,6 +1352,109 @@ void testRoland() {
     std::array<uint8_t, 28> ops{};
     check(RolandSound::programFor(ops, 0x07, 40) == 38, "Roland: una nota grave sostenida es un bajo sintetizado");
     check(RolandSound::programFor(ops, 0x07, 72) == 16, "Roland: el algoritmo 7 es un órgano");
+
+    // Instruments chosen by hand: a drum, an octave up, the chip's own sound.
+    const auto seenFm = roland.seen();
+    check(seenFm.size() >= 2, "Roland: anota los instrumentos que suenan (FM y PSG)");
+    uint32_t fmPrint = 0;
+    for (const auto& [fp, seen] : seenFm)
+        if (seen.kind == RolandSound::Kind::Fm) fmPrint = fp;
+    check(fmPrint && (seenFm.at(fmPrint).channels & 1) && seenFm.at(fmPrint).rules.program >= 0,
+          "Roland: el instrumento FM sabe su canal y su sugerencia");
+    fm(0, 0x2B, 0x00);
+    RolandSound::Assignments chosen;
+    chosen[fmPrint].drum = 38;
+    roland.setAssignments(chosen);
+    log.clear();
+    fm(0, 0x28, 0xF0);
+    check(has("9 on 38"), "Roland: un instrumento FM asignado a la caja suena en el canal de batería");
+    fm(0, 0x28, 0x00);
+    chosen[fmPrint] = RolandSound::Assignment{};
+    chosen[fmPrint].program = 0;
+    chosen[fmPrint].octave = 1;
+    roland.setAssignments(chosen);
+    fm(0, 0xA4, 0x22);  // back to B3
+    fm(0, 0xA0, 0x69);
+    log.clear();
+    fm(0, 0x28, 0xF0);
+    check(has("0 on 71") && has("0 program 0"), "Roland: con una octava más, el Si3 suena como Si4");
+    fm(0, 0x28, 0x00);
+    chosen[fmPrint] = RolandSound::Assignment{};
+    chosen[fmPrint].original = true;
+    roland.setAssignments(chosen);
+    log.clear();
+    fm(0, 0x28, 0xF0);
+    check(log.empty() && (roland.chipChannels() & 1), "Roland: un instrumento original no da notas y deja oír el chip");
+    fm(0, 0x28, 0x00);
+    roland.setAssignments({});
+    roland.setListening(1, {});  // FM 1 muted
+    log.clear();
+    fm(0, 0x28, 0xF0);
+    check(log.empty(), "Roland: un canal en silencio no da notas");
+    roland.setListening(0, {});
+
+    // The assignment files.
+    RolandSound::Assignments files;
+    files[0x1234abcd].program = 81;
+    files[0x1234abcd].octave = -1;
+    files[0x1234abcd].volume = 80;
+    files[0x0badf00d].drum = 42;
+    files[0x4E4F4904].original = true;
+    const RolandSound::Assignments back = RolandSound::parseAssignments(RolandSound::formatAssignments(files));
+    check(back == files, "Roland: las asignaciones se guardan y se leen igual");
+    check(RolandSound::parseAssignments("zz = 3\n12 = 300\n13 = bateria 99\n").empty(),
+          "Roland: las líneas sin sentido se saltan");
+}
+
+void testVgm() {
+    // Record the test ROM's tune, then play the file: the same sound comes out.
+    MegaDrive md;
+    md.loadRomData(testrom::build());
+    md.setSampleRate(44100);
+    VgmWriter writer;
+    for (int i = 0; i < 10; ++i) md.runFrame();  // the tune has started: its note is held
+    md.audio().clearSamples();
+    md.setVgmWriter(&writer);
+    std::vector<int16_t> live;
+    for (int i = 0; i < 120; ++i) {
+        md.runFrame();
+        live.insert(live.end(), md.audio().samples().begin(), md.audio().samples().end());
+        md.audio().clearSamples();
+    }
+    const std::vector<uint8_t> bytes = writer.finish(md.masterClocks(), "Prueba");
+    md.setVgmWriter(nullptr);
+    check(bytes.size() > 18 && bytes[0] == 0x1F && bytes[1] == 0x8B, "VGM: la grabación se guarda comprimida (.vgz)");
+    VgmFile file;
+    std::string error;
+    check(file.parse(bytes, &error), "VGM: la grabación se lee");
+    check(file.game == "Prueba" && std::fabs(file.seconds() - 2.0) < 0.05 && file.ymClock > 7600000,
+          "VGM: dura lo grabado y dice de qué juego es");
+    VgmPlayer player;
+    RolandSound roland;
+    player.setRoland(&roland);
+    player.setRolandOutput(false);
+    player.load(file);
+    player.analyse();
+    check(roland.seen().size() == 1, "VGM: el análisis encuentra el instrumento de la nota que ya sonaba");
+    std::vector<int16_t> played;
+    while (!player.finished()) player.play(1.0 / 60, 44100, played);
+    // How loud, leaving out the constant offset the YM2612's DAC ladder adds even in silence.
+    auto rms = [](const std::vector<int16_t>& s) {
+        if (s.empty()) return 0.0;
+        double mean = 0, sum = 0;
+        for (int16_t v : s) mean += v;
+        mean /= static_cast<double>(s.size());
+        for (int16_t v : s) sum += (v - mean) * (v - mean);
+        return std::sqrt(sum / static_cast<double>(s.size()));
+    };
+    check(rms(live) > 500 && std::fabs(rms(played) - rms(live)) < rms(live) * 0.05,
+          "VGM: al tocarla suena como el juego");
+    player.restart();
+    player.setListening(1, {});  // FM 1 muted
+    std::vector<int16_t> muted;
+    for (int i = 0; i < 60; ++i) player.play(1.0 / 60, 44100, muted);
+    check(rms(muted) < 50, "VGM: silenciar el canal que suena deja la pista callada");
+    check(!file.parse({1, 2, 3}, &error) && !error.empty(), "VGM: un archivo que no lo es se rechaza");
 }
 
 int main() {
@@ -1384,6 +1487,7 @@ int main() {
     testMegaCd();
     testNetplay();
     testRoland();
+    testVgm();
     {
         // The Z80's reset also resets the YM2612; what it already played must stay.
         Ym2612 ym;

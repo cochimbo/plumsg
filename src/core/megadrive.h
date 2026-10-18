@@ -16,6 +16,7 @@
 #include "megacd.h"
 #include "psg.h"
 #include "roland.h"
+#include "vgm.h"
 #include "vdp_md.h"
 #include "ym2612.h"
 #include "z80.h"
@@ -72,6 +73,10 @@ public:
     // loading a savestate the caller decides whether what was playing goes on (a
     // netplay rollback, which replays the same music) or stops (RolandSound::allNotesOff).
     void setRoland(RolandSound* roland, int chipPercent);
+    // Records the YM2612 and PSG music to a VGM from now on (not owned; null stops).
+    void setVgmWriter(VgmWriter* writer);
+    double masterClock() const { return pal() ? kMasterPal : kMasterNtsc; }
+    uint64_t masterClocks() const { return now_; }
 
     const VideoFrameMd& frame() const { return vdp_.frame(); }
     AudioMixer& audio() { return mixer_; }
@@ -146,6 +151,10 @@ private:
     Ym2612 ym_;
     Psg psg_;
     RolandSound* roland_ = nullptr;
+    int rolandPercent_ = 100;
+    uint32_t rolandChip_ = 0;  // the channels the Roland sound leaves to the chips
+    void rolandChipChannels();
+    VgmWriter* vgm_ = nullptr;
     Io io_;
     Cartridge cart_;
     AudioMixer mixer_;
