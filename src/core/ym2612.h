@@ -30,6 +30,15 @@ public:
     // offset 0..3: address/data for ports 0 and 1. Run the chip up to now first.
     void write(int offset, uint8_t value);
     uint8_t readStatus();
+    // The chip's registers as last written (0x000-0x0FF port 0, 0x100-0x1FF port 1).
+    uint8_t reg(int index) const;
+    bool dacEnabled() const;
+    // Turns the FM channels in `mask` (bit 0 = channel 1) down to percent of their
+    // volume; the DAC is never touched. For the Roland sound, which plays them instead.
+    void setMuted(uint32_t mask, int percent) {
+        muted_ = mask & 0x3F;
+        mutedLevel_ = percent * 256 / 100;
+    }
 
     // Interleaved left/right samples at sampleRate().
     std::vector<int16_t>& samples() { return samples_; }
@@ -44,6 +53,8 @@ private:
     std::unique_ptr<Impl> impl_;
     double masterClock_ = 53693175.0;
     uint64_t position_ = 0;  // master clocks already turned into samples
+    uint32_t muted_ = 0;
+    int32_t mutedLevel_ = 0;  // out of 256
     std::vector<int16_t> samples_;
 };
 

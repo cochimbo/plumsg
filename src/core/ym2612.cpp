@@ -10,12 +10,47 @@ namespace {
 
 constexpr uint64_t kMasterPerSample = 7 * 144;  // one FM sample every 144 chip clocks
 
+// ymfm's YM2612 with a way to turn some FM channels down: the Roland sound plays their
+// notes instead, while the DAC (voices and drums) stays. The mix is ymfm's own
+// ym2612::generate, with each muted channel scaled by level/256.
+class Chip : public ymfm::ym2612 {
+public:
+    using ymfm::ym2612::ym2612;
+
+    void generateMuted(output_data* output, uint32_t muted, int32_t level) {
+        m_fm.clock(ymfm::ym2612::fm_engine::ALL_CHANNELS);
+        output->clear();
+        output_data temp;
+        const int lastFm = m_dac_enable ? 5 : 6;
+        for (int chan = 0; chan < lastFm; ++chan) {
+            m_fm.output(temp.clear(), 5, 256, 1 << chan);
+            int32_t l = dac_discontinuity(temp.data[0]), r = dac_discontinuity(temp.data[1]);
+            if (muted & (1u << chan)) {
+                l = l * level / 256;
+                r = r * level / 256;
+            }
+            output->data[0] += l;
+            output->data[1] += r;
+        }
+        if (m_dac_enable) {
+            const int32_t dacval = dac_discontinuity(int16_t(m_dac_data << 7) >> 7);
+            output->data[0] += m_fm.regs().ch_output_0(0x102) ? dacval : dac_discontinuity(0);
+            output->data[1] += m_fm.regs().ch_output_1(0x102) ? dacval : dac_discontinuity(0);
+        }
+        output->data[0] = (output->data[0] * 128) * 64 / (6 * 65);
+        output->data[1] = (output->data[1] * 128) * 64 / (6 * 65);
+    }
+
+    uint8_t reg(uint16_t index) const { return const_cast<Chip*>(this)->m_fm.regs().read(index); }
+    bool dacEnabled() const { return m_dac_enable != 0; }
+};
+
 }  // namespace
 
 // ymfm talks to the outside world through this interface: timers are counted in chip
 // clocks and advanced as samples are generated.
 struct Ym2612::Impl : public ymfm::ymfm_interface {
-    ymfm::ym2612 chip{*this};
+    Chip chip{*this};
     std::array<int32_t, 2> timer{-1, -1};  // chip clocks left, -1 = stopped
     int32_t busy = 0;
 
@@ -52,7 +87,8 @@ void Ym2612::runUntil(uint64_t masterClocks) {
     while (position_ + kMasterPerSample <= masterClocks) {
         position_ += kMasterPerSample;
         ymfm::ym2612::output_data out;
-        impl_->chip.generate(&out, 1);
+        if (muted_) impl_->chip.generateMuted(&out, muted_, mutedLevel_);
+        else impl_->chip.generate(&out, 1);
         impl_->advance(144);
         samples_.push_back(static_cast<int16_t>(std::clamp<int32_t>(out.data[0], -32768, 32767)));
         samples_.push_back(static_cast<int16_t>(std::clamp<int32_t>(out.data[1], -32768, 32767)));
@@ -62,6 +98,10 @@ void Ym2612::runUntil(uint64_t masterClocks) {
 void Ym2612::write(int offset, uint8_t value) { impl_->chip.write(static_cast<uint32_t>(offset & 3), value); }
 
 uint8_t Ym2612::readStatus() { return impl_->chip.read_status(); }
+
+uint8_t Ym2612::reg(int index) const { return impl_->chip.reg(static_cast<uint16_t>(index & 0x1FF)); }
+
+bool Ym2612::dacEnabled() const { return impl_->chip.dacEnabled(); }
 
 void Ym2612::saveState(std::vector<uint8_t>& out) {
     ymfm::ymfm_saved_state st(out, true);

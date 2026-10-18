@@ -15,6 +15,7 @@
 #include "mars.h"
 #include "megacd.h"
 #include "psg.h"
+#include "roland.h"
 #include "vdp_md.h"
 #include "ym2612.h"
 #include "z80.h"
@@ -64,6 +65,13 @@ public:
     void setCheats(const std::vector<CheatPatch>& cheats);
 
     void runFrame();  // up to the start of the next frame (just after VBlank ends)
+
+    // The Roland sound (not owned; null for the console's own). It plays the FM and PSG
+    // music instead, which stays at `chipPercent` of its volume; the DAC is untouched.
+    // It only changes the sound that comes out, never what the console does. After
+    // loading a savestate the caller decides whether what was playing goes on (a
+    // netplay rollback, which replays the same music) or stops (RolandSound::allNotesOff).
+    void setRoland(RolandSound* roland, int chipPercent);
 
     const VideoFrameMd& frame() const { return vdp_.frame(); }
     AudioMixer& audio() { return mixer_; }
@@ -137,6 +145,7 @@ private:
     VdpMd vdp_;
     Ym2612 ym_;
     Psg psg_;
+    RolandSound* roland_ = nullptr;
     Io io_;
     Cartridge cart_;
     AudioMixer mixer_;

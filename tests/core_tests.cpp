@@ -1300,6 +1300,60 @@ void testNetplay() {
           "netplay: un invitado con otro juego no entra y el anfitrión sigue esperando");
 }
 
+// The Roland sound: register writes become the right MIDI events.
+void testRoland() {
+    Ym2612 ym;
+    ym.setMasterClock(MegaDrive::kMasterNtsc);
+    Psg psg;
+    RolandSound roland;
+    std::vector<std::string> log;
+    roland.setLog(&log);
+    auto fm = [&](int port, int reg, int value) {
+        ym.write(port * 2, static_cast<uint8_t>(reg));
+        roland.fmWrite(port * 2, static_cast<uint8_t>(reg), ym, 0);
+        ym.write(port * 2 + 1, static_cast<uint8_t>(value));
+        roland.fmWrite(port * 2 + 1, static_cast<uint8_t>(value), ym, 0);
+    };
+    auto has = [&](const std::string& line) { return std::find(log.begin(), log.end(), line) != log.end(); };
+
+    check(std::fabs(RolandSound::fmNote(1083, 4, MegaDrive::kMasterNtsc / 7) - 69.0) < 0.05,
+          "Roland: F-number 1083 bloque 4 es el La 440");
+    check(std::fabs(RolandSound::psgNote(254, Psg::kClockNtsc) - 69.0) < 0.05, "Roland: periodo PSG 254 es el La 440");
+
+    fm(0, 0xB0, 0x04);  // algorithm 4: operators 2 and 4 heard
+    fm(0, 0xB4, 0xC0);  // both sides
+    for (int op : {0x40, 0x44, 0x48, 0x4C}) fm(0, op, 0);
+    fm(0, 0xA4, 0x22);  // block 4, F-number 0x269: about 250 Hz, B3
+    fm(0, 0xA0, 0x69);
+    fm(0, 0x28, 0xF0);
+    check(has("0 on 59"), "Roland: key on del canal FM 1 toca la nota 59");
+    check(log.size() >= 2 && log[0].rfind("0 program", 0) == 0, "Roland: elige un instrumento antes de la nota");
+    log.clear();
+    fm(0, 0xA4, 0x22);
+    fm(0, 0xA0, 0x7A);  // a little higher: bends, no new note
+    check(!log.empty() && log.back().rfind("0 bend", 0) == 0 && !has("0 on 59"), "Roland: subir la frecuencia dobla la nota");
+    fm(0, 0x28, 0x00);
+    check(has("0 off 59"), "Roland: key off apaga la nota");
+    log.clear();
+    fm(0, 0x2B, 0x80);  // channel 6 plays samples
+    fm(0, 0x28, 0xF6);
+    check(log.empty(), "Roland: el canal 6 con el DAC no da notas");
+
+    psg.write(0x8E);  // channel 0 period 0x0FE
+    psg.write(0x0F);
+    roland.psgWrite(psg, 0);
+    psg.write(0x90);  // full volume
+    roland.psgWrite(psg, 0);
+    check(has("6 on 69"), "Roland: el canal 1 del PSG toca un La");
+    psg.write(0x9F);
+    roland.psgWrite(psg, 0);
+    check(has("6 off 69"), "Roland: silenciarlo apaga la nota");
+
+    std::array<uint8_t, 28> ops{};
+    check(RolandSound::programFor(ops, 0x07, 40) == 38, "Roland: una nota grave sostenida es un bajo sintetizado");
+    check(RolandSound::programFor(ops, 0x07, 72) == 16, "Roland: el algoritmo 7 es un órgano");
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -1329,6 +1383,7 @@ int main() {
     testCdImage();
     testMegaCd();
     testNetplay();
+    testRoland();
     {
         // The Z80's reset also resets the YM2612; what it already played must stay.
         Ym2612 ym;

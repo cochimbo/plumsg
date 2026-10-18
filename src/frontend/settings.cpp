@@ -87,6 +87,11 @@ void Settings::parse(std::istream& in, Settings& s) {
         } else if (section == "audio") {
             if (key == "volumen") s.volume = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "silencio") s.mute = yes(value);
+            else if (key == "modo") s.roland = lower(value) == "roland";
+            else if (key == "soundfont") s.soundfont = value;
+            else if (key == "mezcla_chip") s.chipMix = std::clamp(std::atoi(value.c_str()), 0, 100);
+            else if (key == "reverb") s.reverb = std::clamp(std::atoi(value.c_str()), 0, 100);
+            else if (key == "chorus") s.chorus = std::clamp(std::atoi(value.c_str()), 0, 100);
         } else if (section == "consola") {
             if (key == "region") {
                 for (int i = 0; i < 4; ++i)
@@ -152,6 +157,14 @@ void Settings::write(std::ostream& out) const {
         << "# volumen: de 0 a 100.\n"
         << "volumen = " << volume << "\n"
         << "silencio = " << flag(mute) << "\n"
+        << "# modo: original (el YM2612 y el PSG) o roland (su música con un SoundFont, como una SC-55).\n"
+        << "# soundfont: un .sf2 propio (vacío: el que viene con plumsg). mezcla_chip: cuánto se oye\n"
+        << "# el sonido original además del Roland, de 0 a 100. reverb y chorus: de 0 a 100.\n"
+        << "modo = " << (roland ? "roland" : "original") << "\n"
+        << "soundfont = " << soundfont << "\n"
+        << "mezcla_chip = " << chipMix << "\n"
+        << "reverb = " << reverb << "\n"
+        << "chorus = " << chorus << "\n"
         << "\n[consola]\n"
         << "# region: auto (la de la ROM), japon, usa o europa. mando1/mando2: 3 o 6 botones.\n"
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"

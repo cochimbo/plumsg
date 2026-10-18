@@ -37,7 +37,7 @@ if(NOT ymfm_POPULATED)
   FetchContent_Populate(ymfm)
 endif()
 add_library(plumsg_ymfm STATIC
-  ${ymfm_SOURCE_DIR}/src/ymfm_opn.cpp
+  src/core/ymfm_opn_all.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_adpcm.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_ssg.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_misc.cpp
@@ -87,6 +87,7 @@ add_library(plumsg_core STATIC
   src/core/psg.cpp
   src/core/ym2612.cpp
   src/core/audio_mixer.cpp
+  src/core/roland.cpp
   src/core/megadrive.cpp
   src/core/rewind.cpp
   src/core/cheats.cpp
@@ -99,7 +100,7 @@ add_library(plumsg_core STATIC
   src/render/planes.cpp
   src/render/profile3d.cpp
 )
-target_include_directories(plumsg_core PUBLIC src src/core)
+target_include_directories(plumsg_core PUBLIC src src/core PRIVATE third_party/tsf)
 target_link_libraries(plumsg_core PUBLIC plumsg_miniz PRIVATE plumsg_ymfm chdr-static)
 
 # UDP sockets for netplay (the session itself is in the core).
