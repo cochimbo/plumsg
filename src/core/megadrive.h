@@ -48,6 +48,14 @@ public:
     bool loadDisc(const std::string& path, std::string* error);
     // A disc already open (tests and tools); false without a BIOS for its region.
     bool loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error);
+    // MSU-MD: a cartridge patched to play its music from a CD. loadRom() does it by
+    // itself when a .cue of the same name sits next to the cartridge (Sonic.md and
+    // Sonic.cue): the cartridge boots with the Mega CD attached, which needs a BIOS of
+    // any region. Without one the cartridge still loads, on its own, and loadNotice()
+    // says why there is no CD music.
+    void loadRomDataWithDisc(std::vector<uint8_t> rom, std::unique_ptr<CdImage> disc);  // tests and tools
+    bool hasMsuMd() const { return mcd_ && mcd_->cartridgeMode(); }
+    const std::string& loadNotice() const { return loadNotice_; }  // empty when all went well
     void reset();       // the console's reset button: CPUs, VDP and sound; RAM is kept
     void powerCycle();  // also clears memory
 
@@ -121,8 +129,9 @@ public:
     using MemoryWatch = std::function<void(uint32_t addr, uint8_t value, bool m68k)>;
     void setMemoryWatch(MemoryWatch watch);
     // Keeps the game from asking for music and sounds: the 68000's writes to
-    // [addr, addr + count) of anything but 0 or 0x80 are dropped. count 0: none.
-    void lockSoundRequests(uint32_t addr, int count);
+    // [addr, addr + count) of anything but 0 or 0x80 (of anything, if all) are dropped.
+    // count 0: none.
+    void lockSoundRequests(uint32_t addr, int count, bool all = false);
     // Writes a byte of work RAM or Z80 RAM directly, past the lock.
     void poke(uint32_t addr, uint8_t value);
     // Runs without drawing the picture (faster, for when only the sound matters).
@@ -154,6 +163,8 @@ private:
     void updateIrq() { cpu_.setIrqLevel(vdp_.irqLevel()); }
     void applyRegion();
     void configureFor(Region r);  // clocks, PAL/NTSC and version register
+    int cdBiosSlot(Region r) const;  // the BIOS for `r`, or with a cartridge any there is; -1 for none
+    void attachCd(std::unique_ptr<CdImage> disc, bool cartridge);
     void setUpMars();             // adds or removes the 32X to suit the cartridge
     std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
@@ -178,6 +189,7 @@ private:
     std::unique_ptr<CdImage> disc_;
     std::unique_ptr<MegaCd> mcd_;
     std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe
+    std::string loadNotice_;
 
     std::array<uint8_t, 0x10000> ram_{};
     std::array<uint8_t, 0x2000> zram_{};
@@ -205,6 +217,7 @@ private:
     MemoryWatch watch_;
     uint32_t lockAddr_ = 0;
     int lockCount_ = 0;
+    bool lockAll_ = false;
     bool watching_ = false;  // watch_ or a lock
     bool drawing_ = true;
     bool fromM68k_ = false;  // the Z80 bus write being made comes from the 68000  // THMB of the last loaded state, until a frame runs

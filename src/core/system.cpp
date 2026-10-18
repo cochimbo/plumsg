@@ -127,6 +127,22 @@ std::vector<std::string> cueFiles(const std::string& cuePath) {
     return out;
 }
 
+std::string msuMdCue(const std::string& romPath) {
+    if (extensionOf(romPath) == ".cue") return {};
+    const fs::path rom = fs::u8path(romPath);
+    std::error_code ec;
+    for (const char* ext : {".cue", ".CUE"}) {
+        fs::path cue = rom;
+        cue.replace_extension(ext);
+        if (!fs::is_regular_file(cue, ec)) continue;
+        // A .cue that points at the file itself makes it a disc's track, not a cartridge.
+        for (const std::string& f : cueFiles(cue.u8string()))
+            if (fs::equivalent(fs::u8path(f), rom, ec)) return {};
+        return cue.u8string();
+    }
+    return {};
+}
+
 BiosInfo identifyCdBios(const std::vector<uint8_t>& data) {
     BiosInfo info;
     if (data.size() != 0x20000) {

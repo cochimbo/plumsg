@@ -67,12 +67,13 @@ struct GameOptionsView {
     Settings* values = nullptr;
     std::set<std::string>* own = nullptr;
     const Settings* general = nullptr;    // to go back to when an option stops being the game's
+    InputConfig* controls = nullptr;      // its own console buttons (the general ones are Input's)
     bool loaded = false;                  // the game is the one running: changes apply at once
 };
 
 struct UiState {
     bool romLoaded = false;
-    bool disc = false;  // the game is a Mega CD disc: its music is the disc's audio, never Roland
+    bool disc = false;  // a Mega CD disc or an MSU-MD cartridge: its music is CD audio, never Roland
     std::string romPath;
     bool paused = false;
     bool slowMotion = false;
@@ -133,6 +134,11 @@ public:
         return showCheats_ && (cheatDb_.view().busy || cheatDb_.view().game.empty() || cheatsRefit_ > 0);
     }
     void openNetplay() { showNetplay_ = true; }
+    // `controls`: on its Controles tab.
+    void openGameOptions(bool controls = false) {
+        showGameOptions_ = true;
+        gameControlsTab_ = controls;
+    }
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
     // The instrument editor's window, drawn with the rest (not owned).
@@ -159,6 +165,7 @@ private:
         int row = 0;          // 0..kButtons-1 console buttons, then hotkeys
         int column = 0;       // 0 keyboard player 1, 1 keyboard player 2, 2 gamepad
         bool append = false;  // add to the existing bindings instead of replacing them
+        bool game = false;    // for the Opciones de este juego window's buttons, not the general ones
     };
 
     void drawMenuBar(const UiState& state, UiActions& out);
@@ -166,12 +173,17 @@ private:
     void chooseSoundfont(UiActions& out);
     void chooseTrack();
     void drawControls(UiActions& out);
+    // The table of bindings of `c`: the console buttons, and the hotkeys too when not `game`.
+    // Returns whether a binding was cleared (a new one arrives later, in finishCapture).
+    bool drawBindings(InputConfig& c, bool game);
     void drawVideo(const UiState& state, UiActions& out);
     void drawAbout();
     void drawError();
     void drawCheats(const UiState& state, UiActions& out);
     void drawCheatDatabase(const UiState& state, UiActions& out);
     void drawGameOptions(const UiState& state, UiActions& out);
+    void drawGameSettings(const UiState& state, UiActions& out);
+    void drawGameControls(const GameOptionsView& v, UiActions& out);
     void drawLibrary(UiActions& out);
     void drawLibraryFolders(UiActions& out);
     void drawCoverSearch();
@@ -212,6 +224,7 @@ private:
     bool showBios_ = false;
     bool showNetplay_ = false;
     bool showGameOptions_ = false;
+    bool gameControlsTab_ = false;  // bring the Opciones de este juego window's Controles tab forward
     char netAddress_[128] = "";
     std::vector<std::string> localAddresses_;  // this computer's, for the host to share
     bool showFolders_ = false;  // the library's list of folders, unfolded
@@ -223,6 +236,8 @@ private:
     std::map<std::string, BiosInfo> biosChecked_;  // what each chosen file looks like, read once
     bool openRequested_ = false;
     bool pendingSave_ = false;  // a binding changed outside frame()
+    bool pendingGameOptions_ = false;  // one of a game's own buttons changed outside frame()
+    InputConfig* gameControls_ = nullptr;  // the buttons the Opciones de este juego window shows
     bool peekMenu_ = false;  // menu bar hidden but shown while the mouse is at the top
     int menuHeight_ = 0;
     Capture capture_;

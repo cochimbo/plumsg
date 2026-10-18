@@ -33,6 +33,10 @@ std::vector<std::string> cueFiles(const std::string& cuePath);
 // The same from the text of a .cue whose folder is `folder` (ending in a separator or empty).
 std::vector<std::string> cueFilesFromText(const std::string& text, const std::string& folder);
 
+// The CD of an MSU-MD cartridge (one patched to play its music from CD tracks): a .cue
+// of the same name next to it, as Sonic.md and Sonic.cue. Empty if there is none.
+std::string msuMdCue(const std::string& romPath);
+
 // What a file chosen as a Mega CD BIOS looks like.
 struct BiosInfo {
     bool valid = false;

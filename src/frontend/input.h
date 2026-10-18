@@ -3,6 +3,8 @@
 #include <SDL.h>
 
 #include <array>
+#include <istream>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -46,9 +48,16 @@ struct InputConfig {
     static InputConfig defaults();
     // Loads `path`; if it does not exist, writes the defaults there so the user can edit them.
     static InputConfig loadOrCreate(const std::string& path);
+    // Applies the [teclado], [teclado2] and [mando] keys in `in` onto `c`. Returns whether
+    // any console button was among them.
+    static bool parse(std::istream& in, InputConfig& c);
     bool save(const std::string& path) const;
     // Writes the [teclado] and [mando] sections, so other settings can share the file.
     void write(std::ostream& out) const;
+    // Only the console buttons of the three sections (no hotkeys or stick), for a game's file.
+    void writeButtons(std::ostream& out) const;
+    // Takes the console buttons (both keyboards and the pad) from `from`.
+    void copyButtons(const InputConfig& from);
 };
 
 // Tracks connected controllers and turns the keyboard and pads into both players' pads.
@@ -69,12 +78,18 @@ public:
     // (y positive down); 0,0 when none is. Turns the pseudo-3D camera.
     void rightStick(float* x, float* y) const;
 
+    // The general bindings, as in plumsg.ini.
     const InputConfig& config() const { return config_; }
     void setConfig(InputConfig config) { config_ = std::move(config); }
+    // A game's own console buttons, used instead of the general ones while it is loaded;
+    // nullptr goes back to the general ones. Hotkeys and the stick always stay general.
+    void setGameButtons(const InputConfig* buttons);
+    bool hasGameButtons() const { return gameButtons_.has_value(); }
     std::vector<std::string> padNames() const;
 
 private:
     InputConfig config_;
+    std::optional<InputConfig> gameButtons_;
     std::vector<SDL_GameController*> pads_;
     // Triggers held on each pad (by joystick id), to see a pull as a single press.
     std::vector<std::pair<SDL_JoystickID, int>> triggers_;  // bit 0 left, bit 1 right

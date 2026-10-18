@@ -270,4 +270,12 @@ if(PLUMSG_BUILD_TESTS)
   # Runs the ZEXDOC/ZEXALL Z80 exercisers: zex_runner path/to/zexdoc.com
   add_executable(zex_runner tests/zex_runner.cpp)
   target_link_libraries(zex_runner PRIVATE plumsg_core)
+
+  # The frontend's files (a game's own options and controls); needs SDL2 for the key names.
+  if(PLUMSG_BUILD_FRONTEND)
+    add_executable(frontend_tests tests/frontend_tests.cpp src/frontend/game_options.cpp src/frontend/input.cpp
+                   src/frontend/settings.cpp)
+    target_link_libraries(frontend_tests PRIVATE plumsg_core ${PLUMSG_SDL2_TARGET})
+    add_test(NAME frontend_tests COMMAND frontend_tests)
+  endif()
 endif()

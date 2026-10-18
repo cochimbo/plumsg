@@ -221,7 +221,8 @@ bool Ui::keyboardBusy() const {
 bool Ui::mouseBusy() const { return ImGui::GetIO().WantCaptureMouse; }
 
 void Ui::finishCapture(int code) {
-    InputConfig c = input_.config();
+    const bool game = capture_.game && gameControls_;
+    InputConfig c = game ? *gameControls_ : input_.config();
     if (capture_.column == 2) {
         auto& list = padOf(c, capture_.row);
         const auto b = static_cast<SDL_GameControllerButton>(code);
@@ -233,9 +234,14 @@ void Ui::finishCapture(int code) {
         if (!capture_.append) list.clear();
         if (std::find(list.begin(), list.end(), k) == list.end()) list.push_back(k);
     }
-    input_.setConfig(std::move(c));
     capture_.active = false;
-    pendingSave_ = true;
+    if (game) {
+        *gameControls_ = std::move(c);
+        pendingGameOptions_ = true;
+    } else {
+        input_.setConfig(std::move(c));
+        pendingSave_ = true;
+    }
 }
 
 void Ui::setAchievements(Achievements* achievements) {
@@ -251,6 +257,8 @@ UiActions Ui::frame(const UiState& state) {
     UiActions out;
     out.settingsChanged = pendingSave_;
     pendingSave_ = false;
+    out.gameOptionsChanged = pendingGameOptions_;
+    pendingGameOptions_ = false;
 
     if (openRequested_) {
         openRequested_ = false;
@@ -528,7 +536,7 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
                           "Editor de instrumentos.");
     ImGui::BeginDisabled(!settings_.roland);
     if (state.disc && settings_.roland)
-        ImGui::TextDisabled("Los discos de Mega CD suenan siempre originales:\nsu música son pistas de audio del disco.");
+        ImGui::TextDisabled("Los discos de Mega CD y los juegos MSU-MD suenan\nsiempre originales: su música son pistas de audio del CD.");
     if (ImGui::MenuItem("Efectos de sonido originales", nullptr, settings_.effectsOriginal)) {
         settings_.effectsOriginal = !settings_.effectsOriginal;
         out.settingsChanged = out.soundChanged = true;
@@ -636,26 +644,15 @@ void Ui::chooseTrack() {
     }
 }
 
-void Ui::drawControls(UiActions& out) {
-    ImGui::SetNextWindowSize(ImVec2(760, 0), ImGuiCond_Appearing);
-    if (!ImGui::Begin("Controles", &showControls_)) {
-        ImGui::End();
-        return;
-    }
-    if (!showControls_) capture_.active = false;
-
-    ImGui::TextWrapped("Pulsa una casilla y luego la tecla o el botón del mando. \"+\" añade otro, "
-                       "\"x\" lo borra, Esc cancela.");
-    InputConfig c = input_.config();
+bool Ui::drawBindings(InputConfig& c, bool game) {
     bool changed = false;
-
-    if (ImGui::BeginTable("bindings", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
+    if (ImGui::BeginTable(game ? "game_bindings" : "bindings", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
         ImGui::TableSetupColumn("Acción", ImGuiTableColumnFlags_WidthFixed, 170.0f);
         ImGui::TableSetupColumn("Teclado (jugador 1)");
         ImGui::TableSetupColumn("Teclado (jugador 2)");
         ImGui::TableSetupColumn("Mando");
         ImGui::TableHeadersRow();
-        for (int row = 0; row < kRows; ++row) {
+        for (int row = 0; row < (game ? InputConfig::kButtons : kRows); ++row) {
             ImGui::PushID(row);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
@@ -666,7 +663,7 @@ void Ui::drawControls(UiActions& out) {
                 if (col == 1 && row >= InputConfig::kButtons) continue;  // hotkeys: one keyboard list
                 ImGui::PushID(col);
                 std::string label;
-                if (capture_.active && capture_.row == row && capture_.column == col) {
+                if (capture_.active && capture_.game == game && capture_.row == row && capture_.column == col) {
                     label = pad ? "Pulsa un botón..." : "Pulsa una tecla...";
                 } else if (pad) {
                     for (auto b : padOf(c, row)) label += (label.empty() ? "" : ", ") + std::string(padButtonName(b));
@@ -676,9 +673,9 @@ void Ui::drawControls(UiActions& out) {
                 if (label.empty()) label = "-";
                 const float small = ImGui::GetFrameHeight() * 2 + ImGui::GetStyle().ItemSpacing.x * 2;
                 if (ImGui::Button(label.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - small, 0)))
-                    capture_ = {true, row, col, false};
+                    capture_ = {true, row, col, false, game};
                 ImGui::SameLine();
-                if (ImGui::Button("+", ImVec2(ImGui::GetFrameHeight(), 0))) capture_ = {true, row, col, true};
+                if (ImGui::Button("+", ImVec2(ImGui::GetFrameHeight(), 0))) capture_ = {true, row, col, true, game};
                 ImGui::SameLine();
                 if (ImGui::Button("x", ImVec2(ImGui::GetFrameHeight(), 0))) {
                     if (pad) padOf(c, row).clear();
@@ -692,6 +689,25 @@ void Ui::drawControls(UiActions& out) {
         }
         ImGui::EndTable();
     }
+
+    return changed;
+}
+
+void Ui::drawControls(UiActions& out) {
+    ImGui::SetNextWindowSize(ImVec2(760, 0), ImGuiCond_Appearing);
+    if (!ImGui::Begin("Controles", &showControls_)) {
+        ImGui::End();
+        return;
+    }
+    if (!showControls_ && !capture_.game) capture_.active = false;
+
+    ImGui::TextWrapped("Pulsa una casilla y luego la tecla o el botón del mando. \"+\" añade otro, "
+                       "\"x\" lo borra, Esc cancela.");
+    if (input_.hasGameButtons())
+        ImGui::TextDisabled("El juego abierto tiene sus propios botones (en Opciones de este juego); "
+                            "aquí cambias los generales.");
+    InputConfig c = input_.config();
+    bool changed = drawBindings(c, false);
 
     ImGui::Spacing();
     changed |= ImGui::Checkbox("Usar el stick izquierdo como cruceta", &c.stickAsDpad);
@@ -1879,15 +1895,49 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
 }
 
 
-// The options this game keeps a value of its own for. Each has a box: ticked, the
-// game has its own value (edited here); unticked, it follows the general one (shown greyed).
+// The game's own console buttons, which take the place of the general ones (Opciones >
+// Controles) while it is loaded. The hotkeys and the stick stay the general ones.
+void Ui::drawGameControls(const GameOptionsView& v, UiActions& out) {
+    std::set<std::string>& own = *v.own;
+    bool mine = own.count(kGameControls) != 0;
+    if (ImGui::Checkbox("Botones propios de este juego", &mine)) {
+        if (mine) {
+            own.insert(kGameControls);
+            v.controls->copyButtons(input_.config());  // starting from the general ones
+        } else {
+            own.erase(kGameControls);
+            if (capture_.game) capture_.active = false;
+        }
+        out.gameOptionsChanged = true;
+    }
+    if (!mine) {
+        ImGui::TextDisabled("Usa los de Opciones > Controles.");
+        return;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Volver a los generales")) {
+        own.erase(kGameControls);
+        if (capture_.game) capture_.active = false;
+        out.gameOptionsChanged = true;
+        return;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Deja de usar estos y vuelve a los de Opciones > Controles");
+    ImGui::TextWrapped("Pulsa una casilla y luego la tecla o el botón del mando. \"+\" añade otro, "
+                       "\"x\" lo borra, Esc cancela.");
+    if (drawBindings(*v.controls, true)) out.gameOptionsChanged = true;
+}
+
+// The options this game keeps a value of its own for, in two tabs: Ajustes and Controles.
 void Ui::drawGameOptions(const UiState& state, UiActions& out) {
-    ImGui::SetNextWindowSize(ImVec2(520, 0), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(700, 0), ImGuiCond_Appearing);
     if (!ImGui::Begin("Opciones de este juego", &showGameOptions_)) {
         ImGui::End();
         return;
     }
+    if (!showGameOptions_ && capture_.game) capture_.active = false;
     const GameOptionsView& v = state.gameOptions;
+    if (gameControls_ != v.controls && capture_.game) capture_.active = false;  // another game
+    gameControls_ = v.controls;
     if (v.game.empty() || !v.values || !v.own || !v.general) {
         ImGui::TextDisabled("Abre un juego, o elige uno en la biblioteca con el botón derecho.");
         ImGui::End();
@@ -1897,6 +1947,26 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
                        "las que no marques siguen a las generales.", v.game.c_str());
     if (v.loaded && state.netPlaying) ImGui::TextDisabled("En una partida en red no se pueden cambiar.");
     ImGui::BeginDisabled(v.loaded && state.netPlaying);
+    if (ImGui::BeginTabBar("opciones_juego")) {
+        if (ImGui::BeginTabItem("Ajustes")) {
+            drawGameSettings(state, out);
+            ImGui::EndTabItem();
+        }
+        if (v.controls && ImGui::BeginTabItem("Controles", nullptr, gameControlsTab_ ? ImGuiTabItemFlags_SetSelected : 0)) {
+            drawGameControls(v, out);
+            ImGui::EndTabItem();
+        }
+        gameControlsTab_ = false;
+        ImGui::EndTabBar();
+    }
+    ImGui::EndDisabled();
+    ImGui::End();
+}
+
+// The Ajustes tab: each option has a box; ticked, the game has its own value (edited
+// here); unticked, it follows the general one (shown greyed).
+void Ui::drawGameSettings(const UiState& state, UiActions& out) {
+    const GameOptionsView& v = state.gameOptions;
     Settings& s = *v.values;
     std::set<std::string>& own = *v.own;
     std::string group;
@@ -1977,6 +2047,8 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
             int& v = key == "mezcla_chip" ? s.chipMix : key == "reverb" ? s.reverb : s.chorus;
             ImGui::SliderInt(opt.label, &v, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else if (key == "efectos") {
+            edited |= ImGui::Checkbox("Efectos de sonido originales", &s.effectsOriginal);
         } else if (key == "region") {
             static const char* names[] = {"Automática (la de la ROM)", "Japón (NTSC)", "EE. UU. (NTSC)", "Europa (PAL)"};
             int i = static_cast<int>(s.region);
@@ -2014,8 +2086,7 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
         if (v.loaded && key == "rebobinado_segundos") out.rewindChanged = true;
         if (v.loaded && std::string(opt.group) == "Sonido") out.soundChanged = true;
     }
-    ImGui::EndDisabled();
-    ImGui::End();
 }
+
 
 }  // namespace plumsg

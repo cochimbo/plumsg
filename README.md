@@ -41,6 +41,12 @@ Primera versión. Lo que hay:
   emulada a nivel de órdenes, el chip gráfico que gira y escala sellos, el temporizador,
   el chip PCM RF5C164 y el audio de CD, todo mezclado con el FM y el PSG. Necesita la BIOS
   de la región del disco (ver abajo).
+- **MSU-MD**: cartuchos parcheados por la comunidad para tocar su música desde pistas de
+  CD. Basta con dejar junto al cartucho un `.cue` con su mismo nombre (`Sonic.md` y
+  `Sonic.cue`, con las pistas que nombre): el juego arranca con el Mega CD conectado, como
+  en una consola de verdad (modo 1). Vale la BIOS del Mega CD de cualquier región; sin
+  ninguna el juego va solo, sin música en CD, y plumsg lo dice. En la biblioteca ese `.cue`
+  no sale como un disco aparte, y la partida se guarda en el cartucho.
 - **Mandos** de 3 y 6 botones, dos jugadores, región automática o forzada.
 - **Estados**: 10 ranuras por juego con fecha y miniatura.
 - **Pseudo-3D**: cinco planos (cielo, plano B, plano A, sprites y tiles con prioridad),
@@ -94,6 +100,11 @@ Arrastra una ROM o un disco a la ventana, usa **Archivo > Abrir ROM** o abre la 
 
 Todo se puede cambiar en **Opciones > Controles**. El primer mando conectado es el
 jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por defecto.
+Cada juego puede tener además **sus propios botones**: en **Juego > Opciones de este
+juego**, pestaña **Controles**, marca *Botones propios de este juego* y asigna las teclas y
+los botones del mando que quieras; mientras ese juego está abierto sustituyen a los
+generales (los atajos como guardar estado o rebobinar siguen siendo los generales).
+**Volver a los generales** los quita. Se guardan en el `.ini` del juego en `perfiles\`.
 
 - **Estado**: guardar, cargar y elegir ranura; al pasar el ratón sobre una ranura se ve su
   miniatura. El **menú de estados** (F4, o el clic del stick izquierdo del mando) pausa el
@@ -195,17 +206,19 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     vuelta y su punto de vuelta para que siga sonando. Arranca el juego por su cuenta y
     localiza su driver de sonido (el código que toca el chip FM, o el Z80) y cómo le pide
     el juego la música: un byte que el juego escribe y el driver vacía (el SMPS de Sega y
-    parecidos), o una rutina del driver a la que el juego llama con el número en un registro
-    (como Streets of Rage 2). Luego le va pidiendo cada número. Probado con Sonic 1, 2 y 3,
-    Gunstar Heroes, Ristar, Shinobi III, Golden Axe y Streets of Rage 2. Lo que suena en uno
+    parecidos), una rutina del driver a la que el juego llama con el número en un registro
+    (como Streets of Rage 2), o un anillo de órdenes en la memoria del Z80 donde el juego
+    deja mensajes (el GEMS de los juegos de Sega of America, como Sonic Spinball). Luego le va pidiendo cada número. Probado con Sonic 1, 2 y 3,
+    Gunstar Heroes, Ristar, Shinobi III, Golden Axe, Streets of Rage 2, Sonic Spinball,
+    Earthworm Jim y Taz in Escape from Mars. Lo que suena en uno
     o dos canales, aunque dure (un motor, una alarma), cuenta como efecto y no como canción.
     Tarda unos minutos, con una barra de progreso, y se puede parar.
   - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,
     golpes...): los instrumentos FM que suenan en los sonidos cortos y en ninguna canción.
     Con **Sonido > Efectos de sonido originales** (la opción de serie) suenan como en la
     consola y solo la música pasa por el SoundFont. Se guardan en `sonido\<juego>.efectos`.
-  - Los discos de **Mega CD** suenan siempre originales: su música son pistas de audio del
-    disco, y el FM y el PSG solo hacen efectos.
+  - Los discos de **Mega CD** y los juegos **MSU-MD** suenan siempre originales: su música
+    son pistas de audio del CD, y el FM y el PSG solo hacen efectos.
   - La ROM no trae sus canciones con nombre (cada juego guarda su música a su manera), pero
     [vgmrips](https://vgmrips.net) tiene casi todas: su `.zip` de un juego, o sus `.vgm` y
     `.vgz`, se abren con **Abrir .vgm...** y se guardan en `sonido\pistas\<juego>\`
@@ -337,11 +350,14 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   (`tests/megacd/main.s` hace de BIOS y carga `sub.s` en la CPU secundaria) que prueba
   la comunicación entre ellas, interrupciones, la memoria de guardado, las órdenes a la
   unidad, la lectura de un sector por el controlador y por DMA, el chip gráfico, el PCM,
-  el audio de CD y los estados. Se recompila con `tests/megacd/build.sh` (hace falta
+  el audio de CD y los estados; el mismo programa como cartucho prueba el modo 1 de los
+  juegos MSU-MD (el Mega CD en 0x400000) y cómo se encuentra su `.cue`. Se recompila con `tests/megacd/build.sh` (hace falta
   `binutils-m68k-linux-gnu`).
   Del juego en red: dos sesiones conectadas por una red simulada que retrasa, desordena,
   duplica y pierde paquetes tienen que ver los mismos fotogramas entre sí y que una sola
   consola con los dos mandos, aunque vuelvan atrás muchas veces.
+- `frontend_tests` (solo con la interfaz, necesita SDL2): las opciones propias de cada
+  juego y sus botones, leídos y escritos en su archivo de `perfiles\`.
 - `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la
@@ -355,7 +371,8 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
   `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`
   (`--biblioteca` se puede repetir, `--bios` abre la ventana de las BIOS y
   `--buscar-caratula` la búsqueda de carátula del primer juego de la biblioteca;
-  `plumsg rom.md --trucos --captura trucos.png` abre los trucos del juego con su lista).
+  `plumsg rom.md --trucos --captura trucos.png` abre los trucos del juego con su lista y
+  `--opciones-juego` sus opciones propias, o `--opciones-juego controles` sus botones).
 
 ## Sin ventana: `plumsg-headless`
 
