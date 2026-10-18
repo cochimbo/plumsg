@@ -559,6 +559,7 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
         zram_[addr & 0x1FFF] = value;
     } else if (addr < 0x6000) {
         syncSound();
+        if (watch_ && fromM68k_) watch_(0xA04000 | (addr & 3), value, true);  // who drives the YM2612
         ym_.write(addr & 3, value);
         if (vgm_) vgm_->fm(addr & 3, value, now_);
         if (roland_) {

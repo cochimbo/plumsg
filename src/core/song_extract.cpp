@@ -160,13 +160,7 @@ struct Candidate {
     uint32_t address = 0;
     uint64_t firstFrame = 0;  // of its first request
     std::vector<std::pair<uint64_t, uint8_t>> requests;  // frame, number
-    // Requests the game's program made and the sound driver took: cleared by the Z80, or
-    // by the 68000 in an interrupt (where 68000 drivers run). A game's own variables
-    // are set and cleared by its program.
-    int driverTaken = 0;
-    // Requests right after which the YM2612 was given new instruments: a song or a
-    // sound starting.
-    int voiced = 0;
+    int driverTaken = 0;  // requests the game's program made and the sound driver took
     int sound = 0;  // notes the loudest request makes when asked again
     uint64_t soundFrame = 0;  // and where it was asked: nothing else plays there
 };
@@ -199,21 +193,31 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     };
 
     // 1. Boot, watching for requests: the 68000 writes a number to a byte and the
-    // driver clears it soon after.
+    // driver clears it soon after. Which code does each tells a request from a variable
+    // of the game: the game's program asks, and the driver (the Z80, or the 68000 code
+    // that writes the YM2612) takes it.
     std::map<uint32_t, Candidate> found;
-    // What waits to be cleared, by byte: work RAM, then Z80 RAM.
+    // What waits to be cleared, by byte (work RAM, then Z80 RAM), and who wrote it.
     std::vector<uint8_t> pendingValue(0x12000, 0);
     std::vector<uint64_t> pendingFrame(0x12000, 0);
-    std::vector<uint8_t> pendingMain(0x12000, 0);
-    auto inInterrupt = [&] { return ((md->cpu().sr >> 8) & 7) >= 4; };
+    std::vector<uint32_t> pendingPc(0x12000, 0);
+    std::map<uint32_t, int> ymCode;  // 68000 code writing the YM2612, by 256-byte page
+    struct Taken {
+        uint32_t address, askedFrom, takenFrom;  // takenFrom 0: by the Z80
+    };
+    std::vector<Taken> taken;
     md->setMemoryWatch([&](uint32_t addr, uint8_t v, bool m68k) {
+        if (addr >= 0xA04000 && addr < 0xA04004) {
+            ++ymCode[md->cpu().pc >> 8];
+            return;
+        }
         const size_t i = addr >= 0xFF0000 ? (addr & 0xFFFF) : 0x10000 + (addr & 0x1FFF);
         const uint64_t now = md->frameCount();
         if (v != 0 && v != 0x80) {
             if (m68k) {
                 pendingValue[i] = v;
                 pendingFrame[i] = now;
-                pendingMain[i] = !inInterrupt();
+                pendingPc[i] = md->cpu().pc;
             }
             return;
         }
@@ -225,51 +229,25 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
                 c.firstFrame = pendingFrame[i];
             }
             if (c.requests.size() < 64) c.requests.push_back({pendingFrame[i], pendingValue[i]});
-            if (pendingMain[i] && (!m68k || inInterrupt())) ++c.driverTaken;
+            taken.push_back({addr, pendingPc[i], m68k ? md->cpu().pc : 0});
         }
         pendingValue[i] = 0;
     });
     std::map<uint64_t, std::vector<uint8_t>> checkpoints;
     if (!report("Arrancando el juego")) return fail("");
-    // The YM2612's instrument settings written each frame (not its volumes).
-    std::map<uint64_t, int> voiceWrites;
-    {
-        VgmWriter w;
-        md->setVgmWriter(&w);
-        for (int f = 0; f < kBootFrames; ++f) {
-            if (f % kCheckpointEvery == 0) md->saveState(checkpoints[md->frameCount()], true);
-            const uint64_t at = md->frameCount();
-            const size_t from = w.mark(md->masterClocks()).bytes;
-            frame();
-            const auto& d = w.commands();
-            const size_t to = w.mark(md->masterClocks()).bytes;
-            int n = 0;
-            for (size_t i = from; i < to;) {
-                const uint8_t c = d[i];
-                if ((c == 0x52 || c == 0x53) && i + 2 < to) {
-                    const uint8_t reg = d[i + 1];
-                    if ((reg >= 0x30 && reg < 0x40) || (reg >= 0x50 && reg < 0xA0) || (reg >= 0xB0 && reg < 0xB3)) ++n;
-                    i += 3;
-                } else if (c == 0x50) {
-                    i += 2;
-                } else if (c == 0x61) {
-                    i += 3;
-                } else {
-                    i += 1;
-                }
-            }
-            if (n) voiceWrites[at] = n;
-        }
-        md->setVgmWriter(nullptr);
+    for (int f = 0; f < kBootFrames; ++f) {
+        if (f % kCheckpointEvery == 0) md->saveState(checkpoints[md->frameCount()], true);
+        frame();
     }
     md->setMemoryWatch({});
-    for (auto& [addr, c] : found)
-        for (const auto& [when, number] : c.requests) {
-            int n = 0;
-            for (uint64_t f = when; f <= when + 3; ++f)
-                if (auto it = voiceWrites.find(f); it != voiceWrites.end()) n += it->second;
-            if (n >= 12) ++c.voiced;
-        }
+    auto inDriver = [&](uint32_t pc) {
+        if (!pc) return true;  // the Z80
+        for (const auto& [page, n] : ymCode)
+            if (n > 50 && pc + 0x1000 >= (page << 8) && pc < (page << 8) + 0x1100) return true;
+        return false;
+    };
+    for (const Taken& t : taken)
+        if (!inDriver(t.askedFrom) && inDriver(t.takenFrom)) ++found[t.address].driverTaken;
 
     // The state at the start of frame `n` of the boot.
     auto goTo = [&](uint64_t n) {
@@ -319,9 +297,9 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     std::vector<Candidate> list;
     for (auto& [addr, c] : found)
         if (c.requests.size() > 1 || starting[c.firstFrame] < 16) list.push_back(c);
-    // Those followed by new instruments first, then in the order the game first used them.
+    // Those the driver took first, then in the order the game first used them.
     std::sort(list.begin(), list.end(), [](const Candidate& a, const Candidate& b) {
-        if ((a.voiced > 0) != (b.voiced > 0)) return a.voiced > 0;
+        if ((a.driverTaken > 0) != (b.driverTaken > 0)) return a.driverTaken > 0;
         return a.firstFrame != b.firstFrame ? a.firstFrame < b.firstFrame : a.address < b.address;
     });
     if (log_)
@@ -329,7 +307,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             std::string r;
             for (size_t i = 0; i < c.requests.size() && i < 12; ++i)
                 r += " " + hex(c.requests[i].second, 2) + "@" + std::to_string(c.requests[i].first);
-            say("  " + hex(c.address, 6) + (c.voiced ? " (instrumentos " + std::to_string(c.voiced) + ")" : "") + ":" + r);
+            say("  " + hex(c.address, 6) + (c.driverTaken ? " (driver " + std::to_string(c.driverTaken) + ")" : "") + ":" + r);
         }
     if (list.size() > kMaxCandidates) list.resize(kMaxCandidates);
     std::vector<Candidate> queues;
@@ -364,215 +342,233 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         return fail("No he encontrado cómo pide la música este juego. Por ahora solo sé sacarla de los juegos con un driver "
                     "como el de Sonic (SMPS) y parecidos.");
 
-    // Ask where the request with most music went, from where the game made it (the
-    // driver is ready there, and nothing else was playing), with every queue found kept
-    // from the game.
-    const Candidate* ask = &queues.front();
-    for (const Candidate& c : queues)
-        if (c.sound > ask->sound) ask = &c;
-    const uint64_t start = ask->soundFrame;
-    uint32_t lockFrom = ask->address, lockTo = ask->address + 1;
-    for (const Candidate& c : queues)
-        if (c.address + 8 > ask->address && c.address < ask->address + 8) {  // the same queue
-            lockFrom = std::min(lockFrom, c.address);
-            lockTo = std::max(lockTo, c.address + 1);
-        }
-    bool high = true;
-    for (const auto& r : ask->requests) high = high && r.second >= 0x81;
-    const int first = high ? 0x81 : 0x01, last = 0xFF;
-    say("Pido las canciones en " + hex(ask->address, 6) + ", del " + hex(first, 2) + " al " + hex(last, 2) +
-        ", desde el cuadro " + std::to_string(start) + "; las peticiones del juego en " + hex(lockFrom, 6) + "-" +
-        hex(lockTo - 1, 6) + " no pasan");
-    // Better with the game held where it is, only its VBlank running: it cannot go on to
-    // load a level (the music would stop meanwhile) or ask for other sounds. Some games
-    // need their program running to feed the driver.
-    // (Held, asking must add notes to what was playing: some games hand the request on to
-    // the driver from their program.)
-    goTo(start);
-    md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
-    md->cpu().holdMain(true);
-    const auto heldQuiet = listen(kCheckFrames);
-    md->cpu().holdMain(false);
-    goTo(start);
-    md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
-    md->poke(ask->address, ask->requests.front().second);
-    for (const auto& r : ask->requests)
-        if (r.first == start) md->poke(ask->address, r.second);
-    md->cpu().holdMain(true);
-    const bool hold = extra(listen(kCheckFrames), heldQuiet) > 4;
-    md->cpu().holdMain(false);
-    say(hold ? "El juego se queda quieto mientras suena cada canción" : "El juego sigue andando mientras suena cada canción");
-    goTo(start);
-    std::vector<uint8_t> origin;
-    md->saveState(origin, true);
-    // What sounds there without asking for anything (what was playing goes on): a number
-    // that only plays that is not a song.
-    // The Roland sound listens (without a SoundFont, so silent) for the FM instruments
-    // of each number: those of the short sounds that no song plays are the sound effects.
-    RolandSound ear;
-    md->setRoland(&ear, 100);
-    auto instruments = [&](std::set<uint32_t>& into) {
-        for (const auto& [fp, seen] : ear.seen())
-            if (seen.kind == RolandSound::Kind::Fm) into.insert(fp);
-    };
-    md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
-    md->cpu().holdMain(hold);
-    ear.clearSeen();
-    const auto before = listen(kCheckFrames);
-    std::set<uint32_t> playing;  // and its instruments
-    instruments(playing);
-    checkpoints.clear();
-
-    // 3. Every number in turn.
-    p.total = last - first + 1;
-    std::set<uint64_t> heard;  // how each song found starts, to skip the same song twice
-    std::set<uint32_t> musicSounds, shortSounds;
-    std::vector<int> silent;  // numbers that played nothing
-    struct Effects {  // worked out however run() ends from here
-        SongExtractor& x;
-        std::set<uint32_t>& music;
-        std::set<uint32_t>& sounds;
-        ~Effects() {
-            for (uint32_t fp : sounds)
-                if (!music.count(fp)) x.effects_.insert(fp);
-        }
-    } effects{*this, musicSounds, shortSounds};
-    for (int number = first; number <= last; ++number) {
-        p.tried = number - first;
-        if (!report("Probando el " + std::to_string(p.tried + 1))) return fail("");
-        md->loadState(origin, nullptr);
+    // Where the driver takes the requests first, then where asking made most music. A
+    // queue where no number plays a song (a variable of the game that only looked like
+    // one) gives way to the next.
+    std::stable_sort(queues.begin(), queues.end(), [](const Candidate& a, const Candidate& b) {
+        if ((a.driverTaken > 0) != (b.driverTaken > 0)) return a.driverTaken > 0;
+        return a.sound > b.sound;
+    });
+    // The songs it found asking at `chosen`, or -1 if stopped.
+    auto tryQueue = [&](const Candidate& chosen) -> int {
+        // Ask where the request with most music went, from where the game made it (the
+        // driver is ready there, and nothing else was playing), with every queue found kept
+        // from the game.
+        const Candidate* ask = &chosen;
+        const uint64_t start = ask->soundFrame;
+        uint32_t lockFrom = ask->address, lockTo = ask->address + 1;
+        for (const Candidate& c : queues)
+            if (c.address + 8 > ask->address && c.address < ask->address + 8) {  // the same queue
+                lockFrom = std::min(lockFrom, c.address);
+                lockTo = std::max(lockTo, c.address + 1);
+            }
+        bool high = true;
+        for (const auto& r : ask->requests) high = high && r.second >= 0x81;
+        const int first = high ? 0x81 : 0x01, last = 0xFF;
+        say("Pido las canciones en " + hex(ask->address, 6) + ", del " + hex(first, 2) + " al " + hex(last, 2) +
+            ", desde el cuadro " + std::to_string(start) + "; las peticiones del juego en " + hex(lockFrom, 6) + "-" +
+            hex(lockTo - 1, 6) + " no pasan");
+        // Better with the game held where it is, only its VBlank running: it cannot go on to
+        // load a level (the music would stop meanwhile) or ask for other sounds. Some games
+        // need their program running to feed the driver.
+        // (Held, asking must add notes to what was playing: some games hand the request on to
+        // the driver from their program.)
+        goTo(start);
         md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
-        md->poke(ask->address, static_cast<uint8_t>(number));
-        md->cpu().holdMain(hold);
-        ear.allNotesOff();
-        ear.clearSeen();
-        VgmWriter w;
-        md->setVgmWriter(&w);
-        std::vector<VgmWriter::Mark> marks;
-        NoteTracker tracker;
-        int lastNote = -1, firstNote = -1;
-        int loopStart = -1, loopEnd = -1;
-        bool same = false;  // it only adds a few notes to what was playing
-        for (int f = 0; f < kLongest; ++f) {
-            marks.push_back(w.mark(md->masterClocks()));
-            frame();
-            const size_t from = marks.back().bytes, to = w.mark(md->masterClocks()).bytes;
-            const size_t had = tracker.notes.size();
-            tracker.add(w.commands(), from, to, f);
-            if (tracker.notes.size() > had) {
-                lastNote = f;
-                if (firstNote < 0) firstNote = f;
-            }
-            if (firstNote < 0 && f >= kCheckFrames) break;  // nothing
-            if (f == kCheckFrames - 1 && firstNote >= 0) {
-                // Without waiting for it to end (what was playing may go on for minutes).
-                std::map<uint32_t, int> opened;
-                for (const auto& note : tracker.notes) ++opened[note.key];
-                if (extra(opened, before) < 8) {
-                    same = true;
-                    break;
-                }
-            }
-            if (lastNote >= 0 && f - lastNote >= kSilentFrames) break;  // it ended
-            if (f % kFps == 0) {
-                const auto [start, end] = findLoop(tracker.notes, f, kShortestLoop);
-                if (start >= 0 && end <= f) {
-                    loopStart = start;
-                    loopEnd = end;
-                    break;
-                }
-            }
-        }
-        md->setVgmWriter(nullptr);
-        if (same) {
-            say(hex(number, 2) + ": suena lo mismo que sin pedir nada");
-            // A sound effect over the music: its instruments are the new ones.
-            std::set<uint32_t> now;
-            instruments(now);
-            for (uint32_t fp : now)
-                if (!playing.count(fp)) shortSounds.insert(fp);
-            continue;
-        }
-        if (firstNote < 0 || lastNote - firstNote < kShortest) {
-            if (firstNote >= 0) say(hex(number, 2) + ": un sonido corto");
-            if (firstNote >= 0) instruments(shortSounds);
-            else silent.push_back(number);
-            continue;
-        }
-        std::map<uint32_t, int> opened;
-        for (const auto& note : tracker.notes)
-            if (note.frame < kCheckFrames) ++opened[note.key];
-        if (extra(opened, before) < 8) {
-            say(hex(number, 2) + ": suena lo mismo que sin pedir nada");
-            continue;
-        }
-        // The same song as one found already (several numbers for one song)?
-        uint64_t opening = 1469598103934665603ull;
-        for (size_t i = 0; i < std::min<size_t>(tracker.notes.size(), 64); ++i)
-            opening = (opening ^ tracker.notes[i].key) * 1099511628211ull;
-        instruments(musicSounds);
-        if (!heard.insert(opening).second) {
-            say(hex(number, 2) + ": repetida");
-            continue;
-        }
-        Song song;
-        song.number = number;
-        VgmWriter::Tag tag;
-        tag.title = "Canción " + std::to_string(p.found + 1);
-        tag.game = game;
-        tag.notes = "Sacada de la ROM (petición " + hex(number, 2) + ")";
-        if (loopStart >= 0) {
-            const VgmWriter::Mark loop = marks[static_cast<size_t>(loopStart)];
-            const VgmWriter::Mark end = marks[static_cast<size_t>(loopEnd)];
-            song.vgz = w.finish(md->masterClocks(), tag, true, &end, &loop);
-            song.seconds = static_cast<double>(end.samples) / 44100.0;
-            song.loopSeconds = static_cast<double>(end.samples - loop.samples) / 44100.0;
-        } else {
-            const size_t endFrame = std::min(marks.size() - 1, static_cast<size_t>(lastNote + kFps));
-            const VgmWriter::Mark end = marks[endFrame];
-            song.vgz = w.finish(md->masterClocks(), tag, true, &end, nullptr);
-            song.seconds = static_cast<double>(end.samples) / 44100.0;
-        }
-        ++p.found;
-        say(hex(number, 2) + ": " + tag.title + ", " + std::to_string(static_cast<int>(song.seconds)) + " s" +
-            (song.loopSeconds > 0 ? ", vuelta de " + std::to_string(static_cast<int>(song.loopSeconds)) + " s"
-                                  : ", sin vuelta"));
-        if (onSong) onSong(song);
-    }
-
-    // 4. Some drivers play sound effects only over music (Sonic's, after the fade out
-    // that comes before a level's song): the numbers that played nothing, once more with
-    // the game's own song started. What they add to it are their instruments.
-    p.tried = p.total;
-    if (!silent.empty() && report("Buscando los efectos de sonido")) {
-        uint8_t song = ask->requests.front().second;
+        md->cpu().holdMain(true);
+        const auto heldQuiet = listen(kCheckFrames);
+        md->cpu().holdMain(false);
+        goTo(start);
+        md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
+        md->poke(ask->address, ask->requests.front().second);
         for (const auto& r : ask->requests)
-            if (r.first == start) song = r.second;
-        md->loadState(origin, nullptr);
+            if (r.first == start) md->poke(ask->address, r.second);
+        md->cpu().holdMain(true);
+        const bool hold = extra(listen(kCheckFrames), heldQuiet) > 4;
+        md->cpu().holdMain(false);
+        say(hold ? "El juego se queda quieto mientras suena cada canción" : "El juego sigue andando mientras suena cada canción");
+        goTo(start);
+        std::vector<uint8_t> origin;
+        md->saveState(origin, true);
+        // What sounds there without asking for anything (what was playing goes on): a number
+        // that only plays that is not a song.
+        // The Roland sound listens (without a SoundFont, so silent) for the FM instruments
+        // of each number: those of the short sounds that no song plays are the sound effects.
+        RolandSound ear;
+        md->setRoland(&ear, 100);
+        struct Unplug {  // the console must not keep it once this try is over
+            MegaDrive& md;
+            ~Unplug() { md.setRoland(nullptr, 100); }
+        } unplug{*md};
+        auto instruments = [&](std::set<uint32_t>& into) {
+            for (const auto& [fp, seen] : ear.seen())
+                if (seen.kind == RolandSound::Kind::Fm) into.insert(fp);
+        };
         md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
-        md->poke(ask->address, song);
         md->cpu().holdMain(hold);
-        for (int f = 0; f < kFps; ++f) frame();
-        std::vector<uint8_t> playing;
-        md->saveState(playing, true);
-        auto over = [&](int number) {
-            md->loadState(playing, nullptr);
+        ear.clearSeen();
+        const auto before = listen(kCheckFrames);
+        std::set<uint32_t> playing;  // and its instruments
+        instruments(playing);
+
+        // 3. Every number in turn.
+        p.total = last - first + 1;
+        std::set<uint64_t> heard;  // how each song found starts, to skip the same song twice
+        std::set<uint32_t> musicSounds, shortSounds;
+        std::vector<int> silent;  // numbers that played nothing
+        struct Effects {  // worked out however run() ends from here
+            SongExtractor& x;
+            std::set<uint32_t>& music;
+            std::set<uint32_t>& sounds;
+            ~Effects() {
+                for (uint32_t fp : sounds)
+                    if (!music.count(fp)) x.effects_.insert(fp);
+            }
+        } effects{*this, musicSounds, shortSounds};
+        for (int number = first; number <= last; ++number) {
+            p.tried = number - first;
+            if (!report("Probando el " + std::to_string(p.tried + 1))) return -1;
+            md->loadState(origin, nullptr);
             md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
-            if (number) md->poke(ask->address, static_cast<uint8_t>(number));
+            md->poke(ask->address, static_cast<uint8_t>(number));
             md->cpu().holdMain(hold);
             ear.allNotesOff();
             ear.clearSeen();
-            for (int f = 0; f < kCheckFrames; ++f) frame();
-            std::set<uint32_t> heard;
-            instruments(heard);
-            return heard;
-        };
-        const std::set<uint32_t> alone = over(0);
-        for (int number : silent) {
-            if (!report("Buscando los efectos de sonido")) break;
-            for (uint32_t fp : over(number))
-                if (!alone.count(fp)) shortSounds.insert(fp);
+            VgmWriter w;
+            md->setVgmWriter(&w);
+            std::vector<VgmWriter::Mark> marks;
+            NoteTracker tracker;
+            int lastNote = -1, firstNote = -1;
+            int loopStart = -1, loopEnd = -1;
+            bool same = false;  // it only adds a few notes to what was playing
+            for (int f = 0; f < kLongest; ++f) {
+                marks.push_back(w.mark(md->masterClocks()));
+                frame();
+                const size_t from = marks.back().bytes, to = w.mark(md->masterClocks()).bytes;
+                const size_t had = tracker.notes.size();
+                tracker.add(w.commands(), from, to, f);
+                if (tracker.notes.size() > had) {
+                    lastNote = f;
+                    if (firstNote < 0) firstNote = f;
+                }
+                if (firstNote < 0 && f >= kCheckFrames) break;  // nothing
+                if (f == kCheckFrames - 1 && firstNote >= 0) {
+                    // Without waiting for it to end (what was playing may go on for minutes).
+                    std::map<uint32_t, int> opened;
+                    for (const auto& note : tracker.notes) ++opened[note.key];
+                    if (extra(opened, before) < 8) {
+                        same = true;
+                        break;
+                    }
+                }
+                if (lastNote >= 0 && f - lastNote >= kSilentFrames) break;  // it ended
+                if (f % kFps == 0) {
+                    const auto [start, end] = findLoop(tracker.notes, f, kShortestLoop);
+                    if (start >= 0 && end <= f) {
+                        loopStart = start;
+                        loopEnd = end;
+                        break;
+                    }
+                }
+            }
+            md->setVgmWriter(nullptr);
+            if (same) {
+                say(hex(number, 2) + ": suena lo mismo que sin pedir nada");
+                // A sound effect over the music: its instruments are the new ones.
+                std::set<uint32_t> now;
+                instruments(now);
+                for (uint32_t fp : now)
+                    if (!playing.count(fp)) shortSounds.insert(fp);
+                continue;
+            }
+            if (firstNote < 0 || lastNote - firstNote < kShortest) {
+                if (firstNote >= 0) say(hex(number, 2) + ": un sonido corto");
+                if (firstNote >= 0) instruments(shortSounds);
+                else silent.push_back(number);
+                continue;
+            }
+            std::map<uint32_t, int> opened;
+            for (const auto& note : tracker.notes)
+                if (note.frame < kCheckFrames) ++opened[note.key];
+            if (extra(opened, before) < 8) {
+                say(hex(number, 2) + ": suena lo mismo que sin pedir nada");
+                continue;
+            }
+            // The same song as one found already (several numbers for one song)?
+            uint64_t opening = 1469598103934665603ull;
+            for (size_t i = 0; i < std::min<size_t>(tracker.notes.size(), 64); ++i)
+                opening = (opening ^ tracker.notes[i].key) * 1099511628211ull;
+            instruments(musicSounds);
+            if (!heard.insert(opening).second) {
+                say(hex(number, 2) + ": repetida");
+                continue;
+            }
+            Song song;
+            song.number = number;
+            VgmWriter::Tag tag;
+            tag.title = "Canción " + std::to_string(p.found + 1);
+            tag.game = game;
+            tag.notes = "Sacada de la ROM (petición " + hex(number, 2) + ")";
+            if (loopStart >= 0) {
+                const VgmWriter::Mark loop = marks[static_cast<size_t>(loopStart)];
+                const VgmWriter::Mark end = marks[static_cast<size_t>(loopEnd)];
+                song.vgz = w.finish(md->masterClocks(), tag, true, &end, &loop);
+                song.seconds = static_cast<double>(end.samples) / 44100.0;
+                song.loopSeconds = static_cast<double>(end.samples - loop.samples) / 44100.0;
+            } else {
+                const size_t endFrame = std::min(marks.size() - 1, static_cast<size_t>(lastNote + kFps));
+                const VgmWriter::Mark end = marks[endFrame];
+                song.vgz = w.finish(md->masterClocks(), tag, true, &end, nullptr);
+                song.seconds = static_cast<double>(end.samples) / 44100.0;
+            }
+            ++p.found;
+            say(hex(number, 2) + ": " + tag.title + ", " + std::to_string(static_cast<int>(song.seconds)) + " s" +
+                (song.loopSeconds > 0 ? ", vuelta de " + std::to_string(static_cast<int>(song.loopSeconds)) + " s"
+                                      : ", sin vuelta"));
+            if (onSong) onSong(song);
         }
+
+        // 4. Some drivers play sound effects only over music (Sonic's, after the fade out
+        // that comes before a level's song): the numbers that played nothing, once more with
+        // the game's own song started. What they add to it are their instruments.
+        p.tried = p.total;
+        if (!silent.empty() && report("Buscando los efectos de sonido")) {
+            uint8_t song = ask->requests.front().second;
+            for (const auto& r : ask->requests)
+                if (r.first == start) song = r.second;
+            md->loadState(origin, nullptr);
+            md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
+            md->poke(ask->address, song);
+            md->cpu().holdMain(hold);
+            for (int f = 0; f < kFps; ++f) frame();
+            std::vector<uint8_t> playing;
+            md->saveState(playing, true);
+            auto over = [&](int number) {
+                md->loadState(playing, nullptr);
+                md->lockSoundRequests(lockFrom, static_cast<int>(lockTo - lockFrom));
+                if (number) md->poke(ask->address, static_cast<uint8_t>(number));
+                md->cpu().holdMain(hold);
+                ear.allNotesOff();
+                ear.clearSeen();
+                for (int f = 0; f < kCheckFrames; ++f) frame();
+                std::set<uint32_t> heard;
+                instruments(heard);
+                return heard;
+            };
+            const std::set<uint32_t> alone = over(0);
+            for (int number : silent) {
+                if (!report("Buscando los efectos de sonido")) break;
+                for (uint32_t fp : over(number))
+                    if (!alone.count(fp)) shortSounds.insert(fp);
+            }
+        }
+        return p.found;
+    };
+    for (size_t q = 0; q < queues.size() && q < 3; ++q) {
+        effects_.clear();
+        const int songs = tryQueue(queues[q]);
+        if (songs < 0) return fail("");
+        if (songs > 0) break;
     }
     report("Hecho");
     if (p.found == 0) return fail("El juego responde a las peticiones, pero ninguna ha sonado como una canción.");

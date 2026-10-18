@@ -177,11 +177,12 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     grabación se guarda en `sonido\pistas\` (junto a `states\`) como `.vgz`.
   - **Sacar canciones** busca las canciones en la ROM del juego y las graba una a una en
     `sonido\pistas\<juego>\`, sin nombre ("Canción 1", "Canción 2"...), cada una con una
-    vuelta y su punto de vuelta para que siga sonando. Arranca el juego por su cuenta, mira
-    dónde le pide la música al driver de sonido y le va pidiendo cada número. Funciona con
-    los juegos cuyo driver toma las peticiones así: el SMPS de Sonic 1, 2 y 3 y de muchos
-    juegos de Sega, y otros parecidos como el de Gunstar Heroes. Tarda unos minutos, con
-    una barra de progreso, y se puede parar.
+    vuelta y su punto de vuelta para que siga sonando. Arranca el juego por su cuenta y
+    localiza su driver de sonido (el código que toca el chip FM, o el Z80): la cola de
+    peticiones es el byte que el juego escribe y el driver vacía. Luego le va pidiendo cada
+    número. Funciona con los drivers que toman las peticiones así, como el SMPS de Sega y
+    parecidos: probado con Sonic 1, 2 y 3, Gunstar Heroes, Ristar, Shinobi III y Golden
+    Axe. Tarda unos minutos, con una barra de progreso, y se puede parar.
   - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,
     golpes...): los instrumentos FM que suenan en los sonidos cortos y en ninguna canción.
     Con **Sonido > Efectos de sonido originales** (la opción de serie) suenan como en la
