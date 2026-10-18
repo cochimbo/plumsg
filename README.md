@@ -168,8 +168,13 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
 - **Sonido > Editor de instrumentos** (o **Editor de instrumentos...** en el menú de un juego
   de la biblioteca): para elegir con qué suena cada instrumento sin tener que jugar a la vez.
   - **Grabar del juego** graba la música mientras juegas, hasta **Parar la grabación**. La
-    grabación se guarda en `sonido\pistas\` (junto a `states\`) como `.vgz`. También se puede abrir un `.vgm` o
-    `.vgz`, como los de [vgmrips](https://vgmrips.net).
+    grabación se guarda en `sonido\pistas\` (junto a `states\`) como `.vgz`.
+  - La ROM no trae sus canciones con nombre (cada juego guarda su música a su manera), pero
+    [vgmrips](https://vgmrips.net) tiene casi todas: su `.zip` de un juego, o sus `.vgm` y
+    `.vgz`, se abren con **Abrir .vgm...** y se guardan en `sonido\pistas\<juego>\`
+    (**Carpeta** la abre). Desde entonces, la lista **Pista** de ese juego trae cada canción
+    por su nombre, como "Green Hill Zone", junto a las grabaciones. También vale el sound
+    test del juego: se pone a grabar y se van tocando sus canciones.
   - **Tocar** la reproduce con el juego en pausa. **Original** y **Roland** cambian entre
     los dos sonidos en el mismo punto, para comparar. Cada canal (FM 1-6, DAC, PSG 1-3 y
     ruido) tiene **Solo** y **Silencio**.

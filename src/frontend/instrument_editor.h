@@ -55,7 +55,9 @@ public:
     void useSoundfont(const RolandSound& from, int reverb, int chorus);
     void play(double seconds, double rate, std::vector<int16_t>& out);
 
-    // Opens a .vgm or .vgz; false (and the reason shown in the window) if it cannot.
+    // Opens a .vgm or .vgz, or a .zip of them (a vgmrips pack: all its songs go in the
+    // list); false (and the reason shown in the window) if it cannot. A file from
+    // elsewhere is copied into the game's track folder, so it is there next time.
     bool openTrack(const std::string& path);
     // A recording of `game` (its path): saved in sonido/pistas/ and opened.
     void saveRecording(const std::vector<uint8_t>& file, const std::string& game);
@@ -74,7 +76,17 @@ private:
     std::string gamePath() const;  // sonido/<game>.ini
     std::string cachePath() const { return folder_ + "cache.ini"; }
     std::string tracksFolder() const { return folder_ + "pistas/"; }
+    // A song in the list: a file, or a file inside a .zip.
+    struct Track {
+        std::string path;
+        std::string member;  // in the .zip; empty for a file
+        std::string title;   // what the list shows
+        bool operator==(const Track& o) const { return path == o.path && member == o.member; }
+    };
     void listTracks();
+    void addTracks(const std::string& path);  // a .vgm/.vgz, or every song in a .zip
+    bool loadTrack(const Track& track);
+    std::string gameTracksFolder() const { return tracksFolder() + gameName_ + "/"; }
     void loadAssignments();
     void assign(uint32_t fingerprint, const RolandSound::Assignment* a, EditorRequests& out);  // null: back to the rules
     void applyListening();
@@ -90,8 +102,8 @@ private:
     std::string gameName_;  // file name without extension
     RolandSound synth_;
     VgmPlayer player_;
-    std::string track_;               // the open track's path
-    std::vector<std::string> tracks_;  // the game's recordings, and tracks opened since
+    Track track_;               // the open one
+    std::vector<Track> tracks_;  // the game's songs and recordings, and tracks opened since
     std::map<uint32_t, RolandSound::Seen> trackSeen_;  // the open track's instruments
     bool playing_ = false;
     bool rolandOutput_ = true;

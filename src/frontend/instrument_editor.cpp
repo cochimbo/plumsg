@@ -8,7 +8,10 @@
 #include <iterator>
 #include <system_error>
 
+#include <SDL.h>
+
 #include "imgui.h"
+#include "miniz.h"
 
 namespace plumsg {
 
@@ -107,10 +110,10 @@ void InstrumentEditor::open(const std::string& game) {
     mutedVoices_ = soloVoices_ = 0;
     loadAssignments();
     listTracks();
-    track_.clear();
+    track_ = Track{};
     player_.load(VgmFile{});
     trackSeen_.clear();
-    if (!tracks_.empty()) openTrack(tracks_.back());  // the newest recording
+    if (!tracks_.empty()) loadTrack(tracks_.front());
 }
 
 void InstrumentEditor::loadAssignments() {
@@ -121,17 +124,88 @@ void InstrumentEditor::loadAssignments() {
     synth_.setAssignments(std::move(all));
 }
 
+namespace {
+
+std::string lower(std::string s) {
+    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+bool isTrack(const std::string& name) {
+    const std::string l = lower(name);
+    return l.size() > 4 && (l.compare(l.size() - 4, 4, ".vgm") == 0 || l.compare(l.size() - 4, 4, ".vgz") == 0);
+}
+
+bool isZip(const std::string& name) {
+    const std::string l = lower(name);
+    return l.size() > 4 && l.compare(l.size() - 4, 4, ".zip") == 0;
+}
+
+// The songs in a .zip, by name, with their contents.
+std::vector<std::pair<std::string, std::vector<uint8_t>>> zipTracks(const std::vector<uint8_t>& zip) {
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> out;
+    mz_zip_archive archive{};
+    if (!mz_zip_reader_init_mem(&archive, zip.data(), zip.size(), 0)) return out;
+    for (mz_uint i = 0; i < mz_zip_reader_get_num_files(&archive); ++i) {
+        mz_zip_archive_file_stat st;
+        if (!mz_zip_reader_file_stat(&archive, i, &st) || st.m_is_directory || !isTrack(st.m_filename)) continue;
+        size_t size = 0;
+        void* data = mz_zip_reader_extract_to_heap(&archive, i, &size, 0);
+        if (!data) continue;
+        const uint8_t* b = static_cast<const uint8_t*>(data);
+        out.emplace_back(st.m_filename, std::vector<uint8_t>(b, b + size));
+        mz_free(data);
+    }
+    mz_zip_reader_end(&archive);
+    std::sort(out.begin(), out.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    return out;
+}
+
+// What a song is called: its tag's title, else its file name.
+std::string trackTitle(std::vector<uint8_t> bytes, const std::string& name) {
+    VgmFile file;
+    if (file.parse(std::move(bytes), nullptr) && !file.title.empty()) return file.title;
+    return withoutExtension(fileName(name));
+}
+
+}  // namespace
+
+// The game's songs (sonido/pistas/<game>/: .vgm, .vgz and vgmrips .zip packs), then its
+// recordings (sonido/pistas/<game> <date>.vgz), newest first.
 void InstrumentEditor::listTracks() {
     tracks_.clear();
     if (gameName_.empty()) return;
     std::error_code ec;
+    std::vector<std::string> songs, recordings;
+    for (fs::directory_iterator it(fs::u8path(gameTracksFolder()), ec), end; !ec && it != end; it.increment(ec))
+        if (isTrack(it->path().u8string()) || isZip(it->path().u8string())) songs.push_back(it->path().u8string());
+    ec.clear();
     for (fs::directory_iterator it(fs::u8path(tracksFolder()), ec), end; !ec && it != end; it.increment(ec)) {
         const std::string name = it->path().filename().u8string();
-        const std::string ext = name.size() > 4 ? name.substr(name.size() - 4) : std::string();
-        if (name.compare(0, gameName_.size() + 1, gameName_ + " ") == 0 && (ext == ".vgz" || ext == ".vgm"))
-            tracks_.push_back(it->path().u8string());
+        if (name.compare(0, gameName_.size() + 1, gameName_ + " ") == 0 && isTrack(name))
+            recordings.push_back(it->path().u8string());
     }
-    std::sort(tracks_.begin(), tracks_.end());  // dated names: oldest first
+    std::sort(songs.begin(), songs.end());
+    std::sort(recordings.rbegin(), recordings.rend());  // dated names
+    for (const std::string& p : songs) addTracks(p);
+    for (const std::string& p : recordings) {
+        const std::string name = withoutExtension(fileName(p));
+        tracks_.push_back({p, {}, "Grabación " + name.substr(std::min(name.size(), gameName_.size() + 1))});
+    }
+}
+
+void InstrumentEditor::addTracks(const std::string& path) {
+    std::vector<uint8_t> bytes;
+    if (!readBytes(path, bytes)) return;
+    if (isZip(path)) {
+        for (auto& [name, data] : zipTracks(bytes)) {
+            Track t{path, name, trackTitle(std::move(data), name)};
+            if (std::find(tracks_.begin(), tracks_.end(), t) == tracks_.end()) tracks_.push_back(t);
+        }
+        return;
+    }
+    Track t{path, {}, trackTitle(std::move(bytes), path)};
+    if (std::find(tracks_.begin(), tracks_.end(), t) == tracks_.end()) tracks_.push_back(t);
 }
 
 void InstrumentEditor::useSoundfont(const RolandSound& from, int reverb, int chorus) {
@@ -144,20 +218,51 @@ void InstrumentEditor::useSoundfont(const RolandSound& from, int reverb, int cho
 
 bool InstrumentEditor::openTrack(const std::string& path) {
     stop();
+    std::string from = path;
+    // Kept with the game's songs, to be in its list next time.
+    if (!gameName_.empty() && fs::u8path(path).parent_path() != fs::u8path(gameTracksFolder()).parent_path() &&
+        fs::u8path(path).parent_path() != fs::u8path(tracksFolder()).parent_path()) {
+        std::vector<uint8_t> bytes;
+        const std::string copy = gameTracksFolder() + fileName(path);
+        if (readBytes(path, bytes) && writeBytes(copy, bytes.data(), bytes.size())) from = copy;
+    }
+    const size_t before = tracks_.size();
+    addTracks(from);
+    auto it = std::find_if(tracks_.begin(), tracks_.end(), [&](const Track& t) { return t.path == from; });
+    if (it == tracks_.end()) {
+        message_ = "No se pudo abrir " + fileName(path) + (isZip(path) ? ": no tiene ningún .vgm ni .vgz." : ".");
+        return false;
+    }
+    // A new pack opens at its first song; one already listed, at the first too.
+    return loadTrack(before < tracks_.size() ? tracks_[before] : *it);
+}
+
+bool InstrumentEditor::loadTrack(const Track& track) {
+    stop();
     std::vector<uint8_t> bytes;
+    if (!readBytes(track.path, bytes)) {
+        message_ = "No se pudo leer " + track.path + ".";
+        return false;
+    }
+    if (!track.member.empty()) {
+        bytes.clear();
+        std::vector<uint8_t> zip;
+        readBytes(track.path, zip);
+        for (auto& [name, data] : zipTracks(zip))
+            if (name == track.member) bytes = std::move(data);
+    }
     VgmFile file;
     std::string error;
-    if (!readBytes(path, bytes) || !file.parse(std::move(bytes), &error)) {
-        message_ = "No se pudo abrir " + fileName(path) + ": " + (error.empty() ? "no se puede leer." : error);
+    if (!file.parse(std::move(bytes), &error)) {
+        message_ = "No se pudo abrir " + track.title + ": " + error;
         return false;
     }
     if (file.ymClock == 0) {
-        message_ = fileName(path) + " no tiene música de YM2612: no es de Mega Drive.";
+        message_ = track.title + " no tiene música de YM2612: no es de Mega Drive.";
         return false;
     }
     message_.clear();
-    track_ = path;
-    if (std::find(tracks_.begin(), tracks_.end(), path) == tracks_.end()) tracks_.push_back(path);
+    track_ = track;
     synth_.clearSeen();
     player_.load(std::move(file));
     player_.setLoop(loop_);
@@ -178,7 +283,9 @@ void InstrumentEditor::saveRecording(const std::vector<uint8_t>& file, const std
         message_ = "No se pudo guardar la grabación en " + path + ".";
         return;
     }
-    openTrack(path);
+    listTracks();
+    auto it = std::find_if(tracks_.begin(), tracks_.end(), [&](const Track& t) { return t.path == path; });
+    if (it != tracks_.end()) loadTrack(*it);
 }
 
 void InstrumentEditor::stop() {
@@ -313,16 +420,33 @@ void InstrumentEditor::draw(const EditorView& view, EditorRequests& out) {
 void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
     // Which track: the game's recordings, or a .vgm.
     ImGui::SetNextItemWidth(360);
-    const std::string current = track_.empty() ? std::string("(ninguna)") : fileName(track_);
-    if (ImGui::BeginCombo("Pista", current.c_str())) {
-        for (auto it = tracks_.rbegin(); it != tracks_.rend(); ++it)
-            if (ImGui::Selectable(fileName(*it).c_str(), *it == track_)) openTrack(*it);
+    const std::string current = track_.path.empty() ? std::string("(ninguna)") : track_.title;
+    if (ImGui::BeginCombo("Pista", current.c_str(), ImGuiComboFlags_HeightLarge)) {
+        for (size_t i = 0; i < tracks_.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            if (ImGui::Selectable(tracks_[i].title.c_str(), tracks_[i] == track_)) loadTrack(tracks_[i]);
+            ImGui::PopID();
+        }
         ImGui::EndCombo();
     }
     ImGui::SameLine();
     if (ImGui::Button("Abrir .vgm...")) {
         stop();
         out.chooseTrack = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Un .vgm o .vgz, o el .zip con todas las canciones del juego de vgmrips.net.\n"
+                          "Se guarda con las pistas del juego, para tenerlo la próxima vez.");
+    if (!gameName_.empty()) {
+        ImGui::SameLine();
+        if (ImGui::Button("Carpeta")) {
+            std::error_code ec;
+            fs::create_directories(fs::u8path(gameTracksFolder()), ec);
+            SDL_OpenURL(("file:///" + gameTracksFolder()).c_str());
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("La carpeta de las canciones de este juego: lo que pongas en ella (.vgm, .vgz o\n"
+                              "el .zip de vgmrips) sale en la lista.\n%s", gameTracksFolder().c_str());
     }
     const bool canRecord = !view.loadedGame.empty() && view.loadedGame == game_;
     if (view.recording || !game_.empty()) ImGui::SameLine();
