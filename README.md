@@ -208,7 +208,7 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
     (como Streets of Rage 2), o un anillo de órdenes en la memoria del Z80 donde el juego
     deja mensajes (el GEMS de los juegos de Sega of America, como Sonic Spinball). Luego le va pidiendo cada número. Probado con Sonic 1, 2 y 3,
     Gunstar Heroes, Ristar, Shinobi III, Golden Axe, Streets of Rage 2, Sonic Spinball,
-    Earthworm Jim, Taz in Escape from Mars, Streets of Rage 3 y Beyond Oasis (estos dos con
+    Earthworm Jim, Taz in Escape from Mars, Streets of Rage 3, Beyond Oasis y Shadowrun (estos tres con
     el driver en el 68000, que le pasa las notas al Z80). Lo que suena en uno
     o dos canales, aunque dure (un motor, una alarma), cuenta como efecto y no como canción.
     Tarda unos minutos, con una barra de progreso, y se puede parar.
