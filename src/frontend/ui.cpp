@@ -468,6 +468,16 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
                           "Cada sonido FM recibe un instrumento por reglas, que se cambia a mano en el\n"
                           "Editor de instrumentos.");
     ImGui::BeginDisabled(!settings_.roland);
+    if (state.disc && settings_.roland)
+        ImGui::TextDisabled("Los discos de Mega CD suenan siempre originales:\nsu música son pistas de audio del disco.");
+    if (ImGui::MenuItem("Efectos de sonido originales", nullptr, settings_.effectsOriginal)) {
+        settings_.effectsOriginal = !settings_.effectsOriginal;
+        out.settingsChanged = out.soundChanged = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Los efectos (anillos, saltos, golpes...) suenan como en la consola y solo la música\n"
+                          "pasa por el SoundFont. Para saber cuáles son, usa antes Sacar canciones en el Editor\n"
+                          "de instrumentos. Cada efecto se puede cambiar también a mano en el editor.");
     const std::string font = settings_.soundfont.empty() ? std::string("GeneralUser GS (incluido)") : fileName(settings_.soundfont);
     ImGui::TextDisabled("SoundFont: %s", font.c_str());
     if (ImGui::MenuItem("Elegir SoundFont (.sf2)...")) chooseSoundfont(out);

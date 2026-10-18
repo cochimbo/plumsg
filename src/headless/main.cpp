@@ -19,6 +19,7 @@
 #include <iterator>
 #include <map>
 #include <sstream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -83,6 +84,8 @@ Output
   --roland SF2          play the FM and PSG music as General MIDI on this SoundFont,
                         as the Roland sound does (the DAC stays as it is)
   --midi-log FILE       with --roland: the notes it played, one event per line
+  --effects LIST        with --roland: these FM instruments (hex fingerprints, as
+                        --extract-songs lists them) are sound effects, left original
   --vgm FILE            the run's YM2612 and PSG music as a VGM (.vgz: compressed)
   --save-state FILE     a savestate after the last frame
   --dump-ram FILE       the 68000's work RAM (64 KB) after the last frame
@@ -384,6 +387,11 @@ int extractSongs(const std::string& game, const std::string& dir) {
         &error);
     const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
     std::printf("%.0f s\n", took);
+    if (!extractor.effectInstruments().empty()) {
+        std::printf("Efectos de sonido:");
+        for (uint32_t fp : extractor.effectInstruments()) std::printf(" %08x", fp);
+        std::printf("\n");
+    }
     if (!ok) {
         std::fprintf(stderr, "%s\n", error.c_str());
         return 1;
@@ -437,6 +445,7 @@ int playVgmFile(const std::string& path, long frames, const std::string& wav, co
 }
 
 int main(int argc, char** argv) {
+    std::string effectsList;
     std::string game, playVgm, vgmOut, png, layers, wav, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir, extractDir;
     std::string outDir = ".";
     std::vector<std::string> bios, cheats, scripts, lines;
@@ -496,6 +505,7 @@ int main(int argc, char** argv) {
         else if (a == "--wav") wav = next();
         else if (a == "--roland") roland = next();
         else if (a == "--midi-log") midiLog = next();
+        else if (a == "--effects") effectsList = next();
         else if (a == "--vgm") vgmOut = next();
         else if (a == "--play-vgm") playVgm = next();
         else if (a == "--extract-songs") extractDir = next();
@@ -672,6 +682,16 @@ int main(int argc, char** argv) {
             return 1;
         }
         if (!midiLog.empty()) rolandSound.setLog(&midiEvents);
+        std::set<uint32_t> effects;
+        for (size_t at = 0; at < effectsList.size();) {
+            char* stop = nullptr;
+            const unsigned long fp = std::strtoul(effectsList.c_str() + at, &stop, 16);
+            if (stop == effectsList.c_str() + at) break;
+            effects.insert(static_cast<uint32_t>(fp));
+            at = static_cast<size_t>(stop - effectsList.c_str());
+            while (at < effectsList.size() && (effectsList[at] == ',' || effectsList[at] == ' ')) ++at;
+        }
+        rolandSound.setSoundEffects(std::move(effects), true);
         md.setRoland(&rolandSound, 0);
     }
     VgmWriter vgmWriter;

@@ -223,6 +223,10 @@ RolandSound::Kind RolandSound::kindOf(uint32_t fingerprint) {
 RolandSound::Assignment RolandSound::assignmentFor(uint32_t fingerprint) const {
     if (auto a = assigned_.find(fingerprint); a != assigned_.end()) return a->second;
     Assignment rules;
+    if (effectsOriginal_ && effects_.count(fingerprint)) {
+        rules.original = true;
+        return rules;
+    }
     switch (kindOf(fingerprint)) {
         case Kind::PsgTone:
             rules.program = kPsgDefault;
@@ -236,6 +240,12 @@ RolandSound::Assignment RolandSound::assignmentFor(uint32_t fingerprint) const {
         }
     }
     return rules;
+}
+
+void RolandSound::setSoundEffects(std::set<uint32_t> effects, bool original) {
+    effects_ = std::move(effects);
+    effectsOriginal_ = original;
+    updateChipChannels();
 }
 
 void RolandSound::setAssignments(Assignments assigned) {

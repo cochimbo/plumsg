@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -39,6 +40,10 @@ public:
     using LogFn = std::function<void(const std::string&)>;
 
     void setLog(LogFn log) { log_ = std::move(log); }
+    // After run(), even a stopped one: the FM instruments (RolandSound fingerprints)
+    // heard in the short sounds it skipped and in none of the songs, which are the
+    // game's sound effects.
+    const std::set<uint32_t>& effectInstruments() const { return effects_; }
     // `game` is what goes in the files' tags. False, and why in *error, when the ROM
     // cannot be opened or its sound driver does not take requests this way.
     bool run(const std::string& romPath, const std::string& game, const ProgressFn& progress, const SongFn& song,
@@ -46,6 +51,7 @@ public:
 
 private:
     LogFn log_;
+    std::set<uint32_t> effects_;
 };
 
 }  // namespace plumsg

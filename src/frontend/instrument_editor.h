@@ -50,6 +50,8 @@ public:
 
     // What a game's instruments play: the shared cache, with the game's own on top.
     static RolandSound::Assignments assignmentsFor(const std::string& soundFolder, const std::string& game);
+    // A game's sound effects, as Sacar canciones found them (none if it was not run).
+    static std::set<uint32_t> effectsFor(const std::string& soundFolder, const std::string& game);
 
     // Opens the editor for a game (its path; empty for none: then what is chosen goes
     // to the shared cache only).
@@ -112,10 +114,11 @@ private:
         int saved = 0;                     // songs written so far
         std::string error;
         std::atomic<bool> stop{false}, done{false};
+        std::atomic<bool> effects{false};  // it wrote the game's sound effects
     };
     void startExtraction();
     void endExtraction();  // stops it if it is running, and waits
-    void drawExtraction();
+    void drawExtraction(EditorRequests& out);
     std::unique_ptr<Extraction> extraction_;
     int extractionSeen_ = 0;  // songs of it already in the list
 

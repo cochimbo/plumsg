@@ -176,6 +176,12 @@ jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por 
     los juegos cuyo driver toma las peticiones así: el SMPS de Sonic 1, 2 y 3 y de muchos
     juegos de Sega, y otros parecidos como el de Gunstar Heroes. Tarda unos minutos, con
     una barra de progreso, y se puede parar.
+  - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,
+    golpes...): los instrumentos FM que suenan en los sonidos cortos y en ninguna canción.
+    Con **Sonido > Efectos de sonido originales** (la opción de serie) suenan como en la
+    consola y solo la música pasa por el SoundFont. Se guardan en `sonido\<juego>.efectos`.
+  - Los discos de **Mega CD** suenan siempre originales: su música son pistas de audio del
+    disco, y el FM y el PSG solo hacen efectos.
   - La ROM no trae sus canciones con nombre (cada juego guarda su música a su manera), pero
     [vgmrips](https://vgmrips.net) tiene casi todas: su `.zip` de un juego, o sus `.vgm` y
     `.vgz`, se abren con **Abrir .vgm...** y se guardan en `sonido\pistas\<juego>\`

@@ -4,7 +4,7 @@
 // song extraction without a commercial ROM: the game asks for sounds by writing a
 // number to a queue byte ($FFF00A), which the driver reads and clears in VBlank.
 //   $81-$84  songs: a note every 15 frames, 32 notes and round again (8 s)
-//   $A0-$AF  sound effects: one note, half a second
+//   $A0-$AF  sound effects: one note, half a second, on an instrument of their own
 //   anything else: silence
 // The game asks for $A5 at frame 30, song $81 at frame 60 and $82 at frame 900, and
 // sets and clears a byte of its own ($FFF030) at frames 100 and 101.
@@ -88,6 +88,7 @@ inline std::vector<uint8_t> buildMusic() {
     e.w16(0x6400); e.rel("quiet");                     // bcc.w  quiet
     e.w16(0x4A41);                                     // tst.w  d1
     e.w16(0x6600); e.rel("done");                      // bne.w  done
+    ym(0x3C, 0x02);                                    // an instrument of their own
     ym(0xA4, 0x22);
     ym(0xA0, 0x80);
     ym(0x28, 0xF0);
@@ -104,6 +105,7 @@ inline std::vector<uint8_t> buildMusic() {
     e.w16(0xE749);                                     // lsl.w  #3,d1
     e.w16(0xD200);                                     // add.b  d0,d1
     ym(0x28, 0x00);
+    ym(0x3C, 0x01);
     ym(0xA4, 0x22);
     e.w16(0x13FC); e.w16(0xA0); e.w32(0xA04000);       // move.b #$A0,$A04000
     e.w16(0x13C1); e.w32(0xA04001);                    // move.b d1,$A04001
