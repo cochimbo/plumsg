@@ -21,7 +21,7 @@ constexpr int kSilentFrames = 4 * kFps;    // this long without a note: the song
 constexpr int kShortest = 2 * kFps;        // sounding less is a sound effect
 constexpr int kLongest = 4 * 60 * kFps;    // songs that do not loop are cut here
 constexpr int kShortestLoop = 6 * kFps;
-constexpr int kMaxCandidates = 10;
+constexpr int kMaxCandidates = 12;
 
 // The notes a recording plays, in order: which channel and at what pitch each starts.
 // A song's loop shows as the same notes coming back, even where the driver's tempo
@@ -160,8 +160,7 @@ struct Candidate {
     uint64_t firstFrame = 0;  // of its first request
     std::vector<std::pair<uint64_t, uint8_t>> requests;  // frame, number
     int sound = 0;  // notes the loudest request makes when asked again
-    uint64_t soundFrame = 0;  // and where it was asked
-    bool changes = false;     // asking makes a difference to what sounds
+    uint64_t soundFrame = 0;  // and where it was asked: nothing else plays there
 };
 
 }  // namespace
@@ -217,28 +216,13 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         }
         pendingValue[i] = 0;
     });
-    // After a while, Start now and then: past the title, the game asks for more music.
-    auto bootPad = [](uint64_t f) {
-        PadState pad;
-        pad.start = f >= kBootFrames / 3 && f % (2 * kFps) < 4;
-        return pad;
-    };
     std::map<uint64_t, std::vector<uint8_t>> checkpoints;
     if (!report("Arrancando el juego")) return fail("");
-    // Which frames notes started in: a request that makes music has some right after it.
-    std::vector<uint8_t> started;
-    int heldBefore = 0;
     for (int f = 0; f < kBootFrames; ++f) {
         if (f % kCheckpointEvery == 0) md->saveState(checkpoints[md->frameCount()], true);
-        md->setPads(bootPad(md->frameCount()), PadState{});
         frame();
-        int held = 0;
-        for (int ch = 0; ch < 6; ++ch) held |= md->ym().keys(ch) ? 1 << ch : 0;
-        started.push_back((held & ~heldBefore) != 0);
-        heldBefore = held;
     }
     md->setMemoryWatch({});
-    md->setPads(PadState{}, PadState{});
 
     // The state at the start of frame `n` of the boot.
     auto goTo = [&](uint64_t n) {
@@ -248,11 +232,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         if (!md->loadState(it->second, nullptr)) return false;
         md->lockSoundRequests(0, 0);
         md->cpu().holdMain(false);
-        while (md->frameCount() < n) {
-            md->setPads(bootPad(md->frameCount()), PadState{});  // the same as the first time
-            frame();
-        }
-        md->setPads(PadState{}, PadState{});
+        while (md->frameCount() < n) frame();
         return true;
     };
     // Plays `frames` from the state now, recording; returns the notes heard (channel and
@@ -287,21 +267,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     // request kept out and once asking again ourselves.
     std::vector<Candidate> list;
     for (auto& [addr, c] : found) list.push_back(c);
-    // The likeliest first: bytes of the Z80's RAM (where the 68000 only writes to talk to
-    // the sound driver), then by how often notes start right after a request.
-    auto likely = [&](const Candidate& c) {
-        int n = 0;
-        for (const auto& r : c.requests)
-            for (uint64_t f = r.first; f < r.first + 10 && f < started.size(); ++f)
-                if (started[f]) {
-                    ++n;
-                    break;
-                }
-        return (c.address < 0xFF0000 ? 1000 : 0) + n * 100 / static_cast<int>(c.requests.size());
-    };
-    for (Candidate& c : list) c.sound = -likely(c);  // (a sorting key only, until measured below)
     std::sort(list.begin(), list.end(), [](const Candidate& a, const Candidate& b) {
-        if (a.sound != b.sound) return a.sound < b.sound;
         return a.firstFrame != b.firstFrame ? a.firstFrame < b.firstFrame : a.address < b.address;
     });
     if (log_)
@@ -309,9 +275,8 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             std::string r;
             for (size_t i = 0; i < c.requests.size() && i < 12; ++i)
                 r += " " + hex(c.requests[i].second, 2) + "@" + std::to_string(c.requests[i].first);
-            say("  " + hex(c.address, 6) + " (" + std::to_string(-c.sound) + "):" + r);
+            say("  " + hex(c.address, 6) + ":" + r);
         }
-    for (Candidate& c : list) c.sound = 0;
     if (list.size() > kMaxCandidates) list.resize(kMaxCandidates);
     std::vector<Candidate> queues;
     if (!report("Buscando dónde pide el juego la música")) return fail("");
@@ -324,25 +289,21 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
                 say("No se puede volver al cuadro " + std::to_string(when));
                 continue;
             }
-            // What changes when it is asked for: notes that only sound then (a song or
-            // a sound starts), or that stop sounding (it replaced the one playing).
             md->lockSoundRequests(c.address, 1);
-            const auto quiet = listen(kCheckFrames);
+            const int quiet = count(listen(kCheckFrames));
             goTo(when);
             md->lockSoundRequests(c.address, 1);
             md->poke(c.address, number);
-            const auto asked = listen(kCheckFrames);
-            const int added = extra(asked, quiet), gone = extra(quiet, asked);
+            const int asked = count(listen(kCheckFrames));
             say("Candidato " + hex(c.address, 6) + ", petición " + hex(number, 2) + " en el cuadro " +
-                std::to_string(when) + ": " + std::to_string(added) + " notas nuevas, " + std::to_string(gone) +
-                " que se van");
-            if (added + gone >= 8) c.changes = true;
-            if (added > c.sound) {
-                c.sound = added;
+                std::to_string(when) + ": " + std::to_string(quiet) + " notas sin ella, " + std::to_string(asked) +
+                " pidiéndola");
+            if (asked - quiet > c.sound) {
+                c.sound = asked - quiet;
                 c.soundFrame = when;
             }
         }
-        if (c.changes && c.sound > 4) queues.push_back(c);
+        if (c.sound > 4) queues.push_back(c);
     }
     md->lockSoundRequests(0, 0);
     if (queues.empty())
