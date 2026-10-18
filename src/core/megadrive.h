@@ -116,7 +116,7 @@ public:
 
     // Song extraction (SongExtractor). The watch hears every byte written to work RAM
     // (0xFF0000 up) and to the Z80's RAM (0xA00000 up), and whether the 68000 wrote it;
-    // empty for none.
+    // also the 68000's writes to the YM2612, as 0xA04000-0xA04003. Empty for none.
     using MemoryWatch = std::function<void(uint32_t addr, uint8_t value, bool m68k)>;
     void setMemoryWatch(MemoryWatch watch);
     // Keeps the game from asking for music and sounds: the 68000's writes to
