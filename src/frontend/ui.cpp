@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
+#include "game_options.h"
 #include "library_names.h"
 #include "logo_png.h"
 #include "../core/system.h"
@@ -229,6 +230,7 @@ UiActions Ui::frame(const UiState& state) {
     if (showVideo_) drawVideo(state, out);
     if (showAbout_) drawAbout();
     if (showCheats_) drawCheats(state, out);
+    if (showGameOptions_) drawGameOptions(state, out);
     library_.update();
     if (showLibrary_) drawLibrary(out);
     if (showBios_) drawBios(out);
@@ -265,7 +267,7 @@ UiActions Ui::frame(const UiState& state) {
 // The backend reads the cursor ImGui asks for at the start of the next frame and hides
 // the system pointer when it is None.
 void Ui::hideIdleCursor(const UiState& state) {
-    const bool windowOpen = showControls_ || showVideo_ || showAbout_ || showCheats_ || showLibrary_ ||
+    const bool windowOpen = showControls_ || showVideo_ || showAbout_ || showCheats_ || showGameOptions_ || showLibrary_ ||
                             showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
                             !error_.empty() || capture_.active ||
                             ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) || ImGui::GetIO().WantCaptureMouse;
@@ -315,7 +317,14 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         const bool solo = state.romLoaded && !state.netPlaying;
         if (ImGui::MenuItem("Pausa", "P", state.paused, solo)) out.togglePause = true;
         if (ImGui::MenuItem("Reiniciar", "F1", false, solo)) out.reset = true;
-        if (ImGui::MenuItem("Trucos...", nullptr, showCheats_, solo)) showCheats_ = true;
+        if (ImGui::MenuItem("Trucos...", nullptr, false, solo)) {
+            out.cheatsFor = state.romPath;
+            showCheats_ = true;
+        }
+        if (ImGui::MenuItem("Opciones de este juego...", nullptr, false, solo)) {
+            out.optionsFor = state.romPath;
+            showGameOptions_ = true;
+        }
         ImGui::SeparatorText("Velocidad");
         if (ImGui::MenuItem("Cámara lenta", "F9", state.slowMotion, solo)) out.toggleSlowMotion = true;
         ImGui::TextDisabled("Rebobinar: mantén Retroceso (o el gatillo izquierdo)");
@@ -863,7 +872,7 @@ bool Ui::handleLibrary(const SDL_Event& e) {
     if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_KEYUP &&
         e.type != SDL_CONTROLLERBUTTONUP && e.type != SDL_TEXTINPUT)
         return false;
-    if (browser_.isOpen() || showBios_) return false;
+    if (browser_.isOpen() || showBios_ || showCheats_ || showGameOptions_) return false;
     const bool typing = ImGui::GetIO().WantTextInput;
     if (typing && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_CONTROLLERBUTTONUP) {
         // The search box gets the keys; Enter or the arrows hand them back to the grid.
@@ -880,10 +889,13 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         showLibrary_ = false;
         return true;
     }
-    enum { None, Up, Down, Left, Right, Play, Close, Search, PrevTab, NextTab } action = None;
+    enum { None, Up, Down, Left, Right, Play, Close, Search, PrevTab, NextTab, Menu } action = None;
     if (e.type == SDL_KEYDOWN) {
         const bool ctrl = (e.key.keysym.mod & KMOD_CTRL) != 0;
+        const bool shift = (e.key.keysym.mod & KMOD_SHIFT) != 0;
         switch (e.key.keysym.scancode) {
+            case SDL_SCANCODE_APPLICATION: action = Menu; break;
+            case SDL_SCANCODE_F10: if (shift) action = Menu; else return false; break;
             case SDL_SCANCODE_UP: action = Up; break;
             case SDL_SCANCODE_DOWN: action = Down; break;
             case SDL_SCANCODE_LEFT: action = Left; break;
@@ -904,10 +916,22 @@ bool Ui::handleLibrary(const SDL_Event& e) {
             case SDL_CONTROLLER_BUTTON_A: case SDL_CONTROLLER_BUTTON_START: action = Play; break;
             case SDL_CONTROLLER_BUTTON_B: action = Close; break;
             case SDL_CONTROLLER_BUTTON_Y: action = Search; break;
+            case SDL_CONTROLLER_BUTTON_X: action = Menu; break;
             case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: action = PrevTab; break;
             case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: action = NextTab; break;
             default: break;
         }
+    }
+    // With a game's menu open the arrows move through it, A picks and B closes it.
+    if (libraryView_.menuGame >= 0) {
+        switch (action) {
+            case Up: libraryView_.menuItem = (libraryView_.menuItem + LibraryView::kItems - 1) % LibraryView::kItems; break;
+            case Down: libraryView_.menuItem = (libraryView_.menuItem + 1) % LibraryView::kItems; break;
+            case Play: libraryView_.menuAction = libraryView_.menuItem; break;
+            case Close: case Menu: libraryView_.menuGame = -1; break;
+            default: break;
+        }
+        return true;
     }
     if (action == PrevTab || action == NextTab) {
         // Tabs: -1 (all), then each console; wraps around.
@@ -931,6 +955,13 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         case Play: if (count > 0) libraryView_.load = sel; break;
         case Close: showLibrary_ = false; break;
         case Search: libraryView_.focusSearch = true; break;
+        case Menu:
+            if (count > 0) {
+                libraryView_.menuGame = sel;
+                libraryView_.menuItem = 0;
+                libraryView_.openMenu = true;
+            }
+            break;
         default: break;
     }
     sel = std::clamp(sel, 0, std::max(0, count - 1));
@@ -1050,7 +1081,8 @@ void Ui::drawLibrary(UiActions& out) {
     const std::vector<size_t> visible = visibleGames();
     if (library_.pending() > 0) ImGui::Text("%d juegos. Buscando carátulas, quedan %d...", static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text("%d juegos. %s", static_cast<int>(visible.size()), library_.downloadStatus().c_str());
-    ImGui::TextDisabled("Flechas o cruceta: elegir   A o Intro: jugar   B o Esc: cerrar   L / R o RePág / AvPág: consola");
+    ImGui::TextDisabled("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos y opciones\n"
+                        "B o Esc: cerrar   L / R o RePág / AvPág: consola");
     ImGui::Separator();
 
     if (games.empty()) ImGui::TextDisabled("No hay juegos (.md, .bin, .gen, .smd, .32x, .zip, .cue, .chd, .iso) en estas carpetas.");
@@ -1075,6 +1107,13 @@ void Ui::drawLibrary(UiActions& out) {
         if (ImGui::Selectable("##juego", selected, ImGuiSelectableFlags_AllowDoubleClick, card)) {
             libraryView_.selected = n;
             if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) libraryView_.load = n;
+        }
+        // On release, like ImGui's own context menus: the press closes open popups.
+        if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+            libraryView_.selected = n;
+            libraryView_.menuGame = n;
+            libraryView_.menuItem = 0;
+            libraryView_.openMenu = true;
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s\n%s", systemName(g.system), g.path.c_str());
         if (selected && libraryView_.scroll) {
@@ -1117,6 +1156,40 @@ void Ui::drawLibrary(UiActions& out) {
         ImGui::PopID();
     }
     ImGui::EndChild();
+
+    // The game's menu, opened with the right button, X on the pad or the menu key.
+    if (libraryView_.openMenu) {
+        ImGui::OpenPopup("menu_juego");
+        libraryView_.openMenu = false;
+    }
+    if (ImGui::BeginPopup("menu_juego")) {
+        const int n = libraryView_.menuGame;
+        if (n < 0 || n >= static_cast<int>(visible.size())) {
+            ImGui::CloseCurrentPopup();
+        } else {
+            const Library::Game& g = games[visible[static_cast<size_t>(n)]];
+            ImGui::TextDisabled("%s", g.title.c_str());
+            ImGui::Separator();
+            static const char* items[LibraryView::kItems] = {"Jugar", "Trucos...", "Opciones de este juego..."};
+            int picked = libraryView_.menuAction;
+            for (int i = 0; i < LibraryView::kItems; ++i)
+                if (ImGui::Selectable(items[i], libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
+            switch (picked) {
+                case 0: libraryView_.load = n; break;
+                case 1: out.cheatsFor = g.path; showCheats_ = true; break;
+                case 2: out.optionsFor = g.path; showGameOptions_ = true; break;
+                default: break;
+            }
+            if (picked >= 0) {
+                libraryView_.menuGame = -1;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndPopup();
+    } else {
+        libraryView_.menuGame = -1;  // closed by clicking elsewhere
+    }
+    libraryView_.menuAction = -1;
 
     if (libraryView_.load >= 0 && libraryView_.load < static_cast<int>(visible.size())) {
         out.load = games[visible[static_cast<size_t>(libraryView_.load)]].path;
@@ -1291,14 +1364,14 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
         ImGui::End();
         return;
     }
-    if (!state.romLoaded || !state.cheats) {
-        ImGui::TextDisabled("Abre una ROM para ponerle trucos.");
+    if (!state.cheats) {
+        ImGui::TextDisabled("Abre una ROM, o elige un juego en la biblioteca con el botón derecho.");
         ImGui::End();
         return;
     }
     std::vector<Cheat>& cheats = *state.cheats;
     ImGui::TextWrapped("Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. "
-                       "Se guardan para este juego y se activan al abrirlo.", state.gameName.c_str());
+                       "Se guardan para este juego y se activan al abrirlo.", state.cheatsGame.c_str());
     ImGui::Spacing();
     int remove = -1;
     if (cheats.empty()) ImGui::TextDisabled("Este juego no tiene trucos todavía.");
@@ -1372,5 +1445,127 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
     ImGui::End();
 }
 
+
+// The options this game keeps a value of its own for. Each has a box: ticked, the
+// game has its own value (edited here); unticked, it follows the general one (shown greyed).
+void Ui::drawGameOptions(const UiState& state, UiActions& out) {
+    ImGui::SetNextWindowSize(ImVec2(520, 0), ImGuiCond_Appearing);
+    if (!ImGui::Begin("Opciones de este juego", &showGameOptions_)) {
+        ImGui::End();
+        return;
+    }
+    const GameOptionsView& v = state.gameOptions;
+    if (v.game.empty() || !v.values || !v.own || !v.general) {
+        ImGui::TextDisabled("Abre un juego, o elige uno en la biblioteca con el botón derecho.");
+        ImGui::End();
+        return;
+    }
+    ImGui::TextWrapped("Opciones propias de %s. Marca una opción para que este juego use su propio valor; "
+                       "las que no marques siguen a las generales.", v.game.c_str());
+    if (v.loaded && state.netPlaying) ImGui::TextDisabled("En una partida en red no se pueden cambiar.");
+    ImGui::BeginDisabled(v.loaded && state.netPlaying);
+    Settings& s = *v.values;
+    std::set<std::string>& own = *v.own;
+    std::string group;
+    for (const GameOption& opt : gameOptions()) {
+        const std::string key = opt.key;
+        if (group != opt.group) {
+            group = opt.group;
+            ImGui::SeparatorText(opt.group);
+        }
+        ImGui::PushID(opt.key);
+        bool mine = own.count(key) != 0;
+        bool edited = false;
+        if (ImGui::Checkbox("##propio", &mine)) {
+            if (mine) own.insert(key);
+            else {
+                own.erase(key);
+                opt.copy(*v.general, s);
+            }
+            edited = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(mine ? "Propio de este juego" : "Usa el valor general");
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!mine);
+        ImGui::SetNextItemWidth(220);
+        if (key == "vista") {
+            if (ImGui::BeginCombo(opt.label, s.view.c_str())) {
+                for (const char* view : state.views)
+                    if (ImGui::Selectable(view, s.view == view)) {
+                        s.view = view;
+                        edited = true;
+                    }
+                ImGui::EndCombo();
+            }
+        } else if (key == "escalado") {
+            static const char* names[] = {"Escala entera", "Ajustar", "Estirar"};
+            int i = static_cast<int>(s.render.scale);
+            if (ImGui::Combo(opt.label, &i, names, 3)) {
+                s.render.scale = static_cast<ScaleMode>(i);
+                edited = true;
+            }
+        } else if (key == "suavizado") {
+            edited |= ImGui::Checkbox("Suavizar píxeles", &s.render.smooth);
+        } else if (key == "filtro") {
+            static const char* names[] = {"Ninguno", "Scanlines", "CRT"};
+            int i = static_cast<int>(s.render.filter);
+            if (ImGui::Combo(opt.label, &i, names, 3)) {
+                s.render.filter = static_cast<Filter2D>(i);
+                edited = true;
+            }
+        } else if (key == "intensidad_filtro") {
+            float strength = s.render.filterStrength * 100.0f;
+            if (ImGui::SliderFloat(opt.label, &strength, 0.0f, 100.0f, "%.0f %%")) s.render.filterStrength = strength / 100.0f;
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else if (key == "pixeles_cuadrados") {
+            edited |= ImGui::Checkbox("Píxeles cuadrados (sin estirar a 4:3)", &s.render.squarePixels);
+        } else if (key == "perfil_3d") {
+            ImGui::TextUnformatted(opt.label);
+            ImGui::SameLine();
+            ImGui::TextDisabled(v.loaded ? "(se ajustan en Opciones > Vídeo)" : "(se ajustan en Vídeo con el juego abierto)");
+        } else if (key == "volumen") {
+            ImGui::SliderInt(opt.label, &s.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else if (key == "silencio") {
+            edited |= ImGui::Checkbox("Silenciar", &s.mute);
+        } else if (key == "region") {
+            static const char* names[] = {"Automática (la de la ROM)", "Japón (NTSC)", "EE. UU. (NTSC)", "Europa (PAL)"};
+            int i = static_cast<int>(s.region);
+            if (ImGui::Combo(opt.label, &i, names, 4)) {
+                s.region = static_cast<Region>(i);
+                edited = true;
+            }
+        } else if (key == "mandos") {
+            static const char* names[] = {"3 botones", "6 botones"};
+            for (size_t port = 0; port < 2; ++port) {
+                if (port) ImGui::SameLine();
+                int i = s.padType[port] == PadType::ThreeButton ? 0 : 1;
+                ImGui::SetNextItemWidth(110);
+                if (ImGui::Combo(port ? "Mando 2" : "Mando 1", &i, names, 2)) {
+                    s.padType[port] = i == 0 ? PadType::ThreeButton : PadType::SixButton;
+                    edited = true;
+                }
+            }
+        } else if (key == "rebobinado_segundos") {
+            ImGui::SliderInt(opt.label, &s.rewindSeconds, 0, Settings::kMaxRewindSeconds,
+                             s.rewindSeconds ? "%d s" : "desactivado", ImGuiSliderFlags_AlwaysClamp);
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else if (key == "avance_rapido") {
+            ImGui::SliderInt(opt.label, &s.fastForward, 2, 10, "%dx", ImGuiSliderFlags_AlwaysClamp);
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else if (key == "camara_lenta") {
+            ImGui::SliderInt(opt.label, &s.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
+        }
+        ImGui::EndDisabled();
+        ImGui::PopID();
+        if (!edited) continue;
+        out.gameOptionsChanged = true;
+        if (v.loaded && (key == "region" || key == "mandos")) out.consoleChanged = true;
+        if (v.loaded && key == "rebobinado_segundos") out.rewindChanged = true;
+    }
+    ImGui::EndDisabled();
+    ImGui::End();
+}
 
 }  // namespace plumsg
