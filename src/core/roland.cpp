@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 #include "psg.h"
 #include "ym2612.h"
@@ -145,6 +146,19 @@ bool RolandSound::loadSoundfont(const std::vector<uint8_t>& data) {
     synth_->font = font;
     synth_->rate = 0;
     voices_ = {};
+    channels_ = {};
+    return true;
+}
+
+bool RolandSound::shareSoundfont(const RolandSound& other) {
+    if (!other.synth_->font) return false;
+    tsf* font = tsf_copy(other.synth_->font);
+    if (!font) return false;
+    if (synth_->font) tsf_close(synth_->font);
+    synth_->font = font;
+    synth_->rate = 0;
+    voices_ = {};
+    channels_ = {};
     return true;
 }
 
@@ -152,9 +166,163 @@ bool RolandSound::ready() const { return synth_->font != nullptr; }
 
 void RolandSound::setEffects(int reverb, int chorus) { synth_->effects.setAmounts(reverb, chorus); }
 
-void RolandSound::setAssignment(uint32_t fingerprint, int program) {
-    if (program < 0) assigned_.erase(fingerprint);
-    else assigned_[fingerprint] = std::clamp(program, 0, 127);
+namespace {
+
+// What the PSG noise sounds like as a drum: white noise a snare or a hi-hat by its
+// pitch, periodic noise a bass drum.
+int noiseDrum(int control) { return !(control & 4) ? 36 : (control & 3) >= 2 ? 38 : 42; }
+
+const char* const kPrograms[128] = {
+    "Piano de cola", "Piano brillante", "Piano eléctrico de cola", "Piano de cantina", "Piano eléctrico 1",
+    "Piano eléctrico 2", "Clavecín", "Clavinet", "Celesta", "Glockenspiel", "Caja de música", "Vibráfono",
+    "Marimba", "Xilófono", "Campanas tubulares", "Dulcémele", "Órgano de barras", "Órgano de percusión",
+    "Órgano de rock", "Órgano de iglesia", "Armonio", "Acordeón", "Armónica", "Bandoneón", "Guitarra de nailon",
+    "Guitarra de acero", "Guitarra eléctrica de jazz", "Guitarra eléctrica limpia", "Guitarra eléctrica apagada",
+    "Guitarra saturada", "Guitarra distorsionada", "Armónicos de guitarra", "Bajo acústico", "Bajo eléctrico (dedo)",
+    "Bajo eléctrico (púa)", "Bajo sin trastes", "Bajo slap 1", "Bajo slap 2", "Bajo sintetizado 1",
+    "Bajo sintetizado 2", "Violín", "Viola", "Violonchelo", "Contrabajo", "Cuerdas en trémolo",
+    "Cuerdas en pizzicato", "Arpa", "Timbales", "Cuerdas 1", "Cuerdas 2", "Cuerdas sintetizadas 1",
+    "Cuerdas sintetizadas 2", "Coro \"aah\"", "Voz \"ooh\"", "Voz sintetizada", "Golpe de orquesta", "Trompeta",
+    "Trombón", "Tuba", "Trompeta con sordina", "Trompa", "Sección de metales", "Metales sintetizados 1",
+    "Metales sintetizados 2", "Saxo soprano", "Saxo alto", "Saxo tenor", "Saxo barítono", "Oboe", "Corno inglés",
+    "Fagot", "Clarinete", "Flautín", "Flauta", "Flauta dulce", "Flauta de pan", "Botella soplada", "Shakuhachi",
+    "Silbido", "Ocarina", "Solista cuadrada", "Solista diente de sierra", "Solista calíope", "Solista chiff",
+    "Solista charango", "Solista voz", "Solista quintas", "Solista bajo y melodía", "Fondo new age", "Fondo cálido",
+    "Fondo polisintetizador", "Fondo coro", "Fondo arco", "Fondo metálico", "Fondo halo", "Fondo barrido",
+    "Efecto lluvia", "Efecto banda sonora", "Efecto cristal", "Efecto atmósfera", "Efecto brillo",
+    "Efecto duendes", "Efecto ecos", "Efecto ciencia ficción", "Sitar", "Banjo", "Shamisen", "Koto", "Kalimba",
+    "Gaita", "Violín celta", "Shanai", "Campanilla", "Agogó", "Tambores metálicos", "Caja china", "Taiko",
+    "Tom melódico", "Tambor sintetizado", "Platillo al revés", "Traste de guitarra", "Respiración", "Olas",
+    "Pájaros", "Teléfono", "Helicóptero", "Aplausos", "Disparo"};
+
+const char* const kDrumNames[47] = {
+    "Bombo acústico", "Bombo", "Golpe de aro", "Caja", "Palmada", "Caja eléctrica", "Tom grave de suelo",
+    "Charles cerrado", "Tom agudo de suelo", "Charles con pedal", "Tom grave", "Charles abierto",
+    "Tom medio grave", "Tom medio agudo", "Platillo crash 1", "Tom agudo", "Platillo ride 1", "Platillo chino",
+    "Campana del ride", "Pandereta", "Platillo splash", "Cencerro", "Platillo crash 2", "Vibraslap",
+    "Platillo ride 2", "Bongó agudo", "Bongó grave", "Conga aguda apagada", "Conga aguda abierta", "Conga grave",
+    "Timbal agudo", "Timbal grave", "Agogó agudo", "Agogó grave", "Cabasa", "Maracas", "Silbato corto",
+    "Silbato largo", "Güiro corto", "Güiro largo", "Claves", "Caja china aguda", "Caja china grave",
+    "Cuíca apagada", "Cuíca abierta", "Triángulo apagado", "Triángulo abierto"};
+
+}  // namespace
+
+const char* RolandSound::programName(int program) { return program >= 0 && program < 128 ? kPrograms[program] : ""; }
+
+const char* RolandSound::drumName(int note) { return note >= 35 && note <= 81 ? kDrumNames[note - 35] : nullptr; }
+
+RolandSound::Kind RolandSound::kindOf(uint32_t fingerprint) {
+    if ((fingerprint & ~0xFFu) == psgToneFingerprint(0) && (fingerprint & 0xFF) < 3) return Kind::PsgTone;
+    if ((fingerprint & ~0xFFu) == noiseFingerprint(0) && (fingerprint & 0xFF) < 8) return Kind::PsgNoise;
+    return Kind::Fm;
+}
+
+RolandSound::Assignment RolandSound::assignmentFor(uint32_t fingerprint) const {
+    if (auto a = assigned_.find(fingerprint); a != assigned_.end()) return a->second;
+    Assignment rules;
+    switch (kindOf(fingerprint)) {
+        case Kind::PsgTone: rules.program = kPsgDefault; break;
+        case Kind::PsgNoise: rules.drum = noiseDrum(static_cast<int>(fingerprint & 7)); break;
+        case Kind::Fm: {
+            auto r = rules_.find(fingerprint);
+            rules.program = r != rules_.end() ? r->second : 81;
+            break;
+        }
+    }
+    return rules;
+}
+
+void RolandSound::setAssignments(Assignments assigned) {
+    assigned_ = std::move(assigned);
+    updateChipChannels();
+}
+
+void RolandSound::setListening(uint32_t mutedVoices, std::set<uint32_t> silenced) {
+    mutedVoices_ = mutedVoices;
+    silenced_ = std::move(silenced);
+    // What is sounding and should not be stops now.
+    for (int i = 0; i < kVoices; ++i) {
+        Voice& v = voices_[static_cast<size_t>(i)];
+        if (v.midi && ((mutedVoices_ >> i) & 1 || silenced_.count(v.fingerprint))) {
+            if (!v.drum) emit(frameStart_, Ev::NoteOff, i, v.note);
+            v.midi = false;
+        }
+    }
+    updateChipChannels();
+}
+
+void RolandSound::updateChipChannels() {
+    chipChannels_ = 0;
+    for (int i = 0; i < kVoices; ++i) {
+        const Voice& v = voices_[static_cast<size_t>(i)];
+        if (v.fingerprint && assignmentFor(v.fingerprint).original && !((mutedVoices_ >> i) & 1) &&
+            !silenced_.count(v.fingerprint))
+            chipChannels_ |= 1u << i;
+    }
+}
+
+uint32_t RolandSound::activeVoices() const {
+    uint32_t mask = 0;
+    for (int i = 0; i < kVoices; ++i)
+        if (voices_[static_cast<size_t>(i)].on) mask |= 1u << i;
+    return mask;
+}
+
+RolandSound::Assignments RolandSound::parseAssignments(const std::string& text) {
+    Assignments out;
+    size_t pos = 0;
+    while (pos < text.size()) {
+        size_t end = text.find('\n', pos);
+        if (end == std::string::npos) end = text.size();
+        std::string line = text.substr(pos, end - pos);
+        pos = end + 1;
+        if (const size_t c = line.find(';'); c != std::string::npos) line.resize(c);
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        char* stop = nullptr;
+        const std::string key = line.substr(0, eq);
+        const unsigned long fp = std::strtoul(key.c_str(), &stop, 16);
+        if (stop == key.c_str() || fp == 0) continue;
+        char word[32] = "";
+        int a = 0, b = 0, c = 0;
+        const char* value = line.c_str() + eq + 1;
+        Assignment as;
+        if (std::sscanf(value, " %31s", word) != 1) continue;
+        if (std::string(word) == "original") {
+            as.original = true;
+        } else if (std::string(word) == "bateria") {
+            const int n = std::sscanf(value, " %*s %d %d %d", &a, &b, &c);
+            if (n < 1 || !drumName(a)) continue;
+            as.drum = a;
+            if (n >= 3) as.volume = std::clamp(c, 0, 200);
+        } else {
+            const int n = std::sscanf(value, " %d %d %d", &a, &b, &c);
+            if (n < 1 || a < 0 || a > 127) continue;
+            as.program = a;
+            if (n >= 2) as.octave = std::clamp(b, -3, 3);
+            if (n >= 3) as.volume = std::clamp(c, 0, 200);
+        }
+        out[static_cast<uint32_t>(fp)] = as;
+    }
+    return out;
+}
+
+std::string RolandSound::formatAssignments(const Assignments& assignments) {
+    std::string out =
+        "; Instrumentos del sonido Roland: huella = instrumento GM (0-127) octava volumen,\n"
+        "; bateria nota 0 volumen (una pieza del kit, 35-81), u original.\n[instrumentos]\n";
+    for (const auto& [fp, a] : assignments) {
+        char line[160];
+        if (a.original)
+            std::snprintf(line, sizeof line, "%08x = original\n", fp);
+        else if (a.drum >= 0)
+            std::snprintf(line, sizeof line, "%08x = bateria %d 0 %d ; %s\n", fp, a.drum, a.volume, drumName(a.drum));
+        else
+            std::snprintf(line, sizeof line, "%08x = %d %d %d ; %s\n", fp, a.program, a.octave, a.volume,
+                          programName(a.program));
+        out += line;
+    }
+    return out;
 }
 
 double RolandSound::fmNote(int fnum, int block, double chipClock) {
@@ -205,18 +373,124 @@ void RolandSound::emit(uint64_t clock, Ev type, int channel, int value, int extr
 
 void RolandSound::beginFrame(uint64_t clock) { frameStart_ = clock; }
 
-void RolandSound::allNotesOff() {
+void RolandSound::skipFrame(uint64_t clock) {
+    // The channels' settings still go through, so the synth is ready when it is heard.
+    if (synth_->font)
+        for (const Event& e : events_)
+            if (e.type != Ev::NoteOn) apply(e);
     events_.clear();
-    for (Voice& v : voices_) v.on = false;
+    frameStart_ = clock;
     if (synth_->font) tsf_note_off_all(synth_->font);
 }
 
+void RolandSound::allNotesOff() {
+    events_.clear();
+    for (Voice& v : voices_) v.on = v.midi = false;
+    // Every channel back to its defaults, in the synth and here; the program is sent
+    // again with the next note.
+    channels_ = {};
+    if (synth_->font && synth_->rate) {
+        tsf_note_off_all(synth_->font);
+        for (int ch = 0; ch < 16; ++ch) {
+            tsf_channel_set_pitchwheel(synth_->font, ch, 8192);
+            tsf_channel_set_pan(synth_->font, ch, 0.5f);
+            tsf_channel_midi_control(synth_->font, ch, 11, 127);
+        }
+    }
+}
+
 void RolandSound::keysOff(uint64_t clock) {
-    for (int ch = 0; ch < kFmChannels; ++ch) {
-        Voice& v = voices_[static_cast<size_t>(ch)];
-        if (!v.on) continue;
-        v.on = false;
-        emit(clock, Ev::NoteOff, ch, v.note);
+    for (int ch = 0; ch < kFmChannels; ++ch) noteOff(ch, clock);
+}
+
+void RolandSound::see(int voice, uint32_t fingerprint, const Assignment& rules, int note,
+                      const std::array<uint8_t, 28>* ops, uint8_t algorithmFeedback) {
+    Seen& s = seen_[fingerprint];
+    s.kind = kindOf(fingerprint);
+    if (ops) s.ops = *ops;
+    s.algorithmFeedback = algorithmFeedback;
+    s.channels |= 1u << voice;
+    ++s.notes;
+    s.low = std::min(s.low, note);
+    s.high = std::max(s.high, note);
+    s.rules = rules;
+}
+
+int RolandSound::velocity(const Voice& v, double amplitude) {
+    return std::clamp(static_cast<int>(std::lround(127 * std::sqrt(amplitude) * v.volume / 100.0)), 1, 127);
+}
+
+void RolandSound::noteOn(int voice, uint32_t fingerprint, const Assignment& a, double note, double amplitude, int pan,
+                         uint64_t clock) {
+    noteOff(voice, clock);
+    Voice& v = voices_[static_cast<size_t>(voice)];
+    v.on = true;
+    v.amplitude = amplitude;
+    if (v.fingerprint != fingerprint) {
+        v.fingerprint = fingerprint;
+        updateChipChannels();
+    }
+    const bool quiet = a.original || ((mutedVoices_ >> voice) & 1) || silenced_.count(fingerprint);
+    v.drum = a.drum >= 0;
+    v.midi = !quiet && (v.drum || (a.program >= 0 && voice != kNoise));
+    if (!v.midi) return;
+    v.volume = a.volume;
+    if (v.drum) {
+        v.note = a.drum;
+        emit(clock, Ev::NoteOn, kDrums, v.note, velocity(v, amplitude));
+        return;
+    }
+    Channel& c = channels_[static_cast<size_t>(voice)];
+    if (a.program != c.program) {
+        c.program = a.program;
+        emit(clock, Ev::Program, voice, a.program);
+    }
+    if (pan != c.pan) {
+        c.pan = pan;
+        emit(clock, Ev::Pan, voice, pan);
+    }
+    if (c.expression != 127) {
+        c.expression = 127;
+        emit(clock, Ev::Expression, voice, 127);
+    }
+    v.octave = 12 * a.octave;
+    v.note = std::clamp(static_cast<int>(std::lround(note)) + v.octave, 0, 127);
+    pitchTo(voice, note, clock);
+    emit(clock, Ev::NoteOn, voice, v.note, velocity(v, amplitude));
+}
+
+void RolandSound::noteOff(int voice, uint64_t clock) {
+    Voice& v = voices_[static_cast<size_t>(voice)];
+    // Drums ring out by themselves, as on a GM module.
+    if (v.on && v.midi && !v.drum) emit(clock, Ev::NoteOff, voice, v.note);
+    v.on = v.midi = false;
+}
+
+void RolandSound::expression(int voice, double amplitude, uint64_t clock) {
+    Voice& v = voices_[static_cast<size_t>(voice)];
+    if (!v.midi || v.drum || v.amplitude <= 0) return;
+    Channel& c = channels_[static_cast<size_t>(voice)];
+    const int e = std::clamp(static_cast<int>(127 * std::sqrt(amplitude / v.amplitude)), 0, 127);
+    if (e == c.expression) return;
+    c.expression = e;
+    emit(clock, Ev::Expression, voice, e);
+}
+
+void RolandSound::pitchTo(int voice, double note, uint64_t clock) {
+    Voice& v = voices_[static_cast<size_t>(voice)];
+    if (!v.midi || v.drum || note <= 0) return;
+    note += v.octave;
+    Channel& c = channels_[static_cast<size_t>(voice)];
+    // Within the bend range the note bends; further, it is played again at the new note.
+    if (std::fabs(note - v.note) > kBendRange) {
+        emit(clock, Ev::NoteOff, voice, v.note);
+        v.note = std::clamp(static_cast<int>(std::lround(note)), 0, 127);
+        emit(clock, Ev::NoteOn, voice, v.note, velocity(v, v.amplitude));
+    }
+    const int bend = std::clamp(8192 + static_cast<int>(std::lround((note - v.note) * 8192.0 / kBendRange)), 0, 16383);
+    if (bend != c.bend) {
+        c.bend = bend;
+        emit(clock, Ev::Bend, voice, bend);
     }
 }
 
@@ -235,6 +509,8 @@ uint32_t RolandSound::fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t
             add(b);
         }
     }
+    // Clear of the PSG's fingerprints, which are not hashes.
+    if (kindOf(hash) != Kind::Fm || hash == 0) hash ^= 0x80000001u;
     return hash;
 }
 
@@ -246,29 +522,12 @@ double RolandSound::fmAmplitude(int ch, const Ym2612& ym) const {
     return std::pow(10.0, -0.75 * level / 20.0);  // 0.75 dB a step
 }
 
-void RolandSound::pitchTo(int ch, double note, uint64_t clock, int velocity) {
-    Voice& v = voices_[static_cast<size_t>(ch)];
-    if (note <= 0) return;
-    // Within the bend range the note bends; further, it is played again at the new note.
-    if (v.on && std::fabs(note - v.note) > kBendRange) {
-        emit(clock, Ev::NoteOff, ch, v.note);
-        v.note = static_cast<int>(std::lround(note));
-        emit(clock, Ev::NoteOn, ch, v.note, velocity);
-    }
-    const int bend = std::clamp(8192 + static_cast<int>(std::lround((note - v.note) * 8192.0 / kBendRange)), 0, 16383);
-    if (bend != v.bend) {
-        v.bend = bend;
-        emit(clock, Ev::Bend, ch, bend);
-    }
-}
-
 void RolandSound::fmKey(int ch, bool on, const Ym2612& ym, uint64_t clock) {
     Voice& v = voices_[static_cast<size_t>(ch)];
     if (ch == 5 && ym.dacEnabled()) on = false;  // channel 6 is playing samples
     if (on == v.on) return;
     if (!on) {
-        v.on = false;
-        emit(clock, Ev::NoteOff, ch, v.note);
+        noteOff(ch, clock);
         return;
     }
     const uint8_t hi = ym.reg(chReg(ch, 0xA4));
@@ -276,51 +535,24 @@ void RolandSound::fmKey(int ch, bool on, const Ym2612& ym, uint64_t clock) {
     if (note <= 0) return;
     std::array<uint8_t, 28> ops{};
     const uint32_t fp = fmFingerprint(ch, ym, &ops);
-    int program;
-    if (auto a = assigned_.find(fp); a != assigned_.end()) {
-        program = a->second;
-    } else {
-        auto r = rules_.find(fp);
-        if (r == rules_.end()) r = rules_.emplace(fp, programFor(ops, ym.reg(chReg(ch, 0xB0)), static_cast<int>(note))).first;
-        program = r->second;
-    }
-    if (program != v.program) {
-        v.program = program;
-        emit(clock, Ev::Program, ch, program);
-    }
+    const uint8_t algorithmFeedback = ym.reg(chReg(ch, 0xB0));
+    auto r = rules_.find(fp);
+    if (r == rules_.end()) r = rules_.emplace(fp, programFor(ops, algorithmFeedback, static_cast<int>(note))).first;
+    Assignment rules;
+    rules.program = r->second;
+    see(ch, fp, rules, static_cast<int>(std::lround(note)), &ops, algorithmFeedback);
     const uint8_t panBits = ym.reg(chReg(ch, 0xB4)) >> 6;  // bit 1 left, bit 0 right
     const int pan = panBits == 2 ? 0 : panBits == 1 ? 127 : 64;
-    if (pan != v.pan) {
-        v.pan = pan;
-        emit(clock, Ev::Pan, ch, pan);
-    }
-    v.amplitude = fmAmplitude(ch, ym);
-    if (v.expression != 127) {
-        v.expression = 127;
-        emit(clock, Ev::Expression, ch, 127);
-    }
-    v.note = static_cast<int>(std::lround(note));
-    v.on = true;
-    pitchTo(ch, note, clock, 0);
-    emit(clock, Ev::NoteOn, ch, v.note, std::clamp(static_cast<int>(127 * std::sqrt(v.amplitude)), 1, 127));
+    noteOn(ch, fp, assignmentFor(fp), note, fmAmplitude(ch, ym), pan, clock);
 }
 
 void RolandSound::fmPitch(int ch, const Ym2612& ym, uint64_t clock) {
-    Voice& v = voices_[static_cast<size_t>(ch)];
-    if (!v.on) return;
+    if (!voices_[static_cast<size_t>(ch)].on) return;
     const uint8_t hi = ym.reg(chReg(ch, 0xA4));
-    pitchTo(ch, fmNote((hi & 7) << 8 | ym.reg(chReg(ch, 0xA0)), (hi >> 3) & 7, chipClock_), clock,
-            std::clamp(static_cast<int>(127 * std::sqrt(v.amplitude)), 1, 127));
+    pitchTo(ch, fmNote((hi & 7) << 8 | ym.reg(chReg(ch, 0xA0)), (hi >> 3) & 7, chipClock_), clock);
 }
 
-void RolandSound::fmLevel(int ch, const Ym2612& ym, uint64_t clock) {
-    Voice& v = voices_[static_cast<size_t>(ch)];
-    if (!v.on || v.amplitude <= 0) return;
-    const int expression = std::clamp(static_cast<int>(127 * std::sqrt(fmAmplitude(ch, ym) / v.amplitude)), 0, 127);
-    if (expression == v.expression) return;
-    v.expression = expression;
-    emit(clock, Ev::Expression, ch, expression);
-}
+void RolandSound::fmLevel(int ch, const Ym2612& ym, uint64_t clock) { expression(ch, fmAmplitude(ch, ym), clock); }
 
 void RolandSound::fmWrite(int offset, uint8_t value, const Ym2612& ym, uint64_t clock) {
     chipClock_ = ym.sampleRate() * 144.0;
@@ -349,49 +581,33 @@ void RolandSound::fmWrite(int offset, uint8_t value, const Ym2612& ym, uint64_t 
 
 void RolandSound::psgWrite(const Psg& psg, uint64_t clock) {
     for (int c = 0; c < 3; ++c) {
-        const int ch = kPsgFirst + c;
-        Voice& v = voices_[static_cast<size_t>(ch)];
+        const int voice = kPsgFirst + c;
+        Voice& v = voices_[static_cast<size_t>(voice)];
         const int att = psg.attenuation(c);
         const double note = psgNote(psg.period(c), psg.clock());
         const bool sounding = att < 15 && note > 20 && note < 120;
         const double amplitude = std::pow(10.0, -2.0 * att / 20.0);  // 2 dB a step
         if (!sounding) {
-            if (v.on) {
-                v.on = false;
-                emit(clock, Ev::NoteOff, ch, v.note);
-            }
+            noteOff(voice, clock);
             continue;
         }
         if (!v.on) {
-            if (v.program != kPsgDefault) {
-                v.program = kPsgDefault;
-                emit(clock, Ev::Program, ch, kPsgDefault);
-            }
-            if (v.expression != 127) {
-                v.expression = 127;
-                emit(clock, Ev::Expression, ch, 127);
-            }
-            v.amplitude = amplitude;
-            v.note = static_cast<int>(std::lround(note));
-            v.on = true;
-            pitchTo(ch, note, clock, 0);
-            emit(clock, Ev::NoteOn, ch, v.note, std::clamp(static_cast<int>(127 * std::sqrt(amplitude)), 1, 127));
+            const uint32_t fp = psgToneFingerprint(c);
+            Assignment rules;
+            rules.program = kPsgDefault;
+            see(voice, fp, rules, static_cast<int>(std::lround(note)), nullptr, 0);
+            noteOn(voice, fp, assignmentFor(fp), note, amplitude, 64, clock);
             continue;
         }
-        pitchTo(ch, note, clock, std::clamp(static_cast<int>(127 * std::sqrt(v.amplitude)), 1, 127));
+        pitchTo(voice, note, clock);
         // Games shape PSG notes by rewriting the volume: that is the expression.
-        const int expression = std::clamp(static_cast<int>(127 * std::sqrt(amplitude / v.amplitude)), 0, 127);
-        if (expression != v.expression) {
-            v.expression = expression;
-            emit(clock, Ev::Expression, ch, expression);
-        }
+        expression(voice, amplitude, clock);
     }
-    // The noise channel is the drums: white noise a snare or a hi-hat by its pitch,
-    // periodic noise a bass drum. A jump in volume is a new hit.
-    Voice& d = voices_[kDrums];
+    // The noise channel is the drums. A jump in volume is a new hit.
+    Voice& d = voices_[kNoise];
     const int att = psg.attenuation(3);
     if (att >= 15) {
-        d.on = false;
+        noteOff(kNoise, clock);
         d.amplitude = 0;
         return;
     }
@@ -400,12 +616,12 @@ void RolandSound::psgWrite(const Psg& psg, uint64_t clock) {
         d.amplitude = std::min(d.amplitude, amplitude);
         return;
     }
-    const int control = psg.period(3);
-    const int drum = !(control & 4) ? 36 : (control & 3) >= 2 ? 38 : 42;  // bass drum, snare, closed hi-hat
-    d.on = true;
-    d.amplitude = amplitude;
-    d.note = drum;
-    emit(clock, Ev::NoteOn, kDrums, drum, std::clamp(static_cast<int>(127 * std::sqrt(amplitude)), 1, 127));
+    const int control = psg.period(3) & 7;
+    const uint32_t fp = noiseFingerprint(control);
+    Assignment rules;
+    rules.drum = noiseDrum(control);
+    see(kNoise, fp, rules, rules.drum, nullptr, 0);
+    noteOn(kNoise, fp, assignmentFor(fp), 0, amplitude, 64, clock);
 }
 
 void RolandSound::apply(const Event& e) {
@@ -449,6 +665,7 @@ void RolandSound::endFrame(uint64_t clock, std::vector<int16_t>& out, size_t fro
             tsf_channel_set_pitchrange(s.font, ch, static_cast<float>(kBendRange));
             tsf_channel_set_presetnumber(s.font, ch, 0, ch == kDrums);
         }
+        channels_ = {};
         s.effects.setRate(s.rate);
     }
     const int frames = static_cast<int>((out.size() - std::min(out.size(), from * 2)) / 2);

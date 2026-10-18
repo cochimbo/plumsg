@@ -33,9 +33,11 @@ public:
             output->data[1] += r;
         }
         if (m_dac_enable) {
-            const int32_t dacval = dac_discontinuity(int16_t(m_dac_data << 7) >> 7);
-            output->data[0] += m_fm.regs().ch_output_0(0x102) ? dacval : dac_discontinuity(0);
-            output->data[1] += m_fm.regs().ch_output_1(0x102) ? dacval : dac_discontinuity(0);
+            int32_t dacval = dac_discontinuity(int16_t(m_dac_data << 7) >> 7);
+            if (muted & 0x40) dacval = dacval * level / 256;
+            const int32_t silent = (muted & 0x40) ? dac_discontinuity(0) * level / 256 : dac_discontinuity(0);
+            output->data[0] += m_fm.regs().ch_output_0(0x102) ? dacval : silent;
+            output->data[1] += m_fm.regs().ch_output_1(0x102) ? dacval : silent;
         }
         output->data[0] = (output->data[0] * 128) * 64 / (6 * 65);
         output->data[1] = (output->data[1] * 128) * 64 / (6 * 65);
@@ -78,6 +80,7 @@ Ym2612::Ym2612() : impl_(std::make_unique<Impl>()) { reset(); }
 Ym2612::~Ym2612() = default;
 
 void Ym2612::reset() {
+    keys_ = {};
     impl_->chip.reset();
     impl_->timer = {-1, -1};
     impl_->busy = 0;
@@ -95,7 +98,15 @@ void Ym2612::runUntil(uint64_t masterClocks) {
     }
 }
 
-void Ym2612::write(int offset, uint8_t value) { impl_->chip.write(static_cast<uint32_t>(offset & 3), value); }
+void Ym2612::write(int offset, uint8_t value) {
+    const int port = (offset >> 1) & 1;
+    if (!(offset & 1)) {
+        address_[static_cast<size_t>(port)] = value;
+    } else if (port == 0 && address_[0] == 0x28 && (value & 3) != 3) {
+        keys_[static_cast<size_t>((value & 3) + ((value & 4) ? 3 : 0))] = value & 0xF0;
+    }
+    impl_->chip.write(static_cast<uint32_t>(offset & 3), value);
+}
 
 uint8_t Ym2612::readStatus() { return impl_->chip.read_status(); }
 

@@ -74,7 +74,8 @@ void Psg::tick() {
     int left = 0, right = 0;
     for (int ch = 0; ch < 4; ++ch) {
         const int out = ch == 3 ? ((lfsr_ & 1) ? 1 : -1) : output_[ch];
-        const int v = out * kVolume.level[attenuation_[ch]];
+        int v = out * kVolume.level[attenuation_[ch]];
+        if (muted_ & (1u << ch)) v = v * mutedLevel_ / 256;
         if (stereo_ & (0x10 << ch)) left += v;
         if (stereo_ & (0x01 << ch)) right += v;
     }

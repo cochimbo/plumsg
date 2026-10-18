@@ -279,9 +279,24 @@ void MegaDrive::setRoland(RolandSound* roland, int chipPercent) {
         if (roland) roland->allNotesOff();
     }
     roland_ = roland;
-    const int percent = roland ? std::clamp(chipPercent, 0, 100) : 100;
-    ym_.setMuted(roland ? 0x3F : 0, percent);
-    mixer_.setGains(100, 50 * percent / 100);
+    rolandPercent_ = std::clamp(chipPercent, 0, 100);
+    rolandChip_ = ~0u;
+    rolandChipChannels();
+}
+
+// The chips play what the Roland sound does not: the instruments left original, and a
+// little of the rest if the mix says so.
+void MegaDrive::rolandChipChannels() {
+    const uint32_t chip = roland_ ? roland_->chipChannels() : 0x3FF;
+    if (chip == rolandChip_) return;
+    rolandChip_ = chip;
+    ym_.setMuted(0x3F & ~chip, rolandPercent_);
+    psg_.setMuted(0xF & ~(chip >> 6), rolandPercent_);
+}
+
+void MegaDrive::setVgmWriter(VgmWriter* writer) {
+    vgm_ = writer;
+    if (vgm_) vgm_->begin(ym_, psg_, now_, masterClock());
 }
 
 void MegaDrive::runFrame() {
@@ -345,7 +360,11 @@ void MegaDrive::writeVdp(uint32_t addr, uint16_t value, bool byte) {
         if (!byte || (addr & 1)) {
             syncSound();
             psg_.write(static_cast<uint8_t>(value));
-            if (roland_) roland_->psgWrite(psg_, now_);
+            if (vgm_) vgm_->psg(static_cast<uint8_t>(value), now_);
+            if (roland_) {
+                roland_->psgWrite(psg_, now_);
+                rolandChipChannels();
+            }
         }
         return;
     }
@@ -379,6 +398,7 @@ void MegaDrive::writeBusControl(uint32_t addr, bool set) {
             z80_.reset();
             syncSound();
             ym_.reset();
+            if (vgm_) vgm_->fmReset(now_);
             if (roland_) roland_->keysOff(now_);
         }
         if (!reset && z80Reset_) z80Clock_ = std::max(z80Clock_, now_);
@@ -505,7 +525,11 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
     } else if (addr < 0x6000) {
         syncSound();
         ym_.write(addr & 3, value);
-        if (roland_) roland_->fmWrite(addr & 3, value, ym_, now_);
+        if (vgm_) vgm_->fm(addr & 3, value, now_);
+        if (roland_) {
+            roland_->fmWrite(addr & 3, value, ym_, now_);
+            rolandChipChannels();
+        }
     } else if (addr < 0x6100) {
         // Bank register: nine bits shifted in one at a time, low bit first.
         z80Bank_ = static_cast<uint16_t>(((z80Bank_ >> 1) | ((value & 1) << 8)) & 0x1FF);
@@ -513,7 +537,11 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
         if ((addr & 0x1F) >= 0x10) {
             syncSound();
             psg_.write(value);
-            if (roland_) roland_->psgWrite(psg_, now_);
+            if (vgm_) vgm_->psg(value, now_);
+            if (roland_) {
+                roland_->psgWrite(psg_, now_);
+                rolandChipChannels();
+            }
         }
     } else if (addr >= 0x8000) {
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);

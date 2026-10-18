@@ -235,6 +235,15 @@ UiActions Ui::frame(const UiState& state) {
     if (showLibrary_) drawLibrary(out);
     if (showBios_) drawBios(out);
     if (showNetplay_) drawNetplay(state, out);
+    if (editor_ && editor_->isOpen()) {
+        EditorRequests r;
+        editor_->draw(state.editor, r);
+        if (r.chooseTrack) chooseTrack();
+        if (!r.load.empty()) out.load = r.load;
+        out.startRecording = r.startRecording;
+        out.stopRecording = r.stopRecording;
+        out.assignmentsChanged = r.assignmentsChanged;
+    }
     stateMenu_.slots = static_cast<int>(state.slots.size());
     if (stateMenu_.load >= 0) out.loadState = stateMenu_.load;
     if (stateMenu_.save >= 0) out.saveState = stateMenu_.save;
@@ -256,6 +265,9 @@ UiActions Ui::frame(const UiState& state) {
                 settings_.soundfont = picked;
                 out.settingsChanged = out.soundChanged = true;
                 break;
+            case BrowseFor::Track:
+                if (editor_) editor_->openTrack(picked);
+                break;
             case BrowseFor::CdBios: {
                 settings_.cdBios[static_cast<size_t>(biosSlot_)] = picked;
                 out.settingsChanged = true;
@@ -273,6 +285,7 @@ UiActions Ui::frame(const UiState& state) {
 void Ui::hideIdleCursor(const UiState& state) {
     const bool windowOpen = showControls_ || showVideo_ || showAbout_ || showCheats_ || showGameOptions_ || showLibrary_ ||
                             showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
+                            (editor_ && editor_->isOpen()) ||
                             !error_.empty() || capture_.active ||
                             ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) || ImGui::GetIO().WantCaptureMouse;
     const bool playing = state.romLoaded && !state.paused;
@@ -402,7 +415,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Sonido")) {
-        drawSoundMenu(out);
+        drawSoundMenu(state, out);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Opciones")) {
@@ -431,7 +444,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
 }
 
 // Volume, and the Roland sound: the FM and PSG music played on a SoundFont.
-void Ui::drawSoundMenu(UiActions& out) {
+void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
     if (ImGui::MenuItem("Silenciar", "M", settings_.mute)) {
         settings_.mute = !settings_.mute;
         out.settingsChanged = true;
@@ -452,8 +465,8 @@ void Ui::drawSoundMenu(UiActions& out) {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Las notas del YM2612 y del PSG suenan con instrumentos General MIDI, como en una\n"
                           "Roland SC-55. Las voces y la batería digital (el DAC) siguen siendo las del juego.\n"
-                          "Cada sonido FM recibe un instrumento por reglas; el editor para elegirlos a mano\n"
-                          "llegará más adelante.");
+                          "Cada sonido FM recibe un instrumento por reglas, que se cambia a mano en el\n"
+                          "Editor de instrumentos.");
     ImGui::BeginDisabled(!settings_.roland);
     const std::string font = settings_.soundfont.empty() ? std::string("GeneralUser GS (incluido)") : fileName(settings_.soundfont);
     ImGui::TextDisabled("SoundFont: %s", font.c_str());
@@ -473,6 +486,14 @@ void Ui::drawSoundMenu(UiActions& out) {
     ImGui::SliderInt("Chorus", &settings_.chorus, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = out.soundChanged = true;
     ImGui::EndDisabled();
+    ImGui::Separator();
+    if (ImGui::MenuItem("Editor de instrumentos...")) {
+        out.openEditor = true;
+        out.editorFor = state.romLoaded ? state.romPath : std::string();
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
+                          "y elige con qué instrumento General MIDI suena en el sonido Roland.");
 }
 
 void Ui::chooseSoundfont(UiActions& out) {
@@ -488,6 +509,20 @@ void Ui::chooseSoundfont(UiActions& out) {
             break;
         case DialogResult::Cancelled: break;
         case DialogResult::Unavailable: browser_.open(start, Pick::AnyFile); break;
+    }
+}
+
+// A .vgm or .vgz for the instrument editor.
+void Ui::chooseTrack() {
+    std::string chosen;
+    browseFor_ = BrowseFor::Track;
+    const bool fullscreen = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+    switch (fullscreen ? DialogResult::Unavailable : openFileDialog(window_, settings_.lastFolder, Pick::AnyFile, &chosen)) {
+        case DialogResult::Chosen:
+            if (editor_) editor_->openTrack(chosen);
+            break;
+        case DialogResult::Cancelled: break;
+        case DialogResult::Unavailable: browser_.open(settings_.lastFolder, Pick::AnyFile); break;
     }
 }
 
@@ -1140,7 +1175,7 @@ void Ui::drawLibrary(UiActions& out) {
     const std::vector<size_t> visible = visibleGames();
     if (library_.pending() > 0) ImGui::Text("%d juegos. Buscando carátulas, quedan %d...", static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text("%d juegos. %s", static_cast<int>(visible.size()), library_.downloadStatus().c_str());
-    ImGui::TextDisabled("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos y opciones\n"
+    ImGui::TextDisabled("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
                         "B o Esc: cerrar   L / R o RePág / AvPág: consola");
     ImGui::Separator();
 
@@ -1229,7 +1264,8 @@ void Ui::drawLibrary(UiActions& out) {
             const Library::Game& g = games[visible[static_cast<size_t>(n)]];
             ImGui::TextDisabled("%s", g.title.c_str());
             ImGui::Separator();
-            static const char* items[LibraryView::kItems] = {"Jugar", "Trucos...", "Opciones de este juego..."};
+            static const char* items[LibraryView::kItems] = {"Jugar", "Trucos...", "Opciones de este juego...",
+                                                             "Editor de instrumentos..."};
             int picked = libraryView_.menuAction;
             for (int i = 0; i < LibraryView::kItems; ++i)
                 if (ImGui::Selectable(items[i], libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
@@ -1237,6 +1273,11 @@ void Ui::drawLibrary(UiActions& out) {
                 case 0: libraryView_.load = n; break;
                 case 1: out.cheatsFor = g.path; showCheats_ = true; break;
                 case 2: out.optionsFor = g.path; showGameOptions_ = true; break;
+                case 3:
+                    out.editorFor = g.path;
+                    out.openEditor = true;
+                    showLibrary_ = false;
+                    break;
                 default: break;
             }
             if (picked >= 0) {

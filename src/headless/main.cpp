@@ -37,6 +37,8 @@ namespace {
 const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom> [options]
 
   game                  cartridge (.md .gen .bin .smd .32x .zip) or disc (.cue .chd .iso)
+  --play-vgm FILE       no game: play this .vgm or .vgz for --frames sixtieths of a
+                        second, for --wav and --roland, and list its instruments
   --test-rom            the built-in test program (planes, sprites, scroll, a tone)
   --pad-test-rom        the built-in pad test: the backdrop shows the pressed buttons
   --two-pad-test-rom    the built-in two-pad test: every frame depends on all that both
@@ -77,6 +79,7 @@ Output
   --roland SF2          play the FM and PSG music as General MIDI on this SoundFont,
                         as the Roland sound does (the DAC stays as it is)
   --midi-log FILE       with --roland: the notes it played, one event per line
+  --vgm FILE            the run's YM2612 and PSG music as a VGM (.vgz: compressed)
   --save-state FILE     a savestate after the last frame
   --dump-ram FILE       the 68000's work RAM (64 KB) after the last frame
   --hash-log FILE       one line per frame: frame, picture hash, sound hash
@@ -346,8 +349,53 @@ bool readLog(const std::string& path, std::vector<LogLine>& log) {
 
 }  // namespace
 
+// --play-vgm: the instrument editor's player, without a window.
+int playVgmFile(const std::string& path, long frames, const std::string& wav, const std::string& roland,
+                const std::string& midiLog) {
+    std::vector<uint8_t> bytes;
+    VgmFile file;
+    std::string error;
+    if (!readFile(path, bytes) || !file.parse(std::move(bytes), &error)) {
+        std::fprintf(stderr, "%s: %s\n", path.c_str(), error.empty() ? "cannot read it" : error.c_str());
+        return 1;
+    }
+    RolandSound rolandSound;
+    std::vector<std::string> midiEvents;
+    VgmPlayer player;
+    player.load(file);
+    player.setRoland(&rolandSound);
+    player.setRolandOutput(!roland.empty());
+    if (!roland.empty()) {
+        std::vector<uint8_t> font;
+        if (!readFile(roland, font) || !rolandSound.loadSoundfont(font)) {
+            std::fprintf(stderr, "%s is not a SoundFont\n", roland.c_str());
+            return 1;
+        }
+    }
+    player.analyse();
+    std::printf("title: %s\ngame: %s\nlength: %.1f s%s\ninstruments:\n", file.title.c_str(), file.game.c_str(),
+                file.seconds(), file.loop ? " (loops)" : "");
+    for (const auto& [fp, seen] : rolandSound.seen()) {
+        const RolandSound::Assignment a = rolandSound.assignmentFor(fp);
+        std::printf("  %08x %s voices %03x notes %d (%d-%d): %s\n", fp,
+                    seen.kind == RolandSound::Kind::Fm ? "FM" : seen.kind == RolandSound::Kind::PsgTone ? "PSG" : "noise",
+                    seen.channels, seen.notes, seen.low, seen.high,
+                    a.drum >= 0 ? RolandSound::drumName(a.drum) : RolandSound::programName(a.program));
+    }
+    if (!midiLog.empty()) rolandSound.setLog(&midiEvents);
+    std::vector<int16_t> sound;
+    for (long i = 0; i < frames && !player.finished(); ++i) player.play(1.0 / 60, 44100, sound);
+    bool ioError = !wav.empty() && !writeWav(wav, sound, 44100);
+    if (!midiLog.empty()) {
+        std::ofstream out(midiLog);
+        for (const std::string& e : midiEvents) out << e << "\n";
+        if (!out) ioError = true;
+    }
+    return ioError ? 1 : 0;
+}
+
 int main(int argc, char** argv) {
-    std::string game, png, layers, wav, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir;
+    std::string game, playVgm, vgmOut, png, layers, wav, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir;
     std::string outDir = ".";
     std::vector<std::string> bios, cheats, scripts, lines;
     long frames = 600, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
@@ -406,6 +454,8 @@ int main(int argc, char** argv) {
         else if (a == "--wav") wav = next();
         else if (a == "--roland") roland = next();
         else if (a == "--midi-log") midiLog = next();
+        else if (a == "--vgm") vgmOut = next();
+        else if (a == "--play-vgm") playVgm = next();
         else if (a == "--save-state") stateOut = next();
         else if (a == "--dump-ram") ramOut = next();
         else if (a == "--hash-log") hashLog = next();
@@ -440,6 +490,7 @@ int main(int argc, char** argv) {
             return 2;
         }
     }
+    if (!playVgm.empty()) return playVgmFile(playVgm, frames, wav, roland, midiLog);
     if (game.empty()) {
         std::fputs(kUsage, stderr);
         return 2;
@@ -579,6 +630,8 @@ int main(int argc, char** argv) {
         if (!midiLog.empty()) rolandSound.setLog(&midiEvents);
         md.setRoland(&rolandSound, 0);
     }
+    VgmWriter vgmWriter;
+    if (!vgmOut.empty()) md.setVgmWriter(&vgmWriter);
 
     constexpr int kRate = 44100;
     md.setSampleRate(kRate);
@@ -738,6 +791,13 @@ int main(int argc, char** argv) {
             if (!writePng(layers + name, layer, f.width, f.height, VideoFrameMd::kMaxWidth)) ioError = true;
     }
     if (!wav.empty() && !writeWav(wav, sound, kRate)) ioError = true;
+    if (!vgmOut.empty()) {
+        const bool compress = vgmOut.size() > 4 && vgmOut.compare(vgmOut.size() - 4, 4, ".vgz") == 0;
+        const std::vector<uint8_t> file = vgmWriter.finish(md.masterClocks(), md.cartridge().header().title, compress);
+        std::ofstream out(vgmOut, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(file.data()), static_cast<std::streamsize>(file.size()));
+        if (!out) ioError = true;
+    }
     if (!midiLog.empty()) {
         std::ofstream out(midiLog);
         for (const std::string& e : midiEvents) out << e << "\n";

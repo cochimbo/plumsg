@@ -11,6 +11,7 @@
 #include "../core/system.h"
 #include "file_dialog.h"
 #include "input.h"
+#include "instrument_editor.h"
 #include "library.h"
 #include "settings.h"
 
@@ -39,6 +40,11 @@ struct UiActions {
     std::string optionsFor;        // open the Opciones de este juego window for this game
     bool gameOptionsChanged = false;  // a game's own options were edited: save them (and apply if loaded)
     bool soundChanged = false;        // the Roland sound was switched or retuned
+    bool openEditor = false;          // open the instrument editor for editorFor (empty: no game)
+    std::string editorFor;
+    bool startRecording = false;      // the editor's requests: record the game's music,
+    bool stopRecording = false;       // stop and hand it over,
+    bool assignmentsChanged = false;  // and the game's instruments changed
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -77,6 +83,7 @@ struct UiState {
     bool netPlaying = false;  // connected: the options that would make the consoles differ are off
     std::string netStatus;
     float netProgress = -1;   // 0..1 while the game is sent, else -1
+    EditorView editor;
 };
 
 // Menu bar and option windows, drawn with Dear ImGui (OpenGL 3) on top of the game.
@@ -110,6 +117,8 @@ public:
     void openNetplay() { showNetplay_ = true; }
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
+    // The instrument editor's window, drawn with the rest (not owned).
+    void setEditor(InstrumentEditor* editor) { editor_ = editor; }
     // The states menu: a list of the slots that the pad (or the keyboard) can drive.
     void toggleStateMenu();
     bool stateMenuOpen() const { return stateMenu_.open; }
@@ -127,8 +136,9 @@ private:
     };
 
     void drawMenuBar(const UiState& state, UiActions& out);
-    void drawSoundMenu(UiActions& out);
+    void drawSoundMenu(const UiState& state, UiActions& out);
     void chooseSoundfont(UiActions& out);
+    void chooseTrack();
     void drawControls(UiActions& out);
     void drawVideo(const UiState& state, UiActions& out);
     void drawAbout();
@@ -155,6 +165,7 @@ private:
     Input& input_;
     FileBrowser browser_;
     Library library_;
+    InstrumentEditor* editor_ = nullptr;
     unsigned int logoTexture_ = 0;  // the PLUMSG marquee, 0 if it could not be decoded
     int logoWidth_ = 0, logoHeight_ = 0;
 
@@ -170,7 +181,7 @@ private:
     std::vector<std::string> localAddresses_;  // this computer's, for the host to share
     bool showFolders_ = false;  // the library's list of folders, unfolded
     // What the file browser (or the system dialog) is choosing a file or folder for.
-    enum class BrowseFor { Game, LibraryFolder, CdBios, Soundfont };
+    enum class BrowseFor { Game, LibraryFolder, CdBios, Soundfont, Track };
     BrowseFor browseFor_ = BrowseFor::Game;
     int biosSlot_ = 0;  // the region whose BIOS is being chosen
     std::string biosStatus_;
@@ -196,7 +207,7 @@ private:
         bool tabChanged = false;  // the console tab was changed with the pad or the keyboard
         // The menu of one game (right click, X on the pad or the menu key): its index in
         // the filtered list, the item chosen with the pad or the keys, and a request to open it.
-        static constexpr int kItems = 3;  // Jugar, Trucos, Opciones de este juego
+        static constexpr int kItems = 4;  // Jugar, Trucos, Opciones de este juego, Editor de instrumentos
         int menuGame = -1;
         int menuItem = 0;
         bool openMenu = false;

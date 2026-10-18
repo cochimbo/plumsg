@@ -23,6 +23,12 @@ public:
     void setStereo(uint8_t value) { stereo_ = value; }  // port 0x06: bits 4-7 left, 0-3 right
     void setSampleRate(double hz) { sampleRate_ = hz; }
     void setClock(double hz) { clock_ = hz; }
+    // Turns the channels in `mask` (bit 0 = tone 1 ... bit 3 = noise) down to percent
+    // of their volume: for the Roland sound and for listening to some channels alone.
+    void setMuted(uint32_t mask, int percent) {
+        muted_ = mask & 0xF;
+        mutedLevel_ = percent * 256 / 100;
+    }
 
     // Advances by this many Z80 cycles, appending samples as they fall due.
     void run(int cycles);
@@ -52,6 +58,8 @@ private:
     uint16_t lfsr_ = 0x8000;
     int latched_ = 0;       // register selected by the last latch byte: channel * 2 + volume
     uint8_t stereo_ = 0xFF;
+    uint32_t muted_ = 0;
+    int mutedLevel_ = 0;  // out of 256
 
     int cycleRemainder_ = 0;
     double sampleRate_ = 44100.0;
