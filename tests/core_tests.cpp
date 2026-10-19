@@ -323,6 +323,59 @@ void testVdpSpriteLimit() {
           "VDP: past the 320 pixels without the limit, same status");
 }
 
+void testOverclock() {
+    // A 68000 loop adding 1 to a long in RAM: addq.l #1,($FF0000).l; bra.s back. At 200%
+    // it goes round about twice as often in the same frames.
+    std::vector<uint8_t> rom(0x400, 0);
+    const uint8_t vectors[] = {0x00, 0xFF, 0x80, 0x00, 0x00, 0x00, 0x02, 0x00};
+    const uint8_t loop[] = {0x52, 0xB9, 0x00, 0xFF, 0x00, 0x00, 0x60, 0xF8};
+    std::copy(std::begin(vectors), std::end(vectors), rom.begin());
+    std::copy(std::begin(loop), std::end(loop), rom.begin() + 0x200);
+    auto counter = [](const MegaDrive& md) {
+        const auto& ram = md.workRam();
+        return static_cast<uint32_t>(ram[0]) << 24 | ram[1] << 16 | ram[2] << 8 | ram[3];
+    };
+    auto run = [&](int percent) {
+        MegaDrive md;
+        md.loadRomData(rom);
+        md.setOverclock(percent);
+        for (int i = 0; i < 10; ++i) md.runFrame();
+        return counter(md);
+    };
+    const uint32_t normal = run(100), fast = run(200), fastest = run(400);
+    const double ratio = static_cast<double>(fast) / normal, ratio4 = static_cast<double>(fastest) / normal;
+    check(normal > 1000 && ratio > 1.95 && ratio < 2.05 && ratio4 > 3.9 && ratio4 < 4.1,
+          "overclock: the 68000 runs 2 and 4 times as much");
+    {
+        MegaDrive md;
+        md.setOverclock(1000);
+        const int high = md.overclock();
+        md.setOverclock(10);
+        check(high == MegaDrive::kMaxOverclock && md.overclock() == 100, "overclock: kept within 100-400%");
+    }
+
+    // It is part of the state (a netplay guest starts from the host's), and a state
+    // without it is from a console at its real speed.
+    MegaDrive a, b;
+    a.loadRomData(rom);
+    b.loadRomData(rom);
+    a.setOverclock(300);
+    b.setOverclock(200);
+    for (int i = 0; i < 3; ++i) a.runFrame();
+    std::vector<uint8_t> fastState, plainState;
+    std::string error;
+    a.saveState(fastState);
+    check(b.loadState(fastState, &error) && b.overclock() == 300, "overclock: the state carries it");
+    for (int i = 0; i < 5; ++i) {
+        a.runFrame();
+        b.runFrame();
+    }
+    check(counter(a) == counter(b), "overclock: the same run after loading it");
+    a.setOverclock(100);
+    a.saveState(plainState);
+    check(b.loadState(plainState, &error) && b.overclock() == 100, "overclock: a state without it loads at 100%");
+}
+
 void testTestRom() {
     MegaDrive md;
     md.loadRomData(testrom::build());
@@ -1820,6 +1873,7 @@ int main() {
     testVdpHblankFlag();
     testVdpFillScrollTable();
     testVdpSpriteLimit();
+    testOverclock();
     testTestRom();
     testStates();
     testRewindBuffer();

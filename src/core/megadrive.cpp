@@ -246,7 +246,10 @@ void MegaDrive::runUntil(uint64_t clock) {
             if (mars_) mars_->runUntil(m68kClock_);
             if (mcd_) mcd_->runUntil(m68kClock_);
             now_ = m68kClock_;
-            m68kClock_ += static_cast<uint64_t>(cpu_.step()) * 7;
+            const uint64_t cycles = static_cast<uint64_t>(cpu_.step());
+            // Overclocked, each cycle takes fewer master clocks (rounded, never 0).
+            m68kClock_ += overclock_ == 100 ? cycles * 7
+                                            : std::max<uint64_t>(1, (cycles * 700 + overclock_ / 2) / overclock_);
         } else if (z80Running()) {
             now_ = z80Clock_;
             z80Clock_ += static_cast<uint64_t>(z80_.step()) * 15;
@@ -698,6 +701,12 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         io_.state(w);
         block("IO  ", w.data());
     }
+    if (overclock_ != 100) {
+        StateWriter w;
+        uint16_t percent = static_cast<uint16_t>(overclock_);
+        w(percent);
+        block("OVCK", w.data());
+    }
     {
         StateWriter w;
         cart_.state(w);
@@ -801,6 +810,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
 
     bool ok = true;
     bool hasMixer = false;
+    uint16_t overclock = 100;  // states without the block are from a console at its speed
     std::vector<uint8_t> thumbnail, addOnState;
     while (ok && !r.atEnd()) {
         uint32_t id = 0, size = 0;
@@ -825,6 +835,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("IO  ")) io_.state(b);
         else if (id == fourcc("CART")) cart_.state(b);
         else if (id == fourcc("THMB")) thumbnail = data;
+        else if (id == fourcc("OVCK")) b(overclock);
         else if (id == fourcc("32X ")) {
             if (mars_) mars_->state(b);
         }
@@ -860,6 +871,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         return fail(tr("el estado está dañado o es de una versión incompatible"));
     }
     configureFor(static_cast<Region>(region & 3));
+    setOverclock(overclock);
     if (!hasMixer) mixer_.reset();
     if (!addOnState.empty()) {
         // After the main mixer block, which empties the queue.

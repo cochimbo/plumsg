@@ -58,6 +58,7 @@ Primera versión. Lo que hay:
 - **Run-ahead**: quita 1 o más fotogramas de retardo a los mandos, como en RetroArch.
 - **Sin límite de sprites**: se ven todos los sprites de cada línea, sin el parpadeo que
   causa el límite de la consola.
+- **Overclock**: el procesador de la consola va más rápido, para los juegos que se ralentizan.
 - **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
 - **Trucos** Game Genie y Action Replay, guardados por juego, con las listas de trucos de
   cada juego de libretro-database para elegirlos de un menú.
@@ -137,6 +138,13 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   esconde los sprites él mismo. También se puede fijar por juego.
 - **Consola**: región (automática según la cabecera, Japón, EE. UU. o Europa/PAL) y tipo
   de mando (3 o 6 botones) de cada puerto. Cambiar la región reinicia el juego.
+- **Consola > Overclock** (desactivado por defecto): el 68000 va al 150, 200, 300 o 400 % de su
+  velocidad, así los juegos que se ralentizan cuando hay mucho en pantalla acaban cada
+  fotograma a tiempo. El resto de la consola (Z80, VDP, sonido, Mega CD y 32X) sigue a su
+  velocidad. Al contrario que el límite de sprites, el juego sí corre distinto: alguno puede
+  ir demasiado rápido o fallar, y entonces se desactiva para ese juego (se puede fijar por
+  juego en Opciones de este juego). Va en los estados guardados; en una partida en red
+  manda el del anfitrión, y en modo hardcore de RetroAchievements se queda desactivado.
 - **Opciones > Vídeo**: escalado, 4:3 o píxeles cuadrados, y las opciones del 3D
   (estilo, profundidad, inclinación, giro, zoom, grosor, extrusión, sombras, plano B con
   prioridad delante, plano B plano para juegos que pintan el cielo en él). La cámara del

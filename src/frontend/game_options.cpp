@@ -51,6 +51,7 @@ const std::vector<GameOption>& gameOptions() {
          [](const Settings& f, Settings& t) { t.effectsOriginal = f.effectsOriginal; }},
         {"region", N_("Región"), N_("Consola"), [](const Settings& f, Settings& t) { t.region = f.region; }},
         {"mandos", N_("Tipo de mando"), N_("Consola"), [](const Settings& f, Settings& t) { t.padType = f.padType; }},
+        {"overclock", N_("Overclock"), N_("Consola"), [](const Settings& f, Settings& t) { t.overclock = f.overclock; }},
         {"rebobinado_segundos", N_("Segundos de rebobinado"), N_("Velocidad"),
          [](const Settings& f, Settings& t) { t.rewindSeconds = f.rewindSeconds; }},
         {"avance_rapido", N_("Avance rápido"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.fastForward = f.fastForward; }},
