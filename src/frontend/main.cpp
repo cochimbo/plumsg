@@ -138,7 +138,7 @@ struct App {
         }
         for (const Cheat& c : cheats) {
             std::vector<CheatPatch> p;
-            if (c.enabled && decodeCheatCodes(c.code, &p, nullptr)) patches.insert(patches.end(), p.begin(), p.end());
+            if (c.enabled && decodeCheatCodes(c.code, &p, nullptr, console.isMasterSystem())) patches.insert(patches.end(), p.begin(), p.end());
         }
         console.setCheats(patches);
     }
@@ -583,6 +583,7 @@ int main(int argc, char** argv) {
         app->console.setRegion(settings.region);
         app->console.setPadType(0, settings.padType[0]);
         app->console.setPadType(1, settings.padType[1]);
+        app->console.setMasterSystemFm(settings.smsFm);
     };
     applyConsole();
     // The Roland sound, when chosen and its SoundFont opens; else the chips' own.
@@ -837,12 +838,15 @@ int main(int argc, char** argv) {
     std::string windowsRom;  // the game loaded when they were opened
     GameOverrides otherOptions;
     std::vector<Cheat> otherCheats;
+    bool cheatsSms = false;  // the cheats' game is a Master System or Game Gear one
     auto openGameOptions = [&](const std::string& path) {
         optionsGame = path;
         if (path != app->romPath || !app->romLoaded) otherOptions = app->readOverrides(path, general, input->config());
     };
     auto openCheats = [&](const std::string& path) {
         cheatsGame = path;
+        const ConsoleSystem system = detectSystem(path);
+        cheatsSms = system == ConsoleSystem::MasterSystem || system == ConsoleSystem::GameGear;
         if (path != app->romPath || !app->romLoaded) otherCheats = app->readCheats(path);
     };
     if (cmd.cheats && app->romLoaded) {
@@ -924,6 +928,7 @@ int main(int argc, char** argv) {
     while (running) {
         // Only the picture changes with them, so they can follow the menus at any frame.
         app->console.vdp().setUnlimitedSprites(settings.unlimitedSprites);
+        if (MasterSystem* sms = app->console.masterSystem()) sms->vdp().setUnlimitedSprites(settings.unlimitedSprites);
         const Widescreen& wide = kWidescreens[std::clamp(settings.widescreen, 0, kWidescreenCount - 1)];
         app->console.vdp().setWidescreen(settings.widescreen ? wide.w : 0, wide.h);
         // The overclock does change the game: in a netplay game the speed is the host's,
@@ -1054,6 +1059,7 @@ int main(int argc, char** argv) {
         uiState.cheats = cheatsGame.empty() ? nullptr : cheatsLoaded ? &app->cheats : &otherCheats;
         uiState.cheatsGame = cheatsGame.empty() ? std::string() : fileName(cheatsGame);
         uiState.cheatsPath = cheatsGame;
+        uiState.cheatsSms = cheatsSms;
         const bool optionsLoaded = app->romLoaded && optionsGame == app->romPath;
         uiState.gameOptions.game = optionsGame.empty() ? std::string() : fileName(optionsGame);
         uiState.gameOptions.values = optionsLoaded ? &settings : &otherOptions.values;

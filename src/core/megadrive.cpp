@@ -324,16 +324,35 @@ void MegaDrive::setCheats(const std::vector<CheatPatch>& cheats) {
     for (auto it = romOriginal_.rbegin(); it != romOriginal_.rend(); ++it) cart_.patchRom(it->first, it->second, nullptr);
     romOriginal_.clear();
     ramCheats_.clear();
+    auto patch = [&](uint32_t offset, uint8_t value) {
+        uint8_t old = 0;
+        if (cart_.patchRom(offset, value, &old)) romOriginal_.emplace_back(offset, old);
+    };
+    if (sms_) {
+        // Z80 addresses: RAM from 0xC000; below it the ROM, in the bank the slot shows
+        // at power on, or in every bank where the byte is what the code expects.
+        const std::vector<uint8_t>& rom = cart_.rom();
+        for (const CheatPatch& c : cheats) {
+            if (c.address >= 0xC000) {
+                ramCheats_.push_back(c);
+            } else if (c.compare < 0) {
+                patch(c.address, static_cast<uint8_t>(c.value));
+            } else {
+                const uint32_t start = c.address < 0x4000 ? c.address : c.address & 0x3FFF;
+                const uint32_t step = c.address < 0x4000 ? static_cast<uint32_t>(rom.size()) : 0x4000;
+                for (uint32_t o = start; o < rom.size(); o += step)
+                    if (rom[o] == c.compare) patch(o, static_cast<uint8_t>(c.value));
+            }
+        }
+        applyRamCheats();
+        return;
+    }
     for (const CheatPatch& c : cheats) {
         if (c.address >= 0xE00000) {
             ramCheats_.push_back(c);
             continue;
         }
         if (c.address >= 0x400000) continue;
-        auto patch = [&](uint32_t offset, uint8_t value) {
-            uint8_t old = 0;
-            if (cart_.patchRom(offset, value, &old)) romOriginal_.emplace_back(offset, old);
-        };
         if (c.byte) {
             patch(c.address, static_cast<uint8_t>(c.value));
         } else {
@@ -345,6 +364,10 @@ void MegaDrive::setCheats(const std::vector<CheatPatch>& cheats) {
 }
 
 void MegaDrive::applyRamCheats() {
+    if (sms_) {
+        for (const CheatPatch& c : ramCheats_) zram_[c.address & 0x1FFF] = static_cast<uint8_t>(c.value);
+        return;
+    }
     for (const CheatPatch& c : ramCheats_) {
         const uint32_t a = c.address & 0xFFFF;
         if (c.byte) {

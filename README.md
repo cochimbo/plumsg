@@ -41,7 +41,8 @@ Primera versión. Lo que hay:
   modos de 192, 224 y 240 líneas), el mapper de Sega con la RAM de cartucho (a `.sav`) y
   los mandos: botón 1 = A o B, botón 2 = C, Start = Pausa. También el mapper de
   Codemasters, los modos antiguos del TMS9918 (Graphics I y II, texto, sus sprites) y la
-  unidad FM (YM2413), que está en las consolas japonesas (región Japón). En el 3D el fondo
+  unidad FM (YM2413), que está en las consolas japonesas (región Japón) y, con
+  **Consola > Sonido FM de la Master System**, en todas. En el 3D el fondo
   va al plano B, sus tiles de prioridad al plano A y los sprites a su capa.
 - **Game Gear** (`.gg`, o un `.bin` con la cabecera de Game Gear): la misma máquina con su
   pantalla de 160x144 (la parte central de la imagen, mostrada a 4:3), su paleta de 4096
@@ -205,7 +206,9 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
 - **Juego > Trucos**: códigos Game Genie (`ABCD-EFGH`, cambian la ROM) y Action Replay
   (`FF0A12:0009`, o `FF0A12:09` para un byte; fijan ese valor de la RAM en cada cuadro).
   Cada uno se activa o desactiva con su casilla y se guarda para ese juego en `trucos\`.
-  Un código puede ser varios unidos con `+` (`AJ0T-CA9Y+FFA3C5:0006`).
+  Un código puede ser varios unidos con `+` (`AJ0T-CA9Y+FFA3C5:0006`). En Master System y
+  Game Gear son de cifras: Game Genie `3A8-6CF-E66` (los tres últimos, opcionales, dicen
+  qué byte cambia, y se busca en todos los bancos de la ROM) y Action Replay `00C0-1205`.
   En **Trucos de internet** salen los de la lista del juego en
   [libretro-database](https://github.com/libretro/libretro-database) (la base de trucos de
   RetroArch, casi 2.100 listas de Mega Drive, más las de 32X y Mega CD), que se descarga al

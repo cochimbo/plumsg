@@ -515,6 +515,13 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
                 settings_.region = static_cast<Region>(i);
                 out.consoleChanged = out.settingsChanged = true;
             }
+        if (ImGui::MenuItem(tr("Sonido FM de la Master System"), nullptr, settings_.smsFm)) {
+            settings_.smsFm = !settings_.smsFm;
+            out.consoleChanged = out.settingsChanged = true;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", tr("La unidad FM (YM2413) venía en las Master System japonesas; con esto está "
+                                       "también en las demás regiones, para los juegos que la usan si la encuentran."));
         for (int port = 0; port < 2; ++port) {
             ImGui::SeparatorText(port == 0 ? tr("Mando 1") : tr("Mando 2"));
             ImGui::PushID(port);
@@ -1807,6 +1814,7 @@ void Ui::drawNetplay(const UiState& state, UiActions& out) {
 }
 
 void Ui::drawCheats(const UiState& state, UiActions& out) {
+    const bool smsCodes = state.cheatsSms;
     ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
     if (cheatsRefit_ > 0) ImGui::SetNextWindowSize(ImVec2(cheatsWidth_, 0));  // grow to fit the list that arrived
     if (!ImGui::Begin(tr("Trucos"), &showCheats_)) {
@@ -1819,8 +1827,12 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
         return;
     }
     std::vector<Cheat>& cheats = *state.cheats;
-    ImGui::TextWrapped(tr("Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. "
-                       "Se guardan para este juego y se activan al abrirlo."), state.cheatsGame.c_str());
+    if (smsCodes)
+        ImGui::TextWrapped(tr("Códigos Game Genie (3A8-6CF-E66) o Action Replay (00C0-1205) de %s. "
+                           "Se guardan para este juego y se activan al abrirlo."), state.cheatsGame.c_str());
+    else
+        ImGui::TextWrapped(tr("Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. "
+                           "Se guardan para este juego y se activan al abrirlo."), state.cheatsGame.c_str());
     ImGui::Spacing();
     int remove = -1;
     if (cheats.empty()) ImGui::TextDisabled("%s", tr("Este juego no tiene trucos todavía."));
@@ -1838,7 +1850,7 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
             ImGui::TableNextColumn();
             std::vector<CheatPatch> patches;
             std::string error;
-            const bool valid = decodeCheatCodes(c.code, &patches, &error);
+            const bool valid = decodeCheatCodes(c.code, &patches, &error, smsCodes);
             const std::string shown = shortCode(c.code);
             if (valid) ImGui::TextUnformatted(shown.c_str());
             else ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", shown.c_str());
@@ -1873,7 +1885,7 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
     add |= ImGui::Button(tr("Añadir"));
     if (add) {
         std::vector<CheatPatch> patches;
-        if (decodeCheatCodes(cheatCode_, &patches, &cheatError_)) {
+        if (decodeCheatCodes(cheatCode_, &patches, &cheatError_, smsCodes)) {
             cheats.push_back({normalizeCheat(cheatCode_), cheatName_, true});
             cheatCode_[0] = cheatName_[0] = '\0';
             cheatError_.clear();
@@ -1892,6 +1904,7 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
 // The game's ready-made cheat lists from libretro-database, looked for when the window
 // is opened for it: pick a list (the one named like the ROM comes first) and add codes.
 void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
+    const bool smsCodes = state.cheatsSms;
     ImGui::SeparatorText(tr("Trucos de internet"));
     if (cheatDb_.view().game != state.cheatsPath) {
         cheatFilter_[0] = '\0';
@@ -1953,7 +1966,7 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
                 ImGui::TableNextColumn();
                 std::vector<CheatPatch> patches;
                 std::string error;
-                const bool valid = decodeCheatCodes(c.code, &patches, &error);
+                const bool valid = decodeCheatCodes(c.code, &patches, &error, smsCodes);
                 const std::string code = shortCode(c.code);
                 ImGui::AlignTextToFramePadding();
                 if (valid) ImGui::TextUnformatted(code.c_str());

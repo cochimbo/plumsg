@@ -649,7 +649,7 @@ int main(int argc, char** argv) {
         for (const std::string& code : cheats) {
             std::vector<CheatPatch> p;
             std::string error;
-            if (!decodeCheatCodes(code, &p, &error)) {
+            if (!decodeCheatCodes(code, &p, &error, md.isMasterSystem())) {
                 std::fprintf(stderr, "bad cheat %s: %s\n", code.c_str(), error.c_str());
                 return 2;
             }

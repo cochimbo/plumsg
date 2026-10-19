@@ -630,6 +630,9 @@ msgstr ""
 msgid "Código"
 msgstr "Code"
 
+msgid "Códigos Game Genie (3A8-6CF-E66) o Action Replay (00C0-1205) de %s. Se guardan para este juego y se activan al abrirlo."
+msgstr "Codes Game Genie (3A8-6CF-E66) ou Action Replay (00C0-1205) pour %s. Ils sont enregistrés pour ce jeu et activés à son ouverture."
+
 msgid "Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. Se guardan para este juego y se activan al abrirlo."
 msgstr "Codes Game Genie (ABCD-EFGH) ou Action Replay (FF0A12:0009) de %s. Ils sont gardés pour ce jeu et s'activent à son ouverture."
 
@@ -1267,6 +1270,9 @@ msgstr "L'emplacement %d est vide"
 msgid "La sesión ha caducado: vuelve a escribir la contraseña."
 msgstr "La session a expiré : saisissez à nouveau le mot de passe."
 
+msgid "La unidad FM (YM2413) venía en las Master System japonesas; con esto está también en las demás regiones, para los juegos que la usan si la encuentran."
+msgstr "L'unité FM (YM2413) équipait les Master System japonaises ; avec ceci elle est aussi présente dans les autres régions, pour les jeux qui s'en servent s'ils la trouvent."
+
 msgid "La#"
 msgstr "La#"
 
@@ -1342,6 +1348,9 @@ msgstr ""
 
 msgid "Los códigos Game Genie no usan las letras I, O, Q ni U."
 msgstr "Les codes Game Genie n'utilisent pas les lettres I, O, Q ni U."
+
+msgid "Los códigos de Master System y Game Gear son de cifras hexadecimales: 00C0-1205 (Action Replay) o 3A8-6CF-E66 (Game Genie)."
+msgstr "Les codes Master System et Game Gear sont en chiffres hexadécimaux : 00C0-1205 (Action Replay) ou 3A8-6CF-E66 (Game Genie)."
 
 msgid ""
 "Los discos de Mega CD y los juegos MSU-MD suenan\n"
@@ -2074,6 +2083,9 @@ msgstr "Ombre des sprites"
 msgid "Sonido"
 msgstr "Son"
 
+msgid "Sonido FM de la Master System"
+msgstr "Son FM de la Master System"
+
 msgid "Sonido activado"
 msgstr "Son activé"
 
@@ -2218,6 +2230,9 @@ msgid ""
 msgstr ""
 "Un .vgm ou .vgz, ou le .zip avec tous les morceaux du jeu de vgmrips.net.\n"
 "Il est gardé avec les pistes du jeu, pour l'avoir la prochaine fois."
+
+msgid "Un código Action Replay de Master System escribe en la RAM (C000-DFFF)."
+msgstr "Un code Action Replay de Master System écrit dans la RAM (C000-DFFF)."
 
 msgid "Un código Action Replay es como FF0A12:0009 (6 cifras hexadecimales y luego 4, o 2 para un byte)."
 msgstr "Un code Action Replay ressemble à FF0A12:0009 (6 chiffres hexadécimaux puis 4, ou 2 pour un octet)."

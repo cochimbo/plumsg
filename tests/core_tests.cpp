@@ -2199,6 +2199,39 @@ void testGameGear() {
     check(!md.isGameGear() && md.frame().width == 256 && md.frame().aspectLines == 224, "Game Gear: back to a Master System");
 }
 
+void testSmsCheats() {
+    CheatPatch p;
+    std::string error;
+    check(decodeCheat("00C0-1255", &p, &error, true) && p.address == 0xC012 && p.value == 0x55 && p.byte &&
+              p.compare < 0,
+          "SMS cheats: Action Replay");
+    check(!decodeCheat("0012-3455", &p, &error, true), "SMS cheats: Action Replay outside RAM refused");
+    check(decodeCheat("3A8-6CF", &p, &error, true) && p.address == 0x086C && p.value == 0x3A && p.compare < 0,
+          "SMS cheats: Game Genie without a compare byte");
+    check(decodeCheat("3a8-6cf-e66", &p, &error, true) && p.address == 0x086C && p.value == 0x3A && p.compare == 0x03,
+          "SMS cheats: Game Genie with a compare byte");
+    check(!decodeCheat("ABCD-EFGH", &p, &error, true), "SMS cheats: Mega Drive codes refused");
+
+    namespace st = smstestrom;
+    MegaDrive md;
+    md.loadRomData(st::build());
+    std::vector<CheatPatch> cheats;
+    check(decodeCheatCodes("00C0-1042", &cheats, &error, true), "SMS cheats: list decoded");
+    const uint8_t original = md.masterSystem()->read(0x0001);
+    CheatPatch rom;
+    rom.address = 0x0001;
+    rom.value = static_cast<uint8_t>(original ^ 0xFF);
+    rom.byte = true;
+    rom.compare = original;
+    cheats.push_back(rom);
+    md.setCheats(cheats);
+    md.runFrame();
+    check(md.z80Ram()[0x10] == 0x42, "SMS cheats: the RAM byte held");
+    check(md.masterSystem()->read(0x0001) == static_cast<uint8_t>(original ^ 0xFF), "SMS cheats: the ROM byte patched");
+    md.setCheats({});
+    check(md.masterSystem()->read(0x0001) == original, "SMS cheats: the ROM byte back");
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -2230,6 +2263,7 @@ int main() {
     testSmsMapper();
     testSmsPhase2();
     testGameGear();
+    testSmsCheats();
     testSh2();
     testMars();
     testMarsProgram();
