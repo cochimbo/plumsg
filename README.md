@@ -58,6 +58,7 @@ Primera versión. Lo que hay:
 - **Run-ahead**: quita 1 o más fotogramas de retardo a los mandos, como en RetroArch.
 - **Sin límite de sprites**: se ven todos los sprites de cada línea, sin el parpadeo que
   causa el límite de la consola.
+- **Pantalla ancha** 16:9 o 16:10: se ve lo que hay más allá de los bordes de la pantalla.
 - **Overclock**: el procesador de la consola va más rápido, para los juegos que se ralentizan.
 - **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
 - **Trucos** Game Genie y Action Replay, guardados por juego, con las listas de trucos de
@@ -136,6 +137,13 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   el juego se comporta igual: no afecta a partidas en red, run-ahead, logros ni estados. El
   truco de tapar sprites con uno en x = 0 se respeta. Si un juego parpadea igual, es que
   esconde los sprites él mismo. También se puede fijar por juego.
+- **Opciones > Vídeo > Pantalla ancha** (desactivada por defecto): 16:10 o 16:9 en vez del
+  4:3 de la consola. A los lados se dibuja lo que el juego tiene en los planos y los sprites
+  más allá de los bordes (53 columnas por lado en 16:9). Como el juego nunca pensó que eso
+  se viera, en algunos aparecen enemigos antes de tiempo, trozos del nivel aún sin dibujar
+  o cosas escondidas fuera; por eso conviene fijarla por juego, en Opciones de este juego.
+  El juego no lo nota: no afecta a partidas en red, run-ahead, logros ni estados (la
+  miniatura del estado se queda en 4:3). El headless la prueba con `--widescreen 16:9`.
 - **Consola**: región (automática según la cabecera, Japón, EE. UU. o Europa/PAL) y tipo
   de mando (3 o 6 botones) de cada puerto. Cambiar la región reinicia el juego.
 - **Consola > Overclock** (desactivado por defecto): el 68000 va al 150, 200, 300 o 400 % de su

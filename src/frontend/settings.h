@@ -16,6 +16,14 @@ namespace plumsg {
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
 // the [teclado] / [mando] sections, under [interfaz], [video], [audio], [consola],
 // [velocidad], [estados], [biblioteca], [bios], [red], [logros] and [recientes].
+// The widescreen choices: the picture's aspect, and the name in plumsg.ini.
+struct Widescreen {
+    int w, h;
+    const char* name;
+};
+constexpr Widescreen kWidescreens[] = {{4, 3, "no"}, {16, 10, "16:10"}, {16, 9, "16:9"}};
+constexpr int kWidescreenCount = 3;
+
 struct Settings {
     static constexpr size_t kMaxRecent = 10;
     static constexpr int kMaxRewindSeconds = 60;
@@ -25,6 +33,9 @@ struct Settings {
     RenderOptions render;
     // Draw every sprite on a line, without the console's limit that makes them flicker.
     bool unlimitedSprites = false;
+    // Widescreen: 0 the console's 4:3, 1 16:10, 2 16:9 (kWidescreens), with the planes and
+    // sprites past the edges of the screen at the sides.
+    int widescreen = 0;
     int windowScale = 3;
     bool fullscreen = false;
     bool showMenu = true;

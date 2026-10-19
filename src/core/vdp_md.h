@@ -74,6 +74,17 @@ public:
     // everything the game can read stay as on the console, so it is not part of the state.
     void setUnlimitedSprites(bool on) { unlimitedSprites_ = on; }
     bool unlimitedSprites() const { return unlimitedSprites_; }
+    // Widescreen: draws the picture as wide as `aspectW`:`aspectH` (16:9, 16:10) instead of
+    // 4:3, with columns on each side that the console never shows, taken from the planes
+    // and sprites past its edges. 0 turns it off. Only the picture changes, as with the
+    // sprite limit, so it is not part of the state either.
+    static constexpr int kMaxWideColumns = (VideoFrameMd::kMaxWidth - 320) / 2;
+    void setWidescreen(int aspectW, int aspectH) {
+        wideW_ = aspectW;
+        wideH_ = aspectH;
+    }
+    // The columns added on each side for a picture `width` pixels wide (256 or 320).
+    int wideColumns(int width) const;
 
     template <class Ar>
     void state(Ar& ar) {
@@ -98,8 +109,10 @@ private:
         bool priority;
         uint16_t tile;
     };
-    void drawPlane(int line, bool planeA, std::array<Cell, 320>& out, std::array<bool, 320>& isWindow);
-    void drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t, 320>& number);
+    // They fill `out[0, width + 2 * extra)` for screen columns -extra .. width + extra.
+    using LineCells = std::array<Cell, VideoFrameMd::kMaxWidth>;
+    void drawPlane(int line, bool planeA, int extra, LineCells& out, std::array<bool, VideoFrameMd::kMaxWidth>& isWindow);
+    void drawSprites(int line, int extra, LineCells& out, std::array<uint8_t, VideoFrameMd::kMaxWidth>& number);
 
     std::array<uint8_t, 0x10000> vram_{};
     std::array<uint16_t, 64> cram_{};
@@ -125,6 +138,7 @@ private:
     bool pal_ = false;
     uint64_t frameNumber_ = 0;
     bool unlimitedSprites_ = false;
+    int wideW_ = 0, wideH_ = 0;
 
     std::array<uint32_t, 64 * 3> colors_{};  // CRAM as RGBA, normal/shadow/highlight
     std::unique_ptr<VideoFrameMd> frame_;

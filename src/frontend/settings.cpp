@@ -84,6 +84,11 @@ void Settings::parse(std::istream& in, Settings& s) {
             else if (read3DKey(key, value, s.render)) continue;
             else if (key == "pixeles_cuadrados") s.render.squarePixels = yes(value);
             else if (key == "sin_limite_sprites") s.unlimitedSprites = yes(value);
+            else if (key == "pantalla_ancha") {
+                s.widescreen = 0;
+                for (int i = 0; i < kWidescreenCount; ++i)
+                    if (lower(value) == kWidescreens[i].name) s.widescreen = i;
+            }
             else if (key == "tamano_ventana") s.windowScale = std::clamp(std::atoi(value.c_str()), 1, 8);
             else if (key == "pantalla_completa") s.fullscreen = yes(value);
             else if (key == "barra_menus") s.showMenu = yes(value);
@@ -168,6 +173,9 @@ void Settings::write(std::ostream& out) const {
         << "# sin_limite_sprites: dibujar todos los sprites de cada línea, sin el límite de la consola\n"
         << "# que los hace parpadear o desaparecer. El juego no lo nota.\n"
         << "sin_limite_sprites = " << flag(unlimitedSprites) << "\n"
+        << "# pantalla_ancha: no, 16:10 o 16:9. Enseña lo que hay más allá de los bordes de la\n"
+        << "# pantalla; en algunos juegos se ven cosas que no tendrían que verse.\n"
+        << "pantalla_ancha = " << kWidescreens[std::clamp(widescreen, 0, kWidescreenCount - 1)].name << "\n"
         << "tamano_ventana = " << windowScale << "\n"
         << "pantalla_completa = " << flag(fullscreen) << "\n"
         << "barra_menus = " << flag(showMenu) << "\n"
