@@ -39,12 +39,15 @@ public:
     void holdMain(bool on);
     // Song extraction, for sound drivers asked by calling a routine (the number in a
     // register): calls to `entry` from the game return at once, without running it. 0: none.
+    // skipPops: bytes of arguments the routine takes off the stack itself as it returns.
     uint32_t skipRoutine = 0;
+    uint32_t skipPops = 0;
     // Calls the routine at `entry` from where the program is, as the program would, with
     // the registers given (d0-d7, then a0-a6; `keep` in one keeps it as it is) and
-    // interrupts masked. It runs as the console goes on; on its return every register is
-    // put back as it was and the program carries on. inRoutine(): not back yet.
-    void callRoutine(uint32_t entry, const uint32_t (&regs)[15], uint32_t keep);
+    // interrupts masked; `argBytes` (2 or 4) of `arg` pushed first, for a routine that takes
+    // its number on the stack. It runs as the console goes on; on its return every
+    // register is put back as it was and the program carries on. inRoutine(): not back yet.
+    void callRoutine(uint32_t entry, const uint32_t (&regs)[15], uint32_t keep, uint32_t arg = 0, int argBytes = 0);
     bool inRoutine() const { return calling_; }
     void forgetRoutine() { calling_ = false; }  // a state loaded: not in one any more
 

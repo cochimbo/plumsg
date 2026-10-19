@@ -1650,7 +1650,7 @@ void testVgm() {
 
 void testSongExtract(testrom::Asking asking) {
     // The music test ROM asks for its songs like Sonic does (or like Streets of Rage 2,
-    // or like the GEMS games): the extractor finds how, and takes out its four songs, each
+    // like EA's games or like the GEMS games): the extractor finds how, and takes out its four songs, each
     // once round with its loop.
     const std::string path = (std::filesystem::temp_directory_path() / "plumsg-music-test.md").string();
     {
@@ -1658,12 +1658,14 @@ void testSongExtract(testrom::Asking asking) {
         std::ofstream out(path, std::ios::binary);
         out.write(reinterpret_cast<const char*>(rom.data()), static_cast<std::streamsize>(rom.size()));
     }
-    const std::string how = asking == testrom::Asking::byCall   ? " (llamando a una rutina)"
-                            : asking == testrom::Asking::byRing ? " (con mensajes en un anillo)"
-                                                                : "";
-    const std::string said = asking == testrom::Asking::byCall   ? "Pido las canciones llamando a"
-                             : asking == testrom::Asking::byRing ? "Pido las canciones con el mensaje FF 10 n"
-                                                                 : "Pido las canciones en";
+    const std::string how = asking == testrom::Asking::byCall    ? " (llamando a una rutina)"
+                            : asking == testrom::Asking::byStack ? " (con el número en la pila)"
+                            : asking == testrom::Asking::byRing  ? " (con mensajes en un anillo)"
+                                                                 : "";
+    const std::string said = asking == testrom::Asking::byCall    ? "Pido las canciones llamando a"
+                             : asking == testrom::Asking::byStack ? "Pido las canciones llamando a"
+                             : asking == testrom::Asking::byRing  ? "Pido las canciones con el mensaje FF 10 n"
+                                                                  : "Pido las canciones en";
     SongExtractor extractor;
     std::vector<std::string> log;
     extractor.setLog([&](const std::string& s) { log.push_back(s); });
@@ -1732,6 +1734,7 @@ int main() {
     testVgm();
     testSongExtract(testrom::Asking::byQueue);
     testSongExtract(testrom::Asking::byCall);
+    testSongExtract(testrom::Asking::byStack);
     testSongExtract(testrom::Asking::byRing);
     {
         // The Z80's reset also resets the YM2612; what it already played must stay.

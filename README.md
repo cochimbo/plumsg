@@ -206,15 +206,16 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
     vuelta y su punto de vuelta para que siga sonando. Arranca el juego por su cuenta y
     localiza su driver de sonido (el código que toca el chip FM, o el Z80) y cómo le pide el
     juego la música: un byte que el juego escribe y el driver vacía (el SMPS de Sega y
-    parecidos), una rutina del driver a la que el juego llama con el número en un registro
-    (como Streets of Rage 2), o un anillo de órdenes en la memoria del Z80 donde el juego
+    parecidos), una rutina a la que el juego llama con el número en un registro (como
+    Streets of Rage 2) o en la pila (los juegos de EA, como NHL 96, que tienen dos rutinas,
+    cada una con sus canciones), o un anillo de órdenes en la memoria del Z80 donde el juego
     deja mensajes (el GEMS de los juegos de Sega of America, como Sonic Spinball). Luego le
     va pidiendo cada número. Probado con Sonic 1, 2 y 3, Gunstar Heroes, Ristar, Shinobi
     III, Golden Axe, Streets of Rage 2, Sonic Spinball, Earthworm Jim, Taz in Escape from
-    Mars, Castle of Illusion, QuackShot, Streets of Rage 3, Beyond Oasis y Shadowrun (estos
-    tres con el driver en el 68000, que le pasa las notas al Z80). Lo que suena en uno o dos
-    canales, aunque dure (un motor, una alarma), cuenta como efecto y no como canción. Tarda
-    unos minutos, con una barra de progreso, y se puede parar.
+    Mars, NHL 96, Castle of Illusion, QuackShot, Streets of Rage 3, Beyond Oasis y Shadowrun
+    (estos tres con el driver en el 68000, que le pasa las notas al Z80). Lo que suena en
+    uno o dos canales, aunque dure (un motor, una alarma), cuenta como efecto y no como
+    canción. Tarda unos minutos, con una barra de progreso, y se puede parar.
   - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,
     golpes...): los instrumentos FM que suenan en los sonidos cortos y en ninguna canción.
     Con **Sonido > Efectos de sonido originales** (la opción de serie) suenan como en la

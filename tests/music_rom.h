@@ -12,6 +12,8 @@
 // Asking::byCall: the game asks by calling a routine of the driver with the number in d0,
 // as Streets of Rage 2 does (the driver, VBlank's code, is then at $8000, away from the
 // game's).
+// Asking::byStack: the game pushes the number and calls a routine of its own, which
+// passes it on to the driver's and takes it off the stack as it returns, as EA's games do.
 // Asking::byRing: the game writes FF 10 n to a ring of 64 bytes in the Z80's memory
 // ($A01B40), a byte at a time, each followed by where the next goes ($A00036), as GEMS
 // games do; the driver plays the last FF 10 n written.
@@ -20,10 +22,10 @@
 
 namespace plumsg::testrom {
 
-enum class Asking { byQueue, byCall, byRing };
+enum class Asking { byQueue, byCall, byStack, byRing };
 
 inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
-    const bool byCall = asking == Asking::byCall, byRing = asking == Asking::byRing;
+    const bool byCall = asking == Asking::byCall, byStack = asking == Asking::byStack, byRing = asking == Asking::byRing;
     Emitter e;
     auto text = [&](uint32_t at, const char* s, size_t width) {
         for (size_t i = 0; i < width; ++i) e.rom[at + i] = static_cast<uint8_t>(i < std::strlen(s) ? s[i] : ' ');
@@ -43,12 +45,16 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
         e.w16(0x13FC); e.w16(value); e.w32(0xA04001);  // move.b #value,$A04001
     };
     std::vector<uint32_t> calls;  // where the address of the driver's routine goes
+    std::vector<uint32_t> fronts;  // and of the game's in front of it
     auto request = [&](uint16_t frame, uint8_t value, uint16_t addr, const std::string& skip) {
         e.w16(0x0C41); e.w16(frame);                   // cmp.w  #frame,d1
         e.w16(0x6600); e.rel(skip);                    // bne.w  skip
         if (byCall && addr == 0xF00A) {
             e.w16(0x303C); e.w16(value);               // move.w #value,d0
             e.w16(0x4EB9); calls.push_back(e.here()); e.w32(0);  // jsr    ask
+        } else if (byStack && addr == 0xF00A) {
+            e.w16(0x3F3C); e.w16(value);               // move.w #value,-(sp)
+            e.w16(0x4EB9); fronts.push_back(e.here()); e.w32(0);  // jsr    front
         } else if (byRing && addr == 0xF00A) {
             for (uint16_t b : {uint16_t{0xFF}, uint16_t{0x10}, uint16_t{value}}) {
                 e.w16(0x303C); e.w16(b);               // move.w #b,d0
@@ -98,8 +104,14 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
     e.w16(0x0202); e.w16(0x003F);                      // and.b  #$3F,d2
     e.w16(0x13C2); e.w32(0xA00036);                    // move.b d2,$A00036
     e.w16(0x4E75);                                     // rts
+    e.label("front");                                  // the number on the stack to ask
+    e.w16(0x302F); e.w16(0x0004);                      // move.w 4(sp),d0
+    e.w16(0x4EB9); calls.push_back(e.here()); e.w32(0);  // jsr    ask
+    e.w16(0x2F57); e.w16(0x0002);                      // move.l (sp),2(sp)
+    e.w16(0x544F);                                     // addq.w #2,sp
+    e.w16(0x4E75);                                     // rts
 
-    if (byCall || byRing)
+    if (byCall || byStack || byRing)
         while (e.here() < 0x8000) e.w16(0x4E71);       // nop
     e.label("ask");
     e.w16(0x11C0); e.w16(0xF00A);                      // move.b d0,($F00A).w
@@ -194,6 +206,7 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
 
     e.link();
     for (uint32_t at : calls) e.put32(at, e.at("ask"));
+    for (uint32_t at : fronts) e.put32(at, e.at("front"));
     e.put32(0, 0x00FFFE00);
     e.put32(4, e.at("reset"));
     for (uint32_t v = 2; v < 64; ++v) e.put32(v * 4, e.at("other"));
