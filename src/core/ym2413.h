@@ -30,6 +30,13 @@ public:
     uint8_t reg(int index) const { return regs_[static_cast<size_t>(index & 0x3F)]; }
     // Turns the output down to percent (the console's audio control, port 0xF2).
     void setVolume(int percent) { volume_ = percent; }
+    // Turns the channels in `mask` (bit 0 = channel 1; in rhythm mode channels 7-9 are
+    // the drums) down to percent of their volume: for the Roland sound, which plays
+    // them instead, and for listening to some channels alone.
+    void setMuted(uint32_t mask, int percent) {
+        muted_ = mask & 0x1FF;
+        mutedLevel_ = percent * 256 / 100;
+    }
 
     // Interleaved left/right samples at sampleRate().
     std::vector<int16_t>& samples() { return samples_; }
@@ -47,6 +54,8 @@ private:
     uint8_t address_ = 0;
     uint8_t regs_[64] = {};
     int volume_ = 100;
+    uint32_t muted_ = 0;
+    int32_t mutedLevel_ = 0;
     std::vector<int16_t> samples_;
 };
 

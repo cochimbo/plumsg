@@ -51,9 +51,6 @@ msgstr "%d similar. Click one to see it."
 msgid "%s no es un .wav que plumsg sepa leer"
 msgstr "%s is not a .wav plumsg can read"
 
-msgid "%s no tiene música de YM2612: no es de Mega Drive."
-msgstr "%s has no YM2612 music: it is not from the Mega Drive."
-
 msgid "%s, %u puntos"
 msgstr "%s, %u points"
 
@@ -290,6 +287,9 @@ msgstr "Electric bass (pick)"
 msgid "Bajo sin trastes"
 msgstr "Fretless bass"
 
+msgid "Bajo sintetizado"
+msgstr "Synth bass"
+
 msgid "Bajo sintetizado 1"
 msgstr "Synth bass 1"
 
@@ -471,6 +471,9 @@ msgstr "Cowbell"
 
 msgid "Cerrar sesión"
 msgstr "Log out"
+
+msgid "Charles"
+msgstr "Hi-hat"
 
 msgid "Charles abierto"
 msgstr "Open hi-hat"
@@ -739,8 +742,8 @@ msgstr "The synthesizer's SoundFont"
 msgid "El VGM está cortado."
 msgstr "The VGM is cut short."
 
-msgid "El VGM no es de Mega Drive: no tiene YM2612 ni PSG."
-msgstr "The VGM is not from the Mega Drive: it has no YM2612 or PSG."
+msgid "El VGM no es de una consola de Sega: no tiene YM2612, YM2413 ni PSG."
+msgstr "The VGM is not from a Sega console: it has no YM2612, YM2413 or PSG."
 
 msgid "El anfitrión está jugando a otro juego: abrid los dos el mismo (la misma ROM)."
 msgstr "The host is playing another game: both of you open the same one (the same ROM)."
@@ -1075,6 +1078,9 @@ msgstr "Save state"
 msgid "Guardar estado (ranura %d)"
 msgstr "Save state (slot %d)"
 
+msgid "Guitarra"
+msgstr "Guitar"
+
 msgid "Guitarra de acero"
 msgstr "Steel guitar"
 
@@ -1083,6 +1089,9 @@ msgstr "Nylon guitar"
 
 msgid "Guitarra distorsionada"
 msgstr "Distortion guitar"
+
+msgid "Guitarra eléctrica"
+msgstr "Electric guitar"
 
 msgid "Guitarra eléctrica apagada"
 msgstr "Muted electric guitar"
@@ -1692,6 +1701,9 @@ msgstr "Percussive"
 msgid "Percusión afinada"
 msgstr "Chromatic percussion"
 
+msgid "Piano"
+msgstr "Piano"
+
 msgid "Piano brillante"
 msgstr "Bright piano"
 
@@ -1724,6 +1736,9 @@ msgstr "Plane B with priority in front"
 
 msgid "Plano B plano (como el cielo)"
 msgstr "Flat plane B (like the sky)"
+
+msgid "Platillo"
+msgstr "Cymbal"
 
 msgid "Platillo al revés"
 msgstr "Reverse cymbal"
@@ -1922,9 +1937,6 @@ msgstr "Taken from the ROM (request %s)"
 
 msgid "Sacar canciones"
 msgstr "Get songs"
-
-msgid "Sacar las canciones de los juegos de Master System aún no está hecho."
-msgstr "Extracting the songs of Master System games is not done yet."
 
 msgid "Salir"
 msgstr "Quit"
@@ -2160,6 +2172,9 @@ msgstr "All the 3D settings"
 
 msgid "Todos los archivos"
 msgstr "All files"
+
+msgid "Tom"
+msgstr "Tom"
 
 msgid "Tom agudo"
 msgstr "High tom"
@@ -2551,6 +2566,9 @@ msgstr "Achievement unlocked! (%u points)"
 
 msgid "Étnicos"
 msgstr "Ethnic"
+
+msgid "Órgano"
+msgstr "Organ"
 
 msgid "Órgano de barras"
 msgstr "Drawbar organ"

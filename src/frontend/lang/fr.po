@@ -51,9 +51,6 @@ msgstr "%d ressemblantes. Cliquez sur l'une pour la voir."
 msgid "%s no es un .wav que plumsg sepa leer"
 msgstr "%s n'est pas un .wav que plumsg sait lire"
 
-msgid "%s no tiene música de YM2612: no es de Mega Drive."
-msgstr "%s n'a pas de musique YM2612 : elle ne vient pas de la Mega Drive."
-
 msgid "%s, %u puntos"
 msgstr "%s, %u points"
 
@@ -290,6 +287,9 @@ msgstr "Basse électrique (médiator)"
 msgid "Bajo sin trastes"
 msgstr "Basse fretless"
 
+msgid "Bajo sintetizado"
+msgstr "Basse synthé"
+
 msgid "Bajo sintetizado 1"
 msgstr "Basse synthé 1"
 
@@ -471,6 +471,9 @@ msgstr "Cloche de vache"
 
 msgid "Cerrar sesión"
 msgstr "Se déconnecter"
+
+msgid "Charles"
+msgstr "Charleston"
 
 msgid "Charles abierto"
 msgstr "Charleston ouvert"
@@ -739,8 +742,8 @@ msgstr "La SoundFont du synthétiseur"
 msgid "El VGM está cortado."
 msgstr "Le VGM est tronqué."
 
-msgid "El VGM no es de Mega Drive: no tiene YM2612 ni PSG."
-msgstr "Le VGM ne vient pas de la Mega Drive : il n'a ni YM2612 ni PSG."
+msgid "El VGM no es de una consola de Sega: no tiene YM2612, YM2413 ni PSG."
+msgstr "Le VGM ne vient pas d'une console Sega : il n'a ni YM2612, ni YM2413, ni PSG."
 
 msgid "El anfitrión está jugando a otro juego: abrid los dos el mismo (la misma ROM)."
 msgstr "L'hôte joue à un autre jeu : ouvrez tous les deux le même (la même ROM)."
@@ -1075,6 +1078,9 @@ msgstr "Sauvegarder l'état"
 msgid "Guardar estado (ranura %d)"
 msgstr "Sauvegarder l'état (emplacement %d)"
 
+msgid "Guitarra"
+msgstr "Guitare"
+
 msgid "Guitarra de acero"
 msgstr "Guitare acier"
 
@@ -1083,6 +1089,9 @@ msgstr "Guitare nylon"
 
 msgid "Guitarra distorsionada"
 msgstr "Guitare distorsion"
+
+msgid "Guitarra eléctrica"
+msgstr "Guitare électrique"
 
 msgid "Guitarra eléctrica apagada"
 msgstr "Guitare électrique étouffée"
@@ -1692,6 +1701,9 @@ msgstr "Percussions"
 msgid "Percusión afinada"
 msgstr "Percussions chromatiques"
 
+msgid "Piano"
+msgstr "Piano"
+
 msgid "Piano brillante"
 msgstr "Piano brillant"
 
@@ -1724,6 +1736,9 @@ msgstr "Plan B prioritaire devant"
 
 msgid "Plano B plano (como el cielo)"
 msgstr "Plan B à plat (comme le ciel)"
+
+msgid "Platillo"
+msgstr "Cymbale"
 
 msgid "Platillo al revés"
 msgstr "Cymbale inversée"
@@ -1922,9 +1937,6 @@ msgstr "Extrait de la ROM (demande %s)"
 
 msgid "Sacar canciones"
 msgstr "Extraire les morceaux"
-
-msgid "Sacar las canciones de los juegos de Master System aún no está hecho."
-msgstr "L'extraction des musiques des jeux Master System n'est pas encore faite."
 
 msgid "Salir"
 msgstr "Quitter"
@@ -2160,6 +2172,9 @@ msgstr "Tous les réglages 3D"
 
 msgid "Todos los archivos"
 msgstr "Tous les fichiers"
+
+msgid "Tom"
+msgstr "Tom"
 
 msgid "Tom agudo"
 msgstr "Tom aigu"
@@ -2551,6 +2566,9 @@ msgstr "Succès débloqué ! (%u points)"
 
 msgid "Étnicos"
 msgstr "Ethniques"
+
+msgid "Órgano"
+msgstr "Orgue"
 
 msgid "Órgano de barras"
 msgstr "Orgue à tirettes"

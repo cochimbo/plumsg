@@ -41,7 +41,7 @@ add_library(plumsg_ymfm STATIC
   ${ymfm_SOURCE_DIR}/src/ymfm_adpcm.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_ssg.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_misc.cpp
-  ${ymfm_SOURCE_DIR}/src/ymfm_opl.cpp
+  src/core/ymfm_opl_all.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_pcm.cpp
 )
 target_include_directories(plumsg_ymfm SYSTEM PUBLIC ${ymfm_SOURCE_DIR}/src)
