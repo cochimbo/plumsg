@@ -227,6 +227,9 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   por debajo, y **Reverb** y **Chorus** añaden ambiente. Cada instrumento del juego recibe
   un instrumento General MIDI con unas reglas automáticas, que se cambian a mano en el
   **Editor de instrumentos**. Todo esto se puede cambiar solo para un juego desde sus opciones.
+  En la Master System y la Game Gear también: el FM (YM2413) toca sus 15 instrumentos de
+  serie como los General MIDI que imitan (violín, guitarra, piano...) y su batería con la
+  del SoundFont, y el estéreo de la Game Gear lleva cada canal del PSG a su lado.
 
   plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable. Los `.sf2` que se
   dejen en `sonido\soundfonts\` (**Abrir la carpeta de SoundFonts** la abre) salen en el
@@ -259,7 +262,11 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
     va pidiendo cada número. Probado con Sonic 1, 2 y 3, Gunstar Heroes, Ristar, Shinobi
     III, Golden Axe, Streets of Rage 2, Sonic Spinball, Earthworm Jim, Taz in Escape from
     Mars, NHL 96, Castle of Illusion, QuackShot, Streets of Rage 3, Beyond Oasis y Shadowrun
-    (estos tres con el driver en el 68000, que le pasa las notas al Z80). Lo que suena en
+    (estos tres con el driver en el 68000, que le pasa las notas al Z80). En la Master
+    System y la Game Gear, donde el juego y el driver comparten el Z80, busca el byte que
+    el juego escribe y el código que toca el PSG o el FM vacía; los `.vgz` llevan el PSG,
+    el YM2413 y el estéreo de la Game Gear (probado de momento con un juego de prueba
+    propio). Lo que suena en
     uno o dos canales, aunque dure (un motor, una alarma), cuenta como efecto y no como
     canción. Tarda unos minutos, con una barra de progreso, y se puede parar.
   - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,

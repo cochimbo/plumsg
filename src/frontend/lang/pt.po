@@ -51,9 +51,6 @@ msgstr "%d parecidas. Clique em uma para vê-la."
 msgid "%s no es un .wav que plumsg sepa leer"
 msgstr "%s não é um .wav que o plumsg saiba ler"
 
-msgid "%s no tiene música de YM2612: no es de Mega Drive."
-msgstr "%s não tem música de YM2612: não é do Mega Drive."
-
 msgid "%s, %u puntos"
 msgstr "%s, %u pontos"
 
@@ -290,6 +287,9 @@ msgstr "Baixo elétrico (palheta)"
 msgid "Bajo sin trastes"
 msgstr "Baixo fretless"
 
+msgid "Bajo sintetizado"
+msgstr "Baixo sintetizado"
+
 msgid "Bajo sintetizado 1"
 msgstr "Baixo sintetizado 1"
 
@@ -471,6 +471,9 @@ msgstr "Cowbell"
 
 msgid "Cerrar sesión"
 msgstr "Sair"
+
+msgid "Charles"
+msgstr "Chimbal"
 
 msgid "Charles abierto"
 msgstr "Chimbal aberto"
@@ -739,8 +742,8 @@ msgstr "O SoundFont do sintetizador"
 msgid "El VGM está cortado."
 msgstr "O VGM está cortado."
 
-msgid "El VGM no es de Mega Drive: no tiene YM2612 ni PSG."
-msgstr "O VGM não é do Mega Drive: não tem YM2612 nem PSG."
+msgid "El VGM no es de una consola de Sega: no tiene YM2612, YM2413 ni PSG."
+msgstr "O VGM não é de um console Sega: não tem YM2612, YM2413 nem PSG."
 
 msgid "El anfitrión está jugando a otro juego: abrid los dos el mismo (la misma ROM)."
 msgstr "O anfitrião está jogando outro jogo: abram os dois o mesmo (a mesma ROM)."
@@ -1075,6 +1078,9 @@ msgstr "Salvar estado"
 msgid "Guardar estado (ranura %d)"
 msgstr "Salvar estado (slot %d)"
 
+msgid "Guitarra"
+msgstr "Violão"
+
 msgid "Guitarra de acero"
 msgstr "Violão de aço"
 
@@ -1083,6 +1089,9 @@ msgstr "Violão de náilon"
 
 msgid "Guitarra distorsionada"
 msgstr "Guitarra distorcida"
+
+msgid "Guitarra eléctrica"
+msgstr "Guitarra elétrica"
 
 msgid "Guitarra eléctrica apagada"
 msgstr "Guitarra elétrica abafada"
@@ -1692,6 +1701,9 @@ msgstr "Percussão"
 msgid "Percusión afinada"
 msgstr "Percussão cromática"
 
+msgid "Piano"
+msgstr "Piano"
+
 msgid "Piano brillante"
 msgstr "Piano brilhante"
 
@@ -1724,6 +1736,9 @@ msgstr "Plano B com prioridade na frente"
 
 msgid "Plano B plano (como el cielo)"
 msgstr "Plano B achatado (como o céu)"
+
+msgid "Platillo"
+msgstr "Prato"
 
 msgid "Platillo al revés"
 msgstr "Prato invertido"
@@ -1922,9 +1937,6 @@ msgstr "Tirada da ROM (pedido %s)"
 
 msgid "Sacar canciones"
 msgstr "Tirar músicas"
-
-msgid "Sacar las canciones de los juegos de Master System aún no está hecho."
-msgstr "Extrair as músicas dos jogos de Master System ainda não está feito."
 
 msgid "Salir"
 msgstr "Sair"
@@ -2160,6 +2172,9 @@ msgstr "Todos os ajustes do 3D"
 
 msgid "Todos los archivos"
 msgstr "Todos os arquivos"
+
+msgid "Tom"
+msgstr "Tom"
 
 msgid "Tom agudo"
 msgstr "Tom agudo"
@@ -2551,6 +2566,9 @@ msgstr "Conquista desbloqueada! (%u pontos)"
 
 msgid "Étnicos"
 msgstr "Étnicos"
+
+msgid "Órgano"
+msgstr "Órgão"
 
 msgid "Órgano de barras"
 msgstr "Órgão de barras"

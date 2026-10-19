@@ -157,14 +157,17 @@ public:
 
     // Song extraction (SongExtractor). The watch hears every byte written to work RAM
     // (0xFF0000 up) and to the Z80's RAM (0xA00000 up), and whether the 68000 wrote it;
-    // also the 68000's writes to the YM2612, as 0xA04000-0xA04003. Empty for none.
+    // also the 68000's writes to the YM2612, as 0xA04000-0xA04003. On a Master System:
+    // the Z80's writes to its RAM, by their own address (0xC000 up), and to the sound
+    // chips, as 0xA04000, all as the program's (m68k true). Empty for none.
     using MemoryWatch = std::function<void(uint32_t addr, uint8_t value, bool m68k)>;
     void setMemoryWatch(MemoryWatch watch);
     // Keeps the game from asking for music and sounds: the 68000's writes to
     // [addr, addr + count) of anything but 0 or 0x80 (of anything, if all) are dropped.
     // count 0: none.
     void lockSoundRequests(uint32_t addr, int count, bool all = false);
-    // Writes a byte of work RAM or Z80 RAM directly, past the lock.
+    // Writes a byte of work RAM or Z80 RAM (a Master System's at 0xC000) directly, past
+    // the lock.
     void poke(uint32_t addr, uint8_t value);
     // Runs without drawing the picture (faster, for when only the sound matters).
     void setDrawing(bool on) { drawing_ = on; }

@@ -66,10 +66,15 @@ std::string minutes(double seconds) {
     return text;
 }
 
-// The console's sound channels as RolandSound counts them, and the DAC.
+// The console's sound channels as RolandSound counts them, and the DAC: a Mega Drive's,
+// and a Master System's with its YM2413 (nine FM channels or six and the drums).
 constexpr int kDac = 10;
-const char* const kVoiceNames[11] = {"FM 1", "FM 2", "FM 3", "FM 4", "FM 5", "FM 6", "PSG 1", "PSG 2", "PSG 3", N_("Ruido"), "DAC"};
-const int kVoiceOrder[11] = {0, 1, 2, 3, 4, 5, kDac, 6, 7, 8, 9};
+const char* const kVoiceNames[RolandSound::kVoices] = {
+    "FM 1",   "FM 2",   "FM 3",       "FM 4",     "FM 5",         "FM 6",          "PSG 1",
+    "PSG 2",  "PSG 3",  N_("Ruido"),  "DAC",      "FM 7",         "FM 8",          "FM 9",
+    N_("Bombo"), N_("Caja"), N_("Tom"), N_("Platillo"), N_("Charles")};
+const std::vector<int> kVoiceOrder = {0, 1, 2, 3, 4, 5, kDac, 6, 7, 8, 9};
+const std::vector<int> kVoiceOrderOpll = {0, 1, 2, 3, 4, 5, 11, 12, 13, 14, 15, 16, 17, 18, 6, 7, 8, 9};
 
 const char* const kFamilies[16] = {N_("Pianos"), N_("Percusión afinada"), N_("Órganos"), N_("Guitarras"), N_("Bajos"), N_("Cuerdas"),
                                    N_("Conjuntos"), N_("Metales"), N_("Lengüetas"), N_("Flautas"), N_("Solistas sintetizados"),
@@ -280,10 +285,6 @@ bool InstrumentEditor::loadTrack(const Track& track) {
         message_ = trf("No se pudo abrir %s: %s", track.title.c_str(), error.c_str());
         return false;
     }
-    if (file.ymClock == 0) {
-        message_ = trf("%s no tiene música de YM2612: no es de Mega Drive.", track.title.c_str());
-        return false;
-    }
     message_.clear();
     track_ = track;
     synth_.clearSeen();
@@ -327,7 +328,7 @@ void InstrumentEditor::play(double seconds, double rate, std::vector<int16_t>& o
 
 void InstrumentEditor::applyListening() {
     uint32_t muted = mutedVoices_;
-    if (soloVoices_) muted |= 0x7FF & ~soloVoices_;
+    if (soloVoices_) muted |= ((1u << RolandSound::kVoices) - 1) & ~soloVoices_;
     std::set<uint32_t> silenced;
     if (soloInstrument_)
         for (const auto& [fp, seen] : trackSeen_)
@@ -380,7 +381,11 @@ std::vector<InstrumentEditor::Instrument> InstrumentEditor::instruments() const 
     int fm = 0;
     for (Instrument& i : list) {
         switch (i.seen.kind) {
-            case RolandSound::Kind::Fm: i.label = "FM " + std::to_string(++fm); break;
+            case RolandSound::Kind::Fm:
+                if (const int n = RolandSound::opllInstrument(i.fingerprint)) i.label = std::string("FM: ") + RolandSound::opllInstrumentName(n);
+                else i.label = "FM " + std::to_string(++fm);
+                break;
+            case RolandSound::Kind::Rhythm: i.label = std::string("FM: ") + RolandSound::rhythmName(static_cast<int>(i.fingerprint & 0xFF)); break;
             case RolandSound::Kind::PsgTone: i.label = "PSG " + std::to_string((i.fingerprint & 0xFF) + 1); break;
             case RolandSound::Kind::PsgNoise: {
                 const int control = static_cast<int>(i.fingerprint & 7);
@@ -690,7 +695,7 @@ void InstrumentEditor::drawChannels() {
     ImGui::TextDisabled("%s", tr("Canales"));
     const uint32_t active = synth_.activeVoices();
     bool changed = false;
-    for (int v : kVoiceOrder) {
+    for (int v : player_.file().opllClock > 0 ? kVoiceOrderOpll : kVoiceOrder) {
         ImGui::PushID(v);
         const bool on = playing_ && v < RolandSound::kVoices && ((active >> v) & 1);
         ImGui::TextColored(on ? ImVec4(0.45f, 0.95f, 0.55f, 1.0f) : ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%-6s", tr(kVoiceNames[v]));
@@ -718,7 +723,7 @@ void InstrumentEditor::drawAssignment(const std::vector<Instrument>& list, Edito
     auto it = std::find_if(list.begin(), list.end(), [&](const Instrument& i) { return i.fingerprint == selected_; });
     if (it == list.end()) return;
     const Instrument& inst = *it;
-    const bool noise = inst.seen.kind == RolandSound::Kind::PsgNoise;
+    const bool noise = inst.seen.kind == RolandSound::Kind::PsgNoise || inst.seen.kind == RolandSound::Kind::Rhythm;
     RolandSound::Assignment a = synth_.assignmentFor(inst.fingerprint);
     const RolandSound::Assignment before = a;
     if (inst.heard)

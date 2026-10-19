@@ -439,7 +439,10 @@ int playVgmFile(const std::string& path, long frames, const std::string& wav, co
     for (const auto& [fp, seen] : rolandSound.seen()) {
         const RolandSound::Assignment a = rolandSound.assignmentFor(fp);
         std::printf("  %08x %s voices %03x notes %d (%d-%d): %s\n", fp,
-                    seen.kind == RolandSound::Kind::Fm ? "FM" : seen.kind == RolandSound::Kind::PsgTone ? "PSG" : "noise",
+                    seen.kind == RolandSound::Kind::Fm        ? "FM"
+                    : seen.kind == RolandSound::Kind::PsgTone ? "PSG"
+                    : seen.kind == RolandSound::Kind::Rhythm  ? "rhythm"
+                                                              : "noise",
                     seen.channels, seen.notes, seen.low, seen.high,
                     a.drum >= 0 ? RolandSound::drumName(a.drum) : RolandSound::programName(a.program));
     }

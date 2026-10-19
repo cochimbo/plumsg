@@ -2232,6 +2232,136 @@ void testSmsCheats() {
     check(md.masterSystem()->read(0x0001) == original, "SMS cheats: the ROM byte back");
 }
 
+void testSmsVgm() {
+    // A Master System recording: the YM2413's writes and the PSG, no YM2612.
+    Psg psg;
+    Ym2413 opll;
+    opll.setMasterClock(MegaDrive::kMasterNtsc);
+    VgmWriter writer;
+    writer.beginSms(psg, &opll, false, 0, MegaDrive::kMasterNtsc);
+    const uint64_t second = static_cast<uint64_t>(MegaDrive::kMasterNtsc);
+    for (auto [r, v] : std::initializer_list<std::pair<int, int>>{{0x30, 0x10}, {0x10, 0x80}, {0x20, 0x1C}}) {
+        writer.opll(0, static_cast<uint8_t>(r), second / 10);
+        writer.opll(1, static_cast<uint8_t>(v), second / 10);
+    }
+    VgmFile file;
+    std::string error;
+    check(file.parse(writer.finish(second, "Prueba SMS"), &error) && file.opllClock > 3500000 && file.ymClock == 0 &&
+              file.psgClock > 0 && std::fabs(file.seconds() - 1.0) < 0.01,
+          "SMS VGM: a recording with the YM2413 and the PSG, no YM2612");
+    VgmPlayer player;
+    player.load(file);
+    std::vector<int16_t> played;
+    while (!player.finished()) player.play(1.0 / 60, 44100, played);
+    double sumSq = 0;
+    for (size_t i = played.size() / 2; i < played.size(); ++i) sumSq += static_cast<double>(played[i]) * played[i];
+    check(std::sqrt(sumSq / static_cast<double>(played.size() / 2)) > 200, "SMS VGM: its FM note plays back");
+
+    // A Game Gear one keeps its stereo.
+    writer.beginSms(psg, nullptr, true, 0, MegaDrive::kMasterNtsc);
+    writer.ggStereo(0xF0, second / 2);
+    std::vector<uint8_t> bytes = writer.finish(second, "Prueba GG", false);
+    bool stereo = false;
+    for (size_t i = 0x40; i + 1 < bytes.size(); ++i) stereo |= bytes[i] == 0x4F && bytes[i + 1] == 0xF0;
+    check(file.parse(bytes, &error) && file.opllClock == 0 && file.ymClock == 0 && stereo,
+          "SMS VGM: a Game Gear recording with its stereo");
+}
+
+void testSmsRoland() {
+    // The YM2413's notes as General MIDI: its built-in instruments, its game's own and its drums.
+    Ym2413 opll;
+    opll.setMasterClock(MegaDrive::kMasterNtsc);
+    RolandSound roland;
+    std::vector<std::string> log;
+    roland.setLog(&log);
+    auto fm = [&](int reg, int value) {
+        opll.write(0, static_cast<uint8_t>(reg));
+        roland.opllWrite(0, static_cast<uint8_t>(reg), opll, 0);
+        opll.write(1, static_cast<uint8_t>(value));
+        roland.opllWrite(1, static_cast<uint8_t>(value), opll, 0);
+    };
+    auto has = [&](const std::string& line) { return std::find(log.begin(), log.end(), line) != log.end(); };
+    check(std::fabs(RolandSound::opllNote(289, 4, MegaDrive::kMasterNtsc / 15) - 69.0) < 0.1,
+          "SMS Roland: F-number 289 block 4 is the A 440");
+    fm(0x30, 0x10);  // channel 1: violin, full volume
+    fm(0x10, 289 & 0xFF);
+    fm(0x20, 0x18 | (289 >> 8));  // key on, block 4
+    check(has("0 program 40") && has("0 on 69"), "SMS Roland: the YM2413's violin plays a GM violin");
+    check(RolandSound::kindOf(RolandSound::opllFingerprint(1)) == RolandSound::Kind::Fm &&
+              roland.seen().count(RolandSound::opllFingerprint(1)),
+          "SMS Roland: the built-in instrument is seen");
+    fm(0x20, 0x08 | (289 >> 8));  // key off
+    check(has("0 off 69"), "SMS Roland: key off ends the note");
+    log.clear();
+    fm(0x38, 0x10);  // channel 9: violin too
+    fm(0x18, 289 & 0xFF);
+    fm(0x28, 0x18 | (289 >> 8));
+    check(has("13 on 69"), "SMS Roland: channel 9 plays on its own MIDI channel");
+    log.clear();
+    fm(0x0E, 0x30);  // rhythm mode: bass drum
+    check(has("13 off 69") && has("9 on 36"), "SMS Roland: rhythm mode stops channel 9 and hits the bass drum");
+    log.clear();
+    fm(0x0E, 0x30);
+    check(log.empty(), "SMS Roland: a drum held is one hit");
+    fm(0x0E, 0x21);  // hi-hat
+    check(has("9 on 42"), "SMS Roland: the hi-hat");
+    for (int r = 0; r < 8; ++r) fm(r, 0x21 + r);  // the game's own instrument
+    fm(0x31, 0x00);
+    fm(0x11, 0x80);
+    fm(0x21, 0x14);  // block 2: low
+    bool custom = false;
+    for (const auto& [fp, seen] : roland.seen())
+        custom |= seen.kind == RolandSound::Kind::Fm && !RolandSound::opllInstrument(fp) && seen.channels == 2;
+    check(custom, "SMS Roland: the game's own instrument is an FM instrument of its own");
+
+    RolandSound::Assignments original;
+    original[RolandSound::rhythmFingerprint(0)].original = true;
+    roland.setAssignments(original);
+    fm(0x0E, 0x20);
+    fm(0x0E, 0x30);
+    check(RolandSound::opllChannels(RolandSound::kAllVoices & ~roland.chipChannels()) == (0x1FF & ~0x40),
+          "SMS Roland: a drum left original keeps its channel on the chip");
+
+    // The Game Gear's stereo pans the PSG.
+    Psg psg;
+    psg.setStereo(0xE1);  // channel 1 right only
+    log.clear();
+    psg.write(0x8E);
+    psg.write(0x0F);
+    psg.write(0x90);
+    roland.psgWrite(psg, 0);
+    check(has("6 pan 127") && has("6 on 69"), "SMS Roland: a Game Gear channel on the right is panned right");
+}
+
+void testSmsSongExtract() {
+    // The Master System music test ROM: its driver takes requests from a byte of RAM.
+    const std::string path = (std::filesystem::temp_directory_path() / "plumsg-music-test.sms").string();
+    {
+        const std::vector<uint8_t> rom = smstestrom::buildMusic();
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(rom.data()), static_cast<std::streamsize>(rom.size()));
+    }
+    SongExtractor extractor;
+    std::vector<std::string> log;
+    extractor.setLog([&](const std::string& s) { log.push_back(s); });
+    std::vector<SongExtractor::Song> songs;
+    std::string error;
+    const bool ok = extractor.run(path, "Prueba SMS", nullptr, [&](const SongExtractor::Song& s) { songs.push_back(s); }, &error);
+    for (const std::string& s : log) std::printf("     %s\n", s.c_str());
+    if (!ok) std::printf("     %s\n", error.c_str());
+    bool asked = false;
+    for (const std::string& s : log) asked = asked || s.rfind("Pido las canciones en 00C010", 0) == 0;
+    check(ok && asked, "SMS songs: the extractor finds the request byte");
+    check(songs.size() == 4 && songs[0].number == 0x81 && songs[3].number == 0x84, "SMS songs: the four songs come out");
+    bool loops = !songs.empty();
+    for (const auto& s : songs) loops = loops && std::fabs(s.loopSeconds - 8.0) < 0.1 && s.seconds < 9.0;
+    check(loops, "SMS songs: each one round, with its loop");
+    VgmFile file;
+    check(!songs.empty() && file.parse(songs[0].vgz, &error) && file.ymClock == 0 && file.psgClock > 0,
+          "SMS songs: a Master System VGM");
+    std::filesystem::remove(path);
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -2264,6 +2394,9 @@ int main() {
     testSmsPhase2();
     testGameGear();
     testSmsCheats();
+    testSmsVgm();
+    testSmsRoland();
+    testSmsSongExtract();
     testSh2();
     testMars();
     testMarsProgram();

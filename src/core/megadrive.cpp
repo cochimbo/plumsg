@@ -394,16 +394,18 @@ void MegaDrive::setRoland(RolandSound* roland, int chipPercent) {
 // The chips play what the Roland sound does not: the instruments left original, and a
 // little of the rest if the mix says so.
 void MegaDrive::rolandChipChannels() {
-    const uint32_t chip = roland_ ? roland_->chipChannels() : 0x3FF;
+    const uint32_t chip = roland_ ? roland_->chipChannels() : RolandSound::kAllVoices;
     if (chip == rolandChip_) return;
     rolandChip_ = chip;
     ym_.setMuted(0x3F & ~chip, rolandPercent_);
     psg_.setMuted(0xF & ~(chip >> 6), rolandPercent_);
+    if (opll_) opll_->setMuted(RolandSound::opllChannels(RolandSound::kAllVoices & ~chip), rolandPercent_);
 }
 
 void MegaDrive::setVgmWriter(VgmWriter* writer) {
     vgm_ = writer;
-    if (vgm_) vgm_->begin(ym_, psg_, now_, masterClock());
+    if (vgm_ && sms_) vgm_->beginSms(psg_, sms_->fmPresent() ? opll_.get() : nullptr, sms_->gameGear(), now_, masterClock());
+    else if (vgm_) vgm_->begin(ym_, psg_, now_, masterClock());
 }
 
 void MegaDrive::runFrameSms() {
@@ -546,7 +548,9 @@ void MegaDrive::lockSoundRequests(uint32_t addr, int count, bool all) {
 }
 
 void MegaDrive::poke(uint32_t addr, uint8_t value) {
-    if (addr >= 0xFF0000)
+    if (sms_ && addr >= 0xC000 && addr < 0x10000)
+        zram_[addr & 0x1FFF] = value;
+    else if (addr >= 0xFF0000)
         ram_[addr & 0xFFFF] = value;
     else if (addr >= 0xA00000 && addr < 0xA04000)
         zram_[addr & 0x1FFF] = value;
@@ -700,12 +704,14 @@ uint8_t MegaDrive::in(uint16_t port) {
 void MegaDrive::out(uint16_t port, uint8_t value) {
     if (!sms_) return;
     if ((port & 0xC0) == 0x40) {
+        if (watch_) watch_(0xA04000, value, true);  // who drives the sound chips
         psgWrite(value);
         return;
     }
     if (sms_->gameGear() && (port & 0xFF) == 0x06) {
         syncSound();
         psg_.setStereo(value);
+        if (vgm_) vgm_->ggStereo(value, now_);
         return;
     }
     if (sms_->fmPresent() && (port & 0xFF) >= 0xF0 && (port & 0xFF) <= 0xF2) {
@@ -714,7 +720,13 @@ void MegaDrive::out(uint16_t port, uint8_t value) {
             sms_->setFmControl(value);
             opll_->setVolume(sms_->fmAudible() ? 100 : 0);
         } else {
+            if (watch_) watch_(0xA04000, value, true);
             opll_->write(port & 1, value);
+            if (vgm_) vgm_->opll(port & 1, value, now_);
+            if (roland_) {
+                roland_->opllWrite(port & 1, value, *opll_, now_);
+                rolandChipChannels();
+            }
         }
         return;
     }
@@ -744,6 +756,8 @@ uint8_t MegaDrive::read(uint16_t addr) {
 
 void MegaDrive::write(uint16_t addr, uint8_t value) {
     if (sms_) {
+        // Watched by the program's own address (the RAM from 0xC000), all as the program's.
+        if (watching_ && addr >= 0xC000 && !watchWrite(addr, value, true)) return;
         sms_->write(addr, value);
         return;
     }

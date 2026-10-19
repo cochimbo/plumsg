@@ -54,6 +54,21 @@ public:
                     notes.push_back({frame, static_cast<uint32_t>((p * 3 + ch) << 24 | (v & 0xF0) << 12) ^ pitch});
                 }
                 i += 3;
+            } else if (c == 0x51 && i + 2 < to) {  // the YM2413
+                const uint8_t reg = d[i + 1] & 0x3F, v = d[i + 2];
+                const uint8_t was = opll_[reg];
+                opll_[reg] = v;
+                if (reg >= 0x20 && reg <= 0x28 && (v & 0x10) && !(was & 0x10)) {
+                    const int ch = reg - 0x20;
+                    notes.push_back({frame, static_cast<uint32_t>((16 + ch) << 24) ^ static_cast<uint32_t>((v & 0x0F) << 8 | opll_[0x10 + ch])});
+                } else if (reg == 0x0E && (v & 0x20)) {
+                    for (int b = 0; b < 5; ++b)
+                        if ((v >> b) & 1 && !((was & 0x20) && ((was >> b) & 1)))
+                            notes.push_back({frame, static_cast<uint32_t>((25 + b) << 24)});
+                }
+                i += 3;
+            } else if (c == 0x4F) {  // the Game Gear's stereo
+                i += 2;
             } else if (c == 0x61) {
                 i += 3;
             } else {
@@ -81,6 +96,7 @@ private:
         }
     }
     uint8_t fm_[2][256] = {};
+    uint8_t opll_[64] = {};
     int latch_ = 0;
     bool volume_ = false;
     uint16_t period_[4] = {};
@@ -231,7 +247,10 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     auto md = std::make_unique<MegaDrive>();
     if (!md->loadRom(romPath, error)) return false;
     if (md->isMegaCd()) return fail(tr("Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip."));
-    if (md->isMasterSystem()) return fail(tr("Sacar las canciones de los juegos de Master System aún no está hecho."));
+    // A Master System's game and its sound driver share the Z80: the driver is the code
+    // that writes the sound chips, and the requests are only bytes of RAM.
+    const bool sms = md->isMasterSystem();
+    auto pcNow = [&]() -> uint32_t { return sms ? md->z80().pc : md->cpu().pc; };
     md->setDrawing(false);
 
     Progress p;
@@ -271,7 +290,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     std::map<uint32_t, ZWriter> z80Code;  // 68000 code writing the Z80's memory, by 256-byte page
     md->setMemoryWatch([&](uint32_t addr, uint8_t v, bool m68k) {
         if (addr >= 0xA04000 && addr < 0xA04004) {
-            ++ymCode[md->cpu().pc >> 8];
+            ++ymCode[pcNow() >> 8];
             return;
         }
         if (m68k && addr >= 0xA00000 && addr < 0xA02000) {
@@ -285,13 +304,14 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         }
         // (Not the stack: what the program pushes, and a routine it calls then overwrites.)
         if (m68k && addr >= 0xFF0000 && addr - (md->cpu().a[7] & 0xFFFFFF) < 0x100) return;
+        if (sms && ((addr - md->z80().sp + 0x40) & 0xFFFF) < 0x140) return;
         const size_t i = addr >= 0xFF0000 ? (addr & 0xFFFF) : 0x10000 + (addr & 0x1FFF);
         const uint64_t now = md->frameCount();
         if (v != 0 && v != 0x80) {
             if (m68k) {
                 pendingValue[i] = v;
                 pendingFrame[i] = now;
-                pendingPc[i] = md->cpu().pc;
+                pendingPc[i] = pcNow();
             }
             return;
         }
@@ -303,7 +323,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
                 c.firstFrame = pendingFrame[i];
             }
             if (c.requests.size() < 64) c.requests.push_back({pendingFrame[i], pendingValue[i]});
-            taken.push_back({addr, pendingPc[i], m68k ? md->cpu().pc : 0});
+            taken.push_back({addr, pendingPc[i], m68k ? pcNow() : 0});
         }
         pendingValue[i] = 0;
     });
@@ -339,7 +359,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     // driver's). The routines the game's program calls from many places, loading a
     // register or pushing a different number before each call.
     std::vector<Candidate> calls;
-    {
+    if (!sms) {
         constexpr size_t kStack = 15;  // where a site's number pushed on the stack goes
         struct Site {
             std::array<uint32_t, 16> regs;  // d0-d7, a0-a6, then the stack
@@ -526,7 +546,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     // bytes of the Z80's memory, each time with where the next goes in a ring they are all
     // in (the smallest that fits them).
     std::vector<Candidate> rings;
-    {
+    if (!sms) {
         std::map<uint64_t, int> perFrame;
         for (const ZWrite& w : z80Writes) ++perFrame[w.frame];
         auto loaded = [&](const ZWrite& w) { return perFrame[w.frame] > 64; };  // a program, or data
