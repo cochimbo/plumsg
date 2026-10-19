@@ -250,6 +250,7 @@ void Achievements::loadProgress(const std::vector<uint8_t>& data) {
 uint32_t Achievements::consoleId(const MegaDrive& console) {
     if (console.isMegaCd()) return RC_CONSOLE_SEGA_CD;
     if (console.is32x()) return RC_CONSOLE_SEGA_32X;
+    if (console.isMasterSystem()) return RC_CONSOLE_MASTER_SYSTEM;
     return RC_CONSOLE_MEGA_DRIVE;
 }
 
@@ -281,6 +282,16 @@ uint32_t Achievements::readMemory(MegaDrive& console, uint32_t address, uint8_t*
     // Where the cartridge's save RAM starts in the achievements' addresses.
     const uint32_t saveStart = system == RC_CONSOLE_SEGA_32X ? 0x50000 : system == RC_CONSOLE_MEGA_DRIVE ? 0x10000 : 0;
     const std::vector<uint8_t>& save = console.cartridge().saveRam();
+    if (system == RC_CONSOLE_MASTER_SYSTEM) {
+        // 8 KB of RAM, then the cartridge's 32 KB.
+        for (uint32_t i = 0; i < count; ++i) {
+            const uint32_t a = address + i;
+            if (a < 0x2000) buffer[i] = console.z80Ram()[a];
+            else if (a < 0xA000 && a - 0x2000 < save.size()) buffer[i] = save[a - 0x2000];
+            else return i;
+        }
+        return count;
+    }
     for (uint32_t i = 0; i < count; ++i) {
         const uint32_t a = address + i;
         if (a < 0x10000) {

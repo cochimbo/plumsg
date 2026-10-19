@@ -23,11 +23,18 @@ bool hasRomExtension(std::string name) {
         const std::string e(ext);
         return name.size() > e.size() && name.compare(name.size() - e.size(), e.size(), e) == 0;
     };
-    return endsWith(".md") || endsWith(".gen") || endsWith(".bin") || endsWith(".smd") || endsWith(".32x");
+    return endsWith(".md") || endsWith(".gen") || endsWith(".bin") || endsWith(".smd") || endsWith(".32x") ||
+           endsWith(".sms");
 }
 
-// Replaces a zip archive with its first .md/.gen/.bin/.smd/.32x entry.
-bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std::string* error) {
+bool isSmsName(std::string name) {
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return name.size() > 4 && name.compare(name.size() - 4, 4, ".sms") == 0;
+}
+
+// Replaces a zip archive with its first .md/.gen/.bin/.smd/.32x/.sms entry, and says
+// whether it was a Master System one.
+bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std::string* error, bool* sms) {
     mz_zip_archive zip{};
     if (!mz_zip_reader_init_mem(&zip, data.data(), data.size(), 0)) {
         if (error) *error = trf("el zip está dañado: %s", path.c_str());
@@ -49,10 +56,11 @@ bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std:
         std::vector<uint8_t> extracted(bytes, bytes + size);
         mz_free(rom);
         data = std::move(extracted);
+        *sms = isSmsName(st.m_filename);
         found = true;
     }
     mz_zip_reader_end(&zip);
-    if (!found && error) *error = trf("el zip no contiene ninguna ROM (.md, .gen, .bin, .smd o .32x): %s", path.c_str());
+    if (!found && error) *error = trf("el zip no contiene ninguna ROM (.md, .gen, .bin, .smd, .32x o .sms): %s", path.c_str());
     return found;
 }
 
@@ -103,11 +111,13 @@ bool Cartridge::loadFile(const std::string& path, std::string* error) {
         return false;
     }
     std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    if (isZip(data) && !extractRomFromZip(data, path, error)) return false;
-    if (isSmd(data)) data = deinterleaveSmd(data);
+    bool sms = isSmsName(path);
+    if (isZip(data) && !extractRomFromZip(data, path, error, &sms)) return false;
+    // Master System dumps are never interleaved, but may have a copier header too.
+    if (!sms && isSmd(data)) data = deinterleaveSmd(data);
     else if (data.size() % 0x4000 == 512) data.erase(data.begin(), data.begin() + 512);  // copier header
     if (data.size() < 0x200) {
-        if (error) *error = trf("el archivo es demasiado pequeño para ser una ROM de Mega Drive: %s", path.c_str());
+        if (error) *error = trf("el archivo es demasiado pequeño para ser una ROM: %s", path.c_str());
         return false;
     }
     loadData(std::move(data));
@@ -165,6 +175,14 @@ void Cartridge::loadData(std::vector<uint8_t> rom) {
     sramUsed_ = false;
     mapper_ = rom_.size() > 0x400000;
     reset();
+}
+
+void Cartridge::setMasterSystemHeader(Region region) {
+    header_ = RomHeader{};
+    header_.system = "SEGA MASTER SYSTEM";
+    header_.japan = region == Region::JapanNtsc;
+    header_.usa = !header_.japan;
+    header_.hasSram = true;
 }
 
 Region Cartridge::preferredRegion() const {

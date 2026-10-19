@@ -1,0 +1,106 @@
+#pragma once
+
+// Builds a small Master System program used by the tests and tools in place of a
+// commercial cartridge (none can be committed). It sets up the VDP in mode 4 with the
+// left column masked, loads a palette and three tiles, fills the background with a
+// half red, half blue tile and one row of green tiles in front of the sprites, puts one
+// magenta sprite half under that row, and scrolls the background one pixel to the
+// right per frame from its frame interrupt, with a tone on the PSG. Its RAM holds:
+//   0xC000  frames counted by the interrupt (the horizontal scroll)
+//   0xC001  presses of the pause button (NMI)
+//   0xC002  port 0xDC as last read: the first pad, active low
+
+#include <cstdint>
+#include <initializer_list>
+#include <vector>
+
+namespace plumsg::smstestrom {
+
+// What the picture shows, for the tests.
+constexpr uint32_t kRed = 0xFFFF0000, kBlue = 0xFF0000FF, kGreen = 0xFF00FF00, kYellow = 0xFFFFFF00,
+                   kMagenta = 0xFFFF00FF;
+constexpr int kGreenRowTop = 80;   // lines 80-87
+constexpr int kSpriteTop = 81;     // lines 81-88, columns 128-135
+constexpr int kSpriteLeft = 128;
+
+inline std::vector<uint8_t> build() {
+    std::vector<uint8_t> rom(0x8000, 0xFF);
+    size_t pc = 0;
+    auto emit = [&](std::initializer_list<int> bytes) {
+        for (int b : bytes) rom[pc++] = static_cast<uint8_t>(b);
+    };
+    auto at = [&](size_t addr) { pc = addr; };
+    auto jrBack = [&](size_t target) { return static_cast<int>(target) - static_cast<int>(pc + 2); };
+    auto lo = [](size_t v) { return static_cast<int>(v & 0xFF); };
+    auto hi = [](size_t v) { return static_cast<int>((v >> 8) & 0xFF); };
+
+    constexpr size_t kMain = 0x0100, kRegs = 0x0400, kPalette = 0x0420, kTiles = 0x0440, kSpriteTile = 0x04A0;
+
+    at(0x0000);
+    emit({0xF3, 0xED, 0x56, 0x31, 0xF0, 0xDF, 0xC3, lo(kMain), hi(kMain)});  // di; im 1; ld sp,0xDFF0; jp main
+
+    // Frame interrupt: acknowledge it, count the frame and scroll by the count.
+    at(0x0038);
+    emit({0xF5, 0xDB, 0xBF});              // push af; in a,(0xBF)
+    emit({0x3A, 0x00, 0xC0, 0x3C, 0x32, 0x00, 0xC0});  // ld a,(0xC000); inc a; ld (0xC000),a
+    emit({0xD3, 0xBF, 0x3E, 0x88, 0xD3, 0xBF});        // out (0xBF),a; ld a,0x88; out (0xBF),a
+    emit({0xF1, 0xFB, 0xED, 0x4D});        // pop af; ei; reti
+
+    // Pause button.
+    at(0x0066);
+    emit({0xF5, 0x3A, 0x01, 0xC0, 0x3C, 0x32, 0x01, 0xC0, 0xF1, 0xED, 0x45});  // count it; retn
+
+    at(kMain);
+    emit({0x21, lo(kRegs), hi(kRegs), 0x06, 22, 0x0E, 0xBF, 0xED, 0xB3});  // registers: ld hl; ld b; ld c; otir
+    emit({0x3E, 0x00, 0xD3, 0xBF, 0x3E, 0xC0, 0xD3, 0xBF});                // CRAM address 0
+    emit({0x21, lo(kPalette), hi(kPalette), 0x06, 32, 0x0E, 0xBE, 0xED, 0xB3});
+    emit({0x3E, 0x20, 0xD3, 0xBF, 0x3E, 0x40, 0xD3, 0xBF});                // VRAM 0x0020: tiles 1 and 2
+    emit({0x21, lo(kTiles), hi(kTiles), 0x06, 64, 0x0E, 0xBE, 0xED, 0xB3});
+    emit({0x3E, 0x60, 0xD3, 0xBF, 0x3E, 0x60, 0xD3, 0xBF});                // VRAM 0x2060: sprite tile 0x103
+    emit({0x21, lo(kSpriteTile), hi(kSpriteTile), 0x06, 32, 0x0E, 0xBE, 0xED, 0xB3});
+    // Name table at 0x3800: 896 entries of tile 1.
+    emit({0x3E, 0x00, 0xD3, 0xBF, 0x3E, 0x78, 0xD3, 0xBF, 0x01, 0x80, 0x03});
+    const size_t fill = pc;
+    emit({0x3E, 0x01, 0xD3, 0xBE, 0xAF, 0xD3, 0xBE, 0x0B, 0x78, 0xB1});
+    emit({0x20, jrBack(fill) & 0xFF});
+    // Row 10 (0x3A80): tile 2 with priority.
+    emit({0x3E, 0x80, 0xD3, 0xBF, 0x3E, 0x7A, 0xD3, 0xBF, 0x06, 32});
+    const size_t row = pc;
+    emit({0x3E, 0x02, 0xD3, 0xBE, 0x3E, 0x10, 0xD3, 0xBE});
+    emit({0x10, jrBack(row) & 0xFF});
+    // Sprite table at 0x3F00: one sprite at y 0x50, then the end marker; x 128, tile 3.
+    emit({0x3E, 0x00, 0xD3, 0xBF, 0x3E, 0x7F, 0xD3, 0xBF, 0x3E, 0x50, 0xD3, 0xBE, 0x3E, 0xD0, 0xD3, 0xBE});
+    emit({0x3E, 0x80, 0xD3, 0xBF, 0x3E, 0x7F, 0xD3, 0xBF, 0x3E, kSpriteLeft, 0xD3, 0xBE, 0x3E, 0x03, 0xD3, 0xBE});
+    // A tone on the PSG's first channel, at full volume.
+    emit({0x3E, 0x8E, 0xD3, 0x7F, 0x3E, 0x0F, 0xD3, 0x7F, 0x3E, 0x90, 0xD3, 0x7F});
+    // Display and frame interrupt on.
+    emit({0x3E, 0xE0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, 0xFB});
+    const size_t loop = pc;
+    emit({0xDB, 0xDC, 0x32, 0x02, 0xC0});  // in a,(0xDC); ld (0xC002),a
+    emit({0x18, jrBack(loop) & 0xFF});
+
+    // Registers 0-10 (value, then 0x80 | number): mode 4 with the left column masked,
+    // display off for now, name table 0x3800, sprites 0x3F00 with tiles from 0x2000,
+    // backdrop colour 1 of the sprite palette.
+    at(kRegs);
+    emit({0x26, 0x80, 0x80, 0x81, 0xFF, 0x82, 0xFF, 0x83, 0xFF, 0x84, 0xFF, 0x85, 0xFF, 0x86, 0x01, 0x87,
+          0x00, 0x88, 0x00, 0x89, 0xFF, 0x8A});
+    // Palette: blue, red, green, white; sprites: black, yellow, magenta.
+    at(kPalette);
+    emit({0x30, 0x03, 0x0C, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+    emit({0x00, 0x0F, 0x33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+    // Tile 1: left half colour 1, right half colour 0. Tile 2 and the sprite: colour 2.
+    at(kTiles);
+    for (int y = 0; y < 8; ++y) emit({0xF0, 0x00, 0x00, 0x00});
+    for (int y = 0; y < 8; ++y) emit({0x00, 0xFF, 0x00, 0x00});
+    at(kSpriteTile);
+    for (int y = 0; y < 8; ++y) emit({0x00, 0xFF, 0x00, 0x00});
+
+    // Header: export Master System, 32 KB.
+    at(0x7FF0);
+    for (char c : {'T', 'M', 'R', ' ', 'S', 'E', 'G', 'A'}) emit({c});
+    emit({0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C});
+    return rom;
+}
+
+}  // namespace plumsg::smstestrom

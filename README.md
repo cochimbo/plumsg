@@ -34,6 +34,13 @@ Primera versión. Lo que hay:
   la Mega Drive), el sonido PWM, los registros de comunicación y la FIFO del 68000. No
   hace falta BIOS: plumsg hace lo que hacen las ROM de arranque. En el 3D, la imagen de la
   32X va plana al fondo y el efecto sigue en los planos de la Mega Drive.
+- **Master System** (`.sms`, o un `.bin` con su cabecera `TMR SEGA`), como la ejecuta la
+  propia Mega Drive: el Z80 y el PSG de la consola con el VDP de la Master System (modo 4:
+  fondo con scroll por línea y bloqueos de scroll, tiles delante de los sprites, columna
+  izquierda tapada, 64 sprites de 8x8 u 8x16 con zoom, interrupciones de línea y de cuadro,
+  modos de 192, 224 y 240 líneas), el mapper de Sega con la RAM de cartucho (a `.sav`) y
+  los mandos: botón 1 = A o B, botón 2 = C, Start = Pausa. En el 3D el fondo va al plano
+  B, sus tiles de prioridad al plano A y los sprites a su capa.
 - **Mega CD** (`.cue` con sus `.bin` o `.wav`, `.iso`, `.chd`, o un `.bin` de una sola
   pista de datos): la segunda CPU 68000 a 12,5 MHz con su memoria de programa, la memoria
   de palabras compartida (modos de 2 y 1 Mbit, con las vistas por celdas y por puntos), la
@@ -171,8 +178,9 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   carpeta; con **Añadir carpeta...** se suman más y con **Quitar** se sacan. Cada juego
   sabe de qué consola es por su extensión: `.md`, `.gen`, `.smd` y `.bin` son de Mega
   Drive (un `.bin` con la cabecera de la 32X o de un disco se reconoce también), `.32x` de
-  32X, y `.cue`, `.chd` e `.iso` de Mega CD; las pistas `.bin` de un `.cue` no salen
-  aparte. Las pestañas **Todos**, **Mega Drive**, **32X** y **Mega CD** filtran por
+  32X, `.sms` de Master System, y `.cue`, `.chd` e `.iso` de Mega CD; las pistas `.bin` de
+  un `.cue` no salen aparte. Las pestañas **Todos**, **Mega Drive**, **32X**, **Mega CD** y
+  **Master System** filtran por
   consola (con el mando, los botones L y R; con el teclado, RePág y AvPág).
   **Descargar carátulas que faltan** las busca por el nombre de cada juego (los nombres de
   No-Intro y Redump, como `Sonic The Hedgehog (USA, Europe).md`, aciertan casi siempre) en

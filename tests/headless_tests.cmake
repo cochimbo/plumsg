@@ -20,6 +20,11 @@ endfunction()
 # draws differently (on purpose or not; if on purpose, update the hash).
 run(0 --test-rom --frames 120 --expect-hash d171be7e --quiet)
 run(3 --test-rom --frames 120 --expect-hash 00000000 --quiet)
+# The same for the Master System test ROM, and its savestates.
+run(0 --sms-test-rom --frames 120 --expect-hash 4220de49 --quiet)
+run(0 --sms-test-rom --frames 120 --hash-log "${WORK}/sms-log.txt" --quiet)
+run(0 --sms-test-rom --frames 120 --expect-log "${WORK}/sms-log.txt" --quiet
+    --do "59 savestate ${WORK}/sms.state" --do "60 loadstate ${WORK}/sms.state")
 
 # Two runs give the same frames and sound, and a savestate taken after frame 59 and
 # loaded back before frame 60 changes nothing.

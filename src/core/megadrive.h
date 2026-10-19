@@ -18,6 +18,7 @@
 #include "megacd.h"
 #include "psg.h"
 #include "roland.h"
+#include "sms.h"
 #include "vgm.h"
 #include "vdp_md.h"
 #include "ym2612.h"
@@ -28,7 +29,9 @@ namespace plumsg {
 // The whole console: 68000 and Z80 with their buses and memory maps, VDP, YM2612, PSG,
 // I/O and cartridge, plus the scheduler that interleaves them line by line. With a 32X
 // game it also has the 32X, whose two SH-2s run alongside the 68000, and with a disc
-// the Mega CD, whose BIOS and memory take the cartridge's place. It knows
+// the Mega CD, whose BIOS and memory take the cartridge's place.
+// With a Master System cartridge it runs in the console's Master System mode instead:
+// only the Z80, the PSG and the Master System's own VDP and memory map. It knows
 // nothing about windows, rendering or audio devices: frontends call runFrame(), then
 // read frame() and audio().samples(), and feed the pads in.
 class MegaDrive : private M68kBus, private Z80Bus {
@@ -68,6 +71,7 @@ public:
     void setPads(const PadState& p1, const PadState& p2) {
         io_.setPad(0, p1);
         io_.setPad(1, p2);
+        if (sms_) sms_->setPads(p1, p2);
     }
     void setPadType(int port, PadType t) { io_.setPadType(port, t); }
 
@@ -130,6 +134,8 @@ public:
     Psg& psg() { return psg_; }
     Mars* mars() { return mars_.get(); }  // null unless the game is a 32X one
     bool is32x() const { return mars_ != nullptr; }
+    MasterSystem* masterSystem() { return sms_.get(); }  // null unless the game is a Master System one
+    bool isMasterSystem() const { return sms_ != nullptr; }
     MegaCd* megaCd() { return mcd_.get(); }  // null unless a disc is loaded
     bool isMegaCd() const { return mcd_ != nullptr; }
     CdImage* disc() { return disc_.get(); }  // the disc in the Mega CD, null if none
@@ -164,8 +170,9 @@ private:
     // Z80 bus.
     uint8_t read(uint16_t addr) override;
     void write(uint16_t addr, uint8_t value) override;
-    uint8_t in(uint16_t) override { return 0xFF; }
-    void out(uint16_t, uint8_t) override {}
+    uint8_t in(uint16_t port) override;
+    void out(uint16_t port, uint8_t value) override;
+    void psgWrite(uint8_t value);
 
     uint16_t readVdp(uint32_t addr);
     void writeVdp(uint32_t addr, uint16_t value, bool byte);
@@ -182,6 +189,9 @@ private:
     int cdBiosSlot(Region r) const;  // the BIOS for `r`, or with a cartridge any there is; -1 for none
     void attachCd(std::unique_ptr<CdImage> disc, bool cartridge);
     void setUpMars();             // adds or removes the 32X to suit the cartridge
+    void setUpSms();              // switches to Master System mode for its cartridges, or back
+    void runFrameSms();
+    void runFrameMd();
     std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
 
@@ -204,6 +214,8 @@ private:
     std::unique_ptr<Mars> mars_;
     std::unique_ptr<CdImage> disc_;
     std::unique_ptr<MegaCd> mcd_;
+    std::unique_ptr<MasterSystem> sms_;
+    bool smsFile_ = false;  // the file loaded is a Master System one by its name
     std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe
     std::string loadNotice_;
 

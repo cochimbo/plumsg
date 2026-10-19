@@ -21,6 +21,8 @@ constexpr CheatSet kCheatSets[kSystemCount] = {
      "https://api.github.com/repos/libretro/libretro-database/git/trees/master:cht/Sega%20-%2032X"},
     {"https://raw.githubusercontent.com/libretro/libretro-database/master/cht/Sega%20-%20Mega-CD%20-%20Sega%20CD/",
      "https://api.github.com/repos/libretro/libretro-database/git/trees/master:cht/Sega%20-%20Mega-CD%20-%20Sega%20CD"},
+    {"https://raw.githubusercontent.com/libretro/libretro-database/master/cht/Sega%20-%20Master%20System%20-%20Mark%20III/",
+     "https://api.github.com/repos/libretro/libretro-database/git/trees/master:cht/Sega%20-%20Master%20System%20-%20Mark%20III"},
 };
 
 const CheatSet& cheatSet(ConsoleSystem s) { return kCheatSets[static_cast<int>(s)]; }
