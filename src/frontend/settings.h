@@ -15,7 +15,7 @@ namespace plumsg {
 
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
 // the [teclado] / [mando] sections, under [video], [audio], [consola], [velocidad],
-// [estados], [biblioteca], [bios], [red] and [recientes].
+// [estados], [biblioteca], [bios], [red], [logros] and [recientes].
 struct Settings {
     static constexpr size_t kMaxRecent = 10;
     static constexpr int kMaxRewindSeconds = 60;
@@ -53,6 +53,12 @@ struct Settings {
     int netPort = kDefaultNetPort;
     std::string netAddress;
     int netInputDelay = 2;
+    // RetroAchievements: on or off, the account (its token, never the password) and
+    // hardcore mode.
+    bool achievements = false;
+    std::string raUser;
+    std::string raToken;
+    bool raHardcore = false;
 
     void addRecent(const std::string& path);
     void removeRecent(const std::string& path);

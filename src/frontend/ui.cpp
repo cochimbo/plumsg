@@ -244,6 +244,10 @@ void Ui::finishCapture(int code) {
     }
 }
 
+void Ui::setAchievements(Achievements* achievements) {
+    achievements_ = achievements ? std::make_unique<AchievementsUi>(settings_, *achievements) : nullptr;
+}
+
 void Ui::notify(std::string message) {
     toast_ = std::move(message);
     toastUntil_ = SDL_GetTicks() + 2500;
@@ -285,6 +289,7 @@ UiActions Ui::frame(const UiState& state) {
     if (showCoverSearch_) drawCoverSearch();
     if (showBios_) drawBios(out);
     if (showNetplay_) drawNetplay(state, out);
+    if (achievements_ && achievements_->drawWindows()) out.achievementsChanged = out.settingsChanged = true;
     if (editor_ && editor_->isOpen()) {
         EditorRequests r;
         EditorView view = state.editor;
@@ -337,7 +342,7 @@ UiActions Ui::frame(const UiState& state) {
 void Ui::hideIdleCursor(const UiState& state) {
     const bool windowOpen = showControls_ || showVideo_ || showAbout_ || showCheats_ || showGameOptions_ || showLibrary_ ||
                             showCoverSearch_ || showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
-                            (editor_ && editor_->isOpen()) ||
+                            (editor_ && editor_->isOpen()) || (achievements_ && achievements_->windowOpen()) ||
                             !error_.empty() || capture_.active ||
                             ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) || ImGui::GetIO().WantCaptureMouse;
     const bool playing = state.romLoaded && !state.paused;
@@ -390,7 +395,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Cierra el juego (guarda su partida de cartucho) y vuelve a la\n"
                               "pantalla de inicio, o a la biblioteca si tienes carpetas en ella.");
-        if (ImGui::MenuItem("Trucos...", nullptr, false, solo)) {
+        if (ImGui::MenuItem("Trucos...", nullptr, false, solo && !state.hardcore)) {
             out.cheatsFor = state.romPath;
             showCheats_ = true;
         }
@@ -399,7 +404,8 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
             showGameOptions_ = true;
         }
         ImGui::SeparatorText("Velocidad");
-        if (ImGui::MenuItem("Cámara lenta", "F9", state.slowMotion, solo)) out.toggleSlowMotion = true;
+        if (ImGui::MenuItem("Cámara lenta", "F9", state.slowMotion, solo && !state.hardcore)) out.toggleSlowMotion = true;
+        if (state.hardcore) ImGui::TextDisabled("Modo hardcore: sin trucos, cámara lenta ni rebobinado");
         ImGui::TextDisabled("Rebobinar: mantén Retroceso (o el gatillo izquierdo)");
         ImGui::TextDisabled("Avance rápido: mantén Tab (o el gatillo derecho)");
         ImGui::SetNextItemWidth(160);
@@ -420,7 +426,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
             out.saveState = settings_.stateSlot;
         const bool used = settings_.stateSlot < static_cast<int>(state.slots.size()) &&
                           state.slots[static_cast<size_t>(settings_.stateSlot)].used;
-        if (ImGui::MenuItem(("Cargar estado" + slot).c_str(), "F8", false, state.romLoaded && used && !state.netPlaying))
+        if (ImGui::MenuItem(("Cargar estado" + slot).c_str(), "F8", false, state.romLoaded && used && !state.netPlaying && !state.hardcore))
             out.loadState = settings_.stateSlot;
         if (ImGui::MenuItem("Menú de estados...", "F4")) toggleStateMenu();
         ImGui::SeparatorText("Ranura (F6 / F7)");
@@ -470,6 +476,10 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         if (ImGui::MenuItem("Salir de la partida en red", nullptr, false, state.netSession)) out.netLeave = true;
         ImGui::EndMenu();
     }
+    if (achievements_ && ImGui::BeginMenu("Logros")) {
+        if (achievements_->drawMenu(state.romLoaded)) out.achievementsChanged = out.settingsChanged = true;
+        ImGui::EndMenu();
+    }
     if (ImGui::BeginMenu("Sonido")) {
         drawSoundMenu(state, out);
         ImGui::EndMenu();
@@ -477,6 +487,7 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
     if (ImGui::BeginMenu("Opciones")) {
         if (ImGui::MenuItem("Controles...")) showControls_ = true;
         if (ImGui::MenuItem("Vídeo...")) showVideo_ = true;
+        if (achievements_ && ImGui::MenuItem("RetroAchievements...")) achievements_->openAccount();
         ImGui::Separator();
         if (ImGui::MenuItem("Efecto 3D", nullptr, settings_.render.pseudo3d)) {
             settings_.render.pseudo3d = !settings_.render.pseudo3d;
@@ -1054,6 +1065,7 @@ void Ui::drawOverlays(const UiState& state) {
         ImGui::TextUnformatted(badge);
         ImGui::End();
     }
+    if (achievements_) achievements_->drawOverlay(top);
     if (!toast_.empty() && SDL_TICKS_PASSED(SDL_GetTicks(), toastUntil_)) toast_.clear();
     if (!toast_.empty()) {
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + 10, vp->Pos.y + vp->Size.y - 10), ImGuiCond_Always, ImVec2(0, 1));

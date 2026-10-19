@@ -48,6 +48,8 @@ public:
     void writeTimeRegister(uint32_t addr, uint8_t value);
 
     bool hasSaveData() const { return sramUsed_; }
+    // The battery RAM, indexed by address - sramStart (empty without one).
+    const std::vector<uint8_t>& saveRam() const { return sram_; }
     bool loadSave(const std::string& path);
     bool writeSave(const std::string& path) const;
 
