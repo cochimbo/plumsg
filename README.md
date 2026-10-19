@@ -304,9 +304,9 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
     dejar sitio a un efecto, y antes de la 0.0.23 eso lo hacía pasar por otro instrumento
     sin asignar. Lo guardado con las huellas de antes sigue valiendo.
   - Lo elegido se oye al momento, también en el juego, y se guarda en
-    `sonido\<juego>.ini`. Con **Usar también en otros juegos** (marcado de entrada) va
-    además a `sonido\cache.ini`, que comparten todos los juegos: el mismo sonido FM en otro
-    juego saldrá ya asignado. Lo de cada juego manda sobre lo común.
+    `sonido\<juego>.ini`, solo para ese juego. Con el editor abierto sin juego va a
+    `sonido\cache.ini`, que vale para todos (las versiones hasta la 0.0.22 guardaban ahí
+    también lo de cada juego, y se sigue oyendo); lo de cada juego manda sobre lo común.
 - A pantalla completa, **Abrir ROM** usa el explorador propio de plumsg (también con el
   mando) en vez del diálogo de Windows, que se quedaba escondido detrás del juego.
 

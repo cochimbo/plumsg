@@ -41,9 +41,9 @@ struct EditorRequests {
 // .vgm, lists the instruments in it and lets each one be given a General MIDI
 // instrument, a drum, or its own sound, comparing with the original as it plays.
 //
-// What is chosen is kept per game in sonido/<game>.ini and, unless told otherwise,
-// also in sonido/cache.ini, which every game shares: the same FM sound in another
-// game comes out assigned already. The game's own file wins over the cache.
+// What is chosen is kept per game in sonido/<game>.ini. With no game it goes to
+// sonido/cache.ini, which every game reads (and where plumsg 0.0.22 and older also put
+// each game's choices); the game's own file wins over it.
 class InstrumentEditor {
 public:
     explicit InstrumentEditor(std::string soundFolder);
@@ -147,7 +147,6 @@ private:
     uint32_t mutedVoices_ = 0, soloVoices_ = 0;  // RolandSound voice bits, and bit 10 the DAC
     uint32_t soloInstrument_ = 0;
     bool pendingSlide_ = false;  // the volume slider changed an instrument not yet saved
-    bool share_ = true;  // what is chosen also goes to the shared cache
     std::string message_;
 };
 

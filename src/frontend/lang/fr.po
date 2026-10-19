@@ -1343,13 +1343,6 @@ msgstr "Liste : %s"
 msgid "Listas de libretro-database, la base de trucos de RetroArch (licencia CC BY-SA 4.0). Los nombres vienen en inglés; los añadidos quedan activados en la lista de arriba, con el código maestro (Master Code) del juego cuando lo pide."
 msgstr "Listes de libretro-database, la base de codes de RetroArch (licence CC BY-SA 4.0). Les noms sont en anglais ; ceux ajoutés sont activés dans la liste du haut, avec le code maître (Master Code) du jeu quand il le demande."
 
-msgid ""
-"Lo que elijas se guarda también en la lista común: el mismo sonido en otro juego\n"
-"saldrá ya asignado. Lo de cada juego manda sobre la lista común."
-msgstr ""
-"Ce que vous choisissez est aussi gardé dans la liste commune : le même son dans un autre jeu\n"
-"sera déjà attribué. Les choix propres à chaque jeu priment sur la liste commune."
-
 msgid "Logros"
 msgstr "Succès"
 
@@ -2189,9 +2182,6 @@ msgstr "Taiko"
 msgid "Tamaño:"
 msgstr "Taille :"
 
-msgid "También se quitan de la lista común los instrumentos de esta pista."
-msgstr "Les instruments de cette piste sont aussi retirés de la liste commune."
-
 msgid "Tambor sintetizado"
 msgstr "Tambour synthé"
 
@@ -2345,9 +2335,6 @@ msgstr "Utiliser ce dossier"
 
 msgid "Usar esta carátula"
 msgstr "Utiliser cette jaquette"
-
-msgid "Usar también en otros juegos"
-msgstr "Utiliser aussi dans d'autres jeux"
 
 msgid "Usuario"
 msgstr "Utilisateur"

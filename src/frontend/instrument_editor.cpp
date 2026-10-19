@@ -346,14 +346,13 @@ void InstrumentEditor::applyListening() {
 }
 
 void InstrumentEditor::resetAll(const std::vector<Instrument>& list, EditorRequests& out) {
-    // The game's file empties; the shared list loses this list's instruments (not other
-    // games'), if what is chosen goes there too.
+    // The game's file empties, and the shared list loses this list's instruments (not
+    // other games'): what an older plumsg saved there would still be heard.
     own_.clear();
-    if (game_.empty() || share_)
-        for (const Instrument& i : list) {
-            cache_.erase(i.fingerprint);
-            for (uint32_t old : synth_.aliases(i.fingerprint)) cache_.erase(old);
-        }
+    for (const Instrument& i : list) {
+        cache_.erase(i.fingerprint);
+        for (uint32_t old : synth_.aliases(i.fingerprint)) cache_.erase(old);
+    }
     save(out);
 }
 
@@ -370,17 +369,21 @@ void InstrumentEditor::save(EditorRequests& out) {
 }
 
 void InstrumentEditor::assign(uint32_t fingerprint, const RolandSound::Assignment* a, EditorRequests& out) {
-    // Saved under its fingerprint from now on: what an old file had under an old one goes.
+    // What is chosen goes to the game's file; with no game, to the shared list, which
+    // every game reads (older plumsgs also put each game's choices there). Saved under its
+    // fingerprint from now on: what an old file had under an old one goes.
     for (uint32_t old : synth_.aliases(fingerprint)) {
         own_.erase(old);
-        if (game_.empty() || share_) cache_.erase(old);
+        if (game_.empty()) cache_.erase(old);
     }
     if (a) {
-        if (!game_.empty()) own_[fingerprint] = *a;
-        if (game_.empty() || share_) cache_[fingerprint] = *a;
+        if (game_.empty()) cache_[fingerprint] = *a;
+        else own_[fingerprint] = *a;
     } else {
+        // Back to the suggestion: also out of the shared list, or it would still be heard.
         own_.erase(fingerprint);
-        if (game_.empty() || share_) cache_.erase(fingerprint);
+        cache_.erase(fingerprint);
+        for (uint32_t old : synth_.aliases(fingerprint)) cache_.erase(old);
     }
     save(out);
 }
@@ -909,8 +912,6 @@ void InstrumentEditor::drawAssignment(const std::vector<Instrument>& list, Edito
     if (ImGui::BeginPopup("todo")) {
         ImGui::TextUnformatted(game_.empty() ? tr("¿Quitar lo elegido a mano en todos los instrumentos de esta pista?")
                                              : trf("¿Quitar todo lo elegido a mano en %s?", gameName_.c_str()).c_str());
-        if (!game_.empty() && share_)
-            ImGui::TextDisabled("%s", tr("También se quitan de la lista común los instrumentos de esta pista."));
         if (ImGui::Button(tr("Sí, todo a las sugerencias"))) {
             resetAll(list, out);
             ImGui::CloseCurrentPopup();
@@ -921,13 +922,6 @@ void InstrumentEditor::drawAssignment(const std::vector<Instrument>& list, Edito
         if (ImGui::Button(tr("Cancelar"))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(game_.empty());
-    ImGui::Checkbox(tr("Usar también en otros juegos"), &share_);
-    ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("%s", tr("Lo que elijas se guarda también en la lista común: el mismo sonido en otro juego\n"
-                          "saldrá ya asignado. Lo de cada juego manda sobre la lista común."));
 
     if (a != before || (!sliding && pendingSlide_)) {
         if (sliding) {
