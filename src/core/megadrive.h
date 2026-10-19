@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -73,6 +74,15 @@ public:
     // Replaces the active cheats. ROM patches are applied now and undone by the next
     // call (or by loading another ROM); RAM writes are made at the start of every frame.
     void setCheats(const std::vector<CheatPatch>& cheats);
+
+    // Overclock: the 68000 runs at `percent` of its speed (kMinOverclock to kMaxOverclock),
+    // so games that slow down when there is much on screen get each frame done in time.
+    // The rest of the console (Z80, VDP, sound, the Mega CD and 32X CPUs) keeps its speed.
+    // Unlike the sprite limit the game does run differently, so it is part of the state:
+    // a netplay guest runs at the host's speed, and states without it load at 100.
+    static constexpr int kMinOverclock = 100, kMaxOverclock = 400;
+    void setOverclock(int percent) { overclock_ = std::clamp(percent, kMinOverclock, kMaxOverclock); }
+    int overclock() const { return overclock_; }
 
     void runFrame();  // up to the start of the next frame (just after VBlank ends)
     // Run-ahead, to take frames of input lag away: runs `frames` more frames with the
@@ -212,6 +222,7 @@ private:
     uint64_t z80Clock_ = 0;
     uint64_t psgClock_ = 0;
     int psgRemainder_ = 0;     // master clocks not yet worth a PSG cycle
+    int overclock_ = 100;      // the 68000's speed, percent of the real one
     uint64_t frames_ = 0;
     std::vector<int16_t> psgBuffer_;
     std::vector<uint8_t> loadedThumbnail_;

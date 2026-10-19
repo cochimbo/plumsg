@@ -91,6 +91,27 @@ void testSpriteLimitOption() {
     check(again.unlimitedSprites, "sin límite de sprites: plumsg.ini lo guarda");
 }
 
+void testOverclockOption() {
+    const Settings general;
+    const InputConfig generalInput = InputConfig::defaults();
+    check(general.overclock == 100, "overclock: desactivado si no se dice");
+    const GameOverrides o = parseGameOverrides("[consola]\noverclock = 200\n", general, generalInput);
+    check(o.has("overclock") && o.values.overclock == 200, "overclock: un juego con su propio valor");
+    const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
+    check(back.has("overclock") && back.values.overclock == 200, "overclock: se guarda y se lee igual en el juego");
+    Settings s;
+    s.overclock = 300;
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.overclock == 300, "overclock: plumsg.ini lo guarda");
+    std::istringstream big("[consola]\noverclock = 5000\n");
+    Settings::parse(big, again);
+    check(again.overclock == Settings::kMaxOverclock, "overclock: como mucho 400");
+}
+
 void testWidescreenOption() {
     const Settings general;
     const InputConfig generalInput = InputConfig::defaults();
@@ -109,6 +130,7 @@ void testWidescreenOption() {
     check(again.widescreen == 1, "pantalla ancha: plumsg.ini lo guarda");
 }
 
+
 }  // namespace
 
 int main() {
@@ -116,6 +138,7 @@ int main() {
     testRunAheadOption();
     testSpriteLimitOption();
     testWidescreenOption();
+    testOverclockOption();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

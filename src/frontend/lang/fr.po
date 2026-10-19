@@ -640,6 +640,9 @@ msgstr ""
 msgid "Derecha"
 msgstr "Droite"
 
+msgid "Desactivado (velocidad real)"
+msgstr "Désactivé (vitesse réelle)"
+
 msgid "Desactivados"
 msgstr "Désactivés"
 
@@ -1060,6 +1063,17 @@ msgstr "Guiro court"
 
 msgid "Güiro largo"
 msgstr "Guiro long"
+
+msgid ""
+"Hace más rápido el procesador de la consola (el 68000), para los juegos que se ralentizan\n"
+"cuando hay mucho en pantalla. Cuanto más alto, más pide al ordenador. Algún juego puede ir\n"
+"demasiado rápido o fallar: si pasa, desactívalo para ese juego. En una partida en red manda\n"
+"el del anfitrión, y en modo hardcore se queda desactivado."
+msgstr ""
+"Rend le processeur de la console (le 68000) plus rapide, pour les jeux qui ralentissent\n"
+"quand il y a beaucoup à l'écran. Plus c'est haut, plus l'ordinateur travaille. Certains jeux\n"
+"peuvent aller trop vite ou planter : dans ce cas, désactivez-le pour ce jeu. En réseau, c'est\n"
+"celui de l'hôte qui compte, et en mode hardcore il reste désactivé."
 
 msgid "Has salido de la partida en red"
 msgstr "Vous avez quitté la partie en réseau"
@@ -1567,6 +1581,9 @@ msgstr "Original"
 
 msgid "Original (YM2612 y PSG)"
 msgstr "Original (YM2612 et PSG)"
+
+msgid "Overclock"
+msgstr "Overclock"
 
 msgid "Oír todos"
 msgstr "Tout écouter"

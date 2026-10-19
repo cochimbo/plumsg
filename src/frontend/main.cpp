@@ -860,6 +860,9 @@ int main(int argc, char** argv) {
         app->console.vdp().setUnlimitedSprites(settings.unlimitedSprites);
         const Widescreen& wide = kWidescreens[std::clamp(settings.widescreen, 0, kWidescreenCount - 1)];
         app->console.vdp().setWidescreen(settings.widescreen ? wide.w : 0, wide.h);
+        // The overclock does change the game: in a netplay game the speed is the host's,
+        // which came in the state both started from, and hardcore mode keeps the real one.
+        if (!netPlaying()) app->console.setOverclock(hardcore() ? 100 : settings.overclock);
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             input->handleEvent(e);  // first, so it sees every trigger pull and release

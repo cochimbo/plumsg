@@ -50,6 +50,10 @@ struct Settings {
     bool effectsOriginal = true;  // the game's sound effects keep the chips' sound
     Region region = Region::Auto;
     std::array<PadType, 2> padType{PadType::SixButton, PadType::SixButton};
+    // The 68000's speed in percent (100 off, up to kMaxOverclock), for games that slow
+    // down. In a netplay game the host's counts; hardcore mode keeps it at 100.
+    static constexpr int kMaxOverclock = 400;  // MegaDrive::kMaxOverclock
+    int overclock = 100;
     int stateSlot = 0;  // 0-9
     int rewindSeconds = 20;  // how far back rewinding reaches, 0 = off
     int fastForward = 4;     // fast-forward speed, times normal (2-10)

@@ -640,6 +640,9 @@ msgstr ""
 msgid "Derecha"
 msgstr "Right"
 
+msgid "Desactivado (velocidad real)"
+msgstr "Off (real speed)"
+
 msgid "Desactivados"
 msgstr "Off"
 
@@ -1060,6 +1063,17 @@ msgstr "Short guiro"
 
 msgid "Güiro largo"
 msgstr "Long guiro"
+
+msgid ""
+"Hace más rápido el procesador de la consola (el 68000), para los juegos que se ralentizan\n"
+"cuando hay mucho en pantalla. Cuanto más alto, más pide al ordenador. Algún juego puede ir\n"
+"demasiado rápido o fallar: si pasa, desactívalo para ese juego. En una partida en red manda\n"
+"el del anfitrión, y en modo hardcore se queda desactivado."
+msgstr ""
+"Makes the console's processor (the 68000) faster, for games that slow down\n"
+"when there is a lot on screen. The higher, the more it asks of the computer. Some games may run\n"
+"too fast or fail: if so, turn it off for that game. In a netplay game the host's\n"
+"counts, and in hardcore mode it stays off."
 
 msgid "Has salido de la partida en red"
 msgstr "You left the netplay game"
@@ -1567,6 +1581,9 @@ msgstr "Original"
 
 msgid "Original (YM2612 y PSG)"
 msgstr "Original (YM2612 and PSG)"
+
+msgid "Overclock"
+msgstr "Overclock"
 
 msgid "Oír todos"
 msgstr "Hear all"
