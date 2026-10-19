@@ -22,8 +22,13 @@ std::string lower(std::string s) {
     return s;
 }
 
-// The option a key of the file belongs to: both pads are one option.
-std::string optionFor(const std::string& key) { return key == "mando1" || key == "mando2" ? "mandos" : key; }
+// The option a key of the file belongs to: both pads are one option, and so are both
+// sides of the widescreen.
+std::string optionFor(const std::string& key) {
+    if (key == "mando1" || key == "mando2") return "mandos";
+    if (key == "pantalla_ancha_izquierda" || key == "pantalla_ancha_derecha") return "pantalla_ancha";
+    return key;
+}
 
 }  // namespace
 
@@ -39,7 +44,10 @@ const std::vector<GameOption>& gameOptions() {
          [](const Settings& f, Settings& t) { t.render.squarePixels = f.render.squarePixels; }},
         {"sin_limite_sprites", N_("Sin límite de sprites"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.unlimitedSprites = f.unlimitedSprites; }},
-        {"pantalla_ancha", N_("Pantalla ancha"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.widescreen = f.widescreen; }},
+        {"pantalla_ancha", N_("Pantalla ancha"), N_("Vídeo"), [](const Settings& f, Settings& t) {
+             t.wideLeft = f.wideLeft;
+             t.wideRight = f.wideRight;
+         }},
         {"perfil_3d", N_("Todos los ajustes del 3D"), "3D", [](const Settings& f, Settings& t) { copy3D(f.render, t.render); }},
         {"volumen", N_("Volumen"), N_("Sonido"), [](const Settings& f, Settings& t) { t.volume = f.volume; }},
         {"silencio", N_("Silencio"), N_("Sonido"), [](const Settings& f, Settings& t) { t.mute = f.mute; }},

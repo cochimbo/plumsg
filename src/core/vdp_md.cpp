@@ -297,15 +297,16 @@ void VdpMd::acknowledge(int level) {
     else if (level == 4) hintPending_ = false;
 }
 
-int VdpMd::wideColumns(int width) const {
-    if (wideW_ <= 0 || wideH_ <= 0) return 0;
-    // The console's picture is 4:3 at any width; each side takes half of what is missing:
-    // width * (W:H / 4:3 - 1) / 2, rounded.
-    const int extra = (width * (3 * wideW_ - 4 * wideH_) + 4 * wideH_) / (8 * wideH_);
-    return std::clamp(extra, 0, kMaxWideColumns);
+int VdpMd::wideColumnsFor(int aspectW, int aspectH) {
+    if (aspectW <= 0 || aspectH <= 0) return 0;
+    // The console's picture is 4:3; each side takes half of what is missing:
+    // 320 * (W:H / 4:3 - 1) / 2, rounded.
+    const int extra = (320 * (3 * aspectW - 4 * aspectH) + 4 * aspectH) / (8 * aspectH);
+    return std::clamp(extra, 0, VideoFrameMd::kMaxWideSide);
 }
 
-void VdpMd::drawPlane(int line, bool planeA, int extra, LineCells& out, std::array<bool, VideoFrameMd::kMaxWidth>& isWindow) {
+void VdpMd::drawPlane(int line, bool planeA, int left, int right, LineCells& out,
+                      std::array<bool, VideoFrameMd::kMaxWidth>& isWindow) {
     const int width = h40() ? 320 : 256;
     const bool im2 = (regs_[12] & 0x06) == 0x06;
     const int tileRows = im2 ? 16 : 8;
@@ -360,8 +361,8 @@ void VdpMd::drawPlane(int line, bool planeA, int extra, LineCells& out, std::arr
         cell.tile = tile;
     };
 
-    for (int x = -extra; x < width + extra; ++x) {
-        const int i = x + extra;
+    for (int x = -left; x < width + right; ++x) {
+        const int i = x + left;
         // Past the edges (widescreen) the window goes on as at the nearest edge.
         const int wx = std::clamp(x, 0, width - 1);
         if (planeA && (lineInWindow || (wx >= winLeft && wx < winRight))) {
@@ -381,7 +382,7 @@ void VdpMd::drawPlane(int line, bool planeA, int extra, LineCells& out, std::arr
     }
 }
 
-void VdpMd::drawSprites(int line, int extra, LineCells& out, std::array<uint8_t, VideoFrameMd::kMaxWidth>& number) {
+void VdpMd::drawSprites(int line, int left, int right, LineCells& out, std::array<uint8_t, VideoFrameMd::kMaxWidth>& number) {
     const bool wide = h40();
     const int width = wide ? 320 : 256;
     const int maxSprites = wide ? 80 : 64;
@@ -453,8 +454,8 @@ void VdpMd::drawSprites(int line, int extra, LineCells& out, std::array<uint8_t,
             const int ty = row % tileRows;
             for (int px = 0; px < 8; ++px) {
                 const int x = s.x - 128 + cx * 8 + px;
-                if (x < -extra || x >= width + extra) continue;
-                const int i = x + extra;
+                if (x < -left || x >= width + right) continue;
+                const int i = x + left;
                 const int tx = hflip ? 7 - px : px;
                 const uint8_t byte = vram_[(pattern + static_cast<uint32_t>(ty * 4 + tx / 2)) & 0xFFFF];
                 const int index = (tx & 1) ? (byte & 15) : (byte >> 4);
@@ -476,12 +477,14 @@ void VdpMd::drawSprites(int line, int extra, LineCells& out, std::array<uint8_t,
 void VdpMd::renderLine(int line) {
     VideoFrameMd& f = *frame_;
     const int width = h40() ? 320 : 256;
-    const int extra = wideColumns(width);
-    const int total = width + 2 * extra;
+    // The widescreen columns cover the same part of the screen in H32 as in H40.
+    const int left = (wideLeft_ * width + 160) / 320, right = (wideRight_ * width + 160) / 320;
+    const int total = width + left + right;
     const bool im2 = (regs_[12] & 0x06) == 0x06;
     if (line == 0) {
         f.width = total;
-        f.wide = extra;
+        f.wideLeft = left;
+        f.wideRight = right;
         f.height = activeLines() * (im2 ? 2 : 1);
         f.interlaced = im2;
     }
@@ -507,9 +510,9 @@ void VdpMd::renderLine(int line) {
     LineCells b, a, s;
     std::array<bool, VideoFrameMd::kMaxWidth> isWindow{}, unusedWindow{};
     std::array<uint8_t, VideoFrameMd::kMaxWidth> spriteNumber{};
-    drawPlane(line, false, extra, b, unusedWindow);
-    drawPlane(line, true, extra, a, isWindow);
-    drawSprites(line, extra, s, spriteNumber);
+    drawPlane(line, false, left, right, b, unusedWindow);
+    drawPlane(line, true, left, right, a, isWindow);
+    drawSprites(line, left, right, s, spriteNumber);
 
     f.backdrop[row] = color(backdropIndex, sh ? MdShade::Shadow : MdShade::Normal);
     for (int x = 0; x < total; ++x) {

@@ -143,6 +143,9 @@ msgstr "Abra um jogo, ou escolha um na biblioteca com o botão direito."
 msgid "Abre una ROM para guardar estados."
 msgstr "Abra uma ROM para salvar estados."
 
+msgid "Abre una ROM para guardarle su propia pantalla ancha."
+msgstr "Abra uma ROM para lhe guardar o seu próprio ecrã panorâmico."
+
 msgid "Abre una ROM para guardarle un perfil 3D propio."
 msgstr "Abra uma ROM para salvar um perfil 3D próprio para ela."
 
@@ -778,6 +781,9 @@ msgstr "O jogo recomeça: é assim que se joga no hardcore."
 msgid "El juego vuelve a usar el 3D general"
 msgstr "O jogo volta a usar o 3D geral"
 
+msgid "El juego vuelve a usar la pantalla ancha general"
+msgstr "O jogo volta a usar o ecrã panorâmico geral"
+
 msgid "El otro jugador ha salido de la partida."
 msgstr "O outro jogador saiu da partida."
 
@@ -825,14 +831,16 @@ msgstr "Encontradas %d de 3."
 
 msgid ""
 "Enseña a los lados lo que el juego tiene más allá de los bordes de la pantalla.\n"
+"Cada lado se ajusta por separado y se ve al momento, con la imagen siempre centrada.\n"
 "En muchos juegos se ve bien; en otros aparecen enemigos antes de tiempo, trozos\n"
-"del nivel sin dibujar o cosas que se esconden fuera. El juego no lo nota, así que\n"
-"no afecta a partidas en red, logros ni estados. Mejor por juego, en Opciones de este juego."
+"del nivel sin dibujar o cosas que se esconden fuera: entonces quita columnas de ese lado.\n"
+"El juego no lo nota, así que no afecta a partidas en red, logros ni estados."
 msgstr ""
 "Mostra dos lados o que o jogo tem para lá das bordas do ecrã.\n"
+"Cada lado ajusta-se à parte e vê-se logo, com a imagem sempre centrada.\n"
 "Em muitos jogos fica bem; noutros aparecem inimigos antes do tempo, partes\n"
-"do nível por desenhar ou coisas escondidas fora do ecrã. O jogo não dá por isso, portanto\n"
-"não afeta jogos em rede, conquistas nem estados. Melhor por jogo, em Opções deste jogo."
+"do nível por desenhar ou coisas escondidas: então tire colunas desse lado.\n"
+"O jogo não dá por isso, portanto não afeta jogos em rede, conquistas nem estados."
 
 msgid "Enviando la partida al otro jugador..."
 msgstr "Enviando a partida ao outro jogador..."
@@ -1078,6 +1086,9 @@ msgstr "Salvar estado"
 msgid "Guardar estado (ranura %d)"
 msgstr "Salvar estado (slot %d)"
 
+msgid "Guardar la pantalla ancha solo para este juego"
+msgstr "Guardar o ecrã panorâmico só para este jogo"
+
 msgid "Guitarra"
 msgstr "Violão"
 
@@ -1270,6 +1281,9 @@ msgstr ""
 msgid "La música en CD de este juego (MSU-MD) necesita una BIOS del Mega CD: elígela en Consola > BIOS del Mega CD."
 msgstr "A música em CD deste jogo (MSU-MD) precisa de uma BIOS do Mega CD: escolha-a em Console > BIOS do Mega CD."
 
+msgid "La pantalla ancha se guarda ahora solo para %s"
+msgstr "O ecrã panorâmico guarda-se agora só para %s"
+
 msgid "La partida se ha descompasado y no se puede recuperar."
 msgstr "A partida perdeu a sincronia e não pode ser recuperada."
 
@@ -1378,6 +1392,13 @@ msgstr ""
 "de instrumentos. Cada efeito também pode ser mudado à mão no editor."
 
 msgid ""
+"Los lados de arriba se guardan para %s y se recuperan al abrirlo.\n"
+"Al desmarcarlo, el juego vuelve a usar los generales."
+msgstr ""
+"Os lados acima guardam-se para %s e recuperam-se ao abri-lo.\n"
+"Ao desmarcar, o jogo volta a usar os gerais."
+
+msgid ""
 "Los logros cuentan para tu puntuación hardcore y las clasificaciones, pero sin\n"
 "ayudas: no se puede rebobinar, ir a cámara lenta, usar trucos ni cargar estados.%s"
 msgstr ""
@@ -1465,9 +1486,6 @@ msgstr "Nenhum jogo corresponde à busca."
 
 msgid "Ningún truco tiene ese nombre."
 msgstr "Nenhum truque tem esse nome."
-
-msgid "No (4:3, como la consola)"
-msgstr "Não (4:3, como a consola)"
 
 msgid "No es un archivo VGM."
 msgstr "Não é um arquivo VGM."

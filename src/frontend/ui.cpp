@@ -60,8 +60,24 @@ std::string shortCode(const std::string& code) {
 }
 
 // ImGui::Combo with its items translated.
-// The choices of Pantalla ancha, in the order of kWidescreens.
-const char* const kWidescreenNames[kWidescreenCount] = {N_("No (4:3, como la consola)"), "16:10", "16:9"};
+// The widescreen's controls: a button per ready-made width and a slider per side. They
+// change the picture at once; the return value says when to save.
+bool widescreenControls(int& left, int& right) {
+    bool changed = false;
+    for (int i = 0; i < kWidescreenCount; ++i) {
+        if (i) ImGui::SameLine();
+        const Widescreen& w = kWidescreens[i];
+        if (ImGui::RadioButton(w.name, left == w.columns && right == w.columns)) {
+            left = right = w.columns;
+            changed = true;
+        }
+    }
+    ImGui::SliderInt(tr("Izquierda##ancha"), &left, 0, VideoFrameMd::kMaxWideSide, "%d px", ImGuiSliderFlags_AlwaysClamp);
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SliderInt(tr("Derecha##ancha"), &right, 0, VideoFrameMd::kMaxWideSide, "%d px", ImGuiSliderFlags_AlwaysClamp);
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    return changed;
+}
 
 bool comboTr(const char* label, int* current, const char* const items[], int count) {
     std::vector<const char*> shown(items, items + count);
@@ -876,12 +892,25 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
                           "cada fotograma y por eso parpadean. Así se ven todos. El juego no lo nota, así que\n"
                           "no afecta a partidas en red, logros ni estados. Si un juego parpadea igual, es que\n"
                           "lo hace él mismo."));
-    changed |= comboTr(tr("Pantalla ancha"), &settings_.widescreen, kWidescreenNames, kWidescreenCount);
+
+    ImGui::SeparatorText(tr("Pantalla ancha"));
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Enseña a los lados lo que el juego tiene más allá de los bordes de la pantalla.\n"
+                          "Cada lado se ajusta por separado y se ve al momento, con la imagen siempre centrada.\n"
                           "En muchos juegos se ve bien; en otros aparecen enemigos antes de tiempo, trozos\n"
-                          "del nivel sin dibujar o cosas que se esconden fuera. El juego no lo nota, así que\n"
-                          "no afecta a partidas en red, logros ni estados. Mejor por juego, en Opciones de este juego."));
+                          "del nivel sin dibujar o cosas que se esconden fuera: entonces quita columnas de ese lado.\n"
+                          "El juego no lo nota, así que no afecta a partidas en red, logros ni estados."));
+    changed |= widescreenControls(settings_.wideLeft, settings_.wideRight);
+    ImGui::BeginDisabled(!state.romLoaded);
+    bool wideProfile = state.hasWideProfile;
+    if (ImGui::Checkbox(tr("Guardar la pantalla ancha solo para este juego"), &wideProfile)) out.wideProfile = wideProfile ? 1 : 0;
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("%s", state.romLoaded ? trf("Los lados de arriba se guardan para %s y se recuperan al abrirlo.\n"
+                                                      "Al desmarcarlo, el juego vuelve a usar los generales.",
+                                                      state.gameName.c_str()).c_str()
+                                                : tr("Abre una ROM para guardarle su propia pantalla ancha."));
+    ImGui::Separator();
     int filter = static_cast<int>(settings_.render.filter);
     ImGui::TextUnformatted(tr("Filtro 2D:"));
     ImGui::SameLine();
@@ -2147,7 +2176,8 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
         } else if (key == "sin_limite_sprites") {
             edited |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &s.unlimitedSprites);
         } else if (key == "pantalla_ancha") {
-            edited |= comboTr(tr(opt.label), &s.widescreen, kWidescreenNames, kWidescreenCount);
+            ImGui::TextUnformatted(tr(opt.label));
+            edited |= widescreenControls(s.wideLeft, s.wideRight);
         } else if (key == "perfil_3d") {
             ImGui::TextUnformatted(tr(opt.label));
             ImGui::SameLine();

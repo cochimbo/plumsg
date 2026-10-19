@@ -115,19 +115,26 @@ void testOverclockOption() {
 void testWidescreenOption() {
     const Settings general;
     const InputConfig generalInput = InputConfig::defaults();
-    check(general.widescreen == 0, "pantalla ancha: desactivada si no se dice");
-    const GameOverrides o = parseGameOverrides("[video]\npantalla_ancha = 16:9\n", general, generalInput);
-    check(o.has("pantalla_ancha") && o.values.widescreen == 2, "pantalla ancha: un juego con su propio valor");
+    check(general.wideLeft == 0 && general.wideRight == 0, "pantalla ancha: desactivada si no se dice");
+    const GameOverrides o = parseGameOverrides("[video]\npantalla_ancha_izquierda = 53\npantalla_ancha_derecha = 16\n", general,
+                                               generalInput);
+    check(o.has("pantalla_ancha") && o.values.wideLeft == 53 && o.values.wideRight == 16,
+          "pantalla ancha: un juego con sus propios lados");
     const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
-    check(back.has("pantalla_ancha") && back.values.widescreen == 2, "pantalla ancha: se guarda y se lee igual en el juego");
+    check(back.has("pantalla_ancha") && back.values.wideLeft == 53 && back.values.wideRight == 16,
+          "pantalla ancha: se guarda y se lee igual en el juego");
+    const GameOverrides old = parseGameOverrides("[video]\npantalla_ancha = 16:9\n", general, generalInput);
+    check(old.has("pantalla_ancha") && old.values.wideLeft == 53 && old.values.wideRight == 53,
+          "pantalla ancha: lee los 16:9 de antes");
     Settings s;
-    s.widescreen = 1;
+    s.wideLeft = 32;
+    s.wideRight = 96;
     std::ostringstream out;
     s.write(out);
     Settings again;
     std::istringstream text(out.str());
     Settings::parse(text, again);
-    check(again.widescreen == 1, "pantalla ancha: plumsg.ini lo guarda");
+    check(again.wideLeft == 32 && again.wideRight == 96, "pantalla ancha: plumsg.ini lo guarda");
 }
 
 

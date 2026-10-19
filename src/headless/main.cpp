@@ -60,6 +60,7 @@ Running
   --six-button          6-button pads instead of 3-button ones
   --no-sprite-limit     draw every sprite on a line (the option against flicker)
   --widescreen W:H      draw the picture W:H wide (16:9, 16:10) instead of 4:3
+  --widescreen L,R      or with L more columns on the left and R on the right (up to 96)
   --overclock PERCENT   run the 68000 at 100-400% of its speed (default 100)
   --bios FILE           Mega CD BIOS; its region comes from its header (else: all)
   --bios-dir DIR        look for Mega CD BIOS files in DIR and its subfolders
@@ -466,7 +467,7 @@ int main(int argc, char** argv) {
     long frames = 600, overclock = 100, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
     bool netHost = false;
     std::string netJoin;
-    int wideW = 0, wideH = 0;
+    int wideLeft = 0, wideRight = 0;
     bool sixButton = false, noSpriteLimit = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
     uint32_t expectHash = 0, expectAudio = 0;
     Region region = Region::Auto;
@@ -510,7 +511,9 @@ int main(int argc, char** argv) {
         else if (a == "--no-sprite-limit") noSpriteLimit = true;
         else if (a == "--widescreen") {
             const std::string v = next();
-            if (std::sscanf(v.c_str(), "%d:%d", &wideW, &wideH) != 2 || wideW <= 0 || wideH <= 0) missing = true;
+            int w = 0, h = 0;
+            if (std::sscanf(v.c_str(), "%d:%d", &w, &h) == 2 && w > 0 && h > 0) wideLeft = wideRight = VdpMd::wideColumnsFor(w, h);
+            else if (std::sscanf(v.c_str(), "%d,%d", &wideLeft, &wideRight) != 2 || wideLeft < 0 || wideRight < 0) missing = true;
         }
         else if (a == "--overclock") number(&overclock);
         else if (a == "--bios") bios.push_back(next());
@@ -611,7 +614,7 @@ int main(int argc, char** argv) {
     md.setRegion(region);
     for (int p = 0; p < 2; ++p) md.setPadType(p, sixButton ? PadType::SixButton : PadType::ThreeButton);
     md.vdp().setUnlimitedSprites(noSpriteLimit);
-    md.vdp().setWidescreen(wideW, wideH);
+    md.vdp().setWidescreen(wideLeft, wideRight);
     md.setOverclock(static_cast<int>(overclock));
     static const Region kRegions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
     if (!biosDir.empty()) {

@@ -36,6 +36,7 @@ struct UiActions {
     bool toggleSlowMotion = false;
     bool rewindChanged = false;    // the rewind length changed
     int profile = -1;              // 1 give the game its own 3D profile, 0 drop it, -1 nothing
+    int wideProfile = -1;          // the same for its own widescreen
     bool cheatsChanged = false;    // the cheat list was edited: apply it and save it
     bool netHost = false;          // host a netplay game on settings.netPort
     bool netJoin = false;          // join the host at settings.netAddress
@@ -81,6 +82,7 @@ struct UiState {
     bool slowMotion = false;
     std::string speed;     // badge in the corner while not at normal speed ("<< REBOBINANDO", "x4"...)
     bool hasProfile = false;  // the loaded game has its own 3D profile
+    bool hasWideProfile = false;  // the loaded game has its own widescreen
     std::string gameName;     // the ROM's file name, for the profile option
     std::vector<const char*> views;  // Renderer::name() of each available view
     std::vector<SlotInfo> slots;     // one per slot, 0-9

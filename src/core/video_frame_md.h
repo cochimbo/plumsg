@@ -27,15 +27,17 @@ struct MdPixel {
 // that line and with shadow/highlight applied, so mid-frame palette changes survive
 // in 3D too.
 struct VideoFrameMd {
-    // 320 plus what the widescreen option adds on each side (VdpMd::kMaxWideColumns).
-    static constexpr int kMaxWidth = 432;
+    // Most columns the widescreen option adds on one side.
+    static constexpr int kMaxWideSide = 96;
+    // 320 plus what the widescreen option adds on both sides.
+    static constexpr int kMaxWidth = 320 + 2 * kMaxWideSide;
     static constexpr int kMaxHeight = 480;  // 240 lines, doubled in interlace mode 2
     static constexpr int kPixels = kMaxWidth * kMaxHeight;
 
-    int width = 320;    // 256 (H32) or 320 (H40), plus `wide` on each side
-    // Columns the widescreen option adds on each side: picture the console never shows,
-    // drawn from the planes and sprites past its edges. 0 without the option.
-    int wide = 0;
+    int width = 320;    // 256 (H32) or 320 (H40), plus the widescreen columns
+    // Columns the widescreen option adds on the left and on the right: picture the console
+    // never shows, drawn from the planes and sprites past its edges. 0 without the option.
+    int wideLeft = 0, wideRight = 0;
     int height = 224;   // 224 or 240; 448 or 480 in interlace mode 2
     bool interlaced = false;
     // How many lines make the height of a 4:3 picture: a TV's 224 for the consoles on
@@ -64,6 +66,9 @@ struct VideoFrameMd {
     std::array<Line, kMaxHeight> lines{};
 
     uint64_t frameNumber = 0;
+
+    // Width of the console's own picture, without the widescreen columns.
+    int consoleWidth() const { return width - wideLeft - wideRight; }
 
     uint32_t pixel(int x, int y) const { return rgba[y * kMaxWidth + x]; }
 };

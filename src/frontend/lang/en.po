@@ -143,6 +143,9 @@ msgstr "Open a game, or pick one in the library with the right button."
 msgid "Abre una ROM para guardar estados."
 msgstr "Open a ROM to save states."
 
+msgid "Abre una ROM para guardarle su propia pantalla ancha."
+msgstr "Open a ROM to save a widescreen of its own."
+
 msgid "Abre una ROM para guardarle un perfil 3D propio."
 msgstr "Open a ROM to save a 3D profile of its own."
 
@@ -778,6 +781,9 @@ msgstr "The game starts over: that is how hardcore is played."
 msgid "El juego vuelve a usar el 3D general"
 msgstr "The game uses the general 3D again"
 
+msgid "El juego vuelve a usar la pantalla ancha general"
+msgstr "The game goes back to the general widescreen"
+
 msgid "El otro jugador ha salido de la partida."
 msgstr "The other player has left the game."
 
@@ -825,14 +831,16 @@ msgstr "Found %d of 3."
 
 msgid ""
 "Enseña a los lados lo que el juego tiene más allá de los bordes de la pantalla.\n"
+"Cada lado se ajusta por separado y se ve al momento, con la imagen siempre centrada.\n"
 "En muchos juegos se ve bien; en otros aparecen enemigos antes de tiempo, trozos\n"
-"del nivel sin dibujar o cosas que se esconden fuera. El juego no lo nota, así que\n"
-"no afecta a partidas en red, logros ni estados. Mejor por juego, en Opciones de este juego."
+"del nivel sin dibujar o cosas que se esconden fuera: entonces quita columnas de ese lado.\n"
+"El juego no lo nota, así que no afecta a partidas en red, logros ni estados."
 msgstr ""
 "Shows at the sides what the game has past the edges of the screen.\n"
+"Each side is set on its own and shows at once, with the picture always centred.\n"
 "Many games look fine; in others enemies appear early, bits of the\n"
-"level are not drawn yet or things hidden off screen show up. The game does not notice, so\n"
-"netplay, achievements and states are not affected. Best set per game, in Options for this game."
+"level are not drawn yet or things hidden off screen show up: then take columns off that side.\n"
+"The game does not notice, so netplay, achievements and states are not affected."
 
 msgid "Enviando la partida al otro jugador..."
 msgstr "Sending the game to the other player..."
@@ -1078,6 +1086,9 @@ msgstr "Save state"
 msgid "Guardar estado (ranura %d)"
 msgstr "Save state (slot %d)"
 
+msgid "Guardar la pantalla ancha solo para este juego"
+msgstr "Save the widescreen only for this game"
+
 msgid "Guitarra"
 msgstr "Guitar"
 
@@ -1270,6 +1281,9 @@ msgstr ""
 msgid "La música en CD de este juego (MSU-MD) necesita una BIOS del Mega CD: elígela en Consola > BIOS del Mega CD."
 msgstr "This game's CD music (MSU-MD) needs a Mega CD BIOS: choose it in Console > Mega CD BIOS."
 
+msgid "La pantalla ancha se guarda ahora solo para %s"
+msgstr "The widescreen is now saved only for %s"
+
 msgid "La partida se ha descompasado y no se puede recuperar."
 msgstr "The game went out of sync and cannot be recovered."
 
@@ -1378,6 +1392,13 @@ msgstr ""
 "Instrument editor. Each effect can also be changed by hand in the editor."
 
 msgid ""
+"Los lados de arriba se guardan para %s y se recuperan al abrirlo.\n"
+"Al desmarcarlo, el juego vuelve a usar los generales."
+msgstr ""
+"The sides above are saved for %s and come back when it is opened.\n"
+"When unticked, the game goes back to the general ones."
+
+msgid ""
 "Los logros cuentan para tu puntuación hardcore y las clasificaciones, pero sin\n"
 "ayudas: no se puede rebobinar, ir a cámara lenta, usar trucos ni cargar estados.%s"
 msgstr ""
@@ -1465,9 +1486,6 @@ msgstr "No game matches the search."
 
 msgid "Ningún truco tiene ese nombre."
 msgstr "No cheat has that name."
-
-msgid "No (4:3, como la consola)"
-msgstr "No (4:3, like the console)"
 
 msgid "No es un archivo VGM."
 msgstr "It is not a VGM file."
