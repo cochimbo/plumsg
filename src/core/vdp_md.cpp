@@ -386,8 +386,12 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
         int index, x, y, hcells, vcells;
         uint16_t attr;
     };
-    std::array<Found, 20> found{};
-    int count = 0;
+    // Without the limit every sprite on the line is drawn, but the flags stay as the real
+    // VDP leaves them: `hwCount` sprites, and the cells up to its pixel budget, are what the
+    // console would draw, and only they set the overflow and collision bits. The game sees
+    // the same console either way; only the picture changes.
+    std::array<Found, 80> found{};
+    int count = 0, hwCount = -1;
     int link = 0;
     for (int n = 0; n < maxSprites; ++n) {
         const uint32_t a = (satb + static_cast<uint32_t>(link) * 8) & 0xFFFF;
@@ -396,9 +400,10 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
         const int next = vram_[(a + 3) & 0xFFFF] & 0x7F;
         const int hcells = ((size >> 2) & 3) + 1, vcells = (size & 3) + 1;
         if (yLine >= sy && yLine < sy + vcells * tileRows) {
-            if (count == maxPerLine) {
+            if (count == maxPerLine && hwCount < 0) {
                 spriteOverflow_ = true;
-                break;
+                hwCount = count;
+                if (!unlimitedSprites_) break;
             }
             const uint16_t attr = static_cast<uint16_t>(vram_[(a + 4) & 0xFFFF] << 8 | vram_[(a + 5) & 0xFFFF]);
             const int sx = (vram_[(a + 6) & 0xFFFF] << 8 | vram_[(a + 7) & 0xFFFF]) & 0x1FF;
@@ -407,8 +412,10 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
         if (next == 0 || next >= maxSprites) break;
         link = next;
     }
+    if (hwCount < 0) hwCount = count;
 
     int pixels = 0;
+    bool beyond = false;  // past what the real VDP would draw on this line
     bool masked = false, sawNonZeroX = false;
     for (int i = 0; i < count; ++i) {
         const Found& s = found[i];
@@ -419,10 +426,12 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
         const int height = s.vcells * tileRows;
         int row = yLine - s.y;
         if (vflip) row = height - 1 - row;
+        if (i == hwCount) beyond = true;
         for (int cx = 0; cx < s.hcells; ++cx) {
-            if (pixels >= maxPixels) {
+            if (pixels >= maxPixels && !beyond) {
                 spriteOverflow_ = true;
-                return;
+                if (!unlimitedSprites_) return;
+                beyond = true;
             }
             pixels += 8;
             if (masked) continue;
@@ -438,7 +447,7 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
                 const int index = (tx & 1) ? (byte & 15) : (byte >> 4);
                 if (!index) continue;
                 if (out[x].color & 15) {
-                    spriteCollision_ = true;
+                    if (!beyond) spriteCollision_ = true;
                     continue;
                 }
                 out[x].color = static_cast<uint8_t>(((s.attr >> 13) & 3) * 16 + index);

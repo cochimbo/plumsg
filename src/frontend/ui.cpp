@@ -820,6 +820,12 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     settings_.render.scale = static_cast<ScaleMode>(scale);
     changed |= ImGui::Checkbox(tr("Suavizar píxeles"), &settings_.render.smooth);
     changed |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &settings_.render.squarePixels);
+    changed |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &settings_.unlimitedSprites);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("La consola solo dibuja 20 sprites (16 en modo estrecho) por línea; los juegos alternan cuáles\n"
+                          "cada fotograma y por eso parpadean. Así se ven todos. El juego no lo nota, así que\n"
+                          "no afecta a partidas en red, logros ni estados. Si un juego parpadea igual, es que\n"
+                          "lo hace él mismo."));
     int filter = static_cast<int>(settings_.render.filter);
     ImGui::TextUnformatted(tr("Filtro 2D:"));
     ImGui::SameLine();
@@ -2062,6 +2068,8 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "pixeles_cuadrados") {
             edited |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &s.render.squarePixels);
+        } else if (key == "sin_limite_sprites") {
+            edited |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &s.unlimitedSprites);
         } else if (key == "perfil_3d") {
             ImGui::TextUnformatted(tr(opt.label));
             ImGui::SameLine();

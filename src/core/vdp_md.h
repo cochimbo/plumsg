@@ -11,8 +11,9 @@ namespace plumsg {
 
 // Mega Drive VDP (Yamaha YM7101): 64 KB VRAM, 64-colour CRAM, 40-entry VSRAM and 24
 // registers. Draws whole lines: planes A and B with full/cell/line horizontal scroll
-// and full/2-cell vertical scroll, the window, sprites with the per-line limits and
-// masking, priorities, shadow/highlight, H32/H40, V28/V30 and interlace mode 2.
+// and full/2-cell vertical scroll, the window, sprites with the per-line limits (or
+// without them, as an option) and masking, priorities, shadow/highlight, H32/H40,
+// V28/V30 and interlace mode 2.
 // DMA (68000 to VRAM/CRAM/VSRAM, fill and copy) runs at once; the time a 68000 DMA
 // would take is returned so the CPU can be stalled for it.
 //
@@ -68,6 +69,11 @@ public:
     uint8_t reg(int r) const { return regs_[r]; }
     const std::array<uint8_t, 0x10000>& vram() const { return vram_; }
     const std::array<uint16_t, 64>& cram() const { return cram_; }
+    // Draws every sprite on a line instead of stopping at the console's 16/20 sprites and
+    // 256/320 pixels per line, which is what makes games flicker. The status bits and
+    // everything the game can read stay as on the console, so it is not part of the state.
+    void setUnlimitedSprites(bool on) { unlimitedSprites_ = on; }
+    bool unlimitedSprites() const { return unlimitedSprites_; }
 
     template <class Ar>
     void state(Ar& ar) {
@@ -118,6 +124,7 @@ private:
     int dmaBusyLines_ = 0;  // fill/copy still "running", for the status bit
     bool pal_ = false;
     uint64_t frameNumber_ = 0;
+    bool unlimitedSprites_ = false;
 
     std::array<uint32_t, 64 * 3> colors_{};  // CRAM as RGBA, normal/shadow/highlight
     std::unique_ptr<VideoFrameMd> frame_;

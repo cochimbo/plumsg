@@ -37,6 +37,8 @@ const std::vector<GameOption>& gameOptions() {
          [](const Settings& f, Settings& t) { t.render.filterStrength = f.render.filterStrength; }},
         {"pixeles_cuadrados", N_("Píxeles cuadrados"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.squarePixels = f.render.squarePixels; }},
+        {"sin_limite_sprites", N_("Sin límite de sprites"), N_("Vídeo"),
+         [](const Settings& f, Settings& t) { t.unlimitedSprites = f.unlimitedSprites; }},
         {"perfil_3d", N_("Todos los ajustes del 3D"), "3D", [](const Settings& f, Settings& t) { copy3D(f.render, t.render); }},
         {"volumen", N_("Volumen"), N_("Sonido"), [](const Settings& f, Settings& t) { t.volume = f.volume; }},
         {"silencio", N_("Silencio"), N_("Sonido"), [](const Settings& f, Settings& t) { t.mute = f.mute; }},

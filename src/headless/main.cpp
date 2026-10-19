@@ -54,6 +54,7 @@ Running
   --frames N            frames to run (default 600); frames are numbered from 0
   --region jp|us|eu     force the console's region (default: what the game says)
   --six-button          6-button pads instead of 3-button ones
+  --no-sprite-limit     draw every sprite on a line (the option against flicker)
   --bios FILE           Mega CD BIOS; its region comes from its header (else: all)
   --bios-dir DIR        look for Mega CD BIOS files in DIR and its subfolders
   --load-state FILE     start from this savestate (after loading the game)
@@ -453,7 +454,7 @@ int main(int argc, char** argv) {
     long frames = 600, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
     bool netHost = false;
     std::string netJoin;
-    bool sixButton = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
+    bool sixButton = false, noSpriteLimit = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
     uint32_t expectHash = 0, expectAudio = 0;
     Region region = Region::Auto;
 
@@ -493,6 +494,7 @@ int main(int argc, char** argv) {
             else missing = true;
         } else if (a == "--pal") region = Region::EuropePal;
         else if (a == "--six-button") sixButton = true;
+        else if (a == "--no-sprite-limit") noSpriteLimit = true;
         else if (a == "--bios") bios.push_back(next());
         else if (a == "--bios-dir") biosDir = next();
         else if (a == "--load-state") stateIn = next();
@@ -588,6 +590,7 @@ int main(int argc, char** argv) {
     MegaDrive md;
     md.setRegion(region);
     for (int p = 0; p < 2; ++p) md.setPadType(p, sixButton ? PadType::SixButton : PadType::ThreeButton);
+    md.vdp().setUnlimitedSprites(noSpriteLimit);
     static const Region kRegions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
     if (!biosDir.empty()) {
         const auto found = findCdBios({biosDir});

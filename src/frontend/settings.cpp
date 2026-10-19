@@ -83,6 +83,7 @@ void Settings::parse(std::istream& in, Settings& s) {
             } else if (key == "intensidad_filtro") s.render.filterStrength = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
             else if (read3DKey(key, value, s.render)) continue;
             else if (key == "pixeles_cuadrados") s.render.squarePixels = yes(value);
+            else if (key == "sin_limite_sprites") s.unlimitedSprites = yes(value);
             else if (key == "tamano_ventana") s.windowScale = std::clamp(std::atoi(value.c_str()), 1, 8);
             else if (key == "pantalla_completa") s.fullscreen = yes(value);
             else if (key == "barra_menus") s.showMenu = yes(value);
@@ -162,6 +163,9 @@ void Settings::write(std::ostream& out) const {
     write3D(out, render);
     out << "# pixeles_cuadrados: no estirar la imagen a 4:3 como la tele.\n"
         << "pixeles_cuadrados = " << flag(render.squarePixels) << "\n"
+        << "# sin_limite_sprites: dibujar todos los sprites de cada línea, sin el límite de la consola\n"
+        << "# que los hace parpadear o desaparecer. El juego no lo nota.\n"
+        << "sin_limite_sprites = " << flag(unlimitedSprites) << "\n"
         << "tamano_ventana = " << windowScale << "\n"
         << "pantalla_completa = " << flag(fullscreen) << "\n"
         << "barra_menus = " << flag(showMenu) << "\n"
