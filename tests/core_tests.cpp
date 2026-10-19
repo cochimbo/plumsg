@@ -19,6 +19,7 @@
 #include <filesystem>
 
 #include "megadrive.h"
+#include "ym2413.h"
 #include "sh2.h"
 #include "system.h"
 #include "miniz.h"
@@ -2052,6 +2053,95 @@ void testSmsMapper() {
     check(sms.in(0xBE, 0) == 0xAB && sms.in(0xBE, 0) == 0xCD, "SMS VDP: VRAM written and read back");
 }
 
+void testSmsPhase2() {
+    // The FM unit: a note on the YM2413 sounds.
+    Ym2413 opll;
+    opll.setMasterClock(MegaDrive::kMasterNtsc);
+    auto reg = [&](int r, int v) {
+        opll.write(0, static_cast<uint8_t>(r));
+        opll.write(1, static_cast<uint8_t>(v));
+    };
+    reg(0x30, 0x10);  // channel 0: instrument 1 (violin), loudest
+    reg(0x10, 0xAC);
+    reg(0x20, 0x18);  // key on, block 4
+    opll.runUntil(15 * 72 * 4000);
+    double sumSq = 0;
+    for (int16_t v : opll.samples()) sumSq += static_cast<double>(v) * v;
+    check(opll.samples().size() == 8000 && std::sqrt(sumSq / 8000) > 200 && opll.reg(0x30) == 0x10,
+          "YM2413: a note on the FM unit");
+
+    // It is there on Japanese consoles (or always, if asked), and answers on port 0xF2.
+    MegaDrive md;
+    md.loadRomData(smstestrom::build());
+    check(md.isMasterSystem() && !md.masterSystem()->fmPresent() && md.ym2413(), "Master System FM: not on export consoles");
+    md.setRegion(Region::JapanNtsc);
+    md.powerCycle();
+    check(md.masterSystem()->fmPresent(), "Master System FM: on Japanese consoles");
+    md.setRegion(Region::UsaNtsc);
+    md.setMasterSystemFm(true);
+    check(md.masterSystem()->fmPresent(), "Master System FM: on any console if asked");
+    md.setPads(PadState{}, PadState{});
+    md.runFrame();
+    std::vector<uint8_t> state;
+    std::string error;
+    check(md.saveState(state) && md.loadState(state, &error), "Master System FM: in the savestates");
+
+    // Codemasters mapper: slots at 0x0000, 0x4000, 0x8000, the first one too.
+    std::vector<uint8_t> rom(0x40000);
+    for (size_t i = 0; i < rom.size(); ++i) rom[i] = static_cast<uint8_t>(i / 0x4000);
+    rom[0x7FE6] = 0x34;
+    rom[0x7FE7] = 0x12;
+    rom[0x7FE8] = 0xCC;
+    rom[0x7FE9] = 0xED;  // 0x1234 + 0xEDCC = 0x10000
+    Cartridge cart;
+    cart.loadData(rom);
+    std::array<uint8_t, 0x2000> ram{};
+    auto frame = std::make_unique<VideoFrameMd>();
+    MasterSystem sms(cart, ram, *frame);
+    sms.powerOn();
+    check(sms.codemasters() && sms.read(0x0000) == 0 && sms.read(0x4000) == 1 && sms.read(0x8000) == 0,
+          "Codemasters mapper: detected, banks 0, 1, 0");
+    sms.write(0x0000, 5);
+    sms.write(0x4000, 0x86);
+    sms.write(0x8000, 15);
+    sms.write(0xA000, 0x77);
+    check(sms.read(0x0000) == 5 && sms.read(0x4000) == 6 && sms.read(0x8000) == 15 && sms.read(0xA000) == 0x77 &&
+              cart.saveRamByte(0) == 0x77,
+          "Codemasters mapper: three slots and the RAM of Ernie Els Golf");
+
+    // The TMS9918's Graphics I mode with a sprite.
+    MasterSystem tms(cart, ram, *frame);
+    tms.powerOn();
+    auto vdpReg = [&](int r, int v) {
+        tms.out(0xBF, static_cast<uint8_t>(v));
+        tms.out(0xBF, static_cast<uint8_t>(0x80 | r));
+    };
+    auto vram = [&](int addr, std::initializer_list<int> bytes) {
+        tms.out(0xBF, static_cast<uint8_t>(addr));
+        tms.out(0xBF, static_cast<uint8_t>(0x40 | addr >> 8));
+        for (int b : bytes) tms.out(0xBE, static_cast<uint8_t>(b));
+    };
+    vdpReg(0, 0x00);
+    vdpReg(1, 0x40);  // display on, Graphics I
+    vdpReg(2, 0x06);  // names 0x1800
+    vdpReg(3, 0x80);  // colours 0x2000
+    vdpReg(4, 0x00);  // patterns 0x0000
+    vdpReg(5, 0x76);  // sprites 0x3B00
+    vdpReg(6, 0x00);
+    vdpReg(7, 0x04);  // backdrop dark blue
+    vram(0x0008, {0xF0});        // pattern 1, row 0: left half set
+    vram(0x0010, {0xFF, 0xFF});  // pattern 2: the sprite, rows 0-1
+    vram(0x1800, {0x01});
+    vram(0x2000, {0x2F});        // patterns 0-7: medium green on white
+    vram(0x3B00, {0x00, 16, 2, 0x09, 0xD0});
+    for (int line = 0; line < 3; ++line) tms.vdp().startLine(line, true);
+    const uint32_t green = 0xFF00AA00, white = 0xFFFFFFFF, lightRed = 0xFFFF0000;
+    check(frame->pixel(0, 0) == green && frame->pixel(4, 0) == white && frame->pixel(8, 1) == white &&
+              frame->pixel(16, 1) == lightRed && frame->info[VideoFrameMd::kMaxWidth + 16].layer == MdLayer::Sprite &&
+              frame->pixel(16, 0) != lightRed,
+          "SMS VDP: TMS9918 Graphics I with a sprite");
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -2081,6 +2171,7 @@ int main() {
     testSystems();
     testMasterSystem();
     testSmsMapper();
+    testSmsPhase2();
     testSh2();
     testMars();
     testMarsProgram();

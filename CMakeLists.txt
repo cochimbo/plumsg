@@ -41,6 +41,8 @@ add_library(plumsg_ymfm STATIC
   ${ymfm_SOURCE_DIR}/src/ymfm_adpcm.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_ssg.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_misc.cpp
+  ${ymfm_SOURCE_DIR}/src/ymfm_opl.cpp
+  ${ymfm_SOURCE_DIR}/src/ymfm_pcm.cpp
 )
 target_include_directories(plumsg_ymfm SYSTEM PUBLIC ${ymfm_SOURCE_DIR}/src)
 if(MSVC)
@@ -111,6 +113,7 @@ add_library(plumsg_core STATIC
   src/core/io.cpp
   src/core/psg.cpp
   src/core/ym2612.cpp
+  src/core/ym2413.cpp
   src/core/audio_mixer.cpp
   src/core/roland.cpp
   src/core/vgm.cpp
