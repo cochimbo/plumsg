@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <tuple>
 
 #include "megadrive.h"
 #include "roland.h"
@@ -186,6 +187,7 @@ constexpr uint32_t kKeep = 0xFFFFFFFF;  // a register a call leaves as it is
 struct Candidate {
     uint32_t address = 0;  // of the byte, of the routine, or of the ring's write position
     bool call = false;
+    bool z80 = false;  // a call that only leads to the Z80's memory, not to a driver found
     bool ring = false;
     uint32_t ringStart = 0, ringMask = 0;  // where the ring is, and its size less one
     std::vector<uint8_t> message;          // what goes before the number
@@ -375,18 +377,19 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         };
         // A routine of the driver, or one that calls one, or a routine that does, from its
         // first bytes (the game's own "play this", in front of the driver's).
-        std::map<std::pair<uint32_t, int>, bool> leads;
-        std::function<bool(uint32_t, int)> leadsToDriver = [&](uint32_t routine, int depth) {
-            if (inDriver(routine) || writesZ80(routine)) return true;
+        // (z80: or to one that writes the Z80's memory.)
+        std::map<std::tuple<uint32_t, int, bool>, bool> leads;
+        std::function<bool(uint32_t, int, bool)> leadsToDriver = [&](uint32_t routine, int depth, bool z80) {
+            if (inDriver(routine) || (z80 && writesZ80(routine))) return true;
             if (depth == 0) return false;
-            const auto key = std::make_pair(routine, depth);
+            const auto key = std::make_tuple(routine, depth, z80);
             if (auto it = leads.find(key); it != leads.end()) return it->second;
             leads[key] = false;
             bool yes = false;
             for (uint32_t at = routine; !yes && at < routine + 0x100 && at + 6 <= size; at += 2) {
                 uint32_t length;
                 const uint32_t to = callAt(at, length);
-                if (to && to < size && !(to & 1) && to != routine) yes = leadsToDriver(to, depth - 1);
+                if (to && to < size && !(to & 1) && to != routine) yes = leadsToDriver(to, depth - 1, z80);
             }
             return leads[key] = yes;
         };
@@ -395,7 +398,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             if (op != 0x4EB9 && op != 0x4EF9 && op != 0x4EB8 && op != 0x4EF8) continue;
             uint32_t length;
             const uint32_t target = callAt(at, length);
-            if (target >= size || (target & 1) || inDriver(at) || !leadsToDriver(target, 2)) continue;
+            if (target >= size || (target & 1) || inDriver(at) || !leadsToDriver(target, 2, true)) continue;
             // The registers given a number right before (MOVE.L/MOVE.W/MOVE.B #n,Dn, MOVEQ),
             // and the number pushed last (MOVE.W/MOVE.L #n,-(A7), PEA (n).W) or put where
             // the stack has room for it already (MOVE.L/MOVE.W Dn,(A7), as C compilers do:
@@ -471,6 +474,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             Candidate c;
             c.address = routine;
             c.call = true;
+            c.z80 = !leadsToDriver(routine, 2, false);
             c.regs.fill(kKeep);
             size_t most = 0, numberAt = 0;
             for (size_t r = 0; r < 16; ++r) {
@@ -528,16 +532,17 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             c.driverTaken = static_cast<int>(list.size());
             calls.push_back(c);
         }
-        // The driver's own routines first, then the game's in front of them; those called
-        // from most places first.
+        // The driver's own routines first, then the game's in front of them, then those
+        // writing the Z80's memory; those called from most places first.
         std::sort(calls.begin(), calls.end(), [&](const Candidate& a, const Candidate& b) {
             if (inDriver(a.address) != inDriver(b.address)) return inDriver(a.address);
+            if (a.z80 != b.z80) return b.z80;
             return a.driverTaken > b.driverTaken;
         });
         std::vector<Candidate> kept;
-        int own = 0, front = 0;
+        int own = 0, front = 0, z80 = 0;
         for (const Candidate& c : calls)
-            if (inDriver(c.address) ? own++ < 4 : front++ < 4) kept.push_back(c);
+            if (inDriver(c.address) ? own++ < 4 : c.z80 ? z80++ < 2 : front++ < 4) kept.push_back(c);
         calls = std::move(kept);
     }
     // Other drivers (GEMS) take commands from a ring in the Z80's memory: the game writes a
@@ -1115,16 +1120,18 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     effects_.clear();
     int routines = 0;
     for (const Candidate& c : queues)
-        if (c.call && !stopped && routines++ < 4) stopped = tryQueue(c, true) < 0;
+        if (c.call && !c.z80 && !stopped && routines++ < 4) stopped = tryQueue(c, true) < 0;
     best = songs;
     bestEffects = effects_;
     // Then the other ways of asking, until one plays a few songs (a byte that only looked
     // like the queue may play the odd one, a number that lands on a song by chance); else
-    // the one with most.
-    int others = 0;
-    for (size_t q = 0; !stopped && q < queues.size() && others < 3 && best.size() < 4; ++q) {
-        if (queues[q].call) continue;
-        ++others;
+    // the one with most. The routines that write the Z80's memory last (Ecco's: a byte
+    // there may be the queue, written by one of them).
+    std::stable_partition(queues.begin(), queues.end(), [](const Candidate& c) { return !c.z80; });
+    int others = 0, z80s = 0;
+    for (size_t q = 0; !stopped && q < queues.size() && best.size() < 4; ++q) {
+        if (queues[q].call && !queues[q].z80) continue;
+        if (queues[q].z80 ? z80s++ >= 2 : others++ >= 3) continue;
         effects_.clear();
         stopped = tryQueue(queues[q], false) < 0;
         if (songs.size() > best.size()) {
