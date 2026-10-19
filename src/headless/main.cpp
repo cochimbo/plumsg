@@ -39,7 +39,7 @@ using namespace plumsg;
 
 namespace {
 
-const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom|--sms-test-rom> [options]
+const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom|--sms-test-rom|--gg-test-rom> [options]
 
   game                  cartridge (.md .gen .bin .smd .32x .zip) or disc (.cue .chd .iso)
   --play-vgm FILE       no game: play this .vgm or .vgz for --frames sixtieths of a
@@ -50,6 +50,7 @@ const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom|-
   --test-rom            the built-in test program (planes, sprites, scroll, a tone)
   --pad-test-rom        the built-in pad test: the backdrop shows the pressed buttons
   --sms-test-rom        the built-in Master System test (tiles, a sprite, scroll, a tone)
+  --gg-test-rom         the same for the Game Gear
   --two-pad-test-rom    the built-in two-pad test: every frame depends on all that both
                         pads pressed before it (for checking netplay)
 
@@ -550,7 +551,7 @@ int main(int argc, char** argv) {
             if (inputDelay > 10) missing = true;
         }
         else if (a.size() > 2 && a.compare(0, 2, "--") == 0 && a != "--test-rom" && a != "--pad-test-rom" &&
-                 a != "--two-pad-test-rom" && a != "--sms-test-rom") {
+                 a != "--two-pad-test-rom" && a != "--sms-test-rom" && a != "--gg-test-rom") {
             std::fprintf(stderr, "unknown option %s (see --help)\n", a.c_str());
             return 2;
         } else if (!game.empty()) {
@@ -634,6 +635,7 @@ int main(int argc, char** argv) {
     else if (game == "--pad-test-rom") md.loadRomData(testrom::buildPadTest());
     else if (game == "--two-pad-test-rom") md.loadRomData(testrom::buildTwoPadTest());
     else if (game == "--sms-test-rom") md.loadRomData(smstestrom::build());
+    else if (game == "--gg-test-rom") md.loadRomData(smstestrom::build(true));
     else {
         std::string error;
         if (!md.loadRom(game, &error)) {
@@ -929,7 +931,7 @@ int main(int argc, char** argv) {
         failures.push_back("sound hash " + hex8(audioHash) + ", expected " + hex8(expectAudio));
     if (divergence >= 0) failures.push_back("frame " + std::to_string(divergence) + ": " + divergenceWhat);
 
-    const char* system = md.hasMsuMd() ? "msu-md" : md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : md.isMasterSystem() ? "mastersystem" : "megadrive";
+    const char* system = md.hasMsuMd() ? "msu-md" : md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : md.isGameGear() ? "gamegear" : md.isMasterSystem() ? "mastersystem" : "megadrive";
     const double fps = seconds > 0 ? ran / seconds : 0;
     if (!quiet) {
         std::printf("title: %s\nsystem: %s  region: %s\nframes: %ld  size: %dx%d  hash: %08x\n",

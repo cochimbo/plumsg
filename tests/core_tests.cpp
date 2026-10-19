@@ -2142,6 +2142,63 @@ void testSmsPhase2() {
           "SMS VDP: TMS9918 Graphics I with a sprite");
 }
 
+void testGameGear() {
+    namespace st = smstestrom;
+    const std::vector<uint8_t> rom = st::build(true);
+    check(detectSystemFromData(rom) == ConsoleSystem::GameGear, "Game Gear: detected from its header");
+    MegaDrive md;
+    md.loadRomData(rom);
+    md.setSampleRate(44100);
+    check(md.isGameGear() && md.isMasterSystem(), "Game Gear: runs in its mode");
+    std::vector<int16_t> sound;
+    for (int i = 0; i < 60; ++i) {
+        md.runFrame();
+        sound.insert(sound.end(), md.audio().samples().begin(), md.audio().samples().end());
+        md.audio().clearSamples();
+    }
+    const VideoFrameMd& f = md.frame();
+    check(f.width == 160 && f.height == 144 && f.aspectLines == 144, "Game Gear: a 160x144 screen");
+    const int h = f.lines[0].hscrollB;
+    bool halves = true;
+    for (int x = 0; x < 160; ++x) halves &= f.pixel(x, 10) == (((x + st::kGgLeft - h) & 7) < 4 ? st::kRed : st::kBlue);
+    check(halves, "Game Gear: the middle of the picture, in its 12-bit colours");
+    const int sx = st::kSpriteLeft + 2 - st::kGgLeft, sy = st::kSpriteTop + 7 - st::kGgTop;
+    check(f.pixel(sx, sy) == st::kMagenta && f.pixel(sx, sy - 5) == st::kGreen &&
+              f.info[sy * VideoFrameMd::kMaxWidth + sx].layer == MdLayer::Sprite,
+          "Game Gear: the sprite and the row in front of it");
+    double left = 0, right = 0;
+    for (size_t i = 0; i + 1 < sound.size(); i += 2) {
+        left += std::abs(sound[i]);
+        right += std::abs(sound[i + 1]);
+    }
+    check(left > 100 * right + 1, "Game Gear: the PSG's stereo (left only)");
+
+    PadState p;
+    p.start = true;
+    p.b = true;
+    md.setPads(p, p);
+    md.runFrame();
+    check(md.z80Ram()[3] == 0x40 && md.z80Ram()[2] == static_cast<uint8_t>(~0x10) && md.z80Ram()[1] == 0,
+          "Game Gear: START on port 0x00, one pad, no pause button");
+    std::vector<uint8_t> state;
+    std::string error;
+    md.saveState(state);
+    std::vector<uint32_t> h1, h2;
+    for (int i = 0; i < 20; ++i) {
+        md.runFrame();
+        h1.push_back(frameHash(md.frame()));
+    }
+    check(md.loadState(state, &error), "Game Gear: state loaded");
+    for (int i = 0; i < 20; ++i) {
+        md.runFrame();
+        h2.push_back(frameHash(md.frame()));
+    }
+    check(h1 == h2, "Game Gear: the same frames after loading a state");
+    md.loadRomData(st::build());
+    md.runFrame();
+    check(!md.isGameGear() && md.frame().width == 256 && md.frame().aspectLines == 224, "Game Gear: back to a Master System");
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -2172,6 +2229,7 @@ int main() {
     testMasterSystem();
     testSmsMapper();
     testSmsPhase2();
+    testGameGear();
     testSh2();
     testMars();
     testMarsProgram();

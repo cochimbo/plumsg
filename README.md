@@ -39,8 +39,13 @@ Primera versión. Lo que hay:
   fondo con scroll por línea y bloqueos de scroll, tiles delante de los sprites, columna
   izquierda tapada, 64 sprites de 8x8 u 8x16 con zoom, interrupciones de línea y de cuadro,
   modos de 192, 224 y 240 líneas), el mapper de Sega con la RAM de cartucho (a `.sav`) y
-  los mandos: botón 1 = A o B, botón 2 = C, Start = Pausa. En el 3D el fondo va al plano
-  B, sus tiles de prioridad al plano A y los sprites a su capa.
+  los mandos: botón 1 = A o B, botón 2 = C, Start = Pausa. También el mapper de
+  Codemasters, los modos antiguos del TMS9918 (Graphics I y II, texto, sus sprites) y la
+  unidad FM (YM2413), que está en las consolas japonesas (región Japón). En el 3D el fondo
+  va al plano B, sus tiles de prioridad al plano A y los sprites a su capa.
+- **Game Gear** (`.gg`, o un `.bin` con la cabecera de Game Gear): la misma máquina con su
+  pantalla de 160x144 (la parte central de la imagen, mostrada a 4:3), su paleta de 4096
+  colores, el botón START (el Start del mando) y el sonido en estéreo.
 - **Mega CD** (`.cue` con sus `.bin` o `.wav`, `.iso`, `.chd`, o un `.bin` de una sola
   pista de datos): la segunda CPU 68000 a 12,5 MHz con su memoria de programa, la memoria
   de palabras compartida (modos de 2 y 1 Mbit, con las vistas por celdas y por puntos), la
@@ -178,9 +183,9 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   carpeta; con **Añadir carpeta...** se suman más y con **Quitar** se sacan. Cada juego
   sabe de qué consola es por su extensión: `.md`, `.gen`, `.smd` y `.bin` son de Mega
   Drive (un `.bin` con la cabecera de la 32X o de un disco se reconoce también), `.32x` de
-  32X, `.sms` de Master System, y `.cue`, `.chd` e `.iso` de Mega CD; las pistas `.bin` de
-  un `.cue` no salen aparte. Las pestañas **Todos**, **Mega Drive**, **32X**, **Mega CD** y
-  **Master System** filtran por
+  32X, `.sms` de Master System, `.gg` de Game Gear, y `.cue`, `.chd` e `.iso` de Mega CD; las pistas `.bin` de
+  un `.cue` no salen aparte. Las pestañas **Todos**, **Mega Drive**, **32X**, **Mega CD**,
+  **Master System** y **Game Gear** filtran por
   consola (con el mando, los botones L y R; con el teclado, RePág y AvPág).
   **Descargar carátulas que faltan** las busca por el nombre de cada juego (los nombres de
   No-Intro y Redump, como `Sonic The Hedgehog (USA, Europe).md`, aciertan casi siempre) en

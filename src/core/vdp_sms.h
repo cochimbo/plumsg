@@ -19,6 +19,10 @@ namespace plumsg {
 // for the few games that use them: Graphics I and II and Text, with the TMS9918's 32
 // sprites of one colour (4 per line), in its 15 colours as the Master System shows them.
 //
+// As the Game Gear's VDP (setGameGear) its colours have 12 bits, written to CRAM a
+// byte at a time, and only the middle 160x144 of the picture is seen: that is what
+// goes into the frame.
+//
 // It draws into a VideoFrameMd, the same frame the Mega Drive VDP fills, so the
 // renderers, screenshots and recordings work unchanged: the background goes to plane B,
 // its tiles with priority (where they are not colour 0) also to plane A, and the sprites
@@ -29,6 +33,13 @@ public:
 
     void reset();
     void setPal(bool pal) { pal_ = pal; }
+    void setGameGear(bool on) {
+        gameGear_ = on;
+        cacheColors();
+    }
+    bool gameGear() const { return gameGear_; }
+    // The Game Gear's screen inside the 256-pixel lines.
+    static constexpr int kGgWidth = 160, kGgHeight = 144, kGgLeft = 48;
     bool pal() const { return pal_; }
 
     // CPU ports: 0xBE data, 0xBF control, 0x7E V counter, 0x7F H counter.
@@ -57,11 +68,22 @@ public:
     uint8_t reg(int r) const { return regs_[static_cast<size_t>(r & 15)]; }
     const std::array<uint8_t, 0x4000>& vram() const { return vram_; }
     const std::array<uint8_t, 32>& cram() const { return cram_; }
+    uint32_t color(int index) const { return colors_[static_cast<size_t>(index & 31)]; }
 
     template <class Ar>
     void state(Ar& ar) {
         ar(vram_, cram_, regs_, pendingControl_, code_, addr_, latch_, readBuffer_, line_, lineCounter_, frameIrq_,
            lineIrq_, spriteOverflow_, spriteCollision_, vscrollLatch_, pal_, frameNumber_);
+        if constexpr (Ar::kLoading) {
+            cramHigh_.fill(0);  // until gameGearState() says otherwise
+            cramLatch_ = 0;
+            cacheColors();
+        }
+    }
+    // What the Game Gear added, kept apart so that older states still load.
+    template <class Ar>
+    void gameGearState(Ar& ar) {
+        ar(cramHigh_, cramLatch_);
         if constexpr (Ar::kLoading) cacheColors();
     }
 
@@ -69,11 +91,15 @@ private:
     void cacheColors();
     void renderLine(int line);
     void renderLineTms(int line);
+    void cropGameGear(int line);
     bool mode4() const { return (regs_[0] & 0x04) != 0; }
     uint16_t nameTableBase() const;
 
     std::array<uint8_t, 0x4000> vram_{};
-    std::array<uint8_t, 32> cram_{};
+    std::array<uint8_t, 32> cram_{};      // on the Game Gear, the low byte of each colour
+    std::array<uint8_t, 32> cramHigh_{};  // the Game Gear's high bytes (blue)
+    uint8_t cramLatch_ = 0;               // the Game Gear's low byte, until the high one comes
+    bool gameGear_ = false;
     std::array<uint8_t, 16> regs_{};
     bool pendingControl_ = false;  // first byte of a command written
     uint8_t code_ = 0;

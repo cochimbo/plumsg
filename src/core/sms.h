@@ -24,9 +24,15 @@ namespace plumsg {
 // Codemasters mapper (told by the checksum in its own header at 0x7FE0): the three
 // slots are picked by writes to 0x0000, 0x4000 and 0x8000, the first one too, and bit 7
 // of the 0x4000 write puts 8 KB of cartridge RAM at 0xA000-0xBFFF (Ernie Els Golf).
+//
+// The Game Gear is the same machine in a handheld: with `gameGear` its VDP has the
+// Game Gear's colours and screen, port 0x00 has the START button and the region, ports
+// 0x01-0x05 the link cable (nothing plugged in), and there is one pad and no pause
+// button. The PSG's stereo (port 0x06) the console handles, as it has the PSG.
 class MasterSystem {
 public:
-    MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame);
+    MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame, bool gameGear = false);
+    bool gameGear() const { return gameGear_; }
 
     void powerOn();  // clears the VDP and the mapper
     void reset();
@@ -38,7 +44,8 @@ public:
     uint8_t in(uint8_t port, int cycle);
     void out(uint8_t port, uint8_t value);
 
-    // Mega Drive pads: B and A are button 1, C is button 2. Start is the pause button,
+    // Mega Drive pads: B and A are button 1, C is button 2. Start is the pause button (on
+    // the Game Gear, its START),
     // which makes an NMI when pressed: pausePressed(), called once a frame, says whether
     // it went down since the last frame.
     void setPads(const PadState& p1, const PadState& p2) {
@@ -46,6 +53,7 @@ public:
         pads_[1] = p2;
     }
     bool pausePressed() {
+        if (gameGear_) return false;
         const bool pressed = pads_[0].start && !pause_;
         pause_ = pads_[0].start;
         return pressed;
@@ -81,6 +89,10 @@ public:
             if (ar.atEnd()) return;
         }
         ar(fmControl_);
+        if constexpr (Ar::kLoading) {
+            if (ar.atEnd()) return;
+        }
+        vdp_.gameGearState(ar);
     }
 
 private:
@@ -93,6 +105,7 @@ private:
     VdpSms vdp_;
     std::array<uint8_t, 4> mapper_{0, 0, 1, 2};
     bool codemasters_ = false;
+    bool gameGear_ = false;
     uint8_t ioControl_ = 0xFF;    // port 0x3F
     uint8_t memoryControl_ = 0;   // port 0x3E
     std::array<PadState, 2> pads_{};

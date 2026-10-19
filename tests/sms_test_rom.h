@@ -9,6 +9,10 @@
 //   0xC000  frames counted by the interrupt (the horizontal scroll)
 //   0xC001  presses of the pause button (NMI)
 //   0xC002  port 0xDC as last read: the first pad, active low
+//   0xC003  port 0x00 as last read (Game Gear: START in bit 7, active low)
+// Built for the Game Gear it loads the same colours in its 12-bit palette, plays the
+// tone on the left only, and says Game Gear in its header; the Game Gear shows the
+// middle 160x144 of the picture, from column 48 and line 24.
 
 #include <cstdint>
 #include <initializer_list>
@@ -22,8 +26,9 @@ constexpr uint32_t kRed = 0xFFFF0000, kBlue = 0xFF0000FF, kGreen = 0xFF00FF00, k
 constexpr int kGreenRowTop = 80;   // lines 80-87
 constexpr int kSpriteTop = 81;     // lines 81-88, columns 128-135
 constexpr int kSpriteLeft = 128;
+constexpr int kGgLeft = 48, kGgTop = 24;
 
-inline std::vector<uint8_t> build() {
+inline std::vector<uint8_t> build(bool gameGear = false) {
     std::vector<uint8_t> rom(0x8000, 0xFF);
     size_t pc = 0;
     auto emit = [&](std::initializer_list<int> bytes) {
@@ -34,7 +39,7 @@ inline std::vector<uint8_t> build() {
     auto lo = [](size_t v) { return static_cast<int>(v & 0xFF); };
     auto hi = [](size_t v) { return static_cast<int>((v >> 8) & 0xFF); };
 
-    constexpr size_t kMain = 0x0100, kRegs = 0x0400, kPalette = 0x0420, kTiles = 0x0440, kSpriteTile = 0x04A0;
+    constexpr size_t kMain = 0x0100, kRegs = 0x0400, kPalette = 0x0420, kTiles = 0x0480, kSpriteTile = 0x04E0;
 
     at(0x0000);
     emit({0xF3, 0xED, 0x56, 0x31, 0xF0, 0xDF, 0xC3, lo(kMain), hi(kMain)});  // di; im 1; ld sp,0xDFF0; jp main
@@ -53,7 +58,7 @@ inline std::vector<uint8_t> build() {
     at(kMain);
     emit({0x21, lo(kRegs), hi(kRegs), 0x06, 22, 0x0E, 0xBF, 0xED, 0xB3});  // registers: ld hl; ld b; ld c; otir
     emit({0x3E, 0x00, 0xD3, 0xBF, 0x3E, 0xC0, 0xD3, 0xBF});                // CRAM address 0
-    emit({0x21, lo(kPalette), hi(kPalette), 0x06, 32, 0x0E, 0xBE, 0xED, 0xB3});
+    emit({0x21, lo(kPalette), hi(kPalette), 0x06, gameGear ? 64 : 32, 0x0E, 0xBE, 0xED, 0xB3});
     emit({0x3E, 0x20, 0xD3, 0xBF, 0x3E, 0x40, 0xD3, 0xBF});                // VRAM 0x0020: tiles 1 and 2
     emit({0x21, lo(kTiles), hi(kTiles), 0x06, 64, 0x0E, 0xBE, 0xED, 0xB3});
     emit({0x3E, 0x60, 0xD3, 0xBF, 0x3E, 0x60, 0xD3, 0xBF});                // VRAM 0x2060: sprite tile 0x103
@@ -73,10 +78,12 @@ inline std::vector<uint8_t> build() {
     emit({0x3E, 0x80, 0xD3, 0xBF, 0x3E, 0x7F, 0xD3, 0xBF, 0x3E, kSpriteLeft, 0xD3, 0xBE, 0x3E, 0x03, 0xD3, 0xBE});
     // A tone on the PSG's first channel, at full volume.
     emit({0x3E, 0x8E, 0xD3, 0x7F, 0x3E, 0x0F, 0xD3, 0x7F, 0x3E, 0x90, 0xD3, 0x7F});
+    if (gameGear) emit({0x3E, 0xF0, 0xD3, 0x06});  // left speaker only
     // Display and frame interrupt on.
     emit({0x3E, 0xE0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, 0xFB});
     const size_t loop = pc;
     emit({0xDB, 0xDC, 0x32, 0x02, 0xC0});  // in a,(0xDC); ld (0xC002),a
+    emit({0xDB, 0x00, 0x32, 0x03, 0xC0});  // in a,(0x00); ld (0xC003),a
     emit({0x18, jrBack(loop) & 0xFF});
 
     // Registers 0-10 (value, then 0x80 | number): mode 4 with the left column masked,
@@ -87,8 +94,16 @@ inline std::vector<uint8_t> build() {
           0x00, 0x88, 0x00, 0x89, 0xFF, 0x8A});
     // Palette: blue, red, green, white; sprites: black, yellow, magenta.
     at(kPalette);
-    emit({0x30, 0x03, 0x0C, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
-    emit({0x00, 0x0F, 0x33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+    if (gameGear) {
+        // Two bytes a colour: green and red, then blue.
+        emit({0x00, 0x0F, 0x0F, 0x00, 0xF0, 0x00, 0xFF, 0x0F});
+        for (int i = 4; i < 16; ++i) emit({0, 0});
+        emit({0x00, 0x00, 0xFF, 0x00, 0x0F, 0x0F});
+        for (int i = 3; i < 16; ++i) emit({0, 0});
+    } else {
+        emit({0x30, 0x03, 0x0C, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+        emit({0x00, 0x0F, 0x33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+    }
     // Tile 1: left half colour 1, right half colour 0. Tile 2 and the sprite: colour 2.
     at(kTiles);
     for (int y = 0; y < 8; ++y) emit({0xF0, 0x00, 0x00, 0x00});
@@ -96,10 +111,10 @@ inline std::vector<uint8_t> build() {
     at(kSpriteTile);
     for (int y = 0; y < 8; ++y) emit({0x00, 0xFF, 0x00, 0x00});
 
-    // Header: export Master System, 32 KB.
+    // Header: export Master System (or international Game Gear), 32 KB.
     at(0x7FF0);
     for (char c : {'T', 'M', 'R', ' ', 'S', 'E', 'G', 'A'}) emit({c});
-    emit({0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C});
+    emit({0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, gameGear ? 0x7C : 0x4C});
     return rom;
 }
 

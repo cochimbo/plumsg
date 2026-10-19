@@ -1,10 +1,14 @@
 #include "vdp_sms.h"
 
+#include <algorithm>
+
 namespace plumsg {
 
 void VdpSms::reset() {
     vram_.fill(0);
     cram_.fill(0);
+    cramHigh_.fill(0);
+    cramLatch_ = 0;
     // What the BIOS leaves in the registers before it starts the cartridge: some games
     // count on it, since they do not set every register.
     static constexpr uint8_t kBiosRegs[16] = {0x36, 0x80, 0xFF, 0xFF, 0xFF, 0xFF, 0xFB, 0x00,
@@ -25,6 +29,11 @@ void VdpSms::reset() {
 
 void VdpSms::cacheColors() {
     for (size_t i = 0; i < 32; ++i) {
+        if (gameGear_) {
+            const uint32_t r = (cram_[i] & 0x0F) * 17u, g = (cram_[i] >> 4) * 17u, b = (cramHigh_[i] & 0x0F) * 17u;
+            colors_[i] = 0xFF000000u | r << 16 | g << 8 | b;
+            continue;
+        }
         const uint8_t c = cram_[i];
         const uint32_t r = (c & 3) * 85u, g = ((c >> 2) & 3) * 85u, b = ((c >> 4) & 3) * 85u;
         colors_[i] = 0xFF000000u | r << 16 | g << 8 | b;
@@ -41,7 +50,16 @@ uint8_t VdpSms::readData() {
 
 void VdpSms::writeData(uint8_t value) {
     pendingControl_ = false;
-    if (code_ == 3) {
+    if (code_ == 3 && gameGear_) {
+        // A colour is two bytes: the first waits for the second.
+        if (!(addr_ & 1)) {
+            cramLatch_ = value;
+        } else {
+            cram_[(addr_ >> 1) & 0x1F] = cramLatch_;
+            cramHigh_[(addr_ >> 1) & 0x1F] = value & 0x0F;
+            cacheColors();
+        }
+    } else if (code_ == 3) {
         cram_[addr_ & 0x1F] = value & 0x3F;
         cacheColors();
     } else {
@@ -137,14 +155,16 @@ void VdpSms::startLine(int line, bool draw) {
     const int active = activeLines();
     if (line == 0) {
         vscrollLatch_ = regs_[9];
-        frame_.width = 256;
+        frame_.width = gameGear_ ? kGgWidth : 256;
         frame_.wide = 0;
-        frame_.height = active;
+        frame_.height = gameGear_ ? kGgHeight : active;
         frame_.interlaced = false;
+        frame_.aspectLines = gameGear_ ? kGgHeight : 224;
     }
     if (line < active && (draw || (regs_[1] & 0x40))) {  // the sprite flags need the line even unseen
         if (mode4()) renderLine(line);
         else renderLineTms(line);
+        if (gameGear_) cropGameGear(line);
     }
     // The line counter runs on the active lines and the one after them, and is reloaded
     // on every other line.
@@ -392,6 +412,26 @@ void VdpSms::renderLineTms(int line) {
             }
         }
     }
+}
+
+// The Game Gear shows the middle of the picture: line `line` moves up to its place on
+// the 160x144 screen (lines above it have already moved, so nothing is lost).
+void VdpSms::cropGameGear(int line) {
+    VideoFrameMd& f = frame_;
+    const int top = (activeLines() - kGgHeight) / 2;
+    const int row = line - top;
+    if (row < 0 || row >= kGgHeight) return;
+    const int from = line * VideoFrameMd::kMaxWidth + kGgLeft, to = row * VideoFrameMd::kMaxWidth;
+    for (auto* layer : {&f.rgba, &f.planeA, &f.planeB, &f.sprites}) {
+        std::copy_n(layer->begin() + from, kGgWidth, layer->begin() + to);
+        std::fill_n(layer->begin() + to + kGgWidth, VideoFrameMd::kMaxWidth - kGgWidth, 0u);
+    }
+    for (auto* layer : {&f.info, &f.planeAInfo, &f.planeBInfo, &f.spriteInfo}) {
+        std::copy_n(layer->begin() + from, kGgWidth, layer->begin() + to);
+        std::fill_n(layer->begin() + to + kGgWidth, VideoFrameMd::kMaxWidth - kGgWidth, MdPixel{});
+    }
+    f.backdrop[static_cast<size_t>(row)] = f.backdrop[static_cast<size_t>(line)];
+    f.lines[static_cast<size_t>(row)] = f.lines[static_cast<size_t>(line)];
 }
 
 }  // namespace plumsg
