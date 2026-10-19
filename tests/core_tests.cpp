@@ -323,6 +323,62 @@ void testVdpSpriteLimit() {
           "VDP: past the 320 pixels without the limit, same status");
 }
 
+void testVdpWidescreen() {
+    // 16:9 adds 53 columns on each side in H40 (43 in H32), drawn from the plane and the
+    // sprites past the edges. The console's own 320 columns stay as they were.
+    auto render = [](int aspectW, int aspectH, bool h40) {
+        auto vdp = std::make_unique<VdpMd>();
+        vdp->reset();
+        vdp->setWidescreen(aspectW, aspectH);
+        vdp->writeControl(0x8144);                // display on
+        vdp->writeControl(h40 ? 0x8C81 : 0x8C00);  // H40 or H32
+        vdp->writeControl(0x8230);                // plane A at 0xC000
+        vdp->writeControl(0x8578);                // sprite table at 0xF000
+        vdp->writeControl(0x9001);                // 64x32 planes
+        vdp->writeControl(0x8F02);
+        auto at = [&](uint32_t addr) {
+            vdp->writeControl(static_cast<uint16_t>(0x4000 | (addr & 0x3FFF)));
+            vdp->writeControl(static_cast<uint16_t>(addr >> 14));
+        };
+        at(0x20);  // tile 1: colour 1 everywhere
+        for (int i = 0; i < 16; ++i) vdp->writeData(0x1111);
+        vdp->writeControl(0xC002);  // CRAM colour 1
+        vdp->writeControl(0x0000);
+        vdp->writeData(0x0EEE);
+        at(0xC000 + 63 * 2);  // plane A: tile 1 in the last column of row 0 only (x 504..511)
+        vdp->writeData(0x0001);
+        at(0xF000);  // one sprite with its left edge 16 pixels past the right of the screen
+        vdp->writeData(128);
+        vdp->writeData(0x0000);
+        vdp->writeData(0x0001);
+        vdp->writeData(static_cast<uint16_t>(128 + (h40 ? 320 : 256) + 16));
+        vdp->renderLine(0);
+        return vdp;
+    };
+    auto layer = [](const VdpMd& v, int x) { return v.frame().info[x].layer; };
+
+    auto off = render(0, 0, true);
+    check(off->frame().width == 320 && off->frame().wide == 0, "VDP widescreen: off by default");
+    auto wide = render(16, 9, true);
+    const VideoFrameMd& f = wide->frame();
+    check(f.width == 426 && f.wide == 53, "VDP widescreen: 16:9 in H40 is 426 pixels, 53 on each side");
+    // Plane x 504..511 is screen x -8..-1: only the widescreen columns show it.
+    check(layer(*off, 0) == MdLayer::Backdrop && layer(*wide, 53 - 8) == MdLayer::PlaneA &&
+              layer(*wide, 53 - 1) == MdLayer::PlaneA && layer(*wide, 53) == MdLayer::Backdrop,
+          "VDP widescreen: the plane past the left edge");
+    check(layer(*wide, 53 + 336) == MdLayer::Sprite && layer(*wide, 53 + 335) == MdLayer::Backdrop,
+          "VDP widescreen: a sprite past the right edge");
+    bool same = true;
+    for (int x = 0; x < 320; ++x) same &= off->frame().rgba[x] == f.rgba[53 + x];
+    check(same, "VDP widescreen: the console's own picture is the same");
+
+    auto narrow = render(16, 9, false);
+    check(narrow->frame().width == 342 && narrow->frame().wide == 43 && layer(*narrow, 43 + 272) == MdLayer::Sprite,
+          "VDP widescreen: 16:9 in H32 is 342 pixels");
+    auto tall = render(16, 10, true);
+    check(tall->frame().width == 384 && tall->frame().wide == 32, "VDP widescreen: 16:10 in H40 is 384 pixels");
+}
+
 void testTestRom() {
     MegaDrive md;
     md.loadRomData(testrom::build());
@@ -1820,6 +1876,7 @@ int main() {
     testVdpHblankFlag();
     testVdpFillScrollTable();
     testVdpSpriteLimit();
+    testVdpWidescreen();
     testTestRom();
     testStates();
     testRewindBuffer();

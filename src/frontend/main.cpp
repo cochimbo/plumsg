@@ -327,9 +327,15 @@ bool captureWindow(SDL_Window* window, const std::string& path) {
     return writeFile(path, bytes);
 }
 
-// Window size for a scale factor: 4:3 at 224 lines per scale step, plus the menu bar.
-void applyWindowScale(SDL_Window* window, int scale, int menuHeight) {
-    SDL_SetWindowSize(window, 299 * scale, 224 * scale + menuHeight);
+// Width of the picture at 224 lines: 4:3, or as wide as the widescreen option makes it.
+int pictureWidth(int widescreen) {
+    const Widescreen& w = kWidescreens[std::clamp(widescreen, 0, kWidescreenCount - 1)];
+    return 224 * w.w / w.h;
+}
+
+// Window size for a scale factor: the picture at 224 lines per scale step, plus the menu bar.
+void applyWindowScale(SDL_Window* window, int scale, int menuHeight, int widescreen) {
+    SDL_SetWindowSize(window, pictureWidth(widescreen) * scale, 224 * scale + menuHeight);
 }
 
 struct CommandLine {
@@ -500,7 +506,7 @@ int main(int argc, char** argv) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_Window* window = SDL_CreateWindow("plumsg", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          299 * settings.windowScale, 224 * settings.windowScale,
+                                          pictureWidth(settings.widescreen) * settings.windowScale, 224 * settings.windowScale,
                                           SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
@@ -850,8 +856,10 @@ int main(int argc, char** argv) {
         ui->openNetplay();  // shows how the connection goes
     }
     while (running) {
-        // Only the picture changes with it, so it can follow the menus at any frame.
+        // Only the picture changes with them, so they can follow the menus at any frame.
         app->console.vdp().setUnlimitedSprites(settings.unlimitedSprites);
+        const Widescreen& wide = kWidescreens[std::clamp(settings.widescreen, 0, kWidescreenCount - 1)];
+        app->console.vdp().setWidescreen(settings.widescreen ? wide.w : 0, wide.h);
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             input->handleEvent(e);  // first, so it sees every trigger pull and release
@@ -1026,7 +1034,7 @@ int main(int argc, char** argv) {
         if (act.togglePause && !netBusy) paused = !paused;
         if (act.quit) running = false;
         if (act.fullscreenChanged) setFullscreen();
-        if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight());
+        if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight(), settings.widescreen);
         if (act.saveState >= 0) saveState(act.saveState);
         if (act.loadState >= 0 && !netBusy) loadState(act.loadState);
         if (act.consoleChanged && !netBusy) {
@@ -1083,7 +1091,7 @@ int main(int argc, char** argv) {
         if (act.assignmentsChanged && app->romLoaded) applyInstruments(app->romPath);
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
         if (!sizedForMenu && !settings.fullscreen) {
-            applyWindowScale(window, settings.windowScale, ui->menuHeight());
+            applyWindowScale(window, settings.windowScale, ui->menuHeight(), settings.widescreen);
             sizedForMenu = true;
         }
 

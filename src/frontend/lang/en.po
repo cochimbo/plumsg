@@ -808,6 +808,17 @@ msgstr "They cannot be changed in a netplay game."
 msgid "Encontradas %d de 3."
 msgstr "Found %d of 3."
 
+msgid ""
+"Enseña a los lados lo que el juego tiene más allá de los bordes de la pantalla.\n"
+"En muchos juegos se ve bien; en otros aparecen enemigos antes de tiempo, trozos\n"
+"del nivel sin dibujar o cosas que se esconden fuera. El juego no lo nota, así que\n"
+"no afecta a partidas en red, logros ni estados. Mejor por juego, en Opciones de este juego."
+msgstr ""
+"Shows at the sides what the game has past the edges of the screen.\n"
+"Many games look fine; in others enemies appear early, bits of the\n"
+"level are not drawn yet or things hidden off screen show up. The game does not notice, so\n"
+"netplay, achievements and states are not affected. Best set per game, in Options for this game."
+
 msgid "Enviando la partida al otro jugador..."
 msgstr "Sending the game to the other player..."
 
@@ -1385,6 +1396,9 @@ msgstr "No game matches the search."
 msgid "Ningún truco tiene ese nombre."
 msgstr "No cheat has that name."
 
+msgid "No (4:3, como la consola)"
+msgstr "No (4:3, like the console)"
+
 msgid "No es un archivo VGM."
 msgstr "It is not a VGM file."
 
@@ -1568,6 +1582,9 @@ msgstr "Hand clap"
 
 msgid "Pandereta"
 msgstr "Tambourine"
+
+msgid "Pantalla ancha"
+msgstr "Widescreen"
 
 msgid "Pantalla completa"
 msgstr "Full screen"

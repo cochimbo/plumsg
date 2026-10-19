@@ -41,9 +41,10 @@ struct RenderOptions {
 };
 
 // Width on screen of one pixel, for a line height of 1. The TV shows 224 lines at 4:3
-// whatever the horizontal resolution (PAL's 240 lines just take more of the screen).
+// whatever the horizontal resolution (PAL's 240 lines just take more of the screen);
+// the widescreen columns are as wide as the console's own.
 inline float pixelAspect(const VideoFrameMd& frame, bool squarePixels) {
-    return squarePixels ? 1.0f : 224.0f * 4.0f / 3.0f / static_cast<float>(frame.width);
+    return squarePixels ? 1.0f : 224.0f * 4.0f / 3.0f / static_cast<float>(frame.width - 2 * frame.wide);
 }
 
 // Where to draw, in OpenGL window coordinates (origin at the bottom left).

@@ -91,12 +91,31 @@ void testSpriteLimitOption() {
     check(again.unlimitedSprites, "sin límite de sprites: plumsg.ini lo guarda");
 }
 
+void testWidescreenOption() {
+    const Settings general;
+    const InputConfig generalInput = InputConfig::defaults();
+    check(general.widescreen == 0, "pantalla ancha: desactivada si no se dice");
+    const GameOverrides o = parseGameOverrides("[video]\npantalla_ancha = 16:9\n", general, generalInput);
+    check(o.has("pantalla_ancha") && o.values.widescreen == 2, "pantalla ancha: un juego con su propio valor");
+    const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
+    check(back.has("pantalla_ancha") && back.values.widescreen == 2, "pantalla ancha: se guarda y se lee igual en el juego");
+    Settings s;
+    s.widescreen = 1;
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.widescreen == 1, "pantalla ancha: plumsg.ini lo guarda");
+}
+
 }  // namespace
 
 int main() {
     testGameControls();
     testRunAheadOption();
     testSpriteLimitOption();
+    testWidescreenOption();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

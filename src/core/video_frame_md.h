@@ -27,11 +27,15 @@ struct MdPixel {
 // that line and with shadow/highlight applied, so mid-frame palette changes survive
 // in 3D too.
 struct VideoFrameMd {
-    static constexpr int kMaxWidth = 320;
+    // 320 plus what the widescreen option adds on each side (VdpMd::kMaxWideColumns).
+    static constexpr int kMaxWidth = 432;
     static constexpr int kMaxHeight = 480;  // 240 lines, doubled in interlace mode 2
     static constexpr int kPixels = kMaxWidth * kMaxHeight;
 
-    int width = 320;    // 256 (H32) or 320 (H40)
+    int width = 320;    // 256 (H32) or 320 (H40), plus `wide` on each side
+    // Columns the widescreen option adds on each side: picture the console never shows,
+    // drawn from the planes and sprites past its edges. 0 without the option.
+    int wide = 0;
     int height = 224;   // 224 or 240; 448 or 480 in interlace mode 2
     bool interlaced = false;
 

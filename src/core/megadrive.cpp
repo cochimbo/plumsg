@@ -730,15 +730,15 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         // one from before, so keep the loaded state's thumbnail.
         block("THMB", loadedThumbnail_);
     } else {
-        // Thumbnail: the 2D picture at half size.
+        // Thumbnail: the 2D picture at half size, without the widescreen columns.
         const VideoFrameMd& f = vdp_.frame();
         const int step = f.interlaced ? 2 : 1;
-        uint16_t tw = static_cast<uint16_t>(f.width / 2), th = static_cast<uint16_t>(f.height / step / 2);
+        uint16_t tw = static_cast<uint16_t>((f.width - 2 * f.wide) / 2), th = static_cast<uint16_t>(f.height / step / 2);
         StateWriter w;
         w(tw, th);
         for (int y = 0; y < th; ++y)
             for (int x = 0; x < tw; ++x) {
-                uint32_t c = f.pixel(x * 2, y * 2 * step) & 0xFFFFFF;
+                uint32_t c = f.pixel(f.wide + x * 2, y * 2 * step) & 0xFFFFFF;
                 uint8_t rgb[3] = {static_cast<uint8_t>(c >> 16), static_cast<uint8_t>(c >> 8), static_cast<uint8_t>(c)};
                 w.raw(rgb, 3);
             }

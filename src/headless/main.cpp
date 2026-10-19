@@ -55,6 +55,7 @@ Running
   --region jp|us|eu     force the console's region (default: what the game says)
   --six-button          6-button pads instead of 3-button ones
   --no-sprite-limit     draw every sprite on a line (the option against flicker)
+  --widescreen W:H      draw the picture W:H wide (16:9, 16:10) instead of 4:3
   --bios FILE           Mega CD BIOS; its region comes from its header (else: all)
   --bios-dir DIR        look for Mega CD BIOS files in DIR and its subfolders
   --load-state FILE     start from this savestate (after loading the game)
@@ -454,6 +455,7 @@ int main(int argc, char** argv) {
     long frames = 600, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
     bool netHost = false;
     std::string netJoin;
+    int wideW = 0, wideH = 0;
     bool sixButton = false, noSpriteLimit = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
     uint32_t expectHash = 0, expectAudio = 0;
     Region region = Region::Auto;
@@ -495,6 +497,10 @@ int main(int argc, char** argv) {
         } else if (a == "--pal") region = Region::EuropePal;
         else if (a == "--six-button") sixButton = true;
         else if (a == "--no-sprite-limit") noSpriteLimit = true;
+        else if (a == "--widescreen") {
+            const std::string v = next();
+            if (std::sscanf(v.c_str(), "%d:%d", &wideW, &wideH) != 2 || wideW <= 0 || wideH <= 0) missing = true;
+        }
         else if (a == "--bios") bios.push_back(next());
         else if (a == "--bios-dir") biosDir = next();
         else if (a == "--load-state") stateIn = next();
@@ -591,6 +597,7 @@ int main(int argc, char** argv) {
     md.setRegion(region);
     for (int p = 0; p < 2; ++p) md.setPadType(p, sixButton ? PadType::SixButton : PadType::ThreeButton);
     md.vdp().setUnlimitedSprites(noSpriteLimit);
+    md.vdp().setWidescreen(wideW, wideH);
     static const Region kRegions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
     if (!biosDir.empty()) {
         const auto found = findCdBios({biosDir});

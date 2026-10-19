@@ -808,6 +808,17 @@ msgstr "Ils ne peuvent pas être modifiés pendant une partie en réseau."
 msgid "Encontradas %d de 3."
 msgstr "%d trouvés sur 3."
 
+msgid ""
+"Enseña a los lados lo que el juego tiene más allá de los bordes de la pantalla.\n"
+"En muchos juegos se ve bien; en otros aparecen enemigos antes de tiempo, trozos\n"
+"del nivel sin dibujar o cosas que se esconden fuera. El juego no lo nota, así que\n"
+"no afecta a partidas en red, logros ni estados. Mejor por juego, en Opciones de este juego."
+msgstr ""
+"Montre sur les côtés ce que le jeu a au-delà des bords de l'écran.\n"
+"Beaucoup de jeux s'affichent bien ; dans d'autres, des ennemis apparaissent trop tôt, des morceaux\n"
+"du niveau ne sont pas dessinés ou des choses cachées hors champ se voient. Le jeu ne s'en aperçoit pas, donc\n"
+"cela n'affecte ni le jeu en réseau, ni les succès, ni les états. Mieux par jeu, dans Options de ce jeu."
+
 msgid "Enviando la partida al otro jugador..."
 msgstr "Envoi de la partie à l'autre joueur..."
 
@@ -1385,6 +1396,9 @@ msgstr "Aucun jeu ne correspond à la recherche."
 msgid "Ningún truco tiene ese nombre."
 msgstr "Aucun code n'a ce nom."
 
+msgid "No (4:3, como la consola)"
+msgstr "Non (4:3, comme la console)"
+
 msgid "No es un archivo VGM."
 msgstr "Ce n'est pas un fichier VGM."
 
@@ -1568,6 +1582,9 @@ msgstr "Claquement de mains"
 
 msgid "Pandereta"
 msgstr "Tambourin"
+
+msgid "Pantalla ancha"
+msgstr "Écran large"
 
 msgid "Pantalla completa"
 msgstr "Plein écran"

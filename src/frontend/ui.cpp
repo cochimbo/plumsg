@@ -59,6 +59,9 @@ std::string shortCode(const std::string& code) {
 }
 
 // ImGui::Combo with its items translated.
+// The choices of Pantalla ancha, in the order of kWidescreens.
+const char* const kWidescreenNames[kWidescreenCount] = {N_("No (4:3, como la consola)"), "16:10", "16:9"};
+
 bool comboTr(const char* label, int* current, const char* const items[], int count) {
     std::vector<const char*> shown(items, items + count);
     for (const char*& item : shown) item = tr(item);
@@ -826,6 +829,12 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
                           "cada fotograma y por eso parpadean. Así se ven todos. El juego no lo nota, así que\n"
                           "no afecta a partidas en red, logros ni estados. Si un juego parpadea igual, es que\n"
                           "lo hace él mismo."));
+    changed |= comboTr(tr("Pantalla ancha"), &settings_.widescreen, kWidescreenNames, kWidescreenCount);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Enseña a los lados lo que el juego tiene más allá de los bordes de la pantalla.\n"
+                          "En muchos juegos se ve bien; en otros aparecen enemigos antes de tiempo, trozos\n"
+                          "del nivel sin dibujar o cosas que se esconden fuera. El juego no lo nota, así que\n"
+                          "no afecta a partidas en red, logros ni estados. Mejor por juego, en Opciones de este juego."));
     int filter = static_cast<int>(settings_.render.filter);
     ImGui::TextUnformatted(tr("Filtro 2D:"));
     ImGui::SameLine();
@@ -2070,6 +2079,8 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             edited |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &s.render.squarePixels);
         } else if (key == "sin_limite_sprites") {
             edited |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &s.unlimitedSprites);
+        } else if (key == "pantalla_ancha") {
+            edited |= comboTr(tr(opt.label), &s.widescreen, kWidescreenNames, kWidescreenCount);
         } else if (key == "perfil_3d") {
             ImGui::TextUnformatted(tr(opt.label));
             ImGui::SameLine();
