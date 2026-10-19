@@ -70,6 +70,46 @@ bool decodeGenie(const std::string& letters, CheatPatch* out) {
     return true;
 }
 
+bool decodeSmsCheat(const std::string& s, CheatPatch* out, std::string* error) {
+    auto fail = [&](const char* message) {
+        if (error) *error = message;
+        return false;
+    };
+    std::string digits;
+    for (char c : s)
+        if (c != '-') digits += c;
+    if (!allHex(digits))
+        return fail(tr("Los códigos de Master System y Game Gear son de cifras hexadecimales: 00C0-1205 (Action "
+                       "Replay) o 3A8-6CF-E66 (Game Genie)."));
+    CheatPatch p;
+    p.byte = true;
+    if (digits.size() == 8) {
+        // Action Replay: 00, the address, the byte.
+        p.address = parseHex(digits.substr(2, 4));
+        p.value = static_cast<uint16_t>(parseHex(digits.substr(6, 2)));
+        if (p.address < 0xC000) return fail(tr("Un código Action Replay de Master System escribe en la RAM (C000-DFFF)."));
+        *out = p;
+        return true;
+    }
+    if (digits.size() == 6 || digits.size() == 9) {
+        // Game Genie: value, the address's low 12 bits, its high 4 bits inverted, and
+        // optionally the byte it replaces, scrambled.
+        auto h = [&](size_t i) { return static_cast<uint32_t>(hexValue(digits[i])); };
+        p.value = static_cast<uint16_t>(h(0) << 4 | h(1));
+        p.address = h(2) << 8 | h(3) << 4 | h(4) | (h(5) ^ 0xF) << 12;
+        if (digits.size() == 9) {
+            uint32_t ref = h(6) << 4 | h(8);
+            ref = ((ref >> 2) | (ref << 6)) & 0xFF;
+            p.compare = static_cast<int>(ref ^ 0xBA);
+        }
+        if (p.address >= 0xC000) return fail(tr("El código Game Genie apunta fuera de la ROM."));
+        *out = p;
+        return true;
+    }
+    return fail(tr("Los códigos de Master System y Game Gear son de cifras hexadecimales: 00C0-1205 (Action "
+                   "Replay) o 3A8-6CF-E66 (Game Genie)."));
+}
+
 }  // namespace
 
 std::string normalizeCheat(const std::string& code) {
@@ -99,13 +139,14 @@ std::string encodeGameGenie(uint32_t address, uint16_t value) {
     return s;
 }
 
-bool decodeCheat(const std::string& code, CheatPatch* out, std::string* error) {
+bool decodeCheat(const std::string& code, CheatPatch* out, std::string* error, bool masterSystem) {
     auto fail = [&](const char* message) {
         if (error) *error = message;
         return false;
     };
     const std::string s = normalizeCheat(code);
     if (s.empty()) return fail(tr("Escribe un código."));
+    if (masterSystem) return decodeSmsCheat(s, out, error);
 
     // Action Replay: 6 hex digits of address, then 4 (a word) or 2 (a byte) of value,
     // with or without a ':' between them. Eight hex digits with no separator are only
@@ -154,7 +195,7 @@ bool decodeCheat(const std::string& code, CheatPatch* out, std::string* error) {
     return true;
 }
 
-bool decodeCheatCodes(const std::string& code, std::vector<CheatPatch>* out, std::string* error) {
+bool decodeCheatCodes(const std::string& code, std::vector<CheatPatch>* out, std::string* error, bool masterSystem) {
     out->clear();
     const std::string s = normalizeCheat(code);
     size_t start = 0;
@@ -163,7 +204,7 @@ bool decodeCheatCodes(const std::string& code, std::vector<CheatPatch>* out, std
         if (plus == std::string::npos) plus = s.size();
         if (plus > start) {
             CheatPatch p;
-            if (!decodeCheat(s.substr(start, plus - start), &p, error)) {
+            if (!decodeCheat(s.substr(start, plus - start), &p, error, masterSystem)) {
                 out->clear();
                 return false;
             }

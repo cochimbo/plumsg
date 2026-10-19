@@ -109,6 +109,8 @@ void Settings::parse(std::istream& in, Settings& s) {
                     if (lower(value) == kRegionNames[i]) s.region = static_cast<Region>(i);
             } else if (key == "mando1" || key == "mando2") {
                 s.padType[key == "mando1" ? 0 : 1] = value == "3" ? PadType::ThreeButton : PadType::SixButton;
+            } else if (key == "fm_master_system") {
+                s.smsFm = yes(value);
             } else if (key == "overclock") {
                 s.overclock = std::clamp(std::atoi(value.c_str()), 100, kMaxOverclock);
             }
@@ -201,6 +203,8 @@ void Settings::write(std::ostream& out) const {
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"
         << "mando1 = " << (padType[0] == PadType::ThreeButton ? 3 : 6) << "\n"
         << "mando2 = " << (padType[1] == PadType::ThreeButton ? 3 : 6) << "\n"
+        << "# fm_master_system: si, la unidad FM de la Master System también fuera de Japón.\n"
+        << "fm_master_system = " << (smsFm ? "si" : "no") << "\n"
         << "# overclock: velocidad del procesador (68000) en porcentaje, de 100 (la de la consola) a 400.\n"
         << "# Quita las ralentizaciones de algunos juegos; alguno puede ir demasiado rápido o fallar.\n"
         << "overclock = " << overclock << "\n"

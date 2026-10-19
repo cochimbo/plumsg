@@ -58,10 +58,10 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
-spanish.AssocMD=Añadir {#AppName} a "Abrir con" para las ROMs de Mega Drive (.md, .gen, .smd, .bin, .zip)
-english.AssocMD=Add {#AppName} to "Open with" for Mega Drive ROMs (.md, .gen, .smd, .bin, .zip)
-spanish.MDFileDesc=ROM de Mega Drive
-english.MDFileDesc=Mega Drive ROM
+spanish.AssocMD=Añadir {#AppName} a "Abrir con" para las ROMs de Mega Drive, Master System y Game Gear (.md, .gen, .smd, .sms, .gg, .bin, .zip)
+english.AssocMD=Add {#AppName} to "Open with" for Mega Drive, Master System and Game Gear ROMs (.md, .gen, .smd, .sms, .gg, .bin, .zip)
+spanish.MDFileDesc=ROM de consola Sega
+english.MDFileDesc=Sega console ROM
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -85,6 +85,8 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 Root: HKA; Subkey: "Software\Classes\.md\OpenWithProgids"; ValueType: string; ValueName: "plumsg.mdrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocmd
 Root: HKA; Subkey: "Software\Classes\.gen\OpenWithProgids"; ValueType: string; ValueName: "plumsg.mdrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocmd
 Root: HKA; Subkey: "Software\Classes\.smd\OpenWithProgids"; ValueType: string; ValueName: "plumsg.mdrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocmd
+Root: HKA; Subkey: "Software\Classes\.sms\OpenWithProgids"; ValueType: string; ValueName: "plumsg.mdrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocmd
+Root: HKA; Subkey: "Software\Classes\.gg\OpenWithProgids"; ValueType: string; ValueName: "plumsg.mdrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocmd
 Root: HKA; Subkey: "Software\Classes\.bin\OpenWithProgids"; ValueType: string; ValueName: "plumsg.mdrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocmd
 Root: HKA; Subkey: "Software\Classes\.zip\OpenWithProgids"; ValueType: string; ValueName: "plumsg.mdrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocmd
 Root: HKA; Subkey: "Software\Classes\plumsg.mdrom"; ValueType: string; ValueName: ""; ValueData: "{cm:MDFileDesc}"; Flags: uninsdeletekey; Tasks: assocmd

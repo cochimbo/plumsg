@@ -50,6 +50,7 @@ struct Settings {
     bool effectsOriginal = true;  // the game's sound effects keep the chips' sound
     Region region = Region::Auto;
     std::array<PadType, 2> padType{PadType::SixButton, PadType::SixButton};
+    bool smsFm = false;  // the Master System's FM sound unit on every console, not only Japanese ones
     // The 68000's speed in percent (100 off, up to kMaxOverclock), for games that slow
     // down. In a netplay game the host's counts; hardcore mode keeps it at 100.
     static constexpr int kMaxOverclock = 400;  // MegaDrive::kMaxOverclock

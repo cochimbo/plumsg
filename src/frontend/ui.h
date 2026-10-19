@@ -87,6 +87,7 @@ struct UiState {
     std::vector<Cheat>* cheats = nullptr;  // the cheats of the Trucos window's game, edited in place
     std::string cheatsGame;                // that game's file name
     std::string cheatsPath;                // and its path
+    bool cheatsSms = false;                // and it takes Master System and Game Gear codes
     GameOptionsView gameOptions;
     // Netplay: a session exists (hosting, joining or playing), and what to say about it.
     bool netSession = false;
