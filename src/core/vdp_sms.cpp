@@ -80,6 +80,7 @@ void VdpSms::writeControl(uint8_t value) {
 }
 
 int VdpSms::activeLines() const {
+    if (!mode4()) return 192;
     // Mode 4 with M2 set picks the taller pictures by M1 (224) or M3 (240).
     if ((regs_[0] & 0x06) == 0x06) {
         if (regs_[1] & 0x10) return 224;
@@ -117,6 +118,20 @@ uint16_t VdpSms::nameTableBase() const {
     return static_cast<uint16_t>(((regs_[2] & 0x0C) << 10) | 0x700);
 }
 
+namespace {
+
+// The TMS9918's colours as the Master System's VDP makes them (6-bit, --BBGGRR); 0 is
+// transparent.
+constexpr uint8_t kTmsColors[16] = {0x00, 0x00, 0x08, 0x0C, 0x10, 0x30, 0x01, 0x3C,
+                                    0x02, 0x03, 0x05, 0x0F, 0x04, 0x33, 0x15, 0x3F};
+
+uint32_t tmsRgb(int index) {
+    const uint8_t c = kTmsColors[index & 15];
+    return 0xFF000000u | ((c & 3) * 85u) << 16 | (((c >> 2) & 3) * 85u) << 8 | ((c >> 4) & 3) * 85u;
+}
+
+}  // namespace
+
 void VdpSms::startLine(int line, bool draw) {
     line_ = line;
     const int active = activeLines();
@@ -127,8 +142,9 @@ void VdpSms::startLine(int line, bool draw) {
         frame_.height = active;
         frame_.interlaced = false;
     }
-    if (line < active) {
-        if (draw || (regs_[1] & 0x40)) renderLine(line);  // the sprite flags need the line even unseen
+    if (line < active && (draw || (regs_[1] & 0x40))) {  // the sprite flags need the line even unseen
+        if (mode4()) renderLine(line);
+        else renderLineTms(line);
     }
     // The line counter runs on the active lines and the one after them, and is reloaded
     // on every other line.
@@ -275,6 +291,106 @@ void VdpSms::renderLine(int line) {
     for (int x = 256; x < VideoFrameMd::kMaxWidth; ++x) {
         f.rgba[o + x] = f.planeA[o + x] = f.planeB[o + x] = f.sprites[o + x] = 0;
         f.info[o + x] = f.planeAInfo[o + x] = f.planeBInfo[o + x] = f.spriteInfo[o + x] = MdPixel{};
+    }
+}
+
+void VdpSms::renderLineTms(int line) {
+    VideoFrameMd& f = frame_;
+    const int o = line * VideoFrameMd::kMaxWidth;
+    const bool display = (regs_[1] & 0x40) != 0;
+    const int backdropIndex = regs_[7] & 0x0F;
+    const uint32_t backdrop = backdropIndex ? tmsRgb(backdropIndex) : tmsRgb(1);
+    f.lines[line].displayEnabled = display;
+    f.lines[line].hscrollA = f.lines[line].hscrollB = 0;
+    f.backdrop[line] = backdrop;
+    for (int x = 0; x < VideoFrameMd::kMaxWidth; ++x) {
+        f.rgba[o + x] = x < 256 ? backdrop : 0;
+        f.info[o + x] = MdPixel{static_cast<uint8_t>(backdropIndex), MdLayer::Backdrop, false, MdShade::Normal, 0};
+        f.planeA[o + x] = f.planeB[o + x] = f.sprites[o + x] = 0;
+        f.planeAInfo[o + x] = f.planeBInfo[o + x] = f.spriteInfo[o + x] = MdPixel{};
+    }
+    if (!display) return;
+
+    const bool m1 = (regs_[1] & 0x10) != 0, m2 = (regs_[0] & 0x02) != 0, m3 = (regs_[1] & 0x08) != 0;
+    const int names = (regs_[2] & 0x0F) << 10;
+    auto put = [&](int x, int color, uint16_t source) {
+        if (color == 0 || x < 0 || x >= 256) return;
+        const int i = o + x;
+        f.rgba[i] = f.planeB[i] = tmsRgb(color);
+        f.info[i] = f.planeBInfo[i] = MdPixel{static_cast<uint8_t>(color), MdLayer::PlaneB, false, MdShade::Normal, source};
+    };
+    if (m1 && !m2 && !m3) {
+        // Text: 40 columns of 6 pixels after an 8-pixel border, in the colours of register 7.
+        const int fg = regs_[7] >> 4, bg = regs_[7] & 0x0F;
+        const int patterns = (regs_[4] & 0x07) << 11;
+        for (int col = 0; col < 40; ++col) {
+            const uint8_t name = vram_[(names + (line >> 3) * 40 + col) & 0x3FFF];
+            const uint8_t bits = vram_[(patterns + name * 8 + (line & 7)) & 0x3FFF];
+            for (int px = 0; px < 6; ++px) put(8 + col * 6 + px, (bits & (0x80 >> px)) ? fg : bg, name);
+        }
+    } else if (!m1 && !m3) {
+        // Graphics I (one colour pair for every 8 patterns) and II (a pattern and a colour
+        // table for each third of the screen, with masks in registers 3 and 4).
+        for (int col = 0; col < 32; ++col) {
+            const int name = vram_[(names + (line >> 3) * 32 + col) & 0x3FFF];
+            uint8_t bits, colors;
+            if (m2) {
+                const int index = name + (line >> 6) * 256;
+                const int pg = ((regs_[4] & 0x04) << 11) + (index & ((regs_[4] & 0x03) << 8 | 0xFF)) * 8;
+                const int ct = ((regs_[3] & 0x80) << 6) + (index & ((regs_[3] & 0x7F) << 3 | 0x07)) * 8;
+                bits = vram_[(pg + (line & 7)) & 0x3FFF];
+                colors = vram_[(ct + (line & 7)) & 0x3FFF];
+            } else {
+                bits = vram_[(((regs_[4] & 0x07) << 11) + name * 8 + (line & 7)) & 0x3FFF];
+                colors = vram_[((regs_[3] << 6) + (name >> 3)) & 0x3FFF];
+            }
+            for (int px = 0; px < 8; ++px)
+                put(col * 8 + px, (bits & (0x80 >> px)) ? colors >> 4 : colors & 0x0F, static_cast<uint16_t>(name));
+        }
+    }
+    if (m1) return;  // no sprites in text mode
+
+    // Sprites: 32 of one colour, 8x8 or 16x16, magnified or not; 4 a line, earlier in front.
+    const int sat = (regs_[5] & 0x7F) << 7;
+    const int patterns = (regs_[6] & 0x07) << 11;
+    const int size = (regs_[1] & 0x02) ? 16 : 8;
+    const int zoom = (regs_[1] & 0x01) ? 2 : 1;
+    std::array<bool, 256> taken{};
+    int found = 0;
+    for (int n = 0; n < 32; ++n) {
+        const int at = sat + n * 4;
+        const int y = vram_[at & 0x3FFF];
+        if (y == 0xD0) break;
+        const int row = (line - y - 1) & 0xFF;
+        if (row >= size * zoom) continue;
+        if (++found > 4) {
+            spriteOverflow_ = true;
+            if (!unlimitedSprites_) break;
+        }
+        int x = vram_[(at + 1) & 0x3FFF];
+        const uint8_t attr = vram_[(at + 3) & 0x3FFF];
+        if (attr & 0x80) x -= 32;
+        const int color = attr & 0x0F;
+        const int pattern = size == 16 ? vram_[(at + 2) & 0x3FFF] & 0xFC : vram_[(at + 2) & 0x3FFF];
+        const int r = row / zoom;
+        for (int px = 0; px < size; ++px) {
+            const int addr = patterns + pattern * 8 + (px >= 8 ? 16 : 0) + r;
+            if (!(vram_[addr & 0x3FFF] & (0x80 >> (px & 7)))) continue;
+            for (int zx = 0; zx < zoom; ++zx) {
+                const int sx = x + px * zoom + zx;
+                if (sx < 0 || sx >= 256) continue;
+                if (taken[static_cast<size_t>(sx)]) {
+                    if (found <= 4) spriteCollision_ = true;
+                    continue;
+                }
+                taken[static_cast<size_t>(sx)] = true;
+                if (color == 0) continue;
+                const int i = o + sx;
+                f.rgba[i] = f.sprites[i] = tmsRgb(color);
+                f.info[i] = f.spriteInfo[i] =
+                    MdPixel{static_cast<uint8_t>(color), MdLayer::Sprite, false, MdShade::Normal, static_cast<uint16_t>(n)};
+            }
+        }
     }
 }
 

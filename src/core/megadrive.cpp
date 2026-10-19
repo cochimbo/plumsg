@@ -151,9 +151,15 @@ void MegaDrive::setUpMars() {
 
 void MegaDrive::setUpSms() {
     const bool wanted = !disc_ && (smsFile_ || detectSystemFromData(cart_.rom()) == ConsoleSystem::MasterSystem);
-    if (wanted && !sms_) sms_ = std::make_unique<MasterSystem>(cart_, zram_, vdp_.frame());
+    if (wanted && !sms_) {
+        sms_ = std::make_unique<MasterSystem>(cart_, zram_, vdp_.frame());
+        opll_ = std::make_unique<Ym2413>();
+    }
     if (wanted) cart_.setMasterSystemHeader(smsRegion(cart_.rom()));
-    if (!wanted) sms_.reset();
+    if (!wanted) {
+        sms_.reset();
+        opll_.reset();
+    }
 }
 
 void MegaDrive::setRegion(Region r) {
@@ -170,14 +176,21 @@ void MegaDrive::configureFor(Region r) {
     effectiveRegion_ = r;
     const bool isPal = effectiveRegion_ == Region::EuropePal;
     vdp_.setPal(isPal);
-    if (sms_) {
-        sms_->vdp().setPal(isPal);
-        sms_->setJapanese(r == Region::JapanNtsc);
-    }
     psg_.setClock(isPal ? Psg::kClockPal : Psg::kClockNtsc);
     const double master = isPal ? kMasterPal : kMasterNtsc;
     ym_.setMasterClock(master);
     mixer_.setFmRate(ym_.sampleRate());
+    mixer_.setGains(100, 50);
+    if (sms_) {
+        sms_->vdp().setPal(isPal);
+        sms_->setJapanese(r == Region::JapanNtsc);
+        sms_->setFmPresent(r == Region::JapanNtsc || smsFmAlways_);
+        // The YM2413 stands in for the YM2612 in the mix; the PSG is the main voice here.
+        opll_->setMasterClock(master);
+        opll_->setVolume(sms_->fmAudible() ? 100 : 0);
+        mixer_.setFmRate(opll_->sampleRate());
+        mixer_.setGains(100, 100);
+    }
     if (mars_) mars_->setSampleRate(mixer_.outputRate(), master);
     if (mcd_) {
         mcd_->setMasterClock(master);
@@ -226,6 +239,11 @@ void MegaDrive::reset() {
     io_.reset();
     ym_.reset();
     ym_.samples().clear();
+    if (opll_) {
+        opll_->reset();
+        opll_->samples().clear();
+        opll_->setClockPosition(0);
+    }
     psg_.reset();
     if (roland_) roland_->allNotesOff();
     psg_.setStereo(0xFF);
@@ -292,7 +310,8 @@ void MegaDrive::syncSound() {
         psgRemainder_ = static_cast<int>(clocks % 15);
         psgClock_ = now_;
     }
-    ym_.runUntil(now_);
+    if (opll_) opll_->runUntil(now_);
+    else ym_.runUntil(now_);
 }
 
 void MegaDrive::setCheats(const std::vector<CheatPatch>& cheats) {
@@ -389,7 +408,8 @@ void MegaDrive::runFrame() {
     psgBuffer_.insert(psgBuffer_.end(), psg_.samples().begin(), psg_.samples().end());
     psg_.clearSamples();
     const size_t before = mixer_.samples().size() / 2;
-    mixer_.mix(ym_.samples(), psgBuffer_, addOnSamples());
+    if (sms_ && !sms_->psgAudible()) std::fill(psgBuffer_.begin(), psgBuffer_.end(), int16_t{0});
+    mixer_.mix(opll_ ? opll_->samples() : ym_.samples(), psgBuffer_, addOnSamples());
     if (roland_) roland_->endFrame(now_, mixer_.output(), before, mixer_.outputRate());
 }
 
@@ -643,6 +663,7 @@ void MegaDrive::psgWrite(uint8_t value) {
 
 uint8_t MegaDrive::in(uint16_t port) {
     if (!sms_) return 0xFF;
+    if (sms_->fmPresent() && (port & 0xFF) == 0xF2) return sms_->fmControl();
     const uint8_t value = sms_->in(static_cast<uint8_t>(port), lineClock() / 15);
     z80_.setIrqLine(sms_->vdp().irq());  // reading the status clears the interrupt
     return value;
@@ -652,6 +673,16 @@ void MegaDrive::out(uint16_t port, uint8_t value) {
     if (!sms_) return;
     if ((port & 0xC0) == 0x40) {
         psgWrite(value);
+        return;
+    }
+    if (sms_->fmPresent() && (port & 0xFF) >= 0xF0 && (port & 0xFF) <= 0xF2) {
+        syncSound();
+        if ((port & 0xFF) == 0xF2) {
+            sms_->setFmControl(value);
+            opll_->setVolume(sms_->fmAudible() ? 100 : 0);
+        } else {
+            opll_->write(port & 1, value);
+        }
         return;
     }
     sms_->out(static_cast<uint8_t>(port), value);
@@ -799,6 +830,14 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         sms_->state(w);
         block("SMS ", w.data());
     }
+    if (opll_) {
+        std::vector<uint8_t> chip;
+        opll_->saveState(chip);
+        StateWriter w;
+        uint64_t pos = opll_->clockPosition();
+        w(pos, chip);
+        block("OPLL", w.data());
+    }
     if (quick) {
         // No thumbnail: nobody looks at a rewind snapshot.
     } else if (!loadedThumbnail_.empty()) {
@@ -925,6 +964,13 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
             if (b.ok() && ym_.loadState(chip)) ym_.setClockPosition(pos);
             else ok = false;
         }
+        else if (id == fourcc("OPLL")) {
+            uint64_t pos = 0;
+            std::vector<uint8_t> chip;
+            b(pos, chip);
+            if (opll_ && b.ok() && opll_->loadState(chip)) opll_->setClockPosition(pos);
+            else if (opll_) ok = false;
+        }
         // Unknown blocks (from newer versions) are skipped.
         if (!b.ok()) ok = false;
     }
@@ -952,6 +998,10 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     mixer_.clearSamples();
     psgBuffer_.clear();
     ym_.samples().clear();
+    if (opll_) {
+        opll_->samples().clear();
+        opll_->setVolume(sms_->fmAudible() ? 100 : 0);
+    }
     psg_.clearSamples();
     if (mars_) mars_->samples().clear();
     if (mcd_) mcd_->samples().clear();

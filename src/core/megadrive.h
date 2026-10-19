@@ -19,6 +19,7 @@
 #include "psg.h"
 #include "roland.h"
 #include "sms.h"
+#include "ym2413.h"
 #include "vgm.h"
 #include "vdp_md.h"
 #include "ym2612.h"
@@ -136,6 +137,14 @@ public:
     bool is32x() const { return mars_ != nullptr; }
     MasterSystem* masterSystem() { return sms_.get(); }  // null unless the game is a Master System one
     bool isMasterSystem() const { return sms_ != nullptr; }
+    // The Master System's FM sound unit is built into Japanese consoles; this puts it in
+    // the others too, for games that use it wherever they find it. Takes effect on the
+    // next reset or power cycle.
+    void setMasterSystemFm(bool always) {
+        smsFmAlways_ = always;
+        applyRegion();
+    }
+    Ym2413* ym2413() { return opll_.get(); }  // null unless the game is a Master System one
     MegaCd* megaCd() { return mcd_.get(); }  // null unless a disc is loaded
     bool isMegaCd() const { return mcd_ != nullptr; }
     CdImage* disc() { return disc_.get(); }  // the disc in the Mega CD, null if none
@@ -215,6 +224,8 @@ private:
     std::unique_ptr<CdImage> disc_;
     std::unique_ptr<MegaCd> mcd_;
     std::unique_ptr<MasterSystem> sms_;
+    std::unique_ptr<Ym2413> opll_;  // the Master System's FM unit, with sms_
+    bool smsFmAlways_ = false;
     bool smsFile_ = false;  // the file loaded is a Master System one by its name
     std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe
     std::string loadNotice_;

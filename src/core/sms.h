@@ -20,6 +20,10 @@ namespace plumsg {
 // 0x0400 (rest of slot 0), 0x4000 and 0x8000 are picked by writes to 0xFFFD, 0xFFFE and
 // 0xFFFF, and 0xFFFC bit 3 puts one of two 16 KB pages of cartridge RAM (bit 2) in the
 // third slot instead. RAM at 0xC000-0xDFFF, repeated at 0xE000-0xFFFF.
+//
+// Codemasters mapper (told by the checksum in its own header at 0x7FE0): the three
+// slots are picked by writes to 0x0000, 0x4000 and 0x8000, the first one too, and bit 7
+// of the 0x4000 write puts 8 KB of cartridge RAM at 0xA000-0xBFFF (Ernie Els Golf).
 class MasterSystem {
 public:
     MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame);
@@ -50,16 +54,33 @@ public:
     // Japanese consoles read the TH lines back differently from export ones; some
     // games tell where they are from that.
     void setJapanese(bool on) { japanese_ = on; }
+    // The FM sound unit (YM2413, built into the Japanese Master System): its ports
+    // 0xF0-0xF2 answer only when it is there. Port 0xF2 is the audio control: bit 0
+    // turns the FM on; the PSG plays unless only the FM is on.
+    void setFmPresent(bool on) { fmPresent_ = on; }
+    bool fmPresent() const { return fmPresent_; }
+    uint8_t fmControl() const { return fmControl_; }
+    void setFmControl(uint8_t value) { fmControl_ = value & 0x03; }
+    bool fmAudible() const { return fmPresent_ && (fmControl_ & 1); }
+    bool psgAudible() const { return !fmPresent_ || fmControl_ != 1; }
 
     VdpSms& vdp() { return vdp_; }
     const VdpSms& vdp() const { return vdp_; }
-    // Mapper registers as written to 0xFFFC-0xFFFF.
+    // Mapper registers: as written to 0xFFFC-0xFFFF, or with the Codemasters mapper the
+    // banks of the three slots in [1..3] and its RAM switch in [0].
     const std::array<uint8_t, 4>& mapper() const { return mapper_; }
+    bool codemasters() const { return codemasters_; }
 
     template <class Ar>
     void state(Ar& ar) {
         ar(mapper_, ioControl_, memoryControl_, pause_);
         vdp_.state(ar);
+        // Added after the first version: states without it load with the FM unit quiet.
+        if constexpr (Ar::kLoading) {
+            fmControl_ = 0;
+            if (ar.atEnd()) return;
+        }
+        ar(fmControl_);
     }
 
 private:
@@ -71,11 +92,14 @@ private:
     std::array<uint8_t, 0x2000>& ram_;
     VdpSms vdp_;
     std::array<uint8_t, 4> mapper_{0, 0, 1, 2};
+    bool codemasters_ = false;
     uint8_t ioControl_ = 0xFF;    // port 0x3F
     uint8_t memoryControl_ = 0;   // port 0x3E
     std::array<PadState, 2> pads_{};
     bool pause_ = false;          // Start held at the last frame
     bool japanese_ = false;
+    bool fmPresent_ = false;
+    uint8_t fmControl_ = 0;
 };
 
 }  // namespace plumsg

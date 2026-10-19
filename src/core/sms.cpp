@@ -2,12 +2,25 @@
 
 namespace plumsg {
 
+namespace {
+
+// Codemasters cartridges have a header of their own at 0x7FE0 whose checksum word is
+// followed by its complement.
+bool isCodemasters(const std::vector<uint8_t>& rom) {
+    if (rom.size() < 0x8000) return false;
+    const unsigned sum = rom[0x7FE6] | rom[0x7FE7] << 8, inverse = rom[0x7FE8] | rom[0x7FE9] << 8;
+    return sum != 0 && sum + inverse == 0x10000;
+}
+
+}  // namespace
+
 MasterSystem::MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame)
     : cart_(cart), ram_(ram), vdp_(frame) {}
 
 void MasterSystem::powerOn() {
     vdp_.reset();
-    mapper_ = {0, 0, 1, 2};
+    codemasters_ = isCodemasters(cart_.rom());
+    mapper_ = codemasters_ ? std::array<uint8_t, 4>{0, 0, 1, 0} : std::array<uint8_t, 4>{0, 0, 1, 2};
     reset();
 }
 
@@ -15,6 +28,7 @@ void MasterSystem::reset() {
     ioControl_ = 0xFF;
     memoryControl_ = 0;
     pause_ = false;
+    fmControl_ = 0;
 }
 
 uint8_t MasterSystem::romByte(int bank, uint16_t offset) const {
@@ -25,6 +39,15 @@ uint8_t MasterSystem::romByte(int bank, uint16_t offset) const {
 }
 
 uint8_t MasterSystem::read(uint16_t addr) const {
+    if (codemasters_) {
+        if (addr < 0x4000) return romByte(mapper_[1], addr);
+        if (addr < 0x8000) return romByte(mapper_[2], addr & 0x3FFF);
+        if (addr < 0xC000) {
+            if ((mapper_[0] & 0x80) && addr >= 0xA000) return cart_.saveRamByte(addr & 0x1FFF);
+            return romByte(mapper_[3], addr & 0x3FFF);
+        }
+        return ram_[addr & 0x1FFF];
+    }
     if (addr < 0x0400) return cart_.rom()[addr];
     if (addr < 0x4000) return romByte(mapper_[1], addr);
     if (addr < 0x8000) return romByte(mapper_[2], addr & 0x3FFF);
@@ -36,6 +59,16 @@ uint8_t MasterSystem::read(uint16_t addr) const {
 }
 
 void MasterSystem::write(uint16_t addr, uint8_t value) {
+    if (codemasters_) {
+        if (addr == 0x0000) mapper_[1] = value;
+        else if (addr == 0x4000) {
+            mapper_[2] = value & 0x7F;
+            mapper_[0] = value & 0x80;
+        } else if (addr == 0x8000) mapper_[3] = value;
+        else if (addr >= 0xA000 && addr < 0xC000 && (mapper_[0] & 0x80)) cart_.writeSaveRamByte(addr & 0x1FFF, value);
+        else if (addr >= 0xC000) ram_[addr & 0x1FFF] = value;
+        return;
+    }
     if (addr >= 0xC000) {
         ram_[addr & 0x1FFF] = value;
         if (addr >= 0xFFFC) mapper_[addr - 0xFFFC] = value;

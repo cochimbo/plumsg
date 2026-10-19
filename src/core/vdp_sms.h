@@ -15,6 +15,10 @@ namespace plumsg {
 // tiles in front of sprites, and up to 64 sprites (8 per line) of 8x8 or 8x16, zoomed or
 // not, with the overflow and collision flags.
 //
+// Without mode 4 it draws the TMS9918's own modes, as the first Master System does,
+// for the few games that use them: Graphics I and II and Text, with the TMS9918's 32
+// sprites of one colour (4 per line), in its 15 colours as the Master System shows them.
+//
 // It draws into a VideoFrameMd, the same frame the Mega Drive VDP fills, so the
 // renderers, screenshots and recordings work unchanged: the background goes to plane B,
 // its tiles with priority (where they are not colour 0) also to plane A, and the sprites
@@ -64,6 +68,8 @@ public:
 private:
     void cacheColors();
     void renderLine(int line);
+    void renderLineTms(int line);
+    bool mode4() const { return (regs_[0] & 0x04) != 0; }
     uint16_t nameTableBase() const;
 
     std::array<uint8_t, 0x4000> vram_{};
