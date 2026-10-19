@@ -167,6 +167,9 @@ msgstr "Ouvrir la bibliothèque au démarrage"
 msgid "Abrir la carpeta de SoundFonts"
 msgstr "Ouvrir le dossier des SoundFonts"
 
+msgid "Abrir la carpeta de grabaciones"
+msgstr "Ouvrir le dossier des enregistrements"
+
 msgid "Acción"
 msgstr "Action"
 
@@ -556,6 +559,9 @@ msgstr "Créer un compte sur retroachievements.org"
 
 msgid "Ctrl+O  abrir ROM;  F10  biblioteca de juegos"
 msgstr "Ctrl+O  ouvrir une ROM ;  F10  bibliothèque de jeux"
+
+msgid "Ctrl+R  grabar vídeo;  Ctrl+G  grabar GIF (otra vez para parar)"
+msgstr "Ctrl+R  enregistrer une vidéo ;  Ctrl+G  enregistrer un GIF (à nouveau pour arrêter)"
 
 msgid "Cuenta"
 msgstr "Compte"
@@ -988,6 +994,9 @@ msgstr "Nappe polysynthé"
 msgid "Fondos sintetizados"
 msgstr "Nappes synthé"
 
+msgid "GIF guardado en %s"
+msgstr "GIF enregistré dans %s"
+
 msgid "Gaita"
 msgstr "Cornemuse"
 
@@ -1007,6 +1016,20 @@ msgid "Golpe de orquesta"
 msgstr "Coup d'orchestre"
 
 msgid ""
+"Graba la partida con su sonido en un vídeo AVI, que abren Windows, VLC\n"
+"y los editores de vídeo. Vuelve a pulsarlo para parar."
+msgstr ""
+"Enregistre la partie avec son son dans une vidéo AVI, lisible par Windows,\n"
+"VLC et les logiciels de montage. Choisissez-le à nouveau pour arrêter."
+
+msgid ""
+"Graba la partida, sin sonido, en un GIF animado para compartirlo.\n"
+"Vuelve a pulsarlo para parar."
+msgstr ""
+"Enregistre la partie, sans son, dans un GIF animé à partager.\n"
+"Choisissez-le à nouveau pour arrêter."
+
+msgid ""
 "Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
 "y elige con qué instrumento General MIDI suena en el sintetizador."
 msgstr ""
@@ -1019,8 +1042,23 @@ msgstr "Enregistrement %s"
 msgid "Grabando %s"
 msgstr "Enregistrement %s"
 
+msgid "Grabando un GIF (Ctrl+G para pararlo)"
+msgstr "Enregistrement d'un GIF (Ctrl+G pour l'arrêter)"
+
+msgid "Grabando vídeo (Ctrl+R para pararlo)"
+msgstr "Enregistrement vidéo (Ctrl+R pour l'arrêter)"
+
+msgid "Grabar"
+msgstr "Enregistrer"
+
+msgid "Grabar GIF"
+msgstr "Enregistrer un GIF"
+
 msgid "Grabar del juego"
 msgstr "Enregistrer depuis le jeu"
+
+msgid "Grabar vídeo"
+msgstr "Enregistrer une vidéo"
 
 msgid "Grosor"
 msgstr "Épaisseur"
@@ -1489,6 +1527,9 @@ msgstr "Impossible de se connecter au serveur de jaquettes."
 msgid "No se pudo conectar con la base de trucos de libretro."
 msgstr "Impossible de se connecter à la base de codes de libretro."
 
+msgid "No se pudo crear %s"
+msgstr "Impossible de créer %s"
+
 msgid "No se pudo crear el socket UDP."
 msgstr "Impossible de créer le socket UDP."
 
@@ -1497,6 +1538,9 @@ msgstr "Impossible de télécharger cette jaquette."
 
 msgid "No se pudo descargar la lista de trucos."
 msgstr "Impossible de télécharger la liste de codes."
+
+msgid "No se pudo escribir %s: ¿falta espacio en el disco?"
+msgstr "Impossible d'écrire %s : le disque est-il plein ?"
 
 msgid "No se pudo guardar el estado en %s"
 msgstr "Impossible de sauvegarder l'état dans %s"
@@ -1530,6 +1574,9 @@ msgstr "Impossible de préparer la partie : %s"
 
 msgid "No se puede conectar con RetroAchievements."
 msgstr "Impossible de se connecter à RetroAchievements."
+
+msgid "No se puede grabar con ese tamaño"
+msgstr "Impossible d'enregistrer à cette taille"
 
 msgid "No se pueden conseguir en plumsg"
 msgstr "Impossibles à obtenir dans plumsg"
@@ -2268,6 +2315,9 @@ msgstr "Voix synthé"
 msgid "Vídeo"
 msgstr "Vidéo"
 
+msgid "Vídeo guardado en %s"
+msgstr "Vidéo enregistrée dans %s"
+
 msgid "Vídeo..."
 msgstr "Vidéo..."
 
@@ -2427,6 +2477,7 @@ msgid ""
 "  --opciones-juego controles   ...en la pestaña de sus controles\n"
 "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
 "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
+"  --grabar f.avi        grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
 "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n"
 "\n"
 "La pantalla completa y la región dadas aquí valen solo para esta vez."
@@ -2451,6 +2502,7 @@ msgstr ""
 "  --opciones-juego controles   ...sur l'onglet de ses commandes\n"
 "  --instrumentos         ouvrir l'éditeur d'instruments (du jeu, s'il est donné)\n"
 "  --pista f.vgm          avec --instrumentos : ouvrir cette musique (.vgm ou .vgz)\n"
+"  --grabar f.avi        enregistrer la partie dès le début, en vidéo (.avi) ou GIF (.gif)\n"
 "  --captura f.png        enregistrer une capture après --cuadros N images et quitter\n"
 "\n"
 "Le plein écran et la région donnés ici ne valent que pour cette fois."

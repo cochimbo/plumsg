@@ -446,6 +446,16 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
             out.optionsFor = state.romPath;
             showGameOptions_ = true;
         }
+        ImGui::SeparatorText(tr("Grabar"));
+        if (ImGui::MenuItem(tr("Grabar vídeo"), "Ctrl+R", state.recording == 2, state.romLoaded)) out.record = 2;
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", tr("Graba la partida con su sonido en un vídeo AVI, que abren Windows, VLC\n"
+                              "y los editores de vídeo. Vuelve a pulsarlo para parar."));
+        if (ImGui::MenuItem(tr("Grabar GIF"), "Ctrl+G", state.recording == 1, state.romLoaded)) out.record = 1;
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", tr("Graba la partida, sin sonido, en un GIF animado para compartirlo.\n"
+                              "Vuelve a pulsarlo para parar."));
+        if (ImGui::MenuItem(tr("Abrir la carpeta de grabaciones"))) out.openRecordings = true;
         ImGui::SeparatorText(tr("Velocidad"));
         if (ImGui::MenuItem(tr("Cámara lenta"), "F9", state.slowMotion, solo && !state.hardcore)) out.toggleSlowMotion = true;
         if (state.hardcore) ImGui::TextDisabled("%s", tr("Modo hardcore: sin trucos, cámara lenta ni rebobinado"));
@@ -1068,6 +1078,7 @@ void Ui::drawAbout() {
     ImGui::BulletText("%s", tr("Ctrl+O  abrir ROM;  F10  biblioteca de juegos"));
     ImGui::BulletText("%s", tr("F1  reiniciar;  F12  parar la emulación y volver al inicio"));
     ImGui::BulletText("%s", tr("F2  cambiar de vista"));
+    ImGui::BulletText("%s", tr("Ctrl+R  grabar vídeo;  Ctrl+G  grabar GIF (otra vez para parar)"));
     ImGui::BulletText("%s", tr("P  pausa"));
     ImGui::BulletText("%s", tr("M  silenciar el sonido"));
     ImGui::BulletText("%s", tr("F11  pantalla completa"));
@@ -1142,6 +1153,16 @@ void Ui::drawOverlays(const UiState& state) {
     if (state.romLoaded) {
         if (state.paused) badge = tr("PAUSA");
         else if (!state.speed.empty()) badge = state.speed.c_str();
+    }
+    if (state.romLoaded && state.recording) {
+        // At the top in the middle: the achievements' corner is on the left, the speed's on the right.
+        ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, top + 10), ImGuiCond_Always, ImVec2(0.5f, 0));
+        ImGui::SetNextWindowBgAlpha(0.6f);
+        ImGui::Begin("##grabando", nullptr, flags);
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", state.recording == 1 ? "GIF" : "REC");
+        ImGui::SameLine();
+        ImGui::Text("%d:%02d", state.recordingSeconds / 60, state.recordingSeconds % 60);
+        ImGui::End();
     }
     if (badge) {
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x - 10, top + 10), ImGuiCond_Always, ImVec2(1, 0));

@@ -20,6 +20,8 @@ public:
     bool ok() const { return device_ != 0; }
     // Sample rate the console should produce at for the next frame.
     double rate() const;
+    // The device's own sample rate, what rate() hovers around.
+    int freq() const { return freq_; }
     // Queues interleaved stereo samples. volume is 0-100.
     void push(const std::vector<int16_t>& samples, int volume, bool mute);
 

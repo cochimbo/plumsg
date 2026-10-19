@@ -125,11 +125,13 @@ add_library(plumsg_core STATIC
   src/core/megacd.cpp
   src/core/netplay.cpp
   src/core/i18n.cpp
+  src/core/recording.cpp
   src/render/planes.cpp
   src/render/profile3d.cpp
 )
-target_include_directories(plumsg_core PUBLIC src src/core PRIVATE third_party/tsf)
-target_link_libraries(plumsg_core PUBLIC plumsg_miniz PRIVATE plumsg_ymfm chdr-static)
+# stb_image_write (public domain / MIT, vendored) encodes the JPEG frames of the AVI recordings.
+target_include_directories(plumsg_core PUBLIC src src/core PRIVATE third_party/tsf third_party/stb)
+target_link_libraries(plumsg_core PUBLIC plumsg_miniz Threads::Threads PRIVATE plumsg_ymfm chdr-static)
 
 # UDP sockets for netplay (the session itself is in the core).
 add_library(plumsg_net STATIC src/net/udp.cpp)
