@@ -90,6 +90,9 @@ msgstr ", %d introuvables"
 msgid ". Modo hardcore"
 msgstr ". Mode hardcore"
 
+msgid "1 fotograma"
+msgstr "1 image"
+
 msgid ""
 "2D: la imagen normal de la Mega Drive.\n"
 "capas (depuración): pinta cada píxel según su capa (plano B azul, plano A\n"
@@ -1210,6 +1213,9 @@ msgstr ""
 "Chaque son FM reçoit un instrument selon des règles, modifiable à la main dans\n"
 "l'Éditeur d'instruments."
 
+msgid "Latencia"
+msgstr "Latence"
+
 msgid "Lengüetas"
 msgstr "Anches"
 
@@ -1684,6 +1690,15 @@ msgstr "Pixels carrés"
 msgid "Píxeles cuadrados (sin estirar a 4:3)"
 msgstr "Pixels carrés (sans étirer en 4:3)"
 
+msgid ""
+"Quita fotogramas de retardo entre pulsar un botón y verlo en pantalla: en cada\n"
+"fotograma el juego corre ese número de fotogramas por delante, enseña su imagen\n"
+"y vuelve atrás. Con 1 suele bastar; más piden más al ordenador y pueden notarse saltos."
+msgstr ""
+"Retire des images de retard entre l'appui sur un bouton et son effet à l'écran : à chaque\n"
+"image, le jeu calcule ce nombre d'images en avance, affiche la dernière\n"
+"et revient en arrière. 1 suffit souvent ; plus demande davantage à l'ordinateur et peut saccader."
+
 msgid "Quitar"
 msgstr "Retirer"
 
@@ -1788,6 +1803,15 @@ msgstr "Bruit blanc %s"
 
 msgid "Ruido periódico %s"
 msgstr "Bruit périodique %s"
+
+msgid "Run-ahead"
+msgstr "Run-ahead"
+
+msgid "Run-ahead (menos latencia)"
+msgstr "Run-ahead (moins de latence)"
+
+msgid "Run-ahead desactivado: no se pudo volver al fotograma actual."
+msgstr "Run-ahead désactivé : impossible de revenir à l'image actuelle."
 
 msgid "Saca las canciones de la ROM del juego (Sacar canciones), graba un trozo del juego (abre el juego, pulsa Grabar y juega hasta que suene la música que quieres probar) o abre un .vgm con su música, de vgmrips.net por ejemplo. Aquí saldrán sus instrumentos."
 msgstr "Extrayez les morceaux de la ROM du jeu (Extraire les morceaux), enregistrez un bout du jeu (ouvrez le jeu, appuyez sur Enregistrer et jouez jusqu'à entendre la musique à essayer) ou ouvrez un .vgm avec sa musique, de vgmrips.net par exemple. Ses instruments apparaîtront ici."

@@ -90,6 +90,9 @@ msgstr ", %d not found"
 msgid ". Modo hardcore"
 msgstr ". Hardcore mode"
 
+msgid "1 fotograma"
+msgstr "1 frame"
+
 msgid ""
 "2D: la imagen normal de la Mega Drive.\n"
 "capas (depuración): pinta cada píxel según su capa (plano B azul, plano A\n"
@@ -1210,6 +1213,9 @@ msgstr ""
 "Each FM sound gets an instrument by rules, which can be changed by hand in the\n"
 "Instrument editor."
 
+msgid "Latencia"
+msgstr "Latency"
+
 msgid "Lengüetas"
 msgstr "Reed"
 
@@ -1684,6 +1690,15 @@ msgstr "Square pixels"
 msgid "Píxeles cuadrados (sin estirar a 4:3)"
 msgstr "Square pixels (no stretching to 4:3)"
 
+msgid ""
+"Quita fotogramas de retardo entre pulsar un botón y verlo en pantalla: en cada\n"
+"fotograma el juego corre ese número de fotogramas por delante, enseña su imagen\n"
+"y vuelve atrás. Con 1 suele bastar; más piden más al ordenador y pueden notarse saltos."
+msgstr ""
+"Removes frames of lag between pressing a button and seeing it on screen: on every\n"
+"frame the game runs that many frames ahead, shows their picture\n"
+"and goes back. 1 is usually enough; more ask more of the computer and may stutter."
+
 msgid "Quitar"
 msgstr "Remove"
 
@@ -1788,6 +1803,15 @@ msgstr "White noise %s"
 
 msgid "Ruido periódico %s"
 msgstr "Periodic noise %s"
+
+msgid "Run-ahead"
+msgstr "Run-ahead"
+
+msgid "Run-ahead (menos latencia)"
+msgstr "Run-ahead (less latency)"
+
+msgid "Run-ahead desactivado: no se pudo volver al fotograma actual."
+msgstr "Run-ahead turned off: could not go back to the current frame."
 
 msgid "Saca las canciones de la ROM del juego (Sacar canciones), graba un trozo del juego (abre el juego, pulsa Grabar y juega hasta que suene la música que quieres probar) o abre un .vgm con su música, de vgmrips.net por ejemplo. Aquí saldrán sus instrumentos."
 msgstr "Get the songs out of the game's ROM (Get songs), record a stretch of the game (open the game, press Record and play until the music you want to try is heard) or open a .vgm with its music, from vgmrips.net for example. Its instruments will show up here."

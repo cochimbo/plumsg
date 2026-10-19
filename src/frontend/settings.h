@@ -41,6 +41,10 @@ struct Settings {
     int rewindSeconds = 20;  // how far back rewinding reaches, 0 = off
     int fastForward = 4;     // fast-forward speed, times normal (2-10)
     int slowMotion = 50;     // slow-motion speed, percent of normal (10-90)
+    // Run-ahead: frames of input lag taken away by showing the picture that many frames
+    // ahead (0 off, up to kMaxRunAhead).
+    static constexpr int kMaxRunAhead = 4;
+    int runAhead = 0;
     std::vector<std::string> recent;  // most recent first
     std::string lastFolder;
     std::vector<std::string> libraryFolders;  // where the game library looks for games
