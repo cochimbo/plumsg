@@ -72,11 +72,31 @@ void testRunAheadOption() {
     check(again.runAhead == 2, "run-ahead: plumsg.ini lo guarda");
 }
 
+void testSpriteLimitOption() {
+    const Settings general;
+    const InputConfig generalInput = InputConfig::defaults();
+    check(!general.unlimitedSprites, "sin límite de sprites: desactivado si no se dice");
+    const GameOverrides o = parseGameOverrides("[video]\nsin_limite_sprites = si\n", general, generalInput);
+    check(o.has("sin_limite_sprites") && o.values.unlimitedSprites, "sin límite de sprites: un juego con su propio valor");
+    const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
+    check(back.has("sin_limite_sprites") && back.values.unlimitedSprites,
+          "sin límite de sprites: se guarda y se lee igual en el juego");
+    Settings s;
+    s.unlimitedSprites = true;
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.unlimitedSprites, "sin límite de sprites: plumsg.ini lo guarda");
+}
+
 }  // namespace
 
 int main() {
     testGameControls();
     testRunAheadOption();
+    testSpriteLimitOption();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

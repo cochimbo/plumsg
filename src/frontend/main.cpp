@@ -850,6 +850,8 @@ int main(int argc, char** argv) {
         ui->openNetplay();  // shows how the connection goes
     }
     while (running) {
+        // Only the picture changes with it, so it can follow the menus at any frame.
+        app->console.vdp().setUnlimitedSprites(settings.unlimitedSprites);
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             input->handleEvent(e);  // first, so it sees every trigger pull and release

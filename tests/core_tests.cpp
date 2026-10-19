@@ -269,6 +269,60 @@ void testVdpHblankFlag() {
     }
 }
 
+void testVdpSpriteLimit() {
+    // H40 draws 20 sprites and 320 sprite pixels per line. Without the limit the rest are
+    // drawn too, but the status bits stay what the console would give: the game reads the
+    // same overflow, and sprites past the limit never set the collision bit.
+    auto run = [](bool unlimited, int wideCells, int step, int count, int overlapFrom) {
+        auto vdp = std::make_unique<VdpMd>();
+        vdp->reset();
+        vdp->setUnlimitedSprites(unlimited);
+        vdp->writeControl(0x8144);  // display on
+        vdp->writeControl(0x8C81);  // H40
+        vdp->writeControl(0x8578);  // sprite table at 0xF000
+        vdp->writeControl(0x8F02);
+        auto at = [&](uint32_t addr) {
+            vdp->writeControl(static_cast<uint16_t>(0x4000 | (addr & 0x3FFF)));
+            vdp->writeControl(static_cast<uint16_t>(addr >> 14));
+        };
+        at(0x20);  // tile 1: colour 1 everywhere
+        for (int i = 0; i < 16; ++i) vdp->writeData(0x1111);
+        vdp->writeControl(0xC002);  // CRAM colour 1
+        vdp->writeControl(0x0000);
+        vdp->writeData(0x0EEE);
+        at(0xF000);
+        for (int n = 0; n < count; ++n) {
+            const int x = n >= overlapFrom ? 300 : 128 + n * step;
+            vdp->writeData(128 + 10);                                              // y: line 10
+            vdp->writeData(static_cast<uint16_t>(((wideCells - 1) << 10) | (n + 1 < count ? n + 1 : 0)));
+            vdp->writeData(0x0001);                                                // tile 1
+            vdp->writeData(static_cast<uint16_t>(x));
+        }
+        vdp->readStatus(0);
+        vdp->renderLine(10);
+        const uint16_t status = vdp->readStatus(0);
+        return std::make_pair(std::move(vdp), status);
+    };
+    auto sprite = [](const VdpMd& v, int x) { return v.frame().info[10 * VideoFrameMd::kMaxWidth + x].layer == MdLayer::Sprite; };
+
+    // 30 one-cell sprites, the last ten on top of each other: past the 20 per line.
+    auto [limited, s1] = run(false, 1, 8, 30, 20);
+    auto [free, s2] = run(true, 1, 8, 30, 20);
+    check(sprite(*limited, 19 * 8) && !sprite(*limited, 300 - 128), "VDP: 20 sprites per line in H40");
+    check(sprite(*free, 300 - 128), "VDP: without the limit the 21st sprite is drawn");
+    check(s1 == s2 && (s1 & 0x40) && !(s1 & 0x20),
+          "VDP: without the limit the overflow bit is the same and sprites past it do not collide");
+
+    // 12 sprites four cells wide, 16 pixels apart (only their first cell has pixels): the
+    // 11th starts past the 320 pixels, so its first cell at x = 160 stays empty.
+    auto [narrow, s3] = run(false, 4, 16, 12, 99);
+    auto [wide, s4] = run(true, 4, 16, 12, 99);
+    check(sprite(*narrow, 9 * 16) && !sprite(*narrow, 160) && !sprite(*narrow, 178),
+          "VDP: 320 sprite pixels per line in H40");
+    check(sprite(*wide, 160) && sprite(*wide, 178) && s3 == s4 && (s3 & 0x40),
+          "VDP: past the 320 pixels without the limit, same status");
+}
+
 void testTestRom() {
     MegaDrive md;
     md.loadRomData(testrom::build());
@@ -1765,6 +1819,7 @@ int main() {
     testVdpPorts();
     testVdpHblankFlag();
     testVdpFillScrollTable();
+    testVdpSpriteLimit();
     testTestRom();
     testStates();
     testRewindBuffer();

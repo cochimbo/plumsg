@@ -56,6 +56,8 @@ Primera versión. Lo que hay:
 - **Perfiles 3D por juego**: cada ROM puede guardar sus propios ajustes del 3D.
 - **Rebobinado, avance rápido y cámara lenta**.
 - **Run-ahead**: quita 1 o más fotogramas de retardo a los mandos, como en RetroArch.
+- **Sin límite de sprites**: se ven todos los sprites de cada línea, sin el parpadeo que
+  causa el límite de la consola.
 - **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
 - **Trucos** Game Genie y Action Replay, guardados por juego, con las listas de trucos de
   cada juego de libretro-database para elegirlos de un menú.
@@ -126,6 +128,13 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   fotograma el juego corre por delante ese número de fotogramas, sin sonido, se ve su
   imagen y vuelve atrás, así lo que pulsas se ve antes. Con 1 suele bastar; cada fotograma
   más pide más al ordenador. También se puede fijar por juego en Opciones de este juego.
+- **Opciones > Vídeo > Sin límite de sprites** (desactivado por defecto): la consola dibuja
+  como mucho 20 sprites por línea (16 en modo estrecho) y 320 píxeles de sprites, y los
+  juegos van turnando cuáles se quedan fuera, por eso parpadean. Con esta opción se dibujan
+  todos. La consola sigue avisando al juego de que se ha pasado igual que la real, así que
+  el juego se comporta igual: no afecta a partidas en red, run-ahead, logros ni estados. El
+  truco de tapar sprites con uno en x = 0 se respeta. Si un juego parpadea igual, es que
+  esconde los sprites él mismo. También se puede fijar por juego.
 - **Consola**: región (automática según la cabecera, Japón, EE. UU. o Europa/PAL) y tipo
   de mando (3 o 6 botones) de cada puerto. Cambiar la región reinicia el juego.
 - **Opciones > Vídeo**: escalado, 4:3 o píxeles cuadrados, y las opciones del 3D

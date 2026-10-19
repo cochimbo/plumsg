@@ -23,6 +23,8 @@ struct Settings {
     std::string language;  // "es", "en", "fr" or "pt"; empty: the system's, decided at start
     std::string view = "2D";  // Renderer::name() of the active view
     RenderOptions render;
+    // Draw every sprite on a line, without the console's limit that makes them flicker.
+    bool unlimitedSprites = false;
     int windowScale = 3;
     bool fullscreen = false;
     bool showMenu = true;

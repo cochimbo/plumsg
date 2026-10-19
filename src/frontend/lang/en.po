@@ -1171,6 +1171,17 @@ msgstr ""
 "the vgmrips .zip) shows up in the list.\n"
 "%s"
 
+msgid ""
+"La consola solo dibuja 20 sprites (16 en modo estrecho) por línea; los juegos alternan cuáles\n"
+"cada fotograma y por eso parpadean. Así se ven todos. El juego no lo nota, así que\n"
+"no afecta a partidas en red, logros ni estados. Si un juego parpadea igual, es que\n"
+"lo hace él mismo."
+msgstr ""
+"The console only draws 20 sprites (16 in narrow mode) per line; games take turns on which\n"
+"each frame, which is why they flicker. This shows them all. The game does not notice, so\n"
+"netplay, achievements and states are not affected. If a game still flickers, it does\n"
+"that on its own."
+
 msgid "La contraseña no se guarda: plumsg guarda la sesión que te da el servidor."
 msgstr "The password is not saved: plumsg keeps the session the server gives you."
 
@@ -1905,6 +1916,12 @@ msgstr "No connection: the achievements will be sent when it is back."
 
 msgid "Sin elegir"
 msgstr "Not chosen"
+
+msgid "Sin límite de sprites"
+msgstr "No sprite limit"
+
+msgid "Sin límite de sprites (sin parpadeo)"
+msgstr "No sprite limit (no flicker)"
 
 msgid ""
 "Sin marcar, la cámara mira de frente y la imagen se ve como en 2D;\n"
