@@ -12,9 +12,6 @@ msgstr ""
 "\n"
 "Ao ativá-lo, o jogo recomeça."
 
-msgid "  (sugerido)"
-msgstr "  (sugerido)"
-
 msgid " (%+d oct.)"
 msgstr " (%+d oit.)"
 
@@ -39,12 +36,6 @@ msgstr "%d jogos. %s"
 msgid "%d juegos. Buscando carátulas, quedan %d..."
 msgstr "%d jogos. Procurando capas, faltam %d..."
 
-msgid "%d nota"
-msgstr "%d nota"
-
-msgid "%d notas"
-msgstr "%d notas"
-
 msgid "%d parecidas. Pulsa una para verla."
 msgstr "%d parecidas. Clique em uma para vê-la."
 
@@ -56,6 +47,9 @@ msgstr "%s, %u pontos"
 
 msgid "%s: %d %s, de %s a %s. Sugerencia: %s."
 msgstr "%s: %d %s, de %s a %s. Sugestão: %s."
+
+msgid "%s: %s Hz, %+d dB. Clic derecho: 0 dB."
+msgstr "%s: %s Hz, %+d dB. Clique direito: 0 dB."
 
 msgid "%u de %u logros, %u de %u puntos%s"
 msgstr "%u de %u conquistas, %u de %u pontos%s"
@@ -80,6 +74,9 @@ msgstr "(ajustados em Vídeo com o jogo aberto)"
 
 msgid "(sin nombre)"
 msgstr "(sem nome)"
+
+msgid "(sugerido)"
+msgstr "(sugerido)"
 
 msgid ", %d sin encontrar"
 msgstr ", %d não encontradas"
@@ -193,6 +190,9 @@ msgstr "Agogô agudo"
 
 msgid "Agogó grave"
 msgstr "Agogô grave"
+
+msgid "Agudos"
+msgstr "Agudos"
 
 msgid "Ajustar"
 msgstr "Ajustar"
@@ -439,6 +439,9 @@ msgstr "Sinos tubulares"
 msgid "Campanilla"
 msgstr "Sininho"
 
+msgid "Canal"
+msgstr "Canal"
+
 msgid "Canales"
 msgstr "Canais"
 
@@ -684,6 +687,9 @@ msgstr "EUA (NTSC)"
 
 msgid "EE. UU. (Sega CD)"
 msgstr "EUA (Sega CD)"
+
+msgid "Ecualizador..."
+msgstr "Equalizador..."
 
 msgid "Editor de instrumentos"
 msgstr "Editor de instrumentos"
@@ -1074,6 +1080,12 @@ msgstr "Gravar do jogo"
 msgid "Grabar vídeo"
 msgstr "Gravar vídeo"
 
+msgid "Graves"
+msgstr "Graves"
+
+msgid "Graves, medios y agudos del sintetizador, aquí y en los juegos."
+msgstr "Graves, médios e agudos do sintetizador, aqui e nos jogos."
+
 msgid "Grosor"
 msgstr "Espessura"
 
@@ -1442,6 +1454,15 @@ msgstr "Pontuação enviada: %s"
 msgid "Marimba"
 msgstr "Marimba"
 
+msgid "Medios"
+msgstr "Médios"
+
+msgid "Medios agudos"
+msgstr "Médios agudos"
+
+msgid "Medios graves"
+msgstr "Médios graves"
+
 msgid "Menú de estados"
 msgstr "Menu de estados"
 
@@ -1629,6 +1650,9 @@ msgstr "Nome (opcional)"
 msgid "Nombre del juego"
 msgstr "Nome do jogo"
 
+msgid "Notas"
+msgstr "Notas"
+
 msgid "Oboe"
 msgstr "Oboé"
 
@@ -1749,6 +1773,9 @@ msgstr "Peça do kit"
 msgid "Pista"
 msgstr "Faixa"
 
+msgid "Plano"
+msgstr "Plano"
+
 msgid "Plano B con prioridad delante"
 msgstr "Plano B com prioridade na frente"
 
@@ -1832,6 +1859,13 @@ msgstr ""
 "Tira quadros de atraso entre carregar num botão e vê-lo no ecrã: em cada\n"
 "quadro o jogo corre esse número de quadros à frente, mostra a sua imagem\n"
 "e volta atrás. 1 costuma chegar; mais pedem mais ao computador e podem notar-se saltos."
+
+msgid ""
+"Quita todo lo elegido a mano para este juego: cada instrumento vuelve a sonar\n"
+"como sugieren las reglas."
+msgstr ""
+"Remove tudo o que foi escolhido à mão para este jogo: cada instrumento volta a soar\n"
+"como sugerem as regras."
 
 msgid "Quitar"
 msgstr "Remover"
@@ -2140,6 +2174,12 @@ msgstr "Suavizar pixels"
 msgid "Subir"
 msgstr "Subir"
 
+msgid "Suena como"
+msgstr "Soa como"
+
+msgid "Sí, todo a las sugerencias"
+msgstr "Sim, tudo para as sugestões"
+
 msgid "Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta"
 msgstr "Tab ou gatilho direito (segurar)  avanço rápido;  F9  câmera lenta"
 
@@ -2148,6 +2188,9 @@ msgstr "Taiko"
 
 msgid "Tamaño:"
 msgstr "Tamanho:"
+
+msgid "También se quitan de la lista común los instrumentos de esta pista."
+msgstr "Os instrumentos desta faixa também saem da lista comum."
 
 msgid "Tambor sintetizado"
 msgstr "Tambor sintetizado"
@@ -2181,6 +2224,9 @@ msgstr "Tipo de controle"
 
 msgid "Tocar"
 msgstr "Tocar"
+
+msgid "Todo a las sugerencias..."
+msgstr "Tudo para as sugestões..."
 
 msgid "Todos"
 msgstr "Todos"
@@ -2393,6 +2439,13 @@ msgstr "agudo"
 msgid "byte"
 msgstr "byte"
 
+msgid ""
+"dB por banda.\n"
+"Solo el sintetizador."
+msgstr ""
+"dB por banda.\n"
+"Só o sintetizador."
+
 msgid "de PSG 3"
 msgstr "do PSG 3"
 
@@ -2581,6 +2634,12 @@ msgstr "Jogo dominado! Você tem todas as conquistas dele no hardcore."
 
 msgid "¡Logro desbloqueado! (%u puntos)"
 msgstr "Conquista desbloqueada! (%u pontos)"
+
+msgid "¿Quitar lo elegido a mano en todos los instrumentos de esta pista?"
+msgstr "Remover o que foi escolhido à mão em todos os instrumentos desta faixa?"
+
+msgid "¿Quitar todo lo elegido a mano en %s?"
+msgstr "Remover tudo o que foi escolhido à mão em %s?"
 
 msgid "Étnicos"
 msgstr "Étnicos"

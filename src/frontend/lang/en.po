@@ -12,9 +12,6 @@ msgstr ""
 "\n"
 "Turning it on restarts the game."
 
-msgid "  (sugerido)"
-msgstr "  (suggested)"
-
 msgid " (%+d oct.)"
 msgstr " (%+d oct.)"
 
@@ -39,12 +36,6 @@ msgstr "%d games. %s"
 msgid "%d juegos. Buscando carátulas, quedan %d..."
 msgstr "%d games. Looking for covers, %d left..."
 
-msgid "%d nota"
-msgstr "%d note"
-
-msgid "%d notas"
-msgstr "%d notes"
-
 msgid "%d parecidas. Pulsa una para verla."
 msgstr "%d similar. Click one to see it."
 
@@ -56,6 +47,9 @@ msgstr "%s, %u points"
 
 msgid "%s: %d %s, de %s a %s. Sugerencia: %s."
 msgstr "%s: %d %s, from %s to %s. Suggestion: %s."
+
+msgid "%s: %s Hz, %+d dB. Clic derecho: 0 dB."
+msgstr "%s: %s Hz, %+d dB. Right-click: 0 dB."
 
 msgid "%u de %u logros, %u de %u puntos%s"
 msgstr "%u of %u achievements, %u of %u points%s"
@@ -80,6 +74,9 @@ msgstr "(set in Video with the game open)"
 
 msgid "(sin nombre)"
 msgstr "(no name)"
+
+msgid "(sugerido)"
+msgstr "(suggested)"
 
 msgid ", %d sin encontrar"
 msgstr ", %d not found"
@@ -193,6 +190,9 @@ msgstr "High agogo"
 
 msgid "Agogó grave"
 msgstr "Low agogo"
+
+msgid "Agudos"
+msgstr "Treble"
 
 msgid "Ajustar"
 msgstr "Fit"
@@ -439,6 +439,9 @@ msgstr "Tubular bells"
 msgid "Campanilla"
 msgstr "Tinkle bell"
 
+msgid "Canal"
+msgstr "Channel"
+
 msgid "Canales"
 msgstr "Channels"
 
@@ -684,6 +687,9 @@ msgstr "USA (NTSC)"
 
 msgid "EE. UU. (Sega CD)"
 msgstr "USA (Sega CD)"
+
+msgid "Ecualizador..."
+msgstr "Equalizer..."
 
 msgid "Editor de instrumentos"
 msgstr "Instrument editor"
@@ -1074,6 +1080,12 @@ msgstr "Record from the game"
 msgid "Grabar vídeo"
 msgstr "Record video"
 
+msgid "Graves"
+msgstr "Bass"
+
+msgid "Graves, medios y agudos del sintetizador, aquí y en los juegos."
+msgstr "The synthesizer's bass, mids and treble, here and in the games."
+
 msgid "Grosor"
 msgstr "Thickness"
 
@@ -1442,6 +1454,15 @@ msgstr "Score submitted: %s"
 msgid "Marimba"
 msgstr "Marimba"
 
+msgid "Medios"
+msgstr "Mids"
+
+msgid "Medios agudos"
+msgstr "High mids"
+
+msgid "Medios graves"
+msgstr "Low mids"
+
 msgid "Menú de estados"
 msgstr "States menu"
 
@@ -1629,6 +1650,9 @@ msgstr "Name (optional)"
 msgid "Nombre del juego"
 msgstr "Game name"
 
+msgid "Notas"
+msgstr "Notes"
+
 msgid "Oboe"
 msgstr "Oboe"
 
@@ -1749,6 +1773,9 @@ msgstr "Kit piece"
 msgid "Pista"
 msgstr "Track"
 
+msgid "Plano"
+msgstr "Flat"
+
 msgid "Plano B con prioridad delante"
 msgstr "Plane B with priority in front"
 
@@ -1832,6 +1859,13 @@ msgstr ""
 "Removes frames of lag between pressing a button and seeing it on screen: on every\n"
 "frame the game runs that many frames ahead, shows their picture\n"
 "and goes back. 1 is usually enough; more ask more of the computer and may stutter."
+
+msgid ""
+"Quita todo lo elegido a mano para este juego: cada instrumento vuelve a sonar\n"
+"como sugieren las reglas."
+msgstr ""
+"Drops everything chosen by hand for this game: every instrument sounds again\n"
+"as the rules suggest."
 
 msgid "Quitar"
 msgstr "Remove"
@@ -2140,6 +2174,12 @@ msgstr "Smooth pixels"
 msgid "Subir"
 msgstr "Up"
 
+msgid "Suena como"
+msgstr "Sounds as"
+
+msgid "Sí, todo a las sugerencias"
+msgstr "Yes, all back to suggestions"
+
 msgid "Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta"
 msgstr "Tab or right trigger (hold)  fast forward;  F9  slow motion"
 
@@ -2148,6 +2188,9 @@ msgstr "Taiko drum"
 
 msgid "Tamaño:"
 msgstr "Size:"
+
+msgid "También se quitan de la lista común los instrumentos de esta pista."
+msgstr "This track's instruments are also dropped from the shared list."
 
 msgid "Tambor sintetizado"
 msgstr "Synth drum"
@@ -2181,6 +2224,9 @@ msgstr "Pad type"
 
 msgid "Tocar"
 msgstr "Play"
+
+msgid "Todo a las sugerencias..."
+msgstr "All back to suggestions..."
 
 msgid "Todos"
 msgstr "All"
@@ -2393,6 +2439,13 @@ msgstr "high"
 msgid "byte"
 msgstr "byte"
 
+msgid ""
+"dB por banda.\n"
+"Solo el sintetizador."
+msgstr ""
+"dB per band.\n"
+"Synthesizer only."
+
 msgid "de PSG 3"
 msgstr "from PSG 3"
 
@@ -2581,6 +2634,12 @@ msgstr "Game mastered! You have all its achievements in hardcore."
 
 msgid "¡Logro desbloqueado! (%u puntos)"
 msgstr "Achievement unlocked! (%u points)"
+
+msgid "¿Quitar lo elegido a mano en todos los instrumentos de esta pista?"
+msgstr "Drop what was chosen by hand for every instrument in this track?"
+
+msgid "¿Quitar todo lo elegido a mano en %s?"
+msgstr "Drop everything chosen by hand in %s?"
 
 msgid "Étnicos"
 msgstr "Ethnic"

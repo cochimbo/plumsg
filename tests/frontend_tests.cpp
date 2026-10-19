@@ -112,6 +112,21 @@ void testOverclockOption() {
     check(again.overclock == Settings::kMaxOverclock, "overclock: como mucho 400");
 }
 
+void testEqualizerOption() {
+    Settings s;
+    check(s.equalizer == (std::array<int, 5>{}), "ecualizador: plano si no se dice");
+    s.equalizer = {6, -3, 0, 2, -12};
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.equalizer == s.equalizer, "ecualizador: plumsg.ini lo guarda");
+    std::istringstream loud("[audio]\necualizador = 40, 0, 0, 0, -40\n");
+    Settings::parse(loud, again);
+    check(again.equalizer[0] == 12 && again.equalizer[4] == -12, "ecualizador: de -12 a 12 dB");
+}
+
 void testWidescreenOption() {
     const Settings general;
     const InputConfig generalInput = InputConfig::defaults();
@@ -146,6 +161,7 @@ int main() {
     testSpriteLimitOption();
     testWidescreenOption();
     testOverclockOption();
+    testEqualizerOption();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

@@ -288,13 +288,21 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
     test del juego: se pone a grabar y se van tocando sus canciones.
   - **Tocar** la reproduce con el juego en pausa. **Original** y **Sintetizador** cambian entre
     los dos sonidos en el mismo punto, para comparar, y la lista **SoundFont** de debajo (la
-    misma de **Sonido**) cambia de SoundFont sin salir del editor. Cada canal (FM 1-6, DAC,
-    PSG 1-3 y ruido) tiene **Solo** y **Silencio**.
-  - La lista enseña los instrumentos de la pista, con sus canales y sus notas. Los que suenan
-    en ese momento salen en verde. A cada uno se le puede dar un **Instrumento** General
-    MIDI (con octava y volumen), una pieza de la **Batería** GM, o dejarle su **Sonido
-    original**. **Escuchar solo este** calla todo lo demás, y **Volver a la sugerencia**
-    deshace lo elegido.
+    misma de **Sonido**) cambia de SoundFont sin salir del editor. **Ecualizador...** sube o
+    baja graves, medios y agudos del sintetizador (de -12 a 12 dB), aquí y en los juegos.
+    Cada canal (FM 1-6, DAC, PSG 1-3 y ruido) tiene **Solo** y **Silencio**.
+  - La tabla enseña los instrumentos de la pista (FM A, FM B...: las letras para no
+    confundirlos con los canales FM 1-6), con lo que suenan, sus canales y sus notas, en
+    filas a la altura de las de los canales; los canales del instrumento elegido se marcan.
+    Los que suenan en ese momento salen en verde. A cada uno se le puede dar un
+    **Instrumento** General MIDI (con octava y volumen), una pieza de la **Batería** GM, o
+    dejarle su **Sonido original**. **Escuchar solo este** calla todo lo demás, **Volver a la
+    sugerencia** deshace lo elegido en ese instrumento y **Todo a las sugerencias...**, en
+    todos los del juego.
+  - Un instrumento FM se reconoce por sus registros, sin su volumen ni su velocidad de
+    release: drivers como el de Sonic ponen el release al máximo para cortar una nota o
+    dejar sitio a un efecto, y antes de la 0.0.23 eso lo hacía pasar por otro instrumento
+    sin asignar. Lo guardado con las huellas de antes sigue valiendo.
   - Lo elegido se oye al momento, también en el juego, y se guarda en
     `sonido\<juego>.ini`. Con **Usar también en otros juegos** (marcado de entrada) va
     además a `sonido\cache.ini`, que comparten todos los juegos: el mismo sonido FM en otro

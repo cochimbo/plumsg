@@ -127,12 +127,87 @@ private:
     double phase_ = 0;
 };
 
+// The equalizer: a low shelf, three peaks and a high shelf (RBJ's biquads), one gain
+// each in dB. A band at 0 dB is left out.
+class Equalizer {
+public:
+    void setRate(double rate) {
+        rate_ = rate;
+        design();
+    }
+    void setGains(const std::array<int, RolandSound::kEqBands>& gains) {
+        if (gains == gains_) return;
+        gains_ = gains;
+        design();
+    }
+
+    void process(float* buf, int frames) {
+        for (int b = 0; b < RolandSound::kEqBands; ++b) {
+            if (!gains_[static_cast<size_t>(b)] || rate_ <= 0) continue;
+            Band& f = bands_[static_cast<size_t>(b)];
+            for (int i = 0; i < frames; ++i)
+                for (int side = 0; side < 2; ++side) {
+                    float& x = buf[i * 2 + side];
+                    float* z = f.z[side];
+                    const float y = f.b0 * x + z[0];
+                    z[0] = f.b1 * x - f.a1 * y + z[1];
+                    z[1] = f.b2 * x - f.a2 * y;
+                    x = y;
+                }
+        }
+    }
+
+private:
+    struct Band {
+        float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+        float z[2][2] = {};
+    };
+    void design() {
+        if (rate_ <= 0) return;
+        for (int b = 0; b < RolandSound::kEqBands; ++b) {
+            Band& f = bands_[static_cast<size_t>(b)];
+            const double gain = std::pow(10.0, gains_[static_cast<size_t>(b)] / 40.0);
+            const double w = 2 * 3.14159265358979 * std::min(RolandSound::kEqFrequencies[b], rate_ * 0.45) / rate_;
+            const double cw = std::cos(w), sw = std::sin(w);
+            double b0, b1, b2, a0, a1, a2;
+            if (b == 0 || b == RolandSound::kEqBands - 1) {  // shelves, slope 1
+                const double alpha = sw / 2 * std::sqrt(2.0), sq = 2 * std::sqrt(gain) * alpha;
+                const double sign = b == 0 ? 1 : -1;  // the high shelf is the low one with cos negated
+                b0 = gain * ((gain + 1) - sign * (gain - 1) * cw + sq);
+                b1 = 2 * sign * gain * ((gain - 1) - sign * (gain + 1) * cw);
+                b2 = gain * ((gain + 1) - sign * (gain - 1) * cw - sq);
+                a0 = (gain + 1) + sign * (gain - 1) * cw + sq;
+                a1 = -2 * sign * ((gain - 1) + sign * (gain + 1) * cw);
+                a2 = (gain + 1) + sign * (gain - 1) * cw - sq;
+            } else {  // peaks, Q 1: about an octave and a half wide
+                const double alpha = sw / 2;
+                b0 = 1 + alpha * gain;
+                b1 = -2 * cw;
+                b2 = 1 - alpha * gain;
+                a0 = 1 + alpha / gain;
+                a1 = -2 * cw;
+                a2 = 1 - alpha / gain;
+            }
+            f.b0 = static_cast<float>(b0 / a0);
+            f.b1 = static_cast<float>(b1 / a0);
+            f.b2 = static_cast<float>(b2 / a0);
+            f.a1 = static_cast<float>(a1 / a0);
+            f.a2 = static_cast<float>(a2 / a0);
+        }
+    }
+
+    double rate_ = 0;
+    std::array<int, RolandSound::kEqBands> gains_{};
+    std::array<Band, RolandSound::kEqBands> bands_{};
+};
+
 }  // namespace
 
 struct RolandSound::Synth {
     tsf* font = nullptr;
     int rate = 0;  // the rate tsf renders at, fixed once set
     Effects effects;
+    Equalizer equalizer;
     std::vector<float> buffer;
 
     ~Synth() {
@@ -170,6 +245,12 @@ bool RolandSound::shareSoundfont(const RolandSound& other) {
 bool RolandSound::ready() const { return synth_->font != nullptr; }
 
 void RolandSound::setEffects(int reverb, int chorus) { synth_->effects.setAmounts(reverb, chorus); }
+
+void RolandSound::setEqualizer(const std::array<int, kEqBands>& gains) {
+    std::array<int, kEqBands> clamped = gains;
+    for (int& g : clamped) g = std::clamp(g, -kEqRange, kEqRange);
+    synth_->equalizer.setGains(clamped);
+}
 
 namespace {
 
@@ -261,10 +342,29 @@ RolandSound::Kind RolandSound::kindOf(uint32_t fingerprint) {
     return Kind::Fm;
 }
 
+std::vector<uint32_t> RolandSound::aliases(uint32_t fingerprint) const {
+    auto l = legacy_.find(fingerprint);
+    return l == legacy_.end() ? std::vector<uint32_t>{} : std::vector<uint32_t>(l->second.begin(), l->second.end());
+}
+
+uint32_t RolandSound::assignedAs(uint32_t fingerprint) const {
+    if (assigned_.count(fingerprint)) return fingerprint;
+    for (uint32_t old : aliases(fingerprint))
+        if (assigned_.count(old)) return old;
+    return 0;
+}
+
+bool RolandSound::isSoundEffect(uint32_t fingerprint) const {
+    if (effects_.count(fingerprint)) return true;
+    for (uint32_t old : aliases(fingerprint))
+        if (effects_.count(old)) return true;
+    return false;
+}
+
 RolandSound::Assignment RolandSound::assignmentFor(uint32_t fingerprint) const {
-    if (auto a = assigned_.find(fingerprint); a != assigned_.end()) return a->second;
+    if (const uint32_t key = assignedAs(fingerprint)) return assigned_.at(key);
     Assignment rules;
-    if (effectsOriginal_ && effects_.count(fingerprint)) {
+    if (effectsOriginal_ && isSoundEffect(fingerprint)) {
         rules.original = true;
         return rules;
     }
@@ -563,23 +663,33 @@ void RolandSound::pitchTo(int voice, double note, uint64_t clock) {
     }
 }
 
-uint32_t RolandSound::fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops) const {
+uint32_t RolandSound::fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops, uint32_t* legacy) const {
     const uint8_t algorithmFeedback = ym.reg(chReg(ch, 0xB0));
     const int algorithm = algorithmFeedback & 7;
-    uint32_t hash = 2166136261u;  // FNV-1a
-    auto add = [&](uint8_t b) { hash = (hash ^ b) * 16777619u; };
-    add(algorithmFeedback & 0x3F);
+    // FNV-1a. Before 0.0.23 every bit written went in, release rate included: drivers
+    // like Sonic's set it to the fastest to cut a note or make way for a sound effect,
+    // and the same instrument came out as another one, with no assignment. Those old
+    // fingerprints are still worked out, for the files that use them.
+    uint32_t hash = 2166136261u, old = 2166136261u;
+    auto add = [](uint32_t& h, uint8_t b) { h = (h ^ b) * 16777619u; };
+    add(hash, algorithmFeedback & 0x3F);
+    add(old, algorithmFeedback & 0x3F);
+    // The bits the chip uses of each register, 0x30 to 0x90.
+    static constexpr uint8_t kUsed[7] = {0x7F, 0x7F, 0xDF, 0x9F, 0x1F, 0xF0, 0x0F};
     for (int op = 0; op < 4; ++op) {
         for (int i = 0; i < 7; ++i) {
             uint8_t b = ym.reg(opReg(ch, op, 0x30 + i * 0x10));
             if (ops) (*ops)[static_cast<size_t>(op * 7 + i)] = b;
             // A carrier's total level is its volume, not its sound.
             if (i == 1 && (kCarriers[algorithm] & (1 << op))) b = 0;
-            add(b);
+            add(old, b);
+            add(hash, b & kUsed[i]);  // and the release rate (0x80's low half) is how a note is let go
         }
     }
     // Clear of the PSG's fingerprints, which are not hashes.
     if (kindOf(hash) != Kind::Fm || hash == 0) hash ^= 0x80000001u;
+    if (kindOf(old) != Kind::Fm || old == 0) old ^= 0x80000001u;
+    if (legacy) *legacy = old;
     return hash;
 }
 
@@ -603,7 +713,9 @@ void RolandSound::fmKey(int ch, bool on, const Ym2612& ym, uint64_t clock) {
     const double note = fmNote((hi & 7) << 8 | ym.reg(chReg(ch, 0xA0)), (hi >> 3) & 7, chipClock_);
     if (note <= 0) return;
     std::array<uint8_t, 28> ops{};
-    const uint32_t fp = fmFingerprint(ch, ym, &ops);
+    uint32_t legacy = 0;
+    const uint32_t fp = fmFingerprint(ch, ym, &ops, &legacy);
+    if (legacy != fp) legacy_[fp].insert(legacy);
     const uint8_t algorithmFeedback = ym.reg(chReg(ch, 0xB0));
     auto r = rules_.find(fp);
     if (r == rules_.end()) r = rules_.emplace(fp, programFor(ops, algorithmFeedback, static_cast<int>(note))).first;
@@ -803,6 +915,7 @@ void RolandSound::render(int16_t* out, int frames) {
     buf.assign(static_cast<size_t>(frames) * 2, 0.0f);
     tsf_render_float(synth_->font, buf.data(), frames, 0);
     synth_->effects.process(buf.data(), frames);
+    synth_->equalizer.process(buf.data(), frames);
     const float gain = 9000.0f * static_cast<float>(volume_) / 100.0f;
     for (int i = 0; i < frames * 2; ++i)
         out[i] = static_cast<int16_t>(std::clamp(static_cast<int>(out[i]) + static_cast<int>(buf[static_cast<size_t>(i)] * gain), -32768, 32767));
@@ -827,6 +940,7 @@ void RolandSound::endFrame(uint64_t clock, std::vector<int16_t>& out, size_t fro
         }
         channels_ = {};
         s.effects.setRate(s.rate);
+        s.equalizer.setRate(s.rate);
     }
     const int frames = static_cast<int>((out.size() - std::min(out.size(), from * 2)) / 2);
     const double span = clock > frameStart_ ? static_cast<double>(clock - frameStart_) : 1.0;
