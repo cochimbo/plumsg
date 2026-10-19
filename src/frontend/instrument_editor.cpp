@@ -477,8 +477,8 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("%s", tr("Busca las canciones en la ROM del juego y las graba una a una, sin nombre\n"
                               "(Canción 1, Canción 2...), con las pistas del juego. Sirve para los juegos\n"
-                              "con un driver de sonido como el de Sonic (SMPS), el de Streets of Rage 2\n"
-                              "o el GEMS (Sonic Spinball, Earthworm Jim).\n"
+                              "con un driver de sonido como el de Sonic (SMPS), el de Streets of Rage 2,\n"
+                              "el de EA (NHL 96) o el GEMS (Sonic Spinball, Earthworm Jim).\n"
                               "Tarda unos minutos."));
     }
     const bool canRecord = !view.loadedGame.empty() && view.loadedGame == game_;

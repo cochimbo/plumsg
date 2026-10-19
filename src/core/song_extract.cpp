@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -190,13 +191,21 @@ struct Candidate {
     std::vector<uint8_t> message;          // what goes before the number
     std::array<uint32_t, 15> regs{};  // a call's d0-d7 and a0-a6: what the game loads, or kKeep
     int numberReg = 0;                // and which of them holds the number
+    int argBytes = 0;                 // or 2 or 4: the number goes on the stack (EA's driver)
+    uint32_t pops = 0;                // bytes of it the routine takes off the stack itself
     std::vector<uint32_t> numbers;    // the numbers the game calls it with
     uint64_t firstFrame = 0;  // of its first request
     std::vector<std::pair<uint64_t, uint32_t>> requests;  // frame, number
     int driverTaken = 0;  // requests the game's program made and the sound driver took
     int sound = 0;  // notes the loudest request makes when asked again
     uint64_t soundFrame = 0;  // and where it was asked: nothing else plays there
+    bool probed = false;      // only a number the game was not seen asking for made it
 };
+
+// Where a call takes its number, for the log.
+std::string where(const Candidate& c) {
+    return c.argBytes ? "la pila" : "d" + std::to_string(c.numberReg);
+}
 
 }  // namespace
 
@@ -325,31 +334,72 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
 
     // Other drivers are asked by calling one of their routines with the number in a
     // register (Streets of Rage 2's: the music and each kind of sound with a number of
-    // its own). The routines of the driver the game's program calls from many places,
-    // loading a register with a different number before each call.
+    // its own) or on the stack (EA's, through a routine of the game that calls the
+    // driver's). The routines the game's program calls from many places, loading a
+    // register or pushing a different number before each call.
     std::vector<Candidate> calls;
     {
-        std::map<uint32_t, std::vector<std::array<uint32_t, 15>>> sites;  // by routine
+        constexpr size_t kStack = 15;  // where a site's number pushed on the stack goes
+        struct Site {
+            std::array<uint32_t, 16> regs;  // d0-d7, a0-a6, then the stack
+            int argBytes;
+            bool callerPops;  // the caller takes the number off the stack after the call
+        };
+        std::map<uint32_t, std::vector<Site>> sites;  // by routine
         const uint32_t size = static_cast<uint32_t>(std::min<size_t>(md->cartridge().romSize(), 0x400000));
         auto word = [&](uint32_t at) { return md->peek16(at); };
+        // Where a call (JSR, JMP, BSR) at `at` goes, and how long it is; 0 if it is not one.
+        auto callAt = [&](uint32_t at, uint32_t& length) -> uint32_t {
+            const uint16_t op = word(at);
+            length = 4;
+            if (op == 0x4EB9 || op == 0x4EF9) {  // JSR/JMP (xxx).L
+                length = 6;
+                return (static_cast<uint32_t>(word(at + 2)) << 16 | word(at + 4)) & 0xFFFFFF;
+            }
+            if (op == 0x4EB8 || op == 0x4EF8)  // JSR/JMP (xxx).W
+                return static_cast<uint32_t>(static_cast<int16_t>(word(at + 2))) & 0xFFFFFF;
+            if (op == 0x6100 || op == 0x4EBA)  // BSR.W, JSR (d16,PC)
+                return (at + 2 + static_cast<uint32_t>(static_cast<int16_t>(word(at + 2)))) & 0xFFFFFF;
+            if ((op & 0xFF00) == 0x6100 && (op & 0xFF) != 0xFF) {  // BSR.B
+                length = 2;
+                return (at + 2 + static_cast<uint32_t>(static_cast<int8_t>(op & 0xFF))) & 0xFFFFFF;
+            }
+            return 0;
+        };
+        // A routine that calls the driver, or a routine that does, from its first bytes
+        // (the game's own "play this", in front of the driver's).
+        std::map<std::pair<uint32_t, int>, bool> leads;
+        std::function<bool(uint32_t, int)> leadsToDriver = [&](uint32_t routine, int depth) {
+            if (inDriver(routine)) return true;
+            if (depth == 0) return false;
+            const auto key = std::make_pair(routine, depth);
+            if (auto it = leads.find(key); it != leads.end()) return it->second;
+            leads[key] = false;
+            bool yes = false;
+            for (uint32_t at = routine; !yes && at < routine + 0x100 && at + 6 <= size; at += 2) {
+                uint32_t length;
+                const uint32_t to = callAt(at, length);
+                if (to && to < size && !(to & 1) && to != routine) yes = leadsToDriver(to, depth - 1);
+            }
+            return leads[key] = yes;
+        };
         for (uint32_t at = 0x200; at + 6 <= size; at += 2) {
             const uint16_t op = word(at);
-            uint32_t target;
-            if (op == 0x4EB9 || op == 0x4EF9)  // JSR/JMP (xxx).L
-                target = (static_cast<uint32_t>(word(at + 2)) << 16 | word(at + 4)) & 0xFFFFFF;
-            else if (op == 0x4EB8 || op == 0x4EF8)  // JSR/JMP (xxx).W
-                target = static_cast<uint32_t>(static_cast<int16_t>(word(at + 2))) & 0xFFFFFF;
-            else
-                continue;
-            if (target >= size || (target & 1) || inDriver(at) || !inDriver(target)) continue;
-            // The registers given a number right before (MOVE.L/MOVE.W/MOVE.B #n,Dn, MOVEQ).
-            std::array<uint32_t, 15> regs;
-            regs.fill(kKeep);
+            if (op != 0x4EB9 && op != 0x4EF9 && op != 0x4EB8 && op != 0x4EF8) continue;
+            uint32_t length;
+            const uint32_t target = callAt(at, length);
+            if (target >= size || (target & 1) || inDriver(at) || !leadsToDriver(target, 2)) continue;
+            // The registers given a number right before (MOVE.L/MOVE.W/MOVE.B #n,Dn, MOVEQ),
+            // and the number pushed last (MOVE.W/MOVE.L #n,-(A7), PEA (n).W).
+            Site site;
+            site.regs.fill(kKeep);
+            site.argBytes = 0;
             uint32_t pos = at;
             bool any = false;
             for (int k = 0; k < 3; ++k) {
-                int reg;
+                size_t reg;
                 uint32_t value;
+                int pushed = 0;
                 if (pos >= 6 && (word(pos - 6) & 0xF1FF) == 0x203C) {
                     reg = (word(pos - 6) >> 9) & 7;
                     value = static_cast<uint32_t>(word(pos - 4)) << 16 | word(pos - 2);
@@ -362,61 +412,112 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
                     reg = (word(pos - 2) >> 9) & 7;
                     value = static_cast<uint32_t>(static_cast<int8_t>(word(pos - 2) & 0xFF));
                     pos -= 2;
+                } else if (pos >= 4 && word(pos - 4) == 0x3F3C) {
+                    reg = kStack;
+                    value = word(pos - 2);
+                    pushed = 2;
+                    pos -= 4;
+                } else if (pos >= 4 && word(pos - 4) == 0x4878) {
+                    reg = kStack;
+                    value = static_cast<uint32_t>(static_cast<int16_t>(word(pos - 2)));
+                    pushed = 4;
+                    pos -= 4;
+                } else if (pos >= 6 && word(pos - 6) == 0x2F3C) {
+                    reg = kStack;
+                    value = static_cast<uint32_t>(word(pos - 4)) << 16 | word(pos - 2);
+                    pushed = 4;
+                    pos -= 6;
                 } else {
                     break;
                 }
-                if (regs[static_cast<size_t>(reg)] == kKeep) regs[static_cast<size_t>(reg)] = value;  // the last one loaded
+                if (pushed) {
+                    if (site.argBytes) break;  // a second argument: not one of these
+                    site.argBytes = pushed;
+                }
+                if (site.regs[reg] == kKeep) site.regs[reg] = value;  // the last one loaded
                 any = true;
             }
-            if (any) sites[target].push_back(regs);
+            if (!any) continue;
+            // ADDQ #n,A7 or LEA (d,A7),A7 right after.
+            const uint16_t next = word(at + length);
+            site.callerPops = (next & 0xF13F) == 0x500F || next == 0x4FEF;
+            sites[target].push_back(site);
         }
         for (const auto& [routine, list] : sites) {
             if (list.size() < 8) continue;
-            // The number goes in the register given most different values; the others keep
-            // what the game gives them most often.
+            // The number goes where the game gives most different values; the registers
+            // keep what the game gives them most often.
             Candidate c;
             c.address = routine;
             c.call = true;
             c.regs.fill(kKeep);
-            size_t most = 0;
-            for (int r = 0; r < 8; ++r) {
+            size_t most = 0, numberAt = 0;
+            for (size_t r = 0; r < 16; ++r) {
+                if (r >= 8 && r < kStack) continue;
                 std::map<uint32_t, int> values;
                 size_t loaded = 0;
-                for (const auto& regs : list)
-                    if (regs[static_cast<size_t>(r)] != kKeep) {
-                        ++values[regs[static_cast<size_t>(r)]];
+                for (const Site& site : list)
+                    if (site.regs[r] != kKeep) {
+                        ++values[site.regs[r]];
                         ++loaded;
                     }
                 if (values.size() > most) {
                     most = values.size();
-                    c.numberReg = r;
+                    numberAt = r;
                 }
-                if (loaded * 2 >= list.size()) {
+                if (r < 8 && loaded * 2 >= list.size()) {
                     auto common = std::max_element(values.begin(), values.end(),
                                                    [](const auto& a, const auto& b) { return a.second < b.second; });
-                    c.regs[static_cast<size_t>(r)] = common->first;
+                    c.regs[r] = common->first;
                 }
             }
             if (most < 3) continue;
             std::set<uint32_t> numbers;
-            for (const auto& regs : list)
-                if (regs[static_cast<size_t>(c.numberReg)] <= 0xFFFF) numbers.insert(regs[static_cast<size_t>(c.numberReg)]);
+            int callerPops = 0, pushes = 0;
+            for (const Site& site : list)
+                if (site.regs[numberAt] <= 0xFFFF) {
+                    numbers.insert(site.regs[numberAt]);
+                    if (numberAt == kStack) {
+                        c.argBytes = std::max(c.argBytes, site.argBytes);
+                        callerPops += site.callerPops;
+                        ++pushes;
+                    }
+                }
+            if (numberAt == kStack) {
+                c.numberReg = -1;
+                if (callerPops * 2 < pushes) c.pops = static_cast<uint32_t>(c.argBytes);
+            } else {
+                c.numberReg = static_cast<int>(numberAt);
+            }
             c.numbers.assign(numbers.begin(), numbers.end());
             if (c.numbers.size() < 3) continue;
-            // Asked with a few of them (one of each kind first: the number's high byte), where
-            // they are found (below).
+            // Asked with a few of them (one of each kind first: the number's high byte), and
+            // the next few after the last (the songs may come after the sounds), where they
+            // are found (below).
             std::vector<uint32_t> sample;
             std::set<uint32_t> kinds;
             for (uint32_t n : c.numbers)
                 if (n > 0xFF && kinds.insert(n >> 8).second) sample.push_back(n);
             for (uint32_t n : c.numbers)
                 if (n && std::find(sample.begin(), sample.end(), n) == sample.end()) sample.push_back(n);
-            for (size_t i = 0; i < sample.size() && i < 4; ++i) c.requests.push_back({0, sample[i]});
+            if (sample.size() > 4) sample.resize(4);
+            for (uint32_t step = 1; step <= 3; ++step)
+                if ((c.numbers.back() & 0xFF) + step <= 0xFF) sample.push_back(c.numbers.back() + step);
+            for (uint32_t n : sample) c.requests.push_back({0, n});
             c.driverTaken = static_cast<int>(list.size());
             calls.push_back(c);
         }
-        std::sort(calls.begin(), calls.end(), [](const Candidate& a, const Candidate& b) { return a.driverTaken > b.driverTaken; });
-        if (calls.size() > 4) calls.resize(4);
+        // The driver's own routines first, then the game's in front of them; those called
+        // from most places first.
+        std::sort(calls.begin(), calls.end(), [&](const Candidate& a, const Candidate& b) {
+            if (inDriver(a.address) != inDriver(b.address)) return inDriver(a.address);
+            return a.driverTaken > b.driverTaken;
+        });
+        std::vector<Candidate> kept;
+        int own = 0, front = 0;
+        for (const Candidate& c : calls)
+            if (inDriver(c.address) ? own++ < 4 : front++ < 4) kept.push_back(c);
+        calls = std::move(kept);
     }
     // Other drivers (GEMS) take commands from a ring in the Z80's memory: the game writes a
     // message (as FF 10 n, start song n) a byte at a time after the last, and then where
@@ -515,9 +616,10 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
 
     // Keeping the game's own requests out, and asking.
     auto lock = [&](const Candidate& c, uint32_t from, uint32_t to) {
-        if (c.call)
+        if (c.call) {
             md->cpu().skipRoutine = c.address;
-        else if (c.ring)
+            md->cpu().skipPops = c.pops;
+        } else if (c.ring)
             md->lockSoundRequests(c.address, 1, true);  // where the next goes may be 0
         else
             md->lockSoundRequests(from, static_cast<int>(to - from));
@@ -526,8 +628,12 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         if (c.call) {
             uint32_t regs[15];
             std::copy(c.regs.begin(), c.regs.end(), regs);
-            regs[c.numberReg] = number;
-            md->cpu().callRoutine(c.address, regs, kKeep);
+            if (c.argBytes)
+                md->cpu().callRoutine(c.address, regs, kKeep, number, c.argBytes);
+            else {
+                regs[c.numberReg] = number;
+                md->cpu().callRoutine(c.address, regs, kKeep);
+            }
         } else if (c.ring) {
             // After the last message, and then where the next goes.
             const uint32_t at = md->peek(c.address);
@@ -623,7 +729,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             std::string r;
             for (size_t i = 0; i < c.requests.size() && i < 12; ++i)
                 r += " " + hex(c.requests[i].second, 2) + "@" + std::to_string(c.requests[i].first);
-            say("  " + hex(c.address, 6) + (c.call ? " (rutina, d" + std::to_string(c.numberReg) + ")" : "") +
+            say("  " + hex(c.address, 6) + (c.call ? " (rutina, " + where(c) + ")" : "") +
                 (c.ring ? " (anillo en " + hex(c.ringStart, 6) + ")" : "") +
                 (c.driverTaken ? " (driver " + std::to_string(c.driverTaken) + ")" : "") + ":" + r);
         }
@@ -637,14 +743,17 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         std::set<uint32_t> tried;
         std::vector<std::pair<uint64_t, uint32_t>> tries;
         for (const auto& [when, number] : c.requests)
-            if (tried.size() < 4 && tried.insert(number).second) tries.push_back({when, number});
+            if ((c.call || tried.size() < 4) && tried.insert(number).second) tries.push_back({when, number});
+        const size_t own = tries.size();
         if (!c.call && !c.ring && c.driverTaken > 0 && tried.size() < 3)
             for (uint32_t step = 1; step <= 3; ++step) {
                 const uint32_t number = (c.requests.back().second + step) & 0xFF;
                 if (number && number != 0x80 && tried.insert(number).second)
                     tries.push_back({c.requests.back().first, number});
             }
-        for (const auto& [when, number] : tries) {
+        int ownSound = 0;  // what the game's own requests made
+        for (size_t t = 0; t < tries.size(); ++t) {
+            const auto [when, number] = tries[t];
             if (!goTo(when)) {
                 say("No se puede volver al cuadro " + std::to_string(when));
                 continue;
@@ -662,7 +771,9 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
                 c.sound = asked - quiet;
                 c.soundFrame = when;
             }
+            if (t < own) ownSound = std::max(ownSound, asked - quiet);
         }
+        c.probed = ownSound <= 4;
         if (c.sound > 4) queues.push_back(c);
     }
     md->lockSoundRequests(0, 0);
@@ -671,21 +782,30 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         *notFound = true;
         return fail(tr("No he encontrado cómo pide la música este juego. Por ahora sé sacarla de los juegos cuyo driver toma "
                        "las peticiones de un byte de la memoria (como el de Sonic, SMPS), de una llamada a una rutina suya "
-                       "(como el de Streets of Rage 2) o de mensajes en la memoria del Z80 (GEMS)."));
+                       "(como el de Streets of Rage 2 o el de EA) o de mensajes en la memoria del Z80 (GEMS)."));
     }
 
-    // Where the driver takes the requests first, then where asking made most music. A
-    // queue where no number plays a song (a variable of the game that only looked like
-    // one) gives way to the next.
+    // Where the driver takes the requests first (a ring of messages before a byte), then
+    // where the game's own requests made music (not only the numbers after them), then
+    // where asking made most music. A queue where no number plays a song (a variable of
+    // the game that only looked like one) gives way to the next.
     std::stable_sort(queues.begin(), queues.end(), [](const Candidate& a, const Candidate& b) {
         if ((a.driverTaken > 0) != (b.driverTaken > 0)) return a.driverTaken > 0;
+        if (a.ring != b.ring) return a.ring;
+        if (a.probed != b.probed) return !a.probed;
         return a.sound > b.sound;
     });
     // The songs it finds asking at `chosen` (into `songs`), or -1 if stopped.
+    // (adding: to the songs found already, behind another routine.)
     std::vector<Song> songs;
-    auto tryQueue = [&](const Candidate& chosen) -> int {
-        songs.clear();
-        p.found = 0;
+    std::set<uint64_t> heard;  // how each song found starts, to skip the same song twice
+    auto tryQueue = [&](const Candidate& chosen, bool adding) -> int {
+        if (!adding) {
+            songs.clear();
+            heard.clear();
+            p.found = 0;
+        }
+        const size_t heardBefore = heard.size();
         // Ask where the request with most music went, from where the game made it (the
         // driver is ready there, and nothing else was playing), with every queue found kept
         // from the game.
@@ -722,8 +842,8 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         }
         const int digits = numbers.back() > 0xFF ? 4 : 2;
         if (c.call)
-            say("Pido las canciones llamando a " + hex(c.address, 6) + " con el número en d" + std::to_string(c.numberReg) +
-                ", del " + hex(numbers.front(), digits) + " al " + hex(numbers.back(), digits) + ", desde el cuadro " +
+            say("Pido las canciones llamando a " + hex(c.address, 6) + " con el número en " + where(c) + ", del " +
+                hex(numbers.front(), digits) + " al " + hex(numbers.back(), digits) + ", desde el cuadro " +
                 std::to_string(start) + "; las llamadas del juego no pasan");
         else if (c.ring) {
             std::string m;
@@ -785,7 +905,6 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
 
         // 3. Every number in turn.
         p.total = static_cast<int>(numbers.size());
-        std::set<uint64_t> heard;  // how each song found starts, to skip the same song twice
         auto opening = [](const NoteTracker& t) {
             uint64_t h = 1469598103934665603ull;
             for (size_t i = 0; i < std::min<size_t>(t.notes.size(), 64); ++i) h = (h ^ t.notes[i].key) * 1099511628211ull;
@@ -895,13 +1014,18 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             if (again || !heard.insert(opening(tracker)).second) {
                 say(hex(number, digits) + ": repetida");
                 // Every number the same song: the driver does not take the number from here.
-                if (heard.size() == 1 && ++repeated >= 8) {
+                if (heard.size() <= heardBefore + 1 && ++repeated >= 8) {
                     say("Todas suenan igual; aquí no se elige la canción");
                     break;
                 }
                 continue;
             }
             if (!firstSong) firstSong = number;
+            // A routine's songs may go on past the numbers the game was seen to call it with:
+            // a little past each one found.
+            if (c.call && numbers.back() >> 8 == number >> 8)
+                for (uint32_t n = numbers.back() + 1; n <= number + 0x10 && n >> 8 == number >> 8; ++n) numbers.push_back(n);
+            p.total = static_cast<int>(numbers.size());
             Song song;
             song.number = static_cast<int>(number);
             VgmWriter::Tag tag;
@@ -960,18 +1084,32 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         }
         return p.found;
     };
-    // Until one plays a few songs (a byte that only looked like the queue may play the odd
-    // one, a number that lands on a song by chance); else the one with most.
+    // The songs behind each routine add up (NHL 96 has two, each with songs of its own).
     std::vector<Song> best;
     std::set<uint32_t> bestEffects;
-    for (size_t q = 0; q < queues.size() && q < 3 && best.size() < 4; ++q) {
+    bool stopped = false;  // what it found so far is kept
+    songs.clear();
+    heard.clear();
+    p.found = 0;
+    effects_.clear();
+    int routines = 0;
+    for (const Candidate& c : queues)
+        if (c.call && !stopped && routines++ < 4) stopped = tryQueue(c, true) < 0;
+    best = songs;
+    bestEffects = effects_;
+    // Then the other ways of asking, until one plays a few songs (a byte that only looked
+    // like the queue may play the odd one, a number that lands on a song by chance); else
+    // the one with most.
+    int others = 0;
+    for (size_t q = 0; !stopped && q < queues.size() && others < 3 && best.size() < 4; ++q) {
+        if (queues[q].call) continue;
+        ++others;
         effects_.clear();
-        const bool stopped = tryQueue(queues[q]) < 0;
+        stopped = tryQueue(queues[q], false) < 0;
         if (songs.size() > best.size()) {
             best = std::move(songs);
             bestEffects = effects_;
         }
-        if (stopped) break;  // what it found so far is kept
     }
     effects_ = bestEffects;
     p.found = static_cast<int>(best.size());

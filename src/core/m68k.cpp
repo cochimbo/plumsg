@@ -407,7 +407,7 @@ namespace {
 constexpr uint32_t kBackFromRoutine = 0xF00000;  // a return address no code is at
 }
 
-void M68000::callRoutine(uint32_t entry, const uint32_t (&regs)[15], uint32_t keep) {
+void M68000::callRoutine(uint32_t entry, const uint32_t (&regs)[15], uint32_t keep, uint32_t arg, int argBytes) {
     std::copy(d, d + 8, savedD_);
     std::copy(a, a + 8, savedA_);
     savedOtherSp_ = otherSp;
@@ -422,6 +422,8 @@ void M68000::callRoutine(uint32_t entry, const uint32_t (&regs)[15], uint32_t ke
     stopped = holding = false;
     calling_ = true;
     try {
+        if (argBytes == 2) push16(static_cast<uint16_t>(arg));
+        if (argBytes == 4) push32(arg);
         push32(kBackFromRoutine);
     } catch (const AddressError&) {
         returnFromRoutine();
@@ -463,6 +465,7 @@ int M68000::step() {
         }
         if (skipRoutine && pc == skipRoutine && !calling_) {
             pc = pop32();  // RTS
+            a[7] += skipPops;
             return 16;
         }
         const bool trace = (sr & 0x8000) != 0;
