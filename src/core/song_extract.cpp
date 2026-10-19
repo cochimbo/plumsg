@@ -199,6 +199,7 @@ struct Candidate {
     int driverTaken = 0;  // requests the game's program made and the sound driver took
     int sound = 0;  // notes the loudest request makes when asked again
     uint64_t soundFrame = 0;  // and where it was asked: nothing else plays there
+    bool probed = false;      // only a number the game was not seen asking for made it
 };
 
 // Where a call takes its number, for the log.
@@ -743,13 +744,16 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         std::vector<std::pair<uint64_t, uint32_t>> tries;
         for (const auto& [when, number] : c.requests)
             if ((c.call || tried.size() < 4) && tried.insert(number).second) tries.push_back({when, number});
+        const size_t own = tries.size();
         if (!c.call && !c.ring && c.driverTaken > 0 && tried.size() < 3)
             for (uint32_t step = 1; step <= 3; ++step) {
                 const uint32_t number = (c.requests.back().second + step) & 0xFF;
                 if (number && number != 0x80 && tried.insert(number).second)
                     tries.push_back({c.requests.back().first, number});
             }
-        for (const auto& [when, number] : tries) {
+        int ownSound = 0;  // what the game's own requests made
+        for (size_t t = 0; t < tries.size(); ++t) {
+            const auto [when, number] = tries[t];
             if (!goTo(when)) {
                 say("No se puede volver al cuadro " + std::to_string(when));
                 continue;
@@ -767,7 +771,9 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
                 c.sound = asked - quiet;
                 c.soundFrame = when;
             }
+            if (t < own) ownSound = std::max(ownSound, asked - quiet);
         }
+        c.probed = ownSound <= 4;
         if (c.sound > 4) queues.push_back(c);
     }
     md->lockSoundRequests(0, 0);
@@ -779,11 +785,14 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
                        "(como el de Streets of Rage 2 o el de EA) o de mensajes en la memoria del Z80 (GEMS)."));
     }
 
-    // Where the driver takes the requests first, then where asking made most music. A
-    // queue where no number plays a song (a variable of the game that only looked like
-    // one) gives way to the next.
+    // Where the driver takes the requests first (a ring of messages before a byte), then
+    // where the game's own requests made music (not only the numbers after them), then
+    // where asking made most music. A queue where no number plays a song (a variable of
+    // the game that only looked like one) gives way to the next.
     std::stable_sort(queues.begin(), queues.end(), [](const Candidate& a, const Candidate& b) {
         if ((a.driverTaken > 0) != (b.driverTaken > 0)) return a.driverTaken > 0;
+        if (a.ring != b.ring) return a.ring;
+        if (a.probed != b.probed) return !a.probed;
         return a.sound > b.sound;
     });
     // The songs it finds asking at `chosen` (into `songs`), or -1 if stopped.
