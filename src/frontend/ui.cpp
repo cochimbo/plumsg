@@ -1319,7 +1319,10 @@ bool Ui::handleLibrary(const SDL_Event& e) {
             case SDL_SCANCODE_DOWN: action = Down; break;
             case SDL_SCANCODE_LEFT: action = Left; break;
             case SDL_SCANCODE_RIGHT: action = Right; break;
-            case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: action = Play; break;
+            case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER:
+                if (e.key.keysym.mod & KMOD_ALT) return false;  // Alt+Intro is full screen
+                action = Play;
+                break;
             case SDL_SCANCODE_ESCAPE: action = Close; break;
             case SDL_SCANCODE_PAGEUP: action = PrevTab; break;
             case SDL_SCANCODE_PAGEDOWN: action = NextTab; break;
