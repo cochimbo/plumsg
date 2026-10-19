@@ -5,11 +5,21 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Language: en\n"
 
+msgid ""
+"\n"
+"Al activarlo, el juego vuelve a empezar."
+msgstr ""
+"\n"
+"Turning it on restarts the game."
+
 msgid "  (sugerido)"
 msgstr "  (suggested)"
 
 msgid " (%+d oct.)"
 msgstr " (%+d oct.)"
+
+msgid " (hardcore)"
+msgstr " (hardcore)"
 
 msgid "%d carpetas"
 msgstr "%d folders"
@@ -44,8 +54,17 @@ msgstr "%s is not a .wav plumsg can read"
 msgid "%s no tiene música de YM2612: no es de Mega Drive."
 msgstr "%s has no YM2612 music: it is not from the Mega Drive."
 
+msgid "%s, %u puntos"
+msgstr "%s, %u points"
+
 msgid "%s: %d %s, de %s a %s. Sugerencia: %s."
 msgstr "%s: %d %s, from %s to %s. Suggestion: %s."
+
+msgid "%u de %u logros, %u de %u puntos%s"
+msgstr "%u of %u achievements, %u of %u points%s"
+
+msgid "%u puntos"
+msgstr "%u points"
 
 msgid "(atajo en Opciones > Controles)"
 msgstr "(shortcut in Options > Controls)"
@@ -67,6 +86,9 @@ msgstr "(no name)"
 
 msgid ", %d sin encontrar"
 msgstr ", %d not found"
+
+msgid ". Modo hardcore"
+msgstr ". Hardcore mode"
 
 msgid ""
 "2D: la imagen normal de la Mega Drive.\n"
@@ -99,6 +121,9 @@ msgstr "A / Enter: load   Y / Space: save   B / Esc: close"
 
 msgid "A / Intro: entrar   B / Retroceso: subir   Esc: cerrar"
 msgstr "A / Enter: go in   B / Backspace: up   Esc: close"
+
+msgid "A punto (reto en marcha)"
+msgstr "Almost (challenge running)"
 
 msgid "Abajo"
 msgstr "Down"
@@ -150,6 +175,9 @@ msgstr "About plumsg"
 
 msgid "Acordeón"
 msgstr "Accordion"
+
+msgid "Activar los logros"
+msgstr "Turn on achievements"
 
 msgid "Agogó"
 msgstr "Agogo"
@@ -426,11 +454,17 @@ msgstr "Folder"
 msgid "Carpeta: %s"
 msgstr "Folder: %s"
 
+msgid "Casi"
+msgstr "Almost there"
+
 msgid "Celesta"
 msgstr "Celesta"
 
 msgid "Cencerro"
 msgstr "Cowbell"
+
+msgid "Cerrar sesión"
+msgstr "Log out"
 
 msgid "Charles abierto"
 msgstr "Open hi-hat"
@@ -469,6 +503,9 @@ msgstr "Connecting to %s"
 msgid "Conectando con %s..."
 msgstr "Connecting to %s..."
 
+msgid "Conexión recuperada: logros enviados."
+msgstr "Connection back: achievements sent."
+
 msgid "Conga aguda abierta"
 msgstr "Open high conga"
 
@@ -481,11 +518,20 @@ msgstr "Low conga"
 msgid "Conjuntos"
 msgstr "Ensemble"
 
+msgid "Conseguidos"
+msgstr "Unlocked"
+
+msgid "Conseguidos, sin enviar todavía"
+msgstr "Unlocked, not sent yet"
+
 msgid "Consola"
 msgstr "Console"
 
 msgid "Contrabajo"
 msgstr "Contrabass"
+
+msgid "Contraseña"
+msgstr "Password"
 
 msgid "Controles"
 msgstr "Controls"
@@ -502,8 +548,17 @@ msgstr "Choir \"aah\""
 msgid "Correcta%s%s"
 msgstr "Correct%s%s"
 
+msgid "Crear una cuenta en retroachievements.org"
+msgstr "Create an account on retroachievements.org"
+
 msgid "Ctrl+O  abrir ROM;  F10  biblioteca de juegos"
 msgstr "Ctrl+O  open ROM;  F10  game library"
+
+msgid "Cuenta"
+msgstr "Account"
+
+msgid "Cuenta..."
+msgstr "Account..."
 
 msgid "Cuerdas"
 msgstr "Strings"
@@ -581,6 +636,9 @@ msgstr ""
 
 msgid "Derecha"
 msgstr "Right"
+
+msgid "Desactivados"
+msgstr "Off"
 
 msgid "Descargar carátulas que faltan"
 msgstr "Download missing covers"
@@ -696,6 +754,9 @@ msgstr "The open game has its own buttons (in This game's options); here you cha
 msgid "El juego responde a las peticiones, pero ninguna ha sonado como una canción."
 msgstr "The game answers the requests, but none of them sounded like a song."
 
+msgid "El juego vuelve a empezar: así se juega en hardcore."
+msgstr "The game starts over: that is how hardcore is played."
+
 msgid "El juego vuelve a usar el 3D general"
 msgstr "The game uses the general 3D again"
 
@@ -735,6 +796,9 @@ msgstr "At home, your friend joins %s:%d."
 msgid "En esta pista no suena música del YM2612 ni del PSG."
 msgstr "This track plays no YM2612 or PSG music."
 
+msgid "En modo hardcore no se pueden cargar estados"
+msgstr "States cannot be loaded in hardcore mode"
+
 msgid "En una partida en red no se pueden cambiar."
 msgstr "They cannot be changed in a netplay game."
 
@@ -743,6 +807,9 @@ msgstr "Found %d of 3."
 
 msgid "Enviando la partida al otro jugador..."
 msgstr "Sending the game to the other player..."
+
+msgid "Error del servidor: %s"
+msgstr "Server error: %s"
 
 msgid "Esc  mostrar u ocultar la barra de menús"
 msgstr "Esc  show or hide the menu bar"
@@ -780,8 +847,14 @@ msgstr "State saved to slot %d"
 msgid "Estados"
 msgstr "States"
 
+msgid "Este juego no tiene logros todavía."
+msgstr "This game has no achievements yet."
+
 msgid "Este juego no tiene trucos todavía."
 msgstr "This game has no cheats yet."
+
+msgid "Este juego: %u de %u logros"
+msgstr "This game: %u of %u achievements"
 
 msgid "Estilo:"
 msgstr "Style:"
@@ -1010,6 +1083,12 @@ msgstr "Tilt"
 msgid "Inclinar la cámara"
 msgstr "Tilt the camera"
 
+msgid "Iniciando sesión..."
+msgstr "Logging in..."
+
+msgid "Iniciar sesión"
+msgstr "Log in"
+
 msgid "Instrumento"
 msgstr "Instrument"
 
@@ -1056,6 +1135,9 @@ msgstr ""
 msgid "Jugar"
 msgstr "Play"
 
+msgid "Jugar en hardcore"
+msgstr "Play in hardcore"
+
 msgid "Jugar en red"
 msgstr "Netplay"
 
@@ -1086,6 +1168,9 @@ msgstr ""
 "the vgmrips .zip) shows up in the list.\n"
 "%s"
 
+msgid "La contraseña no se guarda: plumsg guarda la sesión que te da el servidor."
+msgstr "The password is not saved: plumsg keeps the session the server gives you."
+
 msgid ""
 "La cámara se balancea unos grados siguiendo la acción,\n"
 "así las capas se mueven entre sí aunque mires de frente."
@@ -1101,6 +1186,9 @@ msgstr "The game went out of sync and cannot be recovered."
 
 msgid "La ranura %d está vacía"
 msgstr "Slot %d is empty"
+
+msgid "La sesión ha caducado: vuelve a escribir la contraseña."
+msgstr "The session has expired: type the password again."
 
 msgid "La#"
 msgstr "A#"
@@ -1141,6 +1229,25 @@ msgstr ""
 "What you choose is also saved in the shared list: the same sound in another game\n"
 "will come already assigned. Each game's own choices win over the shared list."
 
+msgid "Logros"
+msgstr "Achievements"
+
+msgid "Logros de este juego"
+msgstr "This game's achievements"
+
+msgid "Logros de este juego..."
+msgstr "This game's achievements..."
+
+msgid ""
+"Logros de retroachievements.org: los mismos que en RetroArch y otros emuladores,\n"
+"con tu cuenta de allí."
+msgstr ""
+"Achievements from retroachievements.org: the same as in RetroArch and other emulators,\n"
+"with your account there."
+
+msgid "Logros, marcas y retos para cada juego, los de retroachievements.org. Necesitas una cuenta (gratis) allí."
+msgstr "Achievements, scores and challenges for each game, the ones from retroachievements.org. You need a (free) account there."
+
 msgid "Los Game Genie cambian la ROM; los Action Replay fijan un valor en la RAM en cada cuadro. Algunos juegos comprueban la ROM al arrancar: si no arranca con un truco, reinicia sin él."
 msgstr "Game Genie codes change the ROM; Action Replay codes set a value in RAM every frame. Some games check the ROM at start: if one does not start with a cheat, reset without it."
 
@@ -1171,6 +1278,13 @@ msgstr ""
 "Effects (rings, jumps, hits...) sound as on the console and only the music\n"
 "goes through the SoundFont. To know which ones they are, first use Get songs in the\n"
 "Instrument editor. Each effect can also be changed by hand in the editor."
+
+msgid ""
+"Los logros cuentan para tu puntuación hardcore y las clasificaciones, pero sin\n"
+"ayudas: no se puede rebobinar, ir a cámara lenta, usar trucos ni cargar estados.%s"
+msgstr ""
+"Achievements count for your hardcore score and the leaderboards, but without\n"
+"help: no rewinding, slow motion, cheats or loading states.%s"
 
 msgid "Los tiles del plano B con prioridad alta se ponen delante, con los del plano A."
 msgstr "Plane B tiles with high priority go to the front, with plane A's."
@@ -1203,6 +1317,9 @@ msgstr "Pads connected:"
 msgid "Maracas"
 msgstr "Maracas"
 
+msgid "Marca enviada: %s"
+msgstr "Score submitted: %s"
+
 msgid "Marimba"
 msgstr "Marimba"
 
@@ -1223,6 +1340,12 @@ msgstr "Synth brass 2"
 
 msgid "Mi"
 msgstr "E"
+
+msgid "Modo hardcore"
+msgstr "Hardcore mode"
+
+msgid "Modo hardcore: sin trucos, cámara lenta ni rebobinado"
+msgstr "Hardcore mode: no cheats, slow motion or rewinding"
 
 msgid "Mostrar la barra de menús (Esc)"
 msgstr "Show the menu bar (Esc)"
@@ -1263,8 +1386,14 @@ msgstr "There are no games for this console in your folders."
 msgid "No hay mandos conectados."
 msgstr "No pads connected."
 
+msgid "No hay un juego con logros abierto."
+msgstr "No game with achievements is open."
+
 msgid "No he encontrado cómo pide la música este juego. Por ahora sé sacarla de los juegos cuyo driver toma las peticiones de un byte de la memoria (como el de Sonic, SMPS), de una llamada a una rutina suya (como el de Streets of Rage 2) o de mensajes en la memoria del Z80 (GEMS)."
 msgstr "I could not find how this game asks for its music. For now I can get it from games whose driver takes requests from a byte in memory (like Sonic's, SMPS), from a call to one of its routines (like Streets of Rage 2's) or from messages in the Z80's memory (GEMS)."
+
+msgid "No oficiales"
+msgstr "Unofficial"
 
 msgid "No parece una BIOS: %s"
 msgstr "Does not look like a BIOS: %s"
@@ -1277,6 +1406,9 @@ msgstr "No Mega CD BIOS was found in those folders."
 
 msgid "No se ha podido abrir el SoundFont: elige otro en la lista de al lado."
 msgstr "The SoundFont could not be opened: choose another in the list next to it."
+
+msgid "No se pudieron cargar los logros: %s"
+msgstr "Could not load the achievements: %s"
 
 msgid "No se pudieron guardar las asignaciones en %s."
 msgstr "The assignments could not be saved in %s."
@@ -1333,6 +1465,9 @@ msgstr "The recording could not be saved to %s."
 msgid "No se pudo iniciar la red."
 msgstr "The network could not be started."
 
+msgid "No se pudo iniciar sesión: %s"
+msgstr "Could not log in: %s"
+
 msgid "No se pudo leer %s."
 msgstr "%s could not be read."
 
@@ -1347,6 +1482,12 @@ msgstr "The UDP socket could not be set up."
 
 msgid "No se pudo preparar la partida: %s"
 msgstr "The game could not be prepared: %s"
+
+msgid "No se puede conectar con RetroAchievements."
+msgstr "Cannot connect to RetroAchievements."
+
+msgid "No se pueden conseguir en plumsg"
+msgstr "Cannot be unlocked in plumsg"
 
 msgid "No vale"
 msgstr "Not valid"
@@ -1498,6 +1639,9 @@ msgstr "Ride cymbal 2"
 msgid "Platillo splash"
 msgstr "Splash cymbal"
 
+msgid "Por conseguir"
+msgstr "Locked"
+
 msgid "Por internet: abre (redirige) el puerto UDP %d de tu router hacia este ordenador y dale tu IP pública; o usad los dos una red privada como Tailscale o ZeroTier y no hace falta abrir nada."
 msgstr "Over the internet: open (forward) UDP port %d on your router to this computer and give them your public IP; or both of you use a private network like Tailscale or ZeroTier and nothing needs opening."
 
@@ -1582,6 +1726,9 @@ msgstr "Receiving the host's game..."
 msgid "Recientes"
 msgstr "Recent"
 
+msgid "Recién conseguidos"
+msgstr "Recently unlocked"
+
 msgid "Red"
 msgstr "Network"
 
@@ -1617,6 +1764,15 @@ msgstr "Restore defaults"
 
 msgid "Retardo de los mandos"
 msgstr "Input delay"
+
+msgid "Reto empezado: %s"
+msgstr "Challenge started: %s"
+
+msgid "Reto fallido: %s"
+msgstr "Challenge failed: %s"
+
+msgid "RetroAchievements no conoce este juego (o esta versión de la ROM)."
+msgstr "RetroAchievements does not know this game (or this version of the ROM)."
 
 msgid "Retroceso o gatillo izquierdo (mantener)  rebobinar"
 msgstr "Backspace or left trigger (hold)  rewind"
@@ -1687,6 +1843,12 @@ msgstr "Brass section"
 msgid "Segundos de rebobinado"
 msgstr "Rewind seconds"
 
+msgid "Sesión iniciada como %s (%u puntos)"
+msgstr "Logged in as %s (%u points)"
+
+msgid "Sesión iniciada como %s (%u puntos)."
+msgstr "Logged in as %s (%u points)."
+
 msgid "Shakuhachi"
 msgstr "Shakuhachi"
 
@@ -1714,6 +1876,9 @@ msgstr "Mute"
 msgid "Silencio"
 msgstr "Mute"
 
+msgid "Sin conexión: los logros se enviarán cuando vuelva."
+msgstr "No connection: the achievements will be sent when it is back."
+
 msgid "Sin elegir"
 msgstr "Not chosen"
 
@@ -1723,6 +1888,12 @@ msgid ""
 msgstr ""
 "Unticked, the camera looks straight on and the picture looks like 2D;\n"
 "the depth shows through the lighting and the live camera."
+
+msgid "Sin rebobinar, cámara lenta, trucos ni cargar estados (guardar sí). Los logros cuentan para tu puntuación hardcore y se puede entrar en las clasificaciones. Al activarlo, el juego vuelve a empezar."
+msgstr "No rewinding, slow motion, cheats or loading states (saving is fine). Achievements count for your hardcore score and you can get on the leaderboards. Turning it on restarts the game."
+
+msgid "Sin sesión iniciada"
+msgstr "Not logged in"
 
 msgid "Sintetizador"
 msgstr "Synthesizer"
@@ -1826,6 +1997,9 @@ msgstr "Keyboard (player 2)"
 msgid "Teléfono"
 msgstr "Telephone ring"
 
+msgid "Tienes %u de %u logros (%u de %u puntos)"
+msgstr "You have %u of %u achievements (%u of %u points)"
+
 msgid "Timbal agudo"
 msgstr "High timbale"
 
@@ -1904,6 +2078,12 @@ msgstr "Cheats from the internet"
 msgid "Trucos..."
 msgstr "Cheats..."
 
+msgid "Tu mejor marca: %s"
+msgstr "Your best score: %s"
+
+msgid "Tu puesto: %u de %u"
+msgstr "Your rank: %u of %u"
+
 msgid "Tuba"
 msgstr "Tuba"
 
@@ -1949,6 +2129,12 @@ msgstr "Use this cover"
 
 msgid "Usar también en otros juegos"
 msgstr "Use in other games too"
+
+msgid "Usuario"
+msgstr "User name"
+
+msgid "Usuario o contraseña incorrectos."
+msgstr "Wrong user name or password."
 
 msgid "Valores por defecto"
 msgstr "Defaults"
@@ -2161,6 +2347,7 @@ msgid ""
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
 "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
 "  --trucos               abrir los trucos del juego, con sus listas de internet\n"
+"  --logros               abrir la ventana de RetroAchievements\n"
 "  --opciones-juego       abrir las opciones propias del juego\n"
 "  --opciones-juego controles   ...en la pestaña de sus controles\n"
 "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
@@ -2184,6 +2371,7 @@ msgstr ""
 "  --bios                 open the Mega CD BIOS window\n"
 "  --buscar-caratula      with --biblioteca: find the cover of the first game\n"
 "  --trucos               open the game's cheats, with their internet lists\n"
+"  --logros               open the RetroAchievements window\n"
 "  --opciones-juego       open the game's own options\n"
 "  --opciones-juego controles   ...on the tab of its controls\n"
 "  --instrumentos         open the instrument editor (for the game, if given)\n"
@@ -2203,6 +2391,18 @@ msgstr "empty"
 
 msgid "¡Conectados! Eres el jugador %d"
 msgstr "Connected! You are player %d"
+
+msgid "¡Enhorabuena!"
+msgstr "Congratulations!"
+
+msgid "¡Juego completado! Tienes todos sus logros."
+msgstr "Game completed! You have all its achievements."
+
+msgid "¡Juego dominado! Tienes todos sus logros en hardcore."
+msgstr "Game mastered! You have all its achievements in hardcore."
+
+msgid "¡Logro desbloqueado! (%u puntos)"
+msgstr "Achievement unlocked! (%u points)"
 
 msgid "Étnicos"
 msgstr "Ethnic"

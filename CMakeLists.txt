@@ -77,6 +77,31 @@ foreach(t chdr-static miniz chdr-lzma zstd)
   endif()
 endforeach()
 
+# rcheevos (MIT, RetroAchievements) for the achievements: its client, runtime and web
+# API, without its own hashing (plumsg hashes the games itself). Pinned to v12.5.0.
+FetchContent_Declare(rcheevos
+  GIT_REPOSITORY https://github.com/RetroAchievements/rcheevos.git
+  GIT_TAG 1433173220a7eaede6a9ed7a18e94117be1821e0)
+FetchContent_GetProperties(rcheevos)
+if(NOT rcheevos_POPULATED)
+  FetchContent_Populate(rcheevos)
+endif()
+file(GLOB PLUMSG_RCHEEVOS_SOURCES ${rcheevos_SOURCE_DIR}/src/rapi/*.c ${rcheevos_SOURCE_DIR}/src/rcheevos/*.c)
+add_library(plumsg_rcheevos STATIC ${PLUMSG_RCHEEVOS_SOURCES}
+  ${rcheevos_SOURCE_DIR}/src/rc_client.c
+  ${rcheevos_SOURCE_DIR}/src/rc_compat.c
+  ${rcheevos_SOURCE_DIR}/src/rc_util.c
+  ${rcheevos_SOURCE_DIR}/src/rc_version.c
+  ${rcheevos_SOURCE_DIR}/src/rhash/md5.c)
+target_include_directories(plumsg_rcheevos SYSTEM PUBLIC ${rcheevos_SOURCE_DIR}/include)
+find_package(Threads REQUIRED)
+target_link_libraries(plumsg_rcheevos PUBLIC Threads::Threads)
+if(MSVC)
+  target_compile_options(plumsg_rcheevos PRIVATE /W0)
+else()
+  target_compile_options(plumsg_rcheevos PRIVATE -w)
+endif()
+
 # Emulator core: no SDL, no OS dependencies.
 add_library(plumsg_core STATIC
   src/core/m68k.cpp
@@ -112,6 +137,12 @@ target_link_libraries(plumsg_net PUBLIC plumsg_core)
 if(WIN32)
   target_link_libraries(plumsg_net PUBLIC ws2_32)
 endif()
+
+# RetroAchievements: the game's hash, its memory as the achievements see it, and the
+# rcheevos client with its requests made on worker threads.
+add_library(plumsg_achievements STATIC src/frontend/achievements.cpp)
+target_link_libraries(plumsg_achievements PUBLIC plumsg_core plumsg_rcheevos)
+target_include_directories(plumsg_achievements PRIVATE ${rcheevos_SOURCE_DIR}/src/rhash)
 
 # The emulator without a window, for tests, CI and reproducing bugs (see --help).
 add_executable(plumsg-headless src/headless/main.cpp)
@@ -170,6 +201,7 @@ add_executable(plumsg WIN32
   src/frontend/http.cpp
   src/frontend/cheat_database.cpp
   src/frontend/languages.cpp
+  src/frontend/achievements_ui.cpp
   src/render/gl.cpp
   src/render/gl_renderers.cpp
 )
@@ -216,7 +248,7 @@ file(WRITE ${out}.tmp "${lang_header}")
 configure_file(${out}.tmp ${out} COPYONLY)
 target_include_directories(plumsg PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 find_package(Threads REQUIRED)
-target_link_libraries(plumsg PRIVATE plumsg_core plumsg_net plumsg_imgui Threads::Threads)
+target_link_libraries(plumsg PRIVATE plumsg_core plumsg_net plumsg_achievements plumsg_imgui Threads::Threads)
 if(TARGET SDL2::SDL2main)
   target_link_libraries(plumsg PRIVATE SDL2::SDL2main)
 endif()
@@ -237,7 +269,7 @@ if(PLUMSG_BUILD_TESTS)
   add_executable(core_tests tests/core_tests.cpp src/frontend/library_names.cpp)
   target_include_directories(core_tests PRIVATE tests)
   target_compile_definitions(core_tests PRIVATE PLUMSG_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")
-  target_link_libraries(core_tests PRIVATE plumsg_core)
+  target_link_libraries(core_tests PRIVATE plumsg_core plumsg_achievements)
   add_test(NAME core_tests COMMAND core_tests)
 
   # Every text in tr() has its translation in every .po (tools/i18n.py --update adds the new ones).

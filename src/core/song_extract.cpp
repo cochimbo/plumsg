@@ -245,13 +245,25 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         uint8_t value;
     };
     std::vector<ZWrite> z80Writes;  // what the 68000 writes to the Z80's memory, in order
+    struct ZWriter {
+        uint64_t lastFrame = ~0ull;
+        int frames = 0, writes = 0;
+    };
+    std::map<uint32_t, ZWriter> z80Code;  // 68000 code writing the Z80's memory, by 256-byte page
     md->setMemoryWatch([&](uint32_t addr, uint8_t v, bool m68k) {
         if (addr >= 0xA04000 && addr < 0xA04004) {
             ++ymCode[md->cpu().pc >> 8];
             return;
         }
-        if (m68k && addr >= 0xA00000 && addr < 0xA02000 && z80Writes.size() < 500000)
-            z80Writes.push_back({md->frameCount(), static_cast<uint16_t>(addr & 0x1FFF), v});
+        if (m68k && addr >= 0xA00000 && addr < 0xA02000) {
+            if (z80Writes.size() < 500000) z80Writes.push_back({md->frameCount(), static_cast<uint16_t>(addr & 0x1FFF), v});
+            ZWriter& w = z80Code[md->cpu().pc >> 8];
+            ++w.writes;
+            if (w.lastFrame != md->frameCount()) {
+                w.lastFrame = md->frameCount();
+                ++w.frames;
+            }
+        }
         // (Not the stack: what the program pushes, and a routine it calls then overwrites.)
         if (m68k && addr >= 0xFF0000 && addr - (md->cpu().a[7] & 0xFFFFFF) < 0x100) return;
         const size_t i = addr >= 0xFF0000 ? (addr & 0xFFFF) : 0x10000 + (addr & 0x1FFF);
@@ -283,6 +295,10 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         frame();
     }
     md->setMemoryWatch({});
+    // Some drivers run on the 68000 and hand the YM2612's writes to the Z80 (Streets of
+    // Rage 3's): code that writes the Z80's memory a lot, frame after frame, is one too.
+    for (const auto& [page, w] : z80Code)
+        if (w.frames > 50 && w.writes >= 6 * w.frames) ymCode[page] += 51;
     auto inDriver = [&](uint32_t pc) {
         if (!pc) return true;  // the Z80
         for (const auto& [page, n] : ymCode)

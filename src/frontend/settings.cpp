@@ -125,6 +125,11 @@ void Settings::parse(std::istream& in, Settings& s) {
             if (key == "puerto") s.netPort = std::clamp(std::atoi(value.c_str()), 1, 65535);
             else if (key == "direccion") s.netAddress = value;
             else if (key == "retardo") s.netInputDelay = std::clamp(std::atoi(value.c_str()), 0, 6);
+        } else if (section == "logros") {
+            if (key == "activado") s.achievements = yes(value);
+            else if (key == "usuario") s.raUser = value;
+            else if (key == "token") s.raToken = value;
+            else if (key == "hardcore") s.raHardcore = yes(value);
         } else if (section == "recientes") {
             if (key == "rom" && !value.empty() && s.recent.size() < kMaxRecent) s.recent.push_back(value);
             else if (key == "ultima_carpeta") s.lastFolder = value;
@@ -203,6 +208,13 @@ void Settings::write(std::ostream& out) const {
         << "puerto = " << netPort << "\n"
         << "direccion = " << netAddress << "\n"
         << "retardo = " << netInputDelay << "\n"
+        << "\n[logros]\n"
+        << "# RetroAchievements. activado: si o no. usuario y token: la cuenta (el token sustituye a la\n"
+        << "# contraseña, que no se guarda). hardcore: sin rebobinar, cámara lenta, trucos ni cargar estados.\n"
+        << "activado = " << flag(achievements) << "\n"
+        << "usuario = " << raUser << "\n"
+        << "token = " << raToken << "\n"
+        << "hardcore = " << flag(raHardcore) << "\n"
         << "\n[recientes]\n";
     if (!lastFolder.empty()) out << "ultima_carpeta = " << lastFolder << "\n";
     for (const auto& r : recent) out << "rom = " << r << "\n";
