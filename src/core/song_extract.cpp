@@ -340,6 +340,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     // driver's). The routines the game's program calls from many places, loading a
     // register or pushing a different number before each call.
     std::vector<Candidate> calls;
+    bool heldBack = false;  // calls left for the second boot
     {
         constexpr size_t kStack = 15;  // where a site's number pushed on the stack goes
         struct Site {
@@ -539,10 +540,16 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             if (a.z80 != b.z80) return b.z80;
             return a.driverTaken > b.driverTaken;
         });
+        // Those writing the Z80's memory only on the second boot, pressing Start: a driver of
+        // the 68000's may show itself only then (NHL 96's), and the game's own routines in
+        // front of it are better.
         std::vector<Candidate> kept;
         int own = 0, front = 0, z80 = 0;
         for (const Candidate& c : calls)
-            if (inDriver(c.address) ? own++ < 4 : c.z80 ? z80++ < 2 : front++ < 4) kept.push_back(c);
+            if (c.z80 && !pressStart)
+                heldBack = true;
+            else if (inDriver(c.address) ? own++ < 4 : c.z80 ? z80++ < 6 : front++ < 4)
+                kept.push_back(c);
         calls = std::move(kept);
     }
     // Other drivers (GEMS) take commands from a ring in the Z80's memory: the game writes a
@@ -1125,15 +1132,27 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     bestEffects = effects_;
     // Then the other ways of asking, until one plays a few songs (a byte that only looked
     // like the queue may play the odd one, a number that lands on a song by chance); else
-    // the one with most. The routines that write the Z80's memory last (Ecco's: a byte
-    // there may be the queue, written by one of them).
-    std::stable_partition(queues.begin(), queues.end(), [](const Candidate& c) { return !c.z80; });
-    int others = 0, z80s = 0;
-    for (size_t q = 0; !stopped && q < queues.size() && best.size() < 4; ++q) {
-        if (queues[q].call && !queues[q].z80) continue;
-        if (queues[q].z80 ? z80s++ >= 2 : others++ >= 3) continue;
+    // the one with most.
+    int others = 0;
+    for (size_t q = 0; !stopped && q < queues.size() && others < 3 && best.size() < 4; ++q) {
+        if (queues[q].call) continue;
+        ++others;
         effects_.clear();
         stopped = tryQueue(queues[q], false) < 0;
+        if (songs.size() > best.size()) {
+            best = std::move(songs);
+            bestEffects = effects_;
+        }
+    }
+    // Last, the routines that write the Z80's memory (Ecco's), adding up as the others.
+    if (!stopped && best.size() < 4) {
+        songs.clear();
+        heard.clear();
+        p.found = 0;
+        effects_.clear();
+        routines = 0;
+        for (const Candidate& c : queues)
+            if (c.z80 && !stopped && routines++ < 4) stopped = tryQueue(c, true) < 0;
         if (songs.size() > best.size()) {
             best = std::move(songs);
             bestEffects = effects_;
@@ -1144,6 +1163,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     for (const Song& song : best)
         if (onSong) onSong(song);
     if (!report(tr("Hecho"))) return fail("");
+    if (best.empty() && heldBack) *notFound = true;
     if (best.empty()) return fail(tr("El juego responde a las peticiones, pero ninguna ha sonado como una canción."));
     return true;
 }
