@@ -200,6 +200,15 @@ struct Candidate {
 
 bool SongExtractor::run(const std::string& romPath, const std::string& game, const ProgressFn& progress,
                         const SongFn& onSong, std::string* error) {
+    bool notFound = false;
+    if (tryRun(romPath, game, progress, onSong, error, false, &notFound)) return true;
+    if (!notFound) return false;
+    if (log_) log_("No suena nada que se pueda pedir; arranco otra vez pulsando Start de vez en cuando");
+    return tryRun(romPath, game, progress, onSong, error, true, &notFound);
+}
+
+bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, const ProgressFn& progress,
+                           const SongFn& onSong, std::string* error, bool pressStart, bool* notFound) {
     auto fail = [&](const std::string& why) {
         if (error) *error = why;
         return false;
@@ -290,8 +299,14 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     if (!report("Arrancando el juego")) return fail("");
     for (int f = 0; f < kBootFrames; ++f) {
         if (f % kCheckpointEvery == 0) md->saveState(checkpoints[md->frameCount()], true);
+        if (pressStart) {  // for a tenth of a second every three, once past the logos
+            PadState pad;
+            pad.start = f >= 5 * kFps && f % (3 * kFps) < 6;
+            md->setPads(pad, PadState{});
+        }
         frame();
     }
+    md->setPads(PadState{}, PadState{});
     md->setMemoryWatch({});
     // Some drivers run on the 68000 and hand the YM2612's writes to the Z80 (Streets of
     // Rage 3's): code that writes the Z80's memory a lot, frame after frame, is one too.
@@ -614,10 +629,20 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     std::vector<Candidate> queues;
     if (!report("Buscando dónde pide el juego la música")) return fail("");
     for (Candidate& c : list) {
-        // Its first few different requests: the first may be a short sound.
+        // Its first few different requests: the first may be a short sound. A byte the
+        // driver takes that the game asks only one or two things of (a jingle, a fade) is
+        // also asked for the numbers after its last one, where the game made it.
         std::set<uint32_t> tried;
-        for (const auto& [when, number] : c.requests) {
-            if (tried.size() >= 4 || !tried.insert(number).second) continue;
+        std::vector<std::pair<uint64_t, uint32_t>> tries;
+        for (const auto& [when, number] : c.requests)
+            if (tried.size() < 4 && tried.insert(number).second) tries.push_back({when, number});
+        if (!c.call && !c.ring && c.driverTaken > 0 && tried.size() < 3)
+            for (uint32_t step = 1; step <= 3; ++step) {
+                const uint32_t number = (c.requests.back().second + step) & 0xFF;
+                if (number && number != 0x80 && tried.insert(number).second)
+                    tries.push_back({c.requests.back().first, number});
+            }
+        for (const auto& [when, number] : tries) {
             if (!goTo(when)) {
                 say("No se puede volver al cuadro " + std::to_string(when));
                 continue;
@@ -640,10 +665,12 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     }
     md->lockSoundRequests(0, 0);
     md->cpu().skipRoutine = 0;
-    if (queues.empty())
+    if (queues.empty()) {
+        *notFound = true;
         return fail("No he encontrado cómo pide la música este juego. Por ahora sé sacarla de los juegos cuyo driver toma "
                     "las peticiones de un byte de la memoria (como el de Sonic, SMPS), de una llamada a una rutina suya "
                     "(como el de Streets of Rage 2) o de mensajes en la memoria del Z80 (GEMS).");
+    }
 
     // Where the driver takes the requests first, then where asking made most music. A
     // queue where no number plays a song (a variable of the game that only looked like

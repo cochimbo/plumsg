@@ -61,6 +61,10 @@ public:
              std::string* error);
 
 private:
+    // One try: booting the game as it is, or pressing Start now and then (a game that
+    // waits on its title screen without music). *notFound: no way of asking was found.
+    bool tryRun(const std::string& romPath, const std::string& game, const ProgressFn& progress, const SongFn& song,
+                std::string* error, bool pressStart, bool* notFound);
     LogFn log_;
     std::set<uint32_t> effects_;
 };
