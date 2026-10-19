@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "../core/i18n.h"
 #include "../core/megadrive.h"
 #include "../core/netplay.h"
 #include "../core/rewind.h"
@@ -22,6 +23,7 @@
 #include "audio.h"
 #include "game_options.h"
 #include "http.h"
+#include "languages.h"
 #include "input.h"
 #include "miniz.h"
 #include "settings.h"
@@ -289,19 +291,19 @@ struct App {
         std::error_code ec;
         std::filesystem::create_directories(std::filesystem::u8path(statesDir), ec);
         if (!console.saveState(data) || !writeFile(statePath(slot), data))
-            return "No se pudo guardar el estado en " + statePath(slot);
+            return trf("No se pudo guardar el estado en %s", statePath(slot).c_str());
         refreshSlot(slot);
-        return "Estado guardado en la ranura " + std::to_string(slot);
+        return trf("Estado guardado en la ranura %d", slot);
     }
 
     std::string loadState(int slot, bool* loaded = nullptr) {
         if (loaded) *loaded = false;
         std::vector<uint8_t> data;
-        if (!readFile(statePath(slot), data)) return "La ranura " + std::to_string(slot) + " está vacía";
+        if (!readFile(statePath(slot), data)) return trf("La ranura %d está vacía", slot);
         std::string error;
-        if (!console.loadState(data, &error)) return "No se pudo cargar el estado: " + error;
+        if (!console.loadState(data, &error)) return trf("No se pudo cargar el estado: %s", error.c_str());
         if (loaded) *loaded = true;
-        return "Estado cargado de la ranura " + std::to_string(slot);
+        return trf("Estado cargado de la ranura %d", slot);
     }
     // The achievements' progress when the state in `slot` was saved, next to it.
     std::string progressPath(int slot) const { return statePath(slot) + ".logros"; }
@@ -359,7 +361,7 @@ struct CommandLine {
     std::vector<std::string> unknown;  // options plumsg does not know
 };
 
-const char* kHelp =
+const char* const kHelp = N_(
     "plumsg [juego] [opciones]\n\n"
     "  juego                  cartucho (.md .gen .bin .smd .32x .zip) o disco (.cue .chd .iso)\n"
     "  --pantalla-completa    abrir a pantalla completa (o --fullscreen)\n"
@@ -380,7 +382,7 @@ const char* kHelp =
     "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
     "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
     "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
-    "La pantalla completa y la región dadas aquí valen solo para esta vez.";
+    "La pantalla completa y la región dadas aquí valen solo para esta vez.");
 
 CommandLine parse(int argc, char** argv) {
     CommandLine c;
@@ -444,11 +446,15 @@ CommandLine parse(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     const CommandLine cmd = parse(argc, argv);
+    const Paths paths = findPaths();
+    Settings settings = Settings::load(paths.ini);
+    // Until a language is picked in Opciones > Idioma, the system's.
+    applyLanguage(settings.language.empty() ? systemLanguage() : settings.language);
     if (cmd.help || !cmd.unknown.empty()) {
         // A window build on Windows has no console, so this goes to a message box too.
-        std::string text = kHelp;
+        std::string text = tr(kHelp);
         if (!cmd.unknown.empty()) {
-            text = "Opción desconocida: " + cmd.unknown.front() + "\n\n" + text;
+            text = trf("Opción desconocida: %s", cmd.unknown.front().c_str()) + "\n\n" + text;
         }
         std::fprintf(cmd.help ? stdout : stderr, "%s\n", text.c_str());
         SDL_ShowSimpleMessageBox(cmd.help ? SDL_MESSAGEBOX_INFORMATION : SDL_MESSAGEBOX_ERROR, "plumsg", text.c_str(),
@@ -459,10 +465,8 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
-    const Paths paths = findPaths();
     const bool capturing = !cmd.capture.empty();
     auto input = std::make_unique<Input>(InputConfig::loadOrCreate(paths.ini));
-    Settings settings = Settings::load(paths.ini);
     // A screenshot run never touches the user's settings.
     auto applyCommandLine = [&] {
         if (cmd.pseudo3d >= 0) settings.render.pseudo3d = cmd.pseudo3d == 1;
@@ -507,8 +511,8 @@ int main(int argc, char** argv) {
     const char* missing = context ? gl::load() : nullptr;
     if (!context || missing) {
         const std::string message =
-            "plumsg necesita una tarjeta gráfica con OpenGL 3.3 y sus drivers actualizados.\n\n" +
-            std::string(context ? "Falta la función " + std::string(missing) : SDL_GetError());
+            std::string(tr("plumsg necesita una tarjeta gráfica con OpenGL 3.3 y sus drivers actualizados.")) + "\n\n" +
+            std::string(context ? trf("Falta la función %s", missing) : SDL_GetError());
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "plumsg", message.c_str(), window);
         return 1;
     }
@@ -583,7 +587,7 @@ int main(int argc, char** argv) {
         std::vector<uint8_t> data;
         rolandFontOk = readFile(path, data) && roland->loadSoundfont(data);
         if (!rolandFontOk && !capturing)
-            ui->showError("No se pudo abrir el SoundFont " + path + ".\nSe oye el sonido original.");
+            ui->showError(trf("No se pudo abrir el SoundFont %s.\nSe oye el sonido original.", path.c_str()));
         return rolandFontOk;
     };
     // The game's instruments: those chosen by hand, and its sound effects.
@@ -660,9 +664,9 @@ int main(int argc, char** argv) {
             applySound();  // now it is known whether it is a disc
             if (settings.achievements && !capturing) achievements.loadGame(app->console, app->achievementsHash);
             settings.addRecent(path);
-            if (!game.own.empty()) ui->notify("Opciones propias de " + fileName(path));
+            if (!game.own.empty()) ui->notify(trf("Opciones propias de %s", fileName(path).c_str()));
             if (!app->console.loadNotice().empty()) ui->notify(app->console.loadNotice());
-            else if (app->console.hasMsuMd()) ui->notify("Música en CD (MSU-MD)");
+            else if (app->console.hasMsuMd()) ui->notify(tr("Música en CD (MSU-MD)"));
             rewind.clear();
             setRewindLimits();
         } else {
@@ -723,7 +727,7 @@ int main(int argc, char** argv) {
     auto loadState = [&](int slot) {
         if (!app->romLoaded) return;
         if (hardcore()) {
-            ui->notify("En modo hardcore no se pueden cargar estados");
+            ui->notify(tr("En modo hardcore no se pueden cargar estados"));
             return;
         }
         bool loaded = false;
@@ -740,17 +744,17 @@ int main(int argc, char** argv) {
     };
     auto toggleSlowMotion = [&] {
         slowMotion = !slowMotion;
-        ui->notify(slowMotion ? "Cámara lenta (" + std::to_string(settings.slowMotion) + "%)" : "Velocidad normal");
+        ui->notify(slowMotion ? trf("Cámara lenta (%d%%)", settings.slowMotion) : std::string(tr("Velocidad normal")));
     };
     auto setProfile = [&](bool on) {
         if (!app->romLoaded || on == game.has("perfil_3d")) return;
         if (on) {
             game.own.insert("perfil_3d");
-            ui->notify("El 3D se guarda ahora solo para " + fileName(app->romPath));
+            ui->notify(trf("El 3D se guarda ahora solo para %s", fileName(app->romPath).c_str()));
         } else {
             game.own.erase("perfil_3d");
             copy3D(general.render, settings.render);
-            ui->notify("El juego vuelve a usar el 3D general");
+            ui->notify(tr("El juego vuelve a usar el 3D general"));
         }
         save();
     };
@@ -795,7 +799,7 @@ int main(int argc, char** argv) {
     auto startNet = [&](bool host) {
         stopNet("", false);
         if (!app->romLoaded) {
-            ui->showError("Abre primero el juego: los dos tenéis que tener abierto el mismo.");
+            ui->showError(tr("Abre primero el juego: los dos tenéis que tener abierto el mismo."));
             return;
         }
         auto socket = std::make_unique<UdpTransport>();
@@ -813,13 +817,13 @@ int main(int argc, char** argv) {
         // ROM cheats change the cartridge, which the savestate the guest gets does not carry.
         app->console.setCheats({});
         paused = slowMotion = false;
-        ui->notify(host ? "Esperando al otro jugador en el puerto " + std::to_string(settings.netPort)
-                        : "Conectando con " + settings.netAddress);
+        ui->notify(host ? trf("Esperando al otro jugador en el puerto %d", settings.netPort)
+                        : trf("Conectando con %s", settings.netAddress.c_str()));
     };
     // Parar emulación: back to the start screen (or the library) without closing plumsg.
     auto stop = [&] {
         if (!app->romLoaded) return;
-        stopNet("Has salido de la partida en red", false);
+        stopNet(tr("Has salido de la partida en red"), false);
         stopRecording();
         save();  // the game's own options, while they are still its
         app->unload(capturing ? nullptr : window);
@@ -829,13 +833,13 @@ int main(int argc, char** argv) {
         rewind.clear();
         paused = slowMotion = false;
         save();
-        ui->notify("Emulación parada");
+        ui->notify(tr("Emulación parada"));
         if (!settings.libraryFolders.empty() && !ui->libraryOpen()) ui->toggleLibrary();
     };
     auto selectSlot = [&](int delta) {
         settings.stateSlot = (settings.stateSlot + delta + kSlots) % kSlots;
         const SlotInfo& s = app->slots[static_cast<size_t>(settings.stateSlot)];
-        ui->notify("Ranura " + std::to_string(settings.stateSlot) + (s.used ? " (" + s.when + ")" : " (vacía)"));
+        ui->notify(s.used ? trf("Ranura %d (%s)", settings.stateSlot, s.when.c_str()) : trf("Ranura %d (vacía)", settings.stateSlot));
         save();
     };
     if (app->romLoaded && (cmd.netHost || !cmd.netJoin.empty())) {
@@ -851,7 +855,7 @@ int main(int argc, char** argv) {
             switch (e.type) {
                 case SDL_QUIT: running = false; break;
                 case SDL_DROPFILE:
-                    stopNet("Has salido de la partida en red", false);
+                    stopNet(tr("Has salido de la partida en red"), false);
                     load(e.drop.file);
                     SDL_free(e.drop.file);
                     break;
@@ -862,7 +866,7 @@ int main(int argc, char** argv) {
             switch (input->hotkeyFor(e)) {
                 case Hotkey::Toggle3D:
                     settings.render.pseudo3d = !settings.render.pseudo3d;
-                    ui->notify(settings.render.pseudo3d ? "Efecto 3D activado" : "Efecto 3D desactivado");
+                    ui->notify(settings.render.pseudo3d ? tr("Efecto 3D activado") : tr("Efecto 3D desactivado"));
                     save();
                     break;
                 case Hotkey::SaveState: saveState(settings.stateSlot); break;
@@ -918,7 +922,7 @@ int main(int argc, char** argv) {
                     break;
                 case SDL_SCANCODE_F2:
                     settings.view = renderers[(viewIndex() + 1) % renderers.size()]->name();
-                    ui->notify(std::string("Vista: ") + settings.view);
+                    ui->notify(trf("Vista: %s", settings.view.c_str()));
                     save();
                     break;
                 case SDL_SCANCODE_P:
@@ -926,7 +930,7 @@ int main(int argc, char** argv) {
                     break;
                 case SDL_SCANCODE_M:
                     settings.mute = !settings.mute;
-                    ui->notify(settings.mute ? "Sonido silenciado" : "Sonido activado");
+                    ui->notify(settings.mute ? tr("Sonido silenciado") : tr("Sonido activado"));
                     save();
                     break;
                 case SDL_SCANCODE_RETURN:
@@ -983,36 +987,35 @@ int main(int argc, char** argv) {
             const bool host = net->role() == NetplaySession::Role::Host;
             switch (net->phase()) {
                 case NetplaySession::Phase::Waiting:
-                    uiState.netStatus = "Esperando al otro jugador en el puerto " + std::to_string(settings.netPort) +
-                                        ". Mientras, puedes seguir jugando: la partida empezará donde estés.";
+                    uiState.netStatus = trf("Esperando al otro jugador en el puerto %d. Mientras, puedes seguir jugando: "
+                                            "la partida empezará donde estés.", settings.netPort);
                     break;
                 case NetplaySession::Phase::Connecting:
-                    uiState.netStatus = "Conectando con " + settings.netAddress + "...";
+                    uiState.netStatus = trf("Conectando con %s...", settings.netAddress.c_str());
                     break;
                 case NetplaySession::Phase::Syncing:
-                    uiState.netStatus = host ? "Enviando la partida al otro jugador..." : "Recibiendo la partida del anfitrión...";
+                    uiState.netStatus = host ? tr("Enviando la partida al otro jugador...") : tr("Recibiendo la partida del anfitrión...");
                     uiState.netProgress = net->syncProgress();
                     break;
                 default:
-                    uiState.netStatus = std::string("Jugando en red como jugador ") + (host ? "1" : "2") + ".\nPing: " +
-                                        std::to_string(net->pingMs()) + " ms. Retardo de los mandos: " +
-                                        std::to_string(net->config().inputDelay) + " fotogramas. Vuelta atrás: " +
-                                        std::to_string(net->lastRollback()) + " fotogramas.";
+                    uiState.netStatus = trf("Jugando en red como jugador %d.\nPing: %d ms. Retardo de los mandos: %d fotogramas. "
+                                            "Vuelta atrás: %d fotogramas.", host ? 1 : 2, static_cast<int>(net->pingMs()),
+                                            static_cast<int>(net->config().inputDelay), static_cast<int>(net->lastRollback()));
                     if (net->desyncFrame() >= 0)
-                        uiState.netStatus += "\nLas dos consolas se han descompasado (fotograma " +
-                                             std::to_string(net->desyncFrame()) +
-                                             "): lo que veis ya no es lo mismo. Salid y volved a empezar.";
+                        uiState.netStatus += "\n" + trf("Las dos consolas se han descompasado (fotograma %d): lo que veis "
+                                                        "ya no es lo mismo. Salid y volved a empezar.",
+                                                        static_cast<int>(net->desyncFrame()));
                     break;
             }
         }
         const UiActions act = ui->frame(uiState);
         if (!act.load.empty()) {
-            stopNet("Has salido de la partida en red", false);
+            stopNet(tr("Has salido de la partida en red"), false);
             load(act.load);
         }
         if (act.netHost) startNet(true);
         if (act.netJoin) startNet(false);
-        if (act.netLeave) stopNet("Has salido de la partida en red", false);
+        if (act.netLeave) stopNet(tr("Has salido de la partida en red"), false);
         const bool netBusy = netPlaying();
         if (act.reset && !netBusy && app->romLoaded) resetConsole();
         if (act.stop) stop();
@@ -1102,7 +1105,7 @@ int main(int argc, char** argv) {
                     if (!host) app->hostsBattery = true;  // the host's state is coming
                 }
                 if (phase == NetplaySession::Phase::Playing) {
-                    ui->notify(std::string("¡Conectados! Eres el jugador ") + (host ? "1" : "2"));
+                    ui->notify(trf("¡Conectados! Eres el jugador %d", host ? 1 : 2));
                     framesRun = 0;  // --cuadros counts the frames played together
                 }
                 netPhase = phase;
@@ -1123,11 +1126,11 @@ int main(int argc, char** argv) {
                         app->console.audio().clearSamples();
                     }
                 }
-                uiState.speed = net->desyncFrame() >= 0 ? "Red: ¡descompasados!"
-                                                        : "Red " + std::to_string(net->pingMs()) + " ms";
+                uiState.speed = net->desyncFrame() >= 0 ? std::string(tr("Red: ¡descompasados!"))
+                                                        : trf("Red %d ms", static_cast<int>(net->pingMs()));
             } else {
-                uiState.speed = net->phase() == NetplaySession::Phase::Syncing ? "Red: preparando la partida"
-                                                                               : "Red: conectando";
+                uiState.speed = net->phase() == NetplaySession::Phase::Syncing ? tr("Red: preparando la partida")
+                                                                               : tr("Red: conectando");
             }
             pacer.reset();
         }
@@ -1153,9 +1156,9 @@ int main(int argc, char** argv) {
                     app->console.setPads(PadState{}, PadState{});
                     app->console.runFrame();
                     app->console.audio().clearSamples();
-                    uiState.speed = "<< Rebobinando";
+                    uiState.speed = tr("<< Rebobinando");
                 } else {
-                    uiState.speed = "<< No se puede rebobinar más";
+                    uiState.speed = tr("<< No se puede rebobinar más");
                 }
                 pacer.reset();
             } else {
@@ -1164,7 +1167,7 @@ int main(int argc, char** argv) {
                 // for 1/speed of a tick.
                 const double speed = fast ? settings.fastForward : slowMotion ? settings.slowMotion / 100.0 : 1.0;
                 if (fast) uiState.speed = ">> x" + std::to_string(settings.fastForward);
-                else if (slowMotion) uiState.speed = "Cámara lenta " + std::to_string(settings.slowMotion) + "%";
+                else if (slowMotion) uiState.speed = trf("Cámara lenta %d%%", settings.slowMotion);
                 for (int n = pacer.framesForTick(speed); n > 0; --n) {
                     if (canRewind) {
                         std::vector<uint8_t> snapshot;

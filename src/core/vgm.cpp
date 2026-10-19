@@ -1,5 +1,7 @@
 #include "vgm.h"
 
+#include "i18n.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -272,13 +274,13 @@ bool VgmFile::parse(std::vector<uint8_t> bytes, std::string* error) {
     };
     std::vector<uint8_t> d;
     if (!gunzip(bytes, &d)) d = std::move(bytes);
-    if (d.size() < 0x40 || std::memcmp(d.data(), "Vgm ", 4) != 0) return fail("No es un archivo VGM.");
+    if (d.size() < 0x40 || std::memcmp(d.data(), "Vgm ", 4) != 0) return fail(tr("No es un archivo VGM."));
     const uint32_t version = get32(d, 0x08);
     psgClock = get32(d, 0x0C) & 0x3FFFFFFF;
     ymClock = version >= 0x110 ? get32(d, 0x2C) & 0x3FFFFFFF : get32(d, 0x10);
-    if (ymClock == 0 && psgClock == 0) return fail("El VGM no es de Mega Drive: no tiene YM2612 ni PSG.");
+    if (ymClock == 0 && psgClock == 0) return fail(tr("El VGM no es de Mega Drive: no tiene YM2612 ni PSG."));
     start = version >= 0x150 && get32(d, 0x34) ? 0x34 + get32(d, 0x34) : 0x40;
-    if (start >= d.size()) return fail("El VGM está cortado.");
+    if (start >= d.size()) return fail(tr("El VGM está cortado."));
     samples = get32(d, 0x18);
     loop = get32(d, 0x1C) ? 0x1C + get32(d, 0x1C) : 0;
     loopSamples = loop ? get32(d, 0x20) : 0;

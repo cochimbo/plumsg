@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "i18n.h"
 #include "psg.h"
 #include "ym2612.h"
 
@@ -176,43 +177,43 @@ namespace {
 int noiseDrum(int control) { return !(control & 4) ? 36 : (control & 3) >= 2 ? 38 : 42; }
 
 const char* const kPrograms[128] = {
-    "Piano de cola", "Piano brillante", "Piano eléctrico de cola", "Piano de cantina", "Piano eléctrico 1",
-    "Piano eléctrico 2", "Clavecín", "Clavinet", "Celesta", "Glockenspiel", "Caja de música", "Vibráfono",
-    "Marimba", "Xilófono", "Campanas tubulares", "Dulcémele", "Órgano de barras", "Órgano de percusión",
-    "Órgano de rock", "Órgano de iglesia", "Armonio", "Acordeón", "Armónica", "Bandoneón", "Guitarra de nailon",
-    "Guitarra de acero", "Guitarra eléctrica de jazz", "Guitarra eléctrica limpia", "Guitarra eléctrica apagada",
-    "Guitarra saturada", "Guitarra distorsionada", "Armónicos de guitarra", "Bajo acústico", "Bajo eléctrico (dedo)",
-    "Bajo eléctrico (púa)", "Bajo sin trastes", "Bajo slap 1", "Bajo slap 2", "Bajo sintetizado 1",
-    "Bajo sintetizado 2", "Violín", "Viola", "Violonchelo", "Contrabajo", "Cuerdas en trémolo",
-    "Cuerdas en pizzicato", "Arpa", "Timbales", "Cuerdas 1", "Cuerdas 2", "Cuerdas sintetizadas 1",
-    "Cuerdas sintetizadas 2", "Coro \"aah\"", "Voz \"ooh\"", "Voz sintetizada", "Golpe de orquesta", "Trompeta",
-    "Trombón", "Tuba", "Trompeta con sordina", "Trompa", "Sección de metales", "Metales sintetizados 1",
-    "Metales sintetizados 2", "Saxo soprano", "Saxo alto", "Saxo tenor", "Saxo barítono", "Oboe", "Corno inglés",
-    "Fagot", "Clarinete", "Flautín", "Flauta", "Flauta dulce", "Flauta de pan", "Botella soplada", "Shakuhachi",
-    "Silbido", "Ocarina", "Solista cuadrada", "Solista diente de sierra", "Solista calíope", "Solista chiff",
-    "Solista charango", "Solista voz", "Solista quintas", "Solista bajo y melodía", "Fondo new age", "Fondo cálido",
-    "Fondo polisintetizador", "Fondo coro", "Fondo arco", "Fondo metálico", "Fondo halo", "Fondo barrido",
-    "Efecto lluvia", "Efecto banda sonora", "Efecto cristal", "Efecto atmósfera", "Efecto brillo",
-    "Efecto duendes", "Efecto ecos", "Efecto ciencia ficción", "Sitar", "Banjo", "Shamisen", "Koto", "Kalimba",
-    "Gaita", "Violín celta", "Shanai", "Campanilla", "Agogó", "Tambores metálicos", "Caja china", "Taiko",
-    "Tom melódico", "Tambor sintetizado", "Platillo al revés", "Traste de guitarra", "Respiración", "Olas",
-    "Pájaros", "Teléfono", "Helicóptero", "Aplausos", "Disparo"};
+    N_("Piano de cola"), N_("Piano brillante"), N_("Piano eléctrico de cola"), N_("Piano de cantina"), N_("Piano eléctrico 1"),
+    N_("Piano eléctrico 2"), N_("Clavecín"), N_("Clavinet"), N_("Celesta"), N_("Glockenspiel"), N_("Caja de música"), N_("Vibráfono"),
+    N_("Marimba"), N_("Xilófono"), N_("Campanas tubulares"), N_("Dulcémele"), N_("Órgano de barras"), N_("Órgano de percusión"),
+    N_("Órgano de rock"), N_("Órgano de iglesia"), N_("Armonio"), N_("Acordeón"), N_("Armónica"), N_("Bandoneón"), N_("Guitarra de nailon"),
+    N_("Guitarra de acero"), N_("Guitarra eléctrica de jazz"), N_("Guitarra eléctrica limpia"), N_("Guitarra eléctrica apagada"),
+    N_("Guitarra saturada"), N_("Guitarra distorsionada"), N_("Armónicos de guitarra"), N_("Bajo acústico"), N_("Bajo eléctrico (dedo)"),
+    N_("Bajo eléctrico (púa)"), N_("Bajo sin trastes"), N_("Bajo slap 1"), N_("Bajo slap 2"), N_("Bajo sintetizado 1"),
+    N_("Bajo sintetizado 2"), N_("Violín"), N_("Viola"), N_("Violonchelo"), N_("Contrabajo"), N_("Cuerdas en trémolo"),
+    N_("Cuerdas en pizzicato"), N_("Arpa"), N_("Timbales"), N_("Cuerdas 1"), N_("Cuerdas 2"), N_("Cuerdas sintetizadas 1"),
+    N_("Cuerdas sintetizadas 2"), N_("Coro \"aah\""), N_("Voz \"ooh\""), N_("Voz sintetizada"), N_("Golpe de orquesta"), N_("Trompeta"),
+    N_("Trombón"), N_("Tuba"), N_("Trompeta con sordina"), N_("Trompa"), N_("Sección de metales"), N_("Metales sintetizados 1"),
+    N_("Metales sintetizados 2"), N_("Saxo soprano"), N_("Saxo alto"), N_("Saxo tenor"), N_("Saxo barítono"), N_("Oboe"), N_("Corno inglés"),
+    N_("Fagot"), N_("Clarinete"), N_("Flautín"), N_("Flauta"), N_("Flauta dulce"), N_("Flauta de pan"), N_("Botella soplada"), N_("Shakuhachi"),
+    N_("Silbido"), N_("Ocarina"), N_("Solista cuadrada"), N_("Solista diente de sierra"), N_("Solista calíope"), N_("Solista chiff"),
+    N_("Solista charango"), N_("Solista voz"), N_("Solista quintas"), N_("Solista bajo y melodía"), N_("Fondo new age"), N_("Fondo cálido"),
+    N_("Fondo polisintetizador"), N_("Fondo coro"), N_("Fondo arco"), N_("Fondo metálico"), N_("Fondo halo"), N_("Fondo barrido"),
+    N_("Efecto lluvia"), N_("Efecto banda sonora"), N_("Efecto cristal"), N_("Efecto atmósfera"), N_("Efecto brillo"),
+    N_("Efecto duendes"), N_("Efecto ecos"), N_("Efecto ciencia ficción"), N_("Sitar"), N_("Banjo"), N_("Shamisen"), N_("Koto"), N_("Kalimba"),
+    N_("Gaita"), N_("Violín celta"), N_("Shanai"), N_("Campanilla"), N_("Agogó"), N_("Tambores metálicos"), N_("Caja china"), N_("Taiko"),
+    N_("Tom melódico"), N_("Tambor sintetizado"), N_("Platillo al revés"), N_("Traste de guitarra"), N_("Respiración"), N_("Olas"),
+    N_("Pájaros"), N_("Teléfono"), N_("Helicóptero"), N_("Aplausos"), N_("Disparo")};
 
 const char* const kDrumNames[47] = {
-    "Bombo acústico", "Bombo", "Golpe de aro", "Caja", "Palmada", "Caja eléctrica", "Tom grave de suelo",
-    "Charles cerrado", "Tom agudo de suelo", "Charles con pedal", "Tom grave", "Charles abierto",
-    "Tom medio grave", "Tom medio agudo", "Platillo crash 1", "Tom agudo", "Platillo ride 1", "Platillo chino",
-    "Campana del ride", "Pandereta", "Platillo splash", "Cencerro", "Platillo crash 2", "Vibraslap",
-    "Platillo ride 2", "Bongó agudo", "Bongó grave", "Conga aguda apagada", "Conga aguda abierta", "Conga grave",
-    "Timbal agudo", "Timbal grave", "Agogó agudo", "Agogó grave", "Cabasa", "Maracas", "Silbato corto",
-    "Silbato largo", "Güiro corto", "Güiro largo", "Claves", "Caja china aguda", "Caja china grave",
-    "Cuíca apagada", "Cuíca abierta", "Triángulo apagado", "Triángulo abierto"};
+    N_("Bombo acústico"), N_("Bombo"), N_("Golpe de aro"), N_("Caja"), N_("Palmada"), N_("Caja eléctrica"), N_("Tom grave de suelo"),
+    N_("Charles cerrado"), N_("Tom agudo de suelo"), N_("Charles con pedal"), N_("Tom grave"), N_("Charles abierto"),
+    N_("Tom medio grave"), N_("Tom medio agudo"), N_("Platillo crash 1"), N_("Tom agudo"), N_("Platillo ride 1"), N_("Platillo chino"),
+    N_("Campana del ride"), N_("Pandereta"), N_("Platillo splash"), N_("Cencerro"), N_("Platillo crash 2"), N_("Vibraslap"),
+    N_("Platillo ride 2"), N_("Bongó agudo"), N_("Bongó grave"), N_("Conga aguda apagada"), N_("Conga aguda abierta"), N_("Conga grave"),
+    N_("Timbal agudo"), N_("Timbal grave"), N_("Agogó agudo"), N_("Agogó grave"), N_("Cabasa"), N_("Maracas"), N_("Silbato corto"),
+    N_("Silbato largo"), N_("Güiro corto"), N_("Güiro largo"), N_("Claves"), N_("Caja china aguda"), N_("Caja china grave"),
+    N_("Cuíca apagada"), N_("Cuíca abierta"), N_("Triángulo apagado"), N_("Triángulo abierto")};
 
 }  // namespace
 
-const char* RolandSound::programName(int program) { return program >= 0 && program < 128 ? kPrograms[program] : ""; }
+const char* RolandSound::programName(int program) { return program >= 0 && program < 128 ? tr(kPrograms[program]) : ""; }
 
-const char* RolandSound::drumName(int note) { return note >= 35 && note <= 81 ? kDrumNames[note - 35] : nullptr; }
+const char* RolandSound::drumName(int note) { return note >= 35 && note <= 81 ? tr(kDrumNames[note - 35]) : nullptr; }
 
 RolandSound::Kind RolandSound::kindOf(uint32_t fingerprint) {
     if ((fingerprint & ~0xFFu) == psgToneFingerprint(0) && (fingerprint & 0xFF) < 3) return Kind::PsgTone;

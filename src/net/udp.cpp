@@ -1,5 +1,7 @@
 #include "udp.h"
 
+#include "../core/i18n.h"
+
 #include <cstdlib>
 #include <cstring>
 
@@ -63,12 +65,12 @@ UdpTransport::~UdpTransport() {
 
 bool UdpTransport::open(int port) {
     if (!startSockets()) {
-        error_ = "No se pudo iniciar la red.";
+        error_ = tr("No se pudo iniciar la red.");
         return false;
     }
     const SocketHandle s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s == PLUMSG_BAD_SOCKET) {
-        error_ = "No se pudo crear el socket UDP.";
+        error_ = tr("No se pudo crear el socket UDP.");
         return false;
     }
     sockaddr_in addr{};
@@ -77,12 +79,12 @@ bool UdpTransport::open(int port) {
     addr.sin_port = htons(static_cast<uint16_t>(port));
     if (::bind(s, reinterpret_cast<sockaddr*>(&addr), sizeof addr) != 0) {
         closeSocket(s);
-        error_ = "El puerto " + std::to_string(port) + " está ocupado (¿hay otro plumsg alojando?).";
+        error_ = trf("El puerto %d está ocupado (¿hay otro plumsg alojando?).", port);
         return false;
     }
     if (!makeNonBlocking(s)) {
         closeSocket(s);
-        error_ = "No se pudo preparar el socket UDP.";
+        error_ = tr("No se pudo preparar el socket UDP.");
         return false;
     }
     socket_ = static_cast<intptr_t>(s);
@@ -91,7 +93,7 @@ bool UdpTransport::open(int port) {
 
 bool UdpTransport::setPeer(const std::string& address, int defaultPort) {
     if (!startSockets()) {
-        error_ = "No se pudo iniciar la red.";
+        error_ = tr("No se pudo iniciar la red.");
         return false;
     }
     std::string host = address;
@@ -104,14 +106,14 @@ bool UdpTransport::setPeer(const std::string& address, int defaultPort) {
         char* end = nullptr;
         const long p = std::strtol(host.c_str() + colon + 1, &end, 10);
         if (*end != 0 || p <= 0 || p > 65535) {
-            error_ = "El puerto de \"" + address + "\" no es válido.";
+            error_ = trf("El puerto de \"%s\" no es válido.", address.c_str());
             return false;
         }
         port = static_cast<int>(p);
         host = host.substr(0, colon);
     }
     if (host.empty()) {
-        error_ = "Escribe la dirección del anfitrión.";
+        error_ = tr("Escribe la dirección del anfitrión.");
         return false;
     }
     addrinfo hints{};
@@ -119,7 +121,7 @@ bool UdpTransport::setPeer(const std::string& address, int defaultPort) {
     hints.ai_socktype = SOCK_DGRAM;
     addrinfo* found = nullptr;
     if (getaddrinfo(host.c_str(), nullptr, &hints, &found) != 0 || !found) {
-        error_ = "No se encuentra \"" + host + "\".";
+        error_ = trf("No se encuentra \"%s\".", host.c_str());
         return false;
     }
     peerIp_ = reinterpret_cast<sockaddr_in*>(found->ai_addr)->sin_addr.s_addr;

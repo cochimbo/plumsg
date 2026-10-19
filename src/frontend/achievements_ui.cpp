@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "imgui.h"
+#include "../core/i18n.h"
 #include "http.h"
 #include "../render/gl.h"
 
@@ -110,29 +111,29 @@ bool AchievementsUi::drawMenu(bool romLoaded) {
         if (settings_.achievements && settings_.raToken.empty()) showAccount_ = true;
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Logros de retroachievements.org: los mismos que en RetroArch y otros emuladores,\n"
-                          "con tu cuenta de allí.");
-    if (ImGui::MenuItem("Cuenta...", nullptr, showAccount_)) showAccount_ = true;
+        ImGui::SetTooltip("%s", tr("Logros de retroachievements.org: los mismos que en RetroArch y otros emuladores,\n"
+                                   "con tu cuenta de allí."));
+    if (ImGui::MenuItem(tr("Cuenta..."), nullptr, showAccount_)) showAccount_ = true;
     ImGui::BeginDisabled(!settings_.achievements || !ra_.gameLoaded());
-    if (ImGui::MenuItem("Logros de este juego...", nullptr, showList_)) showList_ = true;
+    if (ImGui::MenuItem(tr("Logros de este juego..."), nullptr, showList_)) showList_ = true;
     ImGui::EndDisabled();
     ImGui::Separator();
-    if (ImGui::MenuItem("Modo hardcore", nullptr, settings_.raHardcore, settings_.achievements)) {
+    if (ImGui::MenuItem(tr("Modo hardcore"), nullptr, settings_.raHardcore, settings_.achievements)) {
         settings_.raHardcore = !settings_.raHardcore;
         changed = true;
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("Los logros cuentan para tu puntuación hardcore y las clasificaciones, pero sin\n"
-                          "ayudas: no se puede rebobinar, ir a cámara lenta, usar trucos ni cargar estados.%s",
-                          romLoaded ? "\nAl activarlo, el juego vuelve a empezar." : "");
+        ImGui::SetTooltip(tr("Los logros cuentan para tu puntuación hardcore y las clasificaciones, pero sin\n"
+                             "ayudas: no se puede rebobinar, ir a cámara lenta, usar trucos ni cargar estados.%s"),
+                          romLoaded ? tr("\nAl activarlo, el juego vuelve a empezar.") : "");
     ImGui::Separator();
-    if (!settings_.achievements) ImGui::TextDisabled("Desactivados");
+    if (!settings_.achievements) ImGui::TextDisabled("%s", tr("Desactivados"));
     else if (ra_.loggedIn())
-        ImGui::TextDisabled("%s, %u puntos", ra_.userName().c_str(), static_cast<unsigned>(ra_.score()));
-    else if (ra_.loggingIn()) ImGui::TextDisabled("Iniciando sesión...");
-    else ImGui::TextDisabled("Sin sesión iniciada");
+        ImGui::TextDisabled(tr("%s, %u puntos"), ra_.userName().c_str(), static_cast<unsigned>(ra_.score()));
+    else if (ra_.loggingIn()) ImGui::TextDisabled("%s", tr("Iniciando sesión..."));
+    else ImGui::TextDisabled("%s", tr("Sin sesión iniciada"));
     if (settings_.achievements && ra_.gameLoaded())
-        ImGui::TextDisabled("Este juego: %u de %u logros", static_cast<unsigned>(ra_.unlockedCount()),
+        ImGui::TextDisabled(tr("Este juego: %u de %u logros"), static_cast<unsigned>(ra_.unlockedCount()),
                             static_cast<unsigned>(ra_.achievementCount()));
     return changed;
 }
@@ -151,27 +152,27 @@ void AchievementsUi::drawAccount(bool& changed) {
         return;
     }
     ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
-    ImGui::TextWrapped("Logros, marcas y retos para cada juego, los de retroachievements.org. Necesitas una "
-                       "cuenta (gratis) allí.");
-    if (ImGui::Checkbox("Activar los logros", &settings_.achievements)) changed = true;
+    ImGui::TextWrapped("%s", tr("Logros, marcas y retos para cada juego, los de retroachievements.org. Necesitas una "
+                                "cuenta (gratis) allí."));
+    if (ImGui::Checkbox(tr("Activar los logros"), &settings_.achievements)) changed = true;
     ImGui::BeginDisabled(!settings_.achievements);
 
-    ImGui::SeparatorText("Cuenta");
+    ImGui::SeparatorText(tr("Cuenta"));
     if (ra_.loggedIn()) {
-        ImGui::Text("Sesión iniciada como %s (%u puntos).", ra_.userName().c_str(), static_cast<unsigned>(ra_.score()));
-        if (ImGui::Button("Cerrar sesión")) {
+        ImGui::Text(tr("Sesión iniciada como %s (%u puntos)."), ra_.userName().c_str(), static_cast<unsigned>(ra_.score()));
+        if (ImGui::Button(tr("Cerrar sesión"))) {
             ra_.logout();
             settings_.raToken.clear();
             changed = true;
         }
     } else {
         ImGui::SetNextItemWidth(220);
-        ImGui::InputText("Usuario", user_, sizeof user_);
+        ImGui::InputText(tr("Usuario"), user_, sizeof user_);
         ImGui::SetNextItemWidth(220);
-        const bool enter = ImGui::InputText("Contraseña", password_, sizeof password_,
+        const bool enter = ImGui::InputText(tr("Contraseña"), password_, sizeof password_,
                                             ImGuiInputTextFlags_Password | ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::BeginDisabled(ra_.loggingIn() || !user_[0] || !password_[0]);
-        if (ImGui::Button(ra_.loggingIn() ? "Iniciando sesión..." : "Iniciar sesión") || (enter && user_[0] && password_[0])) {
+        if (ImGui::Button(ra_.loggingIn() ? tr("Iniciando sesión...") : tr("Iniciar sesión")) || (enter && user_[0] && password_[0])) {
             settings_.raUser = user_;
             ra_.loginWithPassword(user_, password_);
             std::fill(std::begin(password_), std::end(password_), '\0');  // only its token is kept
@@ -179,16 +180,16 @@ void AchievementsUi::drawAccount(bool& changed) {
         }
         ImGui::EndDisabled();
         if (!ra_.loginError().empty()) ImGui::TextColored(kWarning, "%s", ra_.loginError().c_str());
-        ImGui::TextDisabled("La contraseña no se guarda: plumsg guarda la sesión que te da el servidor.");
-        if (ImGui::SmallButton("Crear una cuenta en retroachievements.org"))
+        ImGui::TextDisabled("%s", tr("La contraseña no se guarda: plumsg guarda la sesión que te da el servidor."));
+        if (ImGui::SmallButton(tr("Crear una cuenta en retroachievements.org")))
             SDL_OpenURL("https://retroachievements.org/createaccount.php");
     }
 
-    ImGui::SeparatorText("Modo hardcore");
-    if (ImGui::Checkbox("Jugar en hardcore", &settings_.raHardcore)) changed = true;
-    ImGui::TextDisabled("Sin rebobinar, cámara lenta, trucos ni cargar estados (guardar sí). Los logros cuentan "
-                        "para tu puntuación hardcore y se puede entrar en las clasificaciones. Al activarlo, el "
-                        "juego vuelve a empezar.");
+    ImGui::SeparatorText(tr("Modo hardcore"));
+    if (ImGui::Checkbox(tr("Jugar en hardcore"), &settings_.raHardcore)) changed = true;
+    ImGui::TextDisabled("%s", tr("Sin rebobinar, cámara lenta, trucos ni cargar estados (guardar sí). Los logros cuentan "
+                                 "para tu puntuación hardcore y se puede entrar en las clasificaciones. Al activarlo, el "
+                                 "juego vuelve a empezar."));
     ImGui::EndDisabled();
     ImGui::PopTextWrapPos();
     ImGui::End();
@@ -196,12 +197,12 @@ void AchievementsUi::drawAccount(bool& changed) {
 
 void AchievementsUi::drawList() {
     ImGui::SetNextWindowSize(ImVec2(520, 560), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Logros de este juego", &showList_)) {
+    if (!ImGui::Begin(tr("Logros de este juego"), &showList_)) {
         ImGui::End();
         return;
     }
     if (!ra_.gameLoaded()) {
-        ImGui::TextDisabled("No hay un juego con logros abierto.");
+        ImGui::TextDisabled("%s", tr("No hay un juego con logros abierto."));
         ImGui::End();
         return;
     }
@@ -211,9 +212,9 @@ void AchievementsUi::drawList() {
     }
     ImGui::BeginGroup();
     ImGui::TextUnformatted(ra_.gameTitle().c_str());
-    ImGui::Text("%u de %u logros, %u de %u puntos%s", static_cast<unsigned>(ra_.unlockedCount()),
+    ImGui::Text(tr("%u de %u logros, %u de %u puntos%s"), static_cast<unsigned>(ra_.unlockedCount()),
                 static_cast<unsigned>(ra_.achievementCount()), static_cast<unsigned>(ra_.pointsUnlocked()),
-                static_cast<unsigned>(ra_.pointsTotal()), ra_.hardcore() ? " (hardcore)" : "");
+                static_cast<unsigned>(ra_.pointsTotal()), ra_.hardcore() ? tr(" (hardcore)") : "");
     const std::string presence = ra_.richPresence();
     if (!presence.empty()) ImGui::TextDisabled("%s", presence.c_str());
     ImGui::EndGroup();
@@ -231,7 +232,7 @@ void AchievementsUi::drawList() {
             if (a.unlocked) ImGui::TextColored(kGold, "%s", a.title.c_str());
             else ImGui::TextUnformatted(a.title.c_str());
             ImGui::SameLine();
-            ImGui::TextDisabled("%u puntos", static_cast<unsigned>(a.points));
+            ImGui::TextDisabled(tr("%u puntos"), static_cast<unsigned>(a.points));
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextDisabled("%s", a.description.c_str());
             ImGui::PopTextWrapPos();
@@ -309,9 +310,9 @@ void AchievementsUi::drawOverlay(float top) {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + size * 22);
         switch (n.kind) {
             case Achievements::Notice::Kind::Unlocked:
-                ImGui::TextColored(kGold, "¡Logro desbloqueado! (%u puntos)", static_cast<unsigned>(n.points));
+                ImGui::TextColored(kGold, tr("¡Logro desbloqueado! (%u puntos)"), static_cast<unsigned>(n.points));
                 break;
-            case Achievements::Notice::Kind::GameCompleted: ImGui::TextColored(kGold, "¡Enhorabuena!"); break;
+            case Achievements::Notice::Kind::GameCompleted: ImGui::TextColored(kGold, "%s", tr("¡Enhorabuena!")); break;
             default: break;
         }
         if (n.error) ImGui::TextColored(kWarning, "%s", n.title.c_str());
