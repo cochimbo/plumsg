@@ -955,6 +955,15 @@ int main(int argc, char** argv) {
                     break;
                 default: break;
             }
+            // Full screen works over the library and the windows too: no game key or text box wants these.
+            if (e.type == SDL_KEYDOWN && !e.key.repeat &&
+                (e.key.keysym.scancode == SDL_SCANCODE_F11 ||
+                 (e.key.keysym.scancode == SDL_SCANCODE_RETURN && (e.key.keysym.mod & KMOD_ALT)))) {
+                settings.fullscreen = !settings.fullscreen;
+                setFullscreen();
+                save();
+                continue;
+            }
             if (ui->keyboardBusy() && e.type == SDL_KEYDOWN) continue;
 
             switch (input->hotkeyFor(e)) {
@@ -999,7 +1008,6 @@ int main(int argc, char** argv) {
             }
             if (e.type != SDL_KEYDOWN || e.key.repeat) continue;
             const bool ctrl = (e.key.keysym.mod & KMOD_CTRL) != 0;
-            const bool alt = (e.key.keysym.mod & KMOD_ALT) != 0;
             switch (e.key.keysym.scancode) {
                 case SDL_SCANCODE_ESCAPE:
                     settings.showMenu = !settings.showMenu;
@@ -1031,14 +1039,6 @@ int main(int argc, char** argv) {
                 case SDL_SCANCODE_M:
                     settings.mute = !settings.mute;
                     ui->notify(settings.mute ? tr("Sonido silenciado") : tr("Sonido activado"));
-                    save();
-                    break;
-                case SDL_SCANCODE_RETURN:
-                    if (!alt) break;
-                    [[fallthrough]];
-                case SDL_SCANCODE_F11:
-                    settings.fullscreen = !settings.fullscreen;
-                    setFullscreen();
                     save();
                     break;
                 default: break;

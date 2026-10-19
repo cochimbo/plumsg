@@ -72,12 +72,6 @@ msgstr "(none)"
 msgid "(perfil de %s)"
 msgstr "(profile of %s)"
 
-msgid "(se ajustan en Opciones > Vídeo)"
-msgstr "(set in Options > Video)"
-
-msgid "(se ajustan en Vídeo con el juego abierto)"
-msgstr "(set in Video with the game open)"
-
 msgid "(sin nombre)"
 msgstr "(no name)"
 

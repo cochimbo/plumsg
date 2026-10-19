@@ -59,7 +59,75 @@ std::string shortCode(const std::string& code) {
     return code.substr(0, plus) + " +" + std::to_string(more);
 }
 
-// ImGui::Combo with its items translated.
+// The pseudo-3D's controls, from the style to Valores por defecto, for the general
+// settings or a game's own. The return value says when to save.
+bool controls3D(RenderOptions& r) {
+    bool changed = false;
+    int style = static_cast<int>(r.style);
+    ImGui::TextUnformatted(tr("Estilo:"));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton(tr("Vóxeles"), &style, static_cast<int>(Style3D::Voxels));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton(tr("Capas"), &style, static_cast<int>(Style3D::Layers));
+    r.style = static_cast<Style3D>(style);
+    // Sliders save once released rather than on every frame of the drag.
+    float depth = r.depth * 100.0f, thickness = r.thickness * 100.0f;
+    if (ImGui::SliderFloat(tr("Profundidad"), &depth, 0.0f, 100.0f, "%.0f %%")) r.depth = depth / 100.0f;
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    changed |= ImGui::Checkbox(tr("Inclinar la cámara"), &r.tiltCamera);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Sin marcar, la cámara mira de frente y la imagen se ve como en 2D;\n"
+                          "la profundidad se nota con la iluminación y la cámara viva."));
+    ImGui::BeginDisabled(!r.tiltCamera);
+    ImGui::SliderFloat(tr("Inclinación"), &r.tilt, kMinTilt, kMaxTilt, "%.0f°");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SliderFloat(tr("Giro"), &r.yaw, -kMaxYaw, kMaxYaw, "%.0f°");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::EndDisabled();
+    ImGui::SliderFloat(tr("Zoom"), &r.zoom, kMinZoom, kMaxZoom, "%.2fx");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    if (ImGui::SliderFloat(tr("Grosor"), &thickness, 0.0f, 100.0f, "%.0f %%")) r.thickness = thickness / 100.0f;
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::BeginDisabled(r.style != Style3D::Voxels);
+    float extrusion = r.extrusion * 100.0f;
+    if (ImGui::SliderFloat(tr("Extrusión"), &extrusion, 0.0f, 100.0f, "%.0f %%")) r.extrusion = extrusion / 100.0f;
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::EndDisabled();
+    changed |= ImGui::Checkbox(tr("Iluminación"), &r.lighting);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Luz lateral sobre los bloques y sombras suaves de cada plano sobre los de detrás.\n"
+                          "Hace que el relieve se vea también con la cámara de frente."));
+    changed |= ImGui::Checkbox(tr("Cámara viva"), &r.liveCamera);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("La cámara se balancea unos grados siguiendo la acción,\n"
+                          "así las capas se mueven entre sí aunque mires de frente."));
+    changed |= ImGui::Checkbox(tr("Sombra de los sprites"), &r.shadows);
+    changed |= ImGui::Checkbox(tr("Plano B con prioridad delante"), &r.highBInFront);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Los tiles del plano B con prioridad alta se ponen delante, con los del plano A."));
+    changed |= ImGui::Checkbox(tr("Plano B plano (como el cielo)"), &r.flatB);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Para juegos que pintan el cielo en el plano B: no lo levanta en 3D."));
+    if (ImGui::Button(tr("Valores por defecto"))) {
+        const RenderOptions defaults;
+        r.style = defaults.style;
+        r.depth = defaults.depth;
+        r.tilt = defaults.tilt;
+        r.yaw = defaults.yaw;
+        r.zoom = defaults.zoom;
+        r.extrusion = defaults.extrusion;
+        r.thickness = defaults.thickness;
+        r.shadows = defaults.shadows;
+        r.tiltCamera = defaults.tiltCamera;
+        r.lighting = defaults.lighting;
+        r.liveCamera = defaults.liveCamera;
+        r.highBInFront = defaults.highBInFront;
+        r.flatB = defaults.flatB;
+        changed = true;
+    }
+    return changed;
+}
+
 // The widescreen's controls: a button per ready-made width and a slider per side. They
 // change the picture at once; the return value says when to save.
 bool widescreenControls(int& left, int& right) {
@@ -79,6 +147,7 @@ bool widescreenControls(int& left, int& right) {
     return changed;
 }
 
+// ImGui::Combo with its items translated.
 bool comboTr(const char* label, int* current, const char* const items[], int count) {
     std::vector<const char*> shown(items, items + count);
     for (const char*& item : shown) item = tr(item);
@@ -970,68 +1039,7 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     ImGui::TextDisabled("%s", tr("(atajo en Opciones > Controles)"));
     RenderOptions& r = settings_.render;
     ImGui::BeginDisabled(!r.pseudo3d);
-    int style = static_cast<int>(r.style);
-    ImGui::TextUnformatted(tr("Estilo:"));
-    ImGui::SameLine();
-    changed |= ImGui::RadioButton(tr("Vóxeles"), &style, static_cast<int>(Style3D::Voxels));
-    ImGui::SameLine();
-    changed |= ImGui::RadioButton(tr("Capas"), &style, static_cast<int>(Style3D::Layers));
-    r.style = static_cast<Style3D>(style);
-    // Sliders save once released rather than on every frame of the drag.
-    float depth = r.depth * 100.0f, thickness = r.thickness * 100.0f;
-    if (ImGui::SliderFloat(tr("Profundidad"), &depth, 0.0f, 100.0f, "%.0f %%")) r.depth = depth / 100.0f;
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
-    changed |= ImGui::Checkbox(tr("Inclinar la cámara"), &r.tiltCamera);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", tr("Sin marcar, la cámara mira de frente y la imagen se ve como en 2D;\n"
-                          "la profundidad se nota con la iluminación y la cámara viva."));
-    ImGui::BeginDisabled(!r.tiltCamera);
-    ImGui::SliderFloat(tr("Inclinación"), &r.tilt, kMinTilt, kMaxTilt, "%.0f°");
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
-    ImGui::SliderFloat(tr("Giro"), &r.yaw, -kMaxYaw, kMaxYaw, "%.0f°");
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
-    ImGui::EndDisabled();
-    ImGui::SliderFloat(tr("Zoom"), &r.zoom, kMinZoom, kMaxZoom, "%.2fx");
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
-    if (ImGui::SliderFloat(tr("Grosor"), &thickness, 0.0f, 100.0f, "%.0f %%")) r.thickness = thickness / 100.0f;
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
-    ImGui::BeginDisabled(r.style != Style3D::Voxels);
-    float extrusion = r.extrusion * 100.0f;
-    if (ImGui::SliderFloat(tr("Extrusión"), &extrusion, 0.0f, 100.0f, "%.0f %%")) r.extrusion = extrusion / 100.0f;
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
-    ImGui::EndDisabled();
-    changed |= ImGui::Checkbox(tr("Iluminación"), &r.lighting);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", tr("Luz lateral sobre los bloques y sombras suaves de cada plano sobre los de detrás.\n"
-                          "Hace que el relieve se vea también con la cámara de frente."));
-    changed |= ImGui::Checkbox(tr("Cámara viva"), &r.liveCamera);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", tr("La cámara se balancea unos grados siguiendo la acción,\n"
-                          "así las capas se mueven entre sí aunque mires de frente."));
-    changed |= ImGui::Checkbox(tr("Sombra de los sprites"), &r.shadows);
-    changed |= ImGui::Checkbox(tr("Plano B con prioridad delante"), &r.highBInFront);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", tr("Los tiles del plano B con prioridad alta se ponen delante, con los del plano A."));
-    changed |= ImGui::Checkbox(tr("Plano B plano (como el cielo)"), &r.flatB);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", tr("Para juegos que pintan el cielo en el plano B: no lo levanta en 3D."));
-    if (ImGui::Button(tr("Valores por defecto"))) {
-        const RenderOptions defaults;
-        r.style = defaults.style;
-        r.depth = defaults.depth;
-        r.tilt = defaults.tilt;
-        r.yaw = defaults.yaw;
-        r.zoom = defaults.zoom;
-        r.extrusion = defaults.extrusion;
-        r.thickness = defaults.thickness;
-        r.shadows = defaults.shadows;
-        r.tiltCamera = defaults.tiltCamera;
-        r.lighting = defaults.lighting;
-        r.liveCamera = defaults.liveCamera;
-        r.highBInFront = defaults.highBInFront;
-        r.flatB = defaults.flatB;
-        changed = true;
-    }
+    changed |= controls3D(r);
     ImGui::TextDisabled("%s", tr("Cámara: arrastra con el ratón o usa el stick derecho para girar,\n"
                         "la rueda para acercar y doble clic o el clic del stick para centrarla."));
     ImGui::EndDisabled();
@@ -1278,7 +1286,10 @@ bool Ui::handleLibrary(const SDL_Event& e) {
             case SDL_SCANCODE_DOWN: action = Down; break;
             case SDL_SCANCODE_LEFT: action = Left; break;
             case SDL_SCANCODE_RIGHT: action = Right; break;
-            case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: action = Play; break;
+            case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER:
+                if (e.key.keysym.mod & KMOD_ALT) return false;  // Alt+Intro is full screen
+                action = Play;
+                break;
             case SDL_SCANCODE_ESCAPE: action = Close; break;
             case SDL_SCANCODE_PAGEUP: action = PrevTab; break;
             case SDL_SCANCODE_PAGEDOWN: action = NextTab; break;
@@ -2179,9 +2190,14 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             ImGui::TextUnformatted(tr(opt.label));
             edited |= widescreenControls(s.wideLeft, s.wideRight);
         } else if (key == "perfil_3d") {
-            ImGui::TextUnformatted(tr(opt.label));
-            ImGui::SameLine();
-            ImGui::TextDisabled("%s", v.loaded ? tr("(se ajustan en Opciones > Vídeo)") : tr("(se ajustan en Vídeo con el juego abierto)"));
+            // Here too, so a game's own 3D can be set without opening it.
+            if (ImGui::TreeNode(tr(opt.label))) {
+                edited |= ImGui::Checkbox(tr("Efecto 3D"), &s.render.pseudo3d);
+                ImGui::BeginDisabled(!s.render.pseudo3d);
+                edited |= controls3D(s.render);
+                ImGui::EndDisabled();
+                ImGui::TreePop();
+            }
         } else if (key == "volumen") {
             ImGui::SliderInt(tr(opt.label), &s.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
