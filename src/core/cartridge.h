@@ -36,6 +36,11 @@ public:
     // The region the header asks for, preferring USA, then Japan, then Europe.
     Region preferredRegion() const;
 
+    // The cartridge is a Master System (or Game Gear) one: its header is not where a Mega Drive's is,
+    // so what was read there is forgotten (the title comes from the file name) and the
+    // region is the one its own header asks for.
+    void setMasterSystemHeader(Region region, bool gameGear);
+
     // Changes one byte of the ROM image (cheats); false if `offset` is past its end.
     bool patchRom(uint32_t offset, uint8_t value, uint8_t* previous);
 
@@ -50,6 +55,14 @@ public:
     bool hasSaveData() const { return sramUsed_; }
     // The battery RAM, indexed by address - sramStart (empty without one).
     const std::vector<uint8_t>& saveRam() const { return sram_; }
+    // The battery RAM by offset, for cartridges that map it themselves (the Master
+    // System's mapper). Past its end it reads 0xFF and ignores writes.
+    uint8_t saveRamByte(uint32_t offset) const { return offset < sram_.size() ? sram_[offset] : 0xFF; }
+    void writeSaveRamByte(uint32_t offset, uint8_t value) {
+        if (offset >= sram_.size()) return;
+        if (sram_[offset] != value) sramUsed_ = true;
+        sram_[offset] = value;
+    }
     bool loadSave(const std::string& path);
     bool writeSave(const std::string& path) const;
 

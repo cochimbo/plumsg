@@ -36,6 +36,7 @@ struct UiActions {
     bool toggleSlowMotion = false;
     bool rewindChanged = false;    // the rewind length changed
     int profile = -1;              // 1 give the game its own 3D profile, 0 drop it, -1 nothing
+    int wideProfile = -1;          // the same for its own widescreen
     bool cheatsChanged = false;    // the cheat list was edited: apply it and save it
     bool netHost = false;          // host a netplay game on settings.netPort
     bool netJoin = false;          // join the host at settings.netAddress
@@ -44,12 +45,15 @@ struct UiActions {
     std::string optionsFor;        // open the Opciones de este juego window for this game
     bool gameOptionsChanged = false;  // a game's own options were edited: save them (and apply if loaded)
     bool soundChanged = false;        // the Roland sound was switched or retuned
+    bool equalizerChanged = false;    // settings.equalizer moved: heard at once, saved with settingsChanged
     bool openEditor = false;          // open the instrument editor for editorFor (empty: no game)
     std::string editorFor;
     bool startRecording = false;      // the editor's requests: record the game's music,
     bool stopRecording = false;       // stop and hand it over,
     bool assignmentsChanged = false;  // and the game's instruments changed
     bool achievementsChanged = false; // RetroAchievements switched on or off, or hardcore
+    int record = 0;                   // start or stop recording: 1 a GIF, 2 a video
+    bool openRecordings = false;      // show the folder the recordings go to
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -79,12 +83,14 @@ struct UiState {
     bool slowMotion = false;
     std::string speed;     // badge in the corner while not at normal speed ("<< REBOBINANDO", "x4"...)
     bool hasProfile = false;  // the loaded game has its own 3D profile
+    bool hasWideProfile = false;  // the loaded game has its own widescreen
     std::string gameName;     // the ROM's file name, for the profile option
     std::vector<const char*> views;  // Renderer::name() of each available view
     std::vector<SlotInfo> slots;     // one per slot, 0-9
     std::vector<Cheat>* cheats = nullptr;  // the cheats of the Trucos window's game, edited in place
     std::string cheatsGame;                // that game's file name
     std::string cheatsPath;                // and its path
+    bool cheatsSms = false;                // and it takes Master System and Game Gear codes
     GameOptionsView gameOptions;
     // Netplay: a session exists (hosting, joining or playing), and what to say about it.
     bool netSession = false;
@@ -93,6 +99,8 @@ struct UiState {
     float netProgress = -1;   // 0..1 while the game is sent, else -1
     // RetroAchievements' hardcore mode is on: no rewinding, slow motion, cheats or loading states.
     bool hardcore = false;
+    int recording = 0;         // being recorded: 1 a GIF, 2 a video
+    int recordingSeconds = 0;  // and for how long
     EditorView editor;
 };
 
@@ -215,6 +223,7 @@ private:
     std::string includedSoundfont_, soundfontFolder_;
     void drawSoundfontMenu(UiActions& out);
     void drawSoundfontCombo(UiActions& out, bool labelled = true);
+    void drawEqualizer(UiActions& out);
     unsigned int logoTexture_ = 0;  // the PLUMSG marquee, 0 if it could not be decoded
     int logoWidth_ = 0, logoHeight_ = 0;
     unsigned int iconTexture_ = 0;  // the plum, 0 if it could not be decoded

@@ -7,6 +7,7 @@
 
 #include "i18n.h"
 #include "psg.h"
+#include "ym2413.h"
 #include "ym2612.h"
 
 #define TSF_IMPLEMENTATION
@@ -126,12 +127,87 @@ private:
     double phase_ = 0;
 };
 
+// The equalizer: a low shelf, three peaks and a high shelf (RBJ's biquads), one gain
+// each in dB. A band at 0 dB is left out.
+class Equalizer {
+public:
+    void setRate(double rate) {
+        rate_ = rate;
+        design();
+    }
+    void setGains(const std::array<int, RolandSound::kEqBands>& gains) {
+        if (gains == gains_) return;
+        gains_ = gains;
+        design();
+    }
+
+    void process(float* buf, int frames) {
+        for (int b = 0; b < RolandSound::kEqBands; ++b) {
+            if (!gains_[static_cast<size_t>(b)] || rate_ <= 0) continue;
+            Band& f = bands_[static_cast<size_t>(b)];
+            for (int i = 0; i < frames; ++i)
+                for (int side = 0; side < 2; ++side) {
+                    float& x = buf[i * 2 + side];
+                    float* z = f.z[side];
+                    const float y = f.b0 * x + z[0];
+                    z[0] = f.b1 * x - f.a1 * y + z[1];
+                    z[1] = f.b2 * x - f.a2 * y;
+                    x = y;
+                }
+        }
+    }
+
+private:
+    struct Band {
+        float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+        float z[2][2] = {};
+    };
+    void design() {
+        if (rate_ <= 0) return;
+        for (int b = 0; b < RolandSound::kEqBands; ++b) {
+            Band& f = bands_[static_cast<size_t>(b)];
+            const double gain = std::pow(10.0, gains_[static_cast<size_t>(b)] / 40.0);
+            const double w = 2 * 3.14159265358979 * std::min(RolandSound::kEqFrequencies[b], rate_ * 0.45) / rate_;
+            const double cw = std::cos(w), sw = std::sin(w);
+            double b0, b1, b2, a0, a1, a2;
+            if (b == 0 || b == RolandSound::kEqBands - 1) {  // shelves, slope 1
+                const double alpha = sw / 2 * std::sqrt(2.0), sq = 2 * std::sqrt(gain) * alpha;
+                const double sign = b == 0 ? 1 : -1;  // the high shelf is the low one with cos negated
+                b0 = gain * ((gain + 1) - sign * (gain - 1) * cw + sq);
+                b1 = 2 * sign * gain * ((gain - 1) - sign * (gain + 1) * cw);
+                b2 = gain * ((gain + 1) - sign * (gain - 1) * cw - sq);
+                a0 = (gain + 1) + sign * (gain - 1) * cw + sq;
+                a1 = -2 * sign * ((gain - 1) + sign * (gain + 1) * cw);
+                a2 = (gain + 1) + sign * (gain - 1) * cw - sq;
+            } else {  // peaks, Q 1: about an octave and a half wide
+                const double alpha = sw / 2;
+                b0 = 1 + alpha * gain;
+                b1 = -2 * cw;
+                b2 = 1 - alpha * gain;
+                a0 = 1 + alpha / gain;
+                a1 = -2 * cw;
+                a2 = 1 - alpha / gain;
+            }
+            f.b0 = static_cast<float>(b0 / a0);
+            f.b1 = static_cast<float>(b1 / a0);
+            f.b2 = static_cast<float>(b2 / a0);
+            f.a1 = static_cast<float>(a1 / a0);
+            f.a2 = static_cast<float>(a2 / a0);
+        }
+    }
+
+    double rate_ = 0;
+    std::array<int, RolandSound::kEqBands> gains_{};
+    std::array<Band, RolandSound::kEqBands> bands_{};
+};
+
 }  // namespace
 
 struct RolandSound::Synth {
     tsf* font = nullptr;
     int rate = 0;  // the rate tsf renders at, fixed once set
     Effects effects;
+    Equalizer equalizer;
     std::vector<float> buffer;
 
     ~Synth() {
@@ -169,6 +245,12 @@ bool RolandSound::shareSoundfont(const RolandSound& other) {
 bool RolandSound::ready() const { return synth_->font != nullptr; }
 
 void RolandSound::setEffects(int reverb, int chorus) { synth_->effects.setAmounts(reverb, chorus); }
+
+void RolandSound::setEqualizer(const std::array<int, kEqBands>& gains) {
+    std::array<int, kEqBands> clamped = gains;
+    for (int& g : clamped) g = std::clamp(g, -kEqRange, kEqRange);
+    synth_->equalizer.setGains(clamped);
+}
 
 namespace {
 
@@ -209,7 +291,45 @@ const char* const kDrumNames[47] = {
     N_("Silbato largo"), N_("Güiro corto"), N_("Güiro largo"), N_("Claves"), N_("Caja china aguda"), N_("Caja china grave"),
     N_("Cuíca apagada"), N_("Cuíca abierta"), N_("Triángulo apagado"), N_("Triángulo abierto")};
 
+// The YM2413's built-in instruments, and the General MIDI instrument each one is.
+const char* const kOpllNames[15] = {N_("Violín"),  N_("Guitarra"), N_("Piano"),        N_("Flauta"),      N_("Clarinete"),
+                                    N_("Oboe"),    N_("Trompeta"), N_("Órgano"),       N_("Trompa"),      N_("Sintetizador"),
+                                    N_("Clavecín"), N_("Vibráfono"), N_("Bajo sintetizado"), N_("Bajo acústico"),
+                                    N_("Guitarra eléctrica")};
+constexpr int kOpllPrograms[15] = {40, 24, 0, 73, 71, 68, 56, 16, 60, 81, 6, 11, 38, 32, 27};
+// Its rhythm sounds (bits 4 to 0 of register 0x0E), the drum each one is, and the
+// channel that plays it.
+const char* const kRhythmNames[5] = {N_("Bombo"), N_("Caja"), N_("Tom"), N_("Platillo"), N_("Charles")};
+constexpr int kRhythmDrums[5] = {36, 38, 45, 49, 42};
+constexpr int kRhythmChannel[5] = {6, 7, 8, 8, 7};
+
+// The voice of a YM2413 channel (0-8).
+int opllVoice(int ch) { return ch < 6 ? ch : RolandSound::kOpllHigh + ch - 6; }
+
 }  // namespace
+
+int RolandSound::opllInstrument(uint32_t fingerprint) {
+    return (fingerprint & ~0xFFu) == opllFingerprint(0) && (fingerprint & 0xFF) >= 1 && (fingerprint & 0xFF) < 16
+               ? static_cast<int>(fingerprint & 0xFF)
+               : 0;
+}
+
+const char* RolandSound::opllInstrumentName(int instrument) {
+    return instrument >= 1 && instrument <= 15 ? tr(kOpllNames[instrument - 1]) : "";
+}
+
+const char* RolandSound::rhythmName(int drum) { return drum >= 0 && drum < 5 ? tr(kRhythmNames[drum]) : ""; }
+
+uint32_t RolandSound::opllChannels(uint32_t voices) {
+    uint32_t channels = 0;
+    for (int ch = 0; ch < 9; ++ch) {
+        bool all = (voices >> opllVoice(ch)) & 1;
+        for (int d = 0; d < 5; ++d)
+            if (kRhythmChannel[d] == ch) all = all && ((voices >> (kRhythmFirst + d)) & 1);
+        if (all) channels |= 1u << ch;
+    }
+    return channels;
+}
 
 const char* RolandSound::programName(int program) { return program >= 0 && program < 128 ? tr(kPrograms[program]) : ""; }
 
@@ -218,13 +338,33 @@ const char* RolandSound::drumName(int note) { return note >= 35 && note <= 81 ? 
 RolandSound::Kind RolandSound::kindOf(uint32_t fingerprint) {
     if ((fingerprint & ~0xFFu) == psgToneFingerprint(0) && (fingerprint & 0xFF) < 3) return Kind::PsgTone;
     if ((fingerprint & ~0xFFu) == noiseFingerprint(0) && (fingerprint & 0xFF) < 8) return Kind::PsgNoise;
+    if ((fingerprint & ~0xFFu) == rhythmFingerprint(0) && (fingerprint & 0xFF) < 5) return Kind::Rhythm;
     return Kind::Fm;
 }
 
+std::vector<uint32_t> RolandSound::aliases(uint32_t fingerprint) const {
+    auto l = legacy_.find(fingerprint);
+    return l == legacy_.end() ? std::vector<uint32_t>{} : std::vector<uint32_t>(l->second.begin(), l->second.end());
+}
+
+uint32_t RolandSound::assignedAs(uint32_t fingerprint) const {
+    if (assigned_.count(fingerprint)) return fingerprint;
+    for (uint32_t old : aliases(fingerprint))
+        if (assigned_.count(old)) return old;
+    return 0;
+}
+
+bool RolandSound::isSoundEffect(uint32_t fingerprint) const {
+    if (effects_.count(fingerprint)) return true;
+    for (uint32_t old : aliases(fingerprint))
+        if (effects_.count(old)) return true;
+    return false;
+}
+
 RolandSound::Assignment RolandSound::assignmentFor(uint32_t fingerprint) const {
-    if (auto a = assigned_.find(fingerprint); a != assigned_.end()) return a->second;
+    if (const uint32_t key = assignedAs(fingerprint)) return assigned_.at(key);
     Assignment rules;
-    if (effectsOriginal_ && effects_.count(fingerprint)) {
+    if (effectsOriginal_ && isSoundEffect(fingerprint)) {
         rules.original = true;
         return rules;
     }
@@ -234,7 +374,12 @@ RolandSound::Assignment RolandSound::assignmentFor(uint32_t fingerprint) const {
             rules.volume = kPsgVolume;
             break;
         case Kind::PsgNoise: rules.drum = noiseDrum(static_cast<int>(fingerprint & 7)); break;
+        case Kind::Rhythm: rules.drum = kRhythmDrums[fingerprint & 0xFF]; break;
         case Kind::Fm: {
+            if (const int i = opllInstrument(fingerprint)) {
+                rules.program = kOpllPrograms[i - 1];
+                break;
+            }
             auto r = rules_.find(fingerprint);
             rules.program = r != rules_.end() ? r->second : 81;
             break;
@@ -348,6 +493,12 @@ double RolandSound::fmNote(int fnum, int block, double chipClock) {
     return 69.0 + 12.0 * std::log2(hz / 440.0);
 }
 
+double RolandSound::opllNote(int fnum, int block, double chipClock) {
+    if (fnum <= 0) return 0;
+    const double hz = fnum * std::ldexp(1.0, block) * (chipClock / 72.0) / 524288.0;
+    return 69.0 + 12.0 * std::log2(hz / 440.0);
+}
+
 double RolandSound::psgNote(int period, double psgClock) {
     if (period <= 0) return 0;
     const double hz = psgClock / (32.0 * period);
@@ -449,7 +600,8 @@ void RolandSound::noteOn(int voice, uint32_t fingerprint, const Assignment& a, d
     }
     const bool quiet = a.original || ((mutedVoices_ >> voice) & 1) || silenced_.count(fingerprint);
     v.drum = a.drum >= 0;
-    v.midi = !quiet && (v.drum || (a.program >= 0 && voice != kNoise));
+    // The noise and the YM2413's drums only play drums.
+    v.midi = !quiet && (v.drum || (a.program >= 0 && voice != kNoise && voice < kRhythmFirst));
     if (!v.midi) return;
     v.volume = a.volume;
     if (v.drum) {
@@ -511,23 +663,33 @@ void RolandSound::pitchTo(int voice, double note, uint64_t clock) {
     }
 }
 
-uint32_t RolandSound::fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops) const {
+uint32_t RolandSound::fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops, uint32_t* legacy) const {
     const uint8_t algorithmFeedback = ym.reg(chReg(ch, 0xB0));
     const int algorithm = algorithmFeedback & 7;
-    uint32_t hash = 2166136261u;  // FNV-1a
-    auto add = [&](uint8_t b) { hash = (hash ^ b) * 16777619u; };
-    add(algorithmFeedback & 0x3F);
+    // FNV-1a. Before 0.0.23 every bit written went in, release rate included: drivers
+    // like Sonic's set it to the fastest to cut a note or make way for a sound effect,
+    // and the same instrument came out as another one, with no assignment. Those old
+    // fingerprints are still worked out, for the files that use them.
+    uint32_t hash = 2166136261u, old = 2166136261u;
+    auto add = [](uint32_t& h, uint8_t b) { h = (h ^ b) * 16777619u; };
+    add(hash, algorithmFeedback & 0x3F);
+    add(old, algorithmFeedback & 0x3F);
+    // The bits the chip uses of each register, 0x30 to 0x90.
+    static constexpr uint8_t kUsed[7] = {0x7F, 0x7F, 0xDF, 0x9F, 0x1F, 0xF0, 0x0F};
     for (int op = 0; op < 4; ++op) {
         for (int i = 0; i < 7; ++i) {
             uint8_t b = ym.reg(opReg(ch, op, 0x30 + i * 0x10));
             if (ops) (*ops)[static_cast<size_t>(op * 7 + i)] = b;
             // A carrier's total level is its volume, not its sound.
             if (i == 1 && (kCarriers[algorithm] & (1 << op))) b = 0;
-            add(b);
+            add(old, b);
+            add(hash, b & kUsed[i]);  // and the release rate (0x80's low half) is how a note is let go
         }
     }
     // Clear of the PSG's fingerprints, which are not hashes.
     if (kindOf(hash) != Kind::Fm || hash == 0) hash ^= 0x80000001u;
+    if (kindOf(old) != Kind::Fm || old == 0) old ^= 0x80000001u;
+    if (legacy) *legacy = old;
     return hash;
 }
 
@@ -551,7 +713,9 @@ void RolandSound::fmKey(int ch, bool on, const Ym2612& ym, uint64_t clock) {
     const double note = fmNote((hi & 7) << 8 | ym.reg(chReg(ch, 0xA0)), (hi >> 3) & 7, chipClock_);
     if (note <= 0) return;
     std::array<uint8_t, 28> ops{};
-    const uint32_t fp = fmFingerprint(ch, ym, &ops);
+    uint32_t legacy = 0;
+    const uint32_t fp = fmFingerprint(ch, ym, &ops, &legacy);
+    if (legacy != fp) legacy_[fp].insert(legacy);
     const uint8_t algorithmFeedback = ym.reg(chReg(ch, 0xB0));
     auto r = rules_.find(fp);
     if (r == rules_.end()) r = rules_.emplace(fp, programFor(ops, algorithmFeedback, static_cast<int>(note))).first;
@@ -614,7 +778,9 @@ void RolandSound::psgWrite(const Psg& psg, uint64_t clock) {
             rules.program = kPsgDefault;
             rules.volume = kPsgVolume;
             see(voice, fp, rules, static_cast<int>(std::lround(note)), nullptr, 0);
-            noteOn(voice, fp, assignmentFor(fp), note, amplitude, 64, clock);
+            // A Game Gear can send each channel left, right or both.
+            const bool left = (psg.stereo() >> (4 + c)) & 1, right = (psg.stereo() >> c) & 1;
+            noteOn(voice, fp, assignmentFor(fp), note, amplitude, left == right ? 64 : left ? 0 : 127, clock);
             continue;
         }
         pitchTo(voice, note, clock);
@@ -642,6 +808,94 @@ void RolandSound::psgWrite(const Psg& psg, uint64_t clock) {
     noteOn(kNoise, fp, assignmentFor(fp), 0, amplitude, 64, clock);
 }
 
+double RolandSound::opllNoteOf(int ch, const Ym2413& opll) const {
+    const uint8_t hi = opll.reg(0x20 + ch);
+    return opllNote((hi & 1) << 8 | opll.reg(0x10 + ch), (hi >> 1) & 7, opllClock_);
+}
+
+void RolandSound::opllKey(int ch, const Ym2413& opll, uint64_t clock) {
+    const int voice = opllVoice(ch);
+    Voice& v = voices_[static_cast<size_t>(voice)];
+    const bool on = (opll.reg(0x20 + ch) & 0x10) && !(ch >= 6 && (opll.reg(0x0E) & 0x20));
+    if (on == v.on) {
+        if (on) pitchTo(voice, opllNoteOf(ch, opll), clock);
+        return;
+    }
+    if (!on) {
+        noteOff(voice, clock);
+        return;
+    }
+    const double note = opllNoteOf(ch, opll);
+    if (note <= 0) return;
+    const int instrument = opll.reg(0x30 + ch) >> 4;
+    uint32_t fp = opllFingerprint(instrument);
+    std::array<uint8_t, 28> ops{};
+    if (instrument == 0) {  // the game's own: a hash of its eight registers
+        uint32_t hash = 2166136261u;
+        for (int r = 0; r < 8; ++r) {
+            ops[static_cast<size_t>(r)] = opll.reg(r);
+            hash = (hash ^ opll.reg(r)) * 16777619u;
+        }
+        if (kindOf(hash) != Kind::Fm || opllInstrument(hash) || hash == 0) hash ^= 0x80000001u;
+        fp = hash;
+        if (!rules_.count(fp)) rules_.emplace(fp, note < 48 ? 38 : 81);
+    }
+    Assignment rules;
+    rules.program = instrument ? kOpllPrograms[instrument - 1] : rules_[fp];
+    see(voice, fp, rules, static_cast<int>(std::lround(note)), instrument == 0 ? &ops : nullptr, 0);
+    const double amplitude = std::pow(10.0, -3.0 * (opll.reg(0x30 + ch) & 0x0F) / 20.0);  // 3 dB a step
+    noteOn(voice, fp, assignmentFor(fp), note, amplitude, 64, clock);
+}
+
+void RolandSound::opllRhythm(const Ym2413& opll, uint64_t clock) {
+    const uint8_t r = opll.reg(0x0E);
+    const uint8_t keys = (r & 0x20) ? (r & 0x1F) : 0;
+    // Each drum's volume: 0x36 low (bass drum), 0x37 high (hi-hat) and low (snare), 0x38
+    // high (tom) and low (cymbal).
+    const int volumes[5] = {opll.reg(0x36) & 15, opll.reg(0x37) & 15, opll.reg(0x38) >> 4, opll.reg(0x38) & 15,
+                            opll.reg(0x37) >> 4};
+    for (int d = 0; d < 5; ++d) {
+        const uint8_t bit = static_cast<uint8_t>(0x10 >> d);
+        const int voice = kRhythmFirst + d;
+        if (!(keys & bit)) {
+            noteOff(voice, clock);
+            continue;
+        }
+        if (rhythmKeys_ & bit) continue;  // still held: one hit
+        const uint32_t fp = rhythmFingerprint(d);
+        Assignment rules;
+        rules.drum = kRhythmDrums[d];
+        see(voice, fp, rules, rules.drum, nullptr, 0);
+        noteOn(voice, fp, assignmentFor(fp), 0, std::pow(10.0, -3.0 * volumes[d] / 20.0), 64, clock);
+    }
+    rhythmKeys_ = keys;
+}
+
+void RolandSound::opllWrite(int offset, uint8_t value, const Ym2413& opll, uint64_t clock) {
+    opllClock_ = opll.sampleRate() * 72.0;
+    if (!(offset & 1)) {
+        opllAddress_ = value;
+        return;
+    }
+    const int reg = opllAddress_ & 0x3F;
+    if (reg == 0x0E) {
+        // Rhythm mode takes channels 7-9 from the melody.
+        if (value & 0x20)
+            for (int ch = 6; ch < 9; ++ch) noteOff(opllVoice(ch), clock);
+        opllRhythm(opll, clock);
+        return;
+    }
+    const int ch = reg & 0x0F;
+    if (ch > 8) return;
+    if (reg >= 0x10 && reg < 0x30) {
+        opllKey(ch, opll, clock);
+    } else if (reg >= 0x30 && reg < 0x39) {
+        const int voice = opllVoice(ch);
+        if (voices_[static_cast<size_t>(voice)].on && !(ch >= 6 && (opll.reg(0x0E) & 0x20)))
+            expression(voice, std::pow(10.0, -3.0 * (value & 0x0F) / 20.0), clock);
+    }
+}
+
 void RolandSound::apply(const Event& e) {
     tsf* f = synth_->font;
     const int ch = e.channel;
@@ -661,6 +915,7 @@ void RolandSound::render(int16_t* out, int frames) {
     buf.assign(static_cast<size_t>(frames) * 2, 0.0f);
     tsf_render_float(synth_->font, buf.data(), frames, 0);
     synth_->effects.process(buf.data(), frames);
+    synth_->equalizer.process(buf.data(), frames);
     const float gain = 9000.0f * static_cast<float>(volume_) / 100.0f;
     for (int i = 0; i < frames * 2; ++i)
         out[i] = static_cast<int16_t>(std::clamp(static_cast<int>(out[i]) + static_cast<int>(buf[static_cast<size_t>(i)] * gain), -32768, 32767));
@@ -685,6 +940,7 @@ void RolandSound::endFrame(uint64_t clock, std::vector<int16_t>& out, size_t fro
         }
         channels_ = {};
         s.effects.setRate(s.rate);
+        s.equalizer.setRate(s.rate);
     }
     const int frames = static_cast<int>((out.size() - std::min(out.size(), from * 2)) / 2);
     const double span = clock > frameStart_ ? static_cast<double>(clock - frameStart_) : 1.0;

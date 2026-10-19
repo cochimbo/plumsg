@@ -34,6 +34,19 @@ Primera versión. Lo que hay:
   la Mega Drive), el sonido PWM, los registros de comunicación y la FIFO del 68000. No
   hace falta BIOS: plumsg hace lo que hacen las ROM de arranque. En el 3D, la imagen de la
   32X va plana al fondo y el efecto sigue en los planos de la Mega Drive.
+- **Master System** (`.sms`, o un `.bin` con su cabecera `TMR SEGA`), como la ejecuta la
+  propia Mega Drive: el Z80 y el PSG de la consola con el VDP de la Master System (modo 4:
+  fondo con scroll por línea y bloqueos de scroll, tiles delante de los sprites, columna
+  izquierda tapada, 64 sprites de 8x8 u 8x16 con zoom, interrupciones de línea y de cuadro,
+  modos de 192, 224 y 240 líneas), el mapper de Sega con la RAM de cartucho (a `.sav`) y
+  los mandos: botón 1 = A o B, botón 2 = C, Start = Pausa. También el mapper de
+  Codemasters, los modos antiguos del TMS9918 (Graphics I y II, texto, sus sprites) y la
+  unidad FM (YM2413), que está en las consolas japonesas (región Japón) y, con
+  **Consola > Sonido FM de la Master System**, en todas. En el 3D el fondo
+  va al plano B, sus tiles de prioridad al plano A y los sprites a su capa.
+- **Game Gear** (`.gg`, o un `.bin` con la cabecera de Game Gear): la misma máquina con su
+  pantalla de 160x144 (la parte central de la imagen, mostrada a 4:3), su paleta de 4096
+  colores, el botón START (el Start del mando) y el sonido en estéreo.
 - **Mega CD** (`.cue` con sus `.bin` o `.wav`, `.iso`, `.chd`, o un `.bin` de una sola
   pista de datos): la segunda CPU 68000 a 12,5 MHz con su memoria de programa, la memoria
   de palabras compartida (modos de 2 y 1 Mbit, con las vistas por celdas y por puntos), la
@@ -55,6 +68,12 @@ Primera versión. Lo que hay:
   siguiendo la acción, y la inclinación de la cámara se puede quitar para mirar de frente.
 - **Perfiles 3D por juego**: cada ROM puede guardar sus propios ajustes del 3D.
 - **Rebobinado, avance rápido y cámara lenta**.
+- **Run-ahead**: quita 1 o más fotogramas de retardo a los mandos, como en RetroArch.
+- **Sin límite de sprites**: se ven todos los sprites de cada línea, sin el parpadeo que
+  causa el límite de la consola.
+- **Pantalla ancha** 16:9, 16:10 o a medida, cada lado por separado: se ve lo que hay más
+  allá de los bordes de la pantalla.
+- **Overclock**: el procesador de la consola va más rápido, para los juegos que se ralentizan.
 - **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
 - **Trucos** Game Genie y Action Replay, guardados por juego, con las listas de trucos de
   cada juego de libretro-database para elegirlos de un menú.
@@ -121,8 +140,37 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   lenta (50 %). El sonido acompaña: más agudo al acelerar y más grave a cámara lenta. Al
   rebobinar el juego va hacia atrás fotograma a fotograma, en silencio, y al soltar sigue
   desde ahí.
+- **Juego > Latencia > Run-ahead** (desactivado por defecto, de 1 a 4 fotogramas): en cada
+  fotograma el juego corre por delante ese número de fotogramas, sin sonido, se ve su
+  imagen y vuelve atrás, así lo que pulsas se ve antes. Con 1 suele bastar; cada fotograma
+  más pide más al ordenador. También se puede fijar por juego en Opciones de este juego.
+- **Opciones > Vídeo > Sin límite de sprites** (desactivado por defecto): la consola dibuja
+  como mucho 20 sprites por línea (16 en modo estrecho) y 320 píxeles de sprites, y los
+  juegos van turnando cuáles se quedan fuera, por eso parpadean. Con esta opción se dibujan
+  todos. La consola sigue avisando al juego de que se ha pasado igual que la real, así que
+  el juego se comporta igual: no afecta a partidas en red, run-ahead, logros ni estados. El
+  truco de tapar sprites con uno en x = 0 se respeta. Si un juego parpadea igual, es que
+  esconde los sprites él mismo. También se puede fijar por juego.
+- **Opciones > Vídeo > Pantalla ancha** (desactivada por defecto): botones para 4:3, 16:10 y
+  16:9, y un deslizador por lado (de 0 a 56 columnas) que cambia la imagen al momento,
+  siempre centrada. A los lados se dibuja lo que el juego tiene en los planos y los sprites
+  más allá de los bordes. Como el juego nunca pensó que eso se viera, en algunos aparecen
+  enemigos antes de tiempo, trozos del nivel aún sin dibujar o cosas escondidas fuera; se
+  arregla quitando columnas de ese lado (en Sonic, por ejemplo, el derecho, porque el nivel
+  se dibuja justo antes de entrar en pantalla). «Guardar la pantalla ancha solo para este
+  juego» guarda los dos lados para el juego abierto, y también se fija en Opciones de este
+  juego. El juego no lo nota: no afecta a partidas en red, run-ahead, logros ni estados (la
+  miniatura del estado se queda en 4:3). El headless la prueba con `--widescreen 16:9` o
+  `--widescreen 53,16` (izquierda, derecha).
 - **Consola**: región (automática según la cabecera, Japón, EE. UU. o Europa/PAL) y tipo
   de mando (3 o 6 botones) de cada puerto. Cambiar la región reinicia el juego.
+- **Consola > Overclock** (desactivado por defecto): el 68000 va al 150, 200, 300 o 400 % de su
+  velocidad, así los juegos que se ralentizan cuando hay mucho en pantalla acaban cada
+  fotograma a tiempo. El resto de la consola (Z80, VDP, sonido, Mega CD y 32X) sigue a su
+  velocidad. Al contrario que el límite de sprites, el juego sí corre distinto: alguno puede
+  ir demasiado rápido o fallar, y entonces se desactiva para ese juego (se puede fijar por
+  juego en Opciones de este juego). Va en los estados guardados; en una partida en red
+  manda el del anfitrión, y en modo hardcore de RetroAchievements se queda desactivado.
 - **Opciones > Vídeo**: escalado, 4:3 o píxeles cuadrados, y las opciones del 3D
   (estilo, profundidad, inclinación, giro, zoom, grosor, extrusión, sombras, plano B con
   prioridad delante, plano B plano para juegos que pintan el cielo en él). La cámara del
@@ -141,8 +189,9 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   carpeta; con **Añadir carpeta...** se suman más y con **Quitar** se sacan. Cada juego
   sabe de qué consola es por su extensión: `.md`, `.gen`, `.smd` y `.bin` son de Mega
   Drive (un `.bin` con la cabecera de la 32X o de un disco se reconoce también), `.32x` de
-  32X, y `.cue`, `.chd` e `.iso` de Mega CD; las pistas `.bin` de un `.cue` no salen
-  aparte. Las pestañas **Todos**, **Mega Drive**, **32X** y **Mega CD** filtran por
+  32X, `.sms` de Master System, `.gg` de Game Gear, y `.cue`, `.chd` e `.iso` de Mega CD; las pistas `.bin` de
+  un `.cue` no salen aparte. Las pestañas **Todos**, **Mega Drive**, **32X**, **Mega CD**,
+  **Master System** y **Game Gear** filtran por
   consola (con el mando, los botones L y R; con el teclado, RePág y AvPág).
   **Descargar carátulas que faltan** las busca por el nombre de cada juego (los nombres de
   No-Intro y Redump, como `Sonic The Hedgehog (USA, Europe).md`, aciertan casi siempre) en
@@ -162,7 +211,9 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
 - **Juego > Trucos**: códigos Game Genie (`ABCD-EFGH`, cambian la ROM) y Action Replay
   (`FF0A12:0009`, o `FF0A12:09` para un byte; fijan ese valor de la RAM en cada cuadro).
   Cada uno se activa o desactiva con su casilla y se guarda para ese juego en `trucos\`.
-  Un código puede ser varios unidos con `+` (`AJ0T-CA9Y+FFA3C5:0006`).
+  Un código puede ser varios unidos con `+` (`AJ0T-CA9Y+FFA3C5:0006`). En Master System y
+  Game Gear son de cifras: Game Genie `3A8-6CF-E66` (los tres últimos, opcionales, dicen
+  qué byte cambia, y se busca en todos los bancos de la ROM) y Action Replay `00C0-1205`.
   En **Trucos de internet** salen los de la lista del juego en
   [libretro-database](https://github.com/libretro/libretro-database) (la base de trucos de
   RetroArch, casi 2.100 listas de Mega Drive, más las de 32X y Mega CD), que se descarga al
@@ -181,6 +232,9 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   por debajo, y **Reverb** y **Chorus** añaden ambiente. Cada instrumento del juego recibe
   un instrumento General MIDI con unas reglas automáticas, que se cambian a mano en el
   **Editor de instrumentos**. Todo esto se puede cambiar solo para un juego desde sus opciones.
+  En la Master System y la Game Gear también: el FM (YM2413) toca sus 15 instrumentos de
+  serie como los General MIDI que imitan (violín, guitarra, piano...) y su batería con la
+  del SoundFont, y el estéreo de la Game Gear lleva cada canal del PSG a su lado.
 
   plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable. Los `.sf2` que se
   dejen en `sonido\soundfonts\` (**Abrir la carpeta de SoundFonts** la abre) salen en el
@@ -214,9 +268,12 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
     Heroes, Ristar, Shinobi III, Golden Axe, Streets of Rage 2, Sonic Spinball, Earthworm
     Jim, Taz in Escape from Mars, NHL 96, Ecco the Dolphin, Castle of Illusion, QuackShot,
     Streets of Rage 3, Beyond Oasis y Shadowrun (estos tres con el driver en el 68000, que
-    le pasa las notas al Z80). Lo que suena en uno o dos canales, aunque dure (un motor, una
-    alarma), cuenta como efecto y no como canción. Tarda unos minutos, con una barra de
-    progreso, y se puede parar.
+    le pasa las notas al Z80). En la Master System y la Game Gear, donde el juego y el
+    driver comparten el Z80, busca el byte que el juego escribe y el código que toca el PSG
+    o el FM vacía; los `.vgz` llevan el PSG, el YM2413 y el estéreo de la Game Gear
+    (probado de momento con un juego de prueba propio). Lo que suena en uno o dos canales,
+    aunque dure (un motor, una alarma), cuenta como efecto y no como canción. Tarda unos
+    minutos, con una barra de progreso, y se puede parar.
   - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,
     golpes...): los instrumentos FM que suenan en los sonidos cortos y en ninguna canción.
     Con **Sonido > Efectos de sonido originales** (la opción de serie) suenan como en la
@@ -231,21 +288,47 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
     test del juego: se pone a grabar y se van tocando sus canciones.
   - **Tocar** la reproduce con el juego en pausa. **Original** y **Sintetizador** cambian entre
     los dos sonidos en el mismo punto, para comparar, y la lista **SoundFont** de debajo (la
-    misma de **Sonido**) cambia de SoundFont sin salir del editor. Cada canal (FM 1-6, DAC,
-    PSG 1-3 y ruido) tiene **Solo** y **Silencio**.
-  - La lista enseña los instrumentos de la pista, con sus canales y sus notas. Los que suenan
-    en ese momento salen en verde. A cada uno se le puede dar un **Instrumento** General
-    MIDI (con octava y volumen), una pieza de la **Batería** GM, o dejarle su **Sonido
-    original**. **Escuchar solo este** calla todo lo demás, y **Volver a la sugerencia**
-    deshace lo elegido.
+    misma de **Sonido**) cambia de SoundFont sin salir del editor. **Ecualizador...** sube o
+    baja graves, medios y agudos del sintetizador (de -12 a 12 dB), aquí y en los juegos.
+    Cada canal (FM 1-6, DAC, PSG 1-3 y ruido) tiene **Solo** y **Silencio**.
+  - La tabla enseña los instrumentos de la pista (FM A, FM B...: las letras para no
+    confundirlos con los canales FM 1-6), con lo que suenan, sus canales y sus notas, en
+    filas a la altura de las de los canales; los canales del instrumento elegido se marcan.
+    Los que suenan en ese momento salen en verde. A cada uno se le puede dar un
+    **Instrumento** General MIDI (con octava y volumen), una pieza de la **Batería** GM, o
+    dejarle su **Sonido original**. **Escuchar solo este** calla todo lo demás, **Volver a la
+    sugerencia** deshace lo elegido en ese instrumento y **Todo a las sugerencias...**, en
+    todos los del juego.
+  - Un instrumento FM se reconoce por sus registros, sin su volumen ni su velocidad de
+    release: drivers como el de Sonic ponen el release al máximo para cortar una nota o
+    dejar sitio a un efecto, y antes de la 0.0.23 eso lo hacía pasar por otro instrumento
+    sin asignar. Lo guardado con las huellas de antes sigue valiendo.
   - Lo elegido se oye al momento, también en el juego, y se guarda en
-    `sonido\<juego>.ini`. Con **Usar también en otros juegos** (marcado de entrada) va
-    además a `sonido\cache.ini`, que comparten todos los juegos: el mismo sonido FM en otro
-    juego saldrá ya asignado. Lo de cada juego manda sobre lo común.
+    `sonido\<juego>.ini`, solo para ese juego. Con el editor abierto sin juego va a
+    `sonido\cache.ini`, que vale para todos (las versiones hasta la 0.0.22 guardaban ahí
+    también lo de cada juego, y se sigue oyendo); lo de cada juego manda sobre lo común.
 - A pantalla completa, **Abrir ROM** usa el explorador propio de plumsg (también con el
   mando) en vez del diálogo de Windows, que se quedaba escondido detrás del juego.
 
 La configuración se guarda en `plumsg.ini`.
+
+### Grabar vídeo o GIF
+
+En **Juego > Grabar**:
+
+- **Grabar vídeo** (`Ctrl+R`) graba la partida con su sonido en un `.avi` (Motion JPEG y
+  PCM), que abren Windows, VLC y los editores de vídeo sin instalar nada. Pasa sin problema
+  de 1 GB.
+- **Grabar GIF** (`Ctrl+G`) graba un GIF animado sin sonido, a 30 imágenes por segundo,
+  para compartir un trozo de partida.
+
+Se para con el mismo atajo (o en el menú); arriba en el centro se ve el tiempo grabado. Los
+archivos van a la carpeta `grabaciones` (junto a `states`), con el nombre del juego y la
+fecha; **Abrir la carpeta de grabaciones** la abre. En la vista 2D se graba la imagen de la
+consola tal cual, nítida y sin el filtro (el vídeo a 960x672); en 3D, lo que se ve en
+pantalla, sin los menús (el vídeo hasta 720 líneas y el GIF hacia 480x360). Los menús, la
+pausa o el rebobinado quedan en la grabación como en pantalla; si el juego se para o se
+cambia de juego, la grabación se cierra.
 
 ### Jugar en red
 
@@ -313,6 +396,7 @@ plumsg.exe "C:\Juegos\Sonic CD.cue" --region eu --estado 1
 | `--region r` | `auto`, `jp`, `us` o `eu` |
 | `--estado N` | carga el estado guardado N (0-9) del juego al abrirlo |
 | `--biblioteca carpeta` | abre la biblioteca de esa carpeta |
+| `--grabar f.avi` | graba la partida desde el principio, en vídeo (`.avi`) o GIF (`.gif`) |
 | `--alojar` | aloja una partida en red con el juego (en el puerto del menú Red) |
 | `--unirse direccion` | se une a la partida en red de ese anfitrión (`IP` o `IP:puerto`) |
 | `--ayuda` | muestra las opciones |
@@ -389,7 +473,7 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
 `plumsg-headless` es el emulador sin ventana, sin sonido y sin tarjeta gráfica, para
 pruebas, CI y reproducir fallos. Ejecuta un cartucho o un disco durante N fotogramas,
 pulsa los botones que diga un guion y guarda lo que se le pida: capturas PNG, el sonido
-en WAV, un hash por fotograma, estados y volcados de la RAM. También comprueba
+en WAV, la partida en GIF o en vídeo (`--gif`, `--avi`), un hash por fotograma, estados y volcados de la RAM. También comprueba
 resultados y dice en qué fotograma una ejecución empieza a ser distinta.
 
 Para compilar solo esto (sin SDL2, ImGui ni OpenGL):
@@ -457,7 +541,7 @@ sus capturas, sonido y hashes como artefacto.
 ## Licencias
 
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
-miniz (MIT, en `third_party/miniz`), stb_image (dominio público o MIT, en `third_party/stb`),
+miniz (MIT, en `third_party/miniz`), stb_image y stb_image_write (dominio público o MIT, en `third_party/stb`),
 ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
 `third_party/tsf`), rcheevos (MIT, para RetroAchievements). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
 propia licencia libre (`soundfonts\GeneralUser-GS-LICENSE.txt` en la instalación). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de

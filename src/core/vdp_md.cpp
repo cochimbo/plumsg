@@ -297,7 +297,16 @@ void VdpMd::acknowledge(int level) {
     else if (level == 4) hintPending_ = false;
 }
 
-void VdpMd::drawPlane(int line, bool planeA, std::array<Cell, 320>& out, std::array<bool, 320>& isWindow) {
+int VdpMd::wideColumnsFor(int aspectW, int aspectH) {
+    if (aspectW <= 0 || aspectH <= 0) return 0;
+    // The console's picture is 4:3; each side takes half of what is missing:
+    // 320 * (W:H / 4:3 - 1) / 2, rounded.
+    const int extra = (320 * (3 * aspectW - 4 * aspectH) + 4 * aspectH) / (8 * aspectH);
+    return std::clamp(extra, 0, VideoFrameMd::kMaxWideSide);
+}
+
+void VdpMd::drawPlane(int line, bool planeA, int left, int right, LineCells& out,
+                      std::array<bool, VideoFrameMd::kMaxWidth>& isWindow) {
     const int width = h40() ? 320 : 256;
     const bool im2 = (regs_[12] & 0x06) == 0x06;
     const int tileRows = im2 ? 16 : 8;
@@ -352,24 +361,28 @@ void VdpMd::drawPlane(int line, bool planeA, std::array<Cell, 320>& out, std::ar
         cell.tile = tile;
     };
 
-    for (int x = 0; x < width; ++x) {
-        if (planeA && (lineInWindow || (x >= winLeft && x < winRight))) {
-            const uint32_t addr = winBase + static_cast<uint32_t>(((y / tileRows) * winCells + x / 8) * 2);
-            fetch(addr, x, y, out[x]);
-            isWindow[x] = true;
+    for (int x = -left; x < width + right; ++x) {
+        const int i = x + left;
+        // Past the edges (widescreen) the window goes on as at the nearest edge.
+        const int wx = std::clamp(x, 0, width - 1);
+        if (planeA && (lineInWindow || (wx >= winLeft && wx < winRight))) {
+            const int cell = (x >> 3) & (winCells - 1);
+            const uint32_t addr = winBase + static_cast<uint32_t>(((y / tileRows) * winCells + cell) * 2);
+            fetch(addr, x, y, out[i]);
+            isWindow[i] = true;
             continue;
         }
-        isWindow[x] = false;
-        const int column = std::min(x / 16, 19);
+        isWindow[i] = false;
+        const int column = std::clamp(x >> 4, 0, 19);
         const int vs = (columnScroll ? vsram_[column * 2 + (planeA ? 0 : 1)] : vsram_[planeA ? 0 : 1]) & (im2 ? 0x7FF : 0x3FF);
         const int py = (y + vs) & (planeH - 1);
         const int px = (x - hscroll) & (planeW - 1);
         const uint32_t addr = base + static_cast<uint32_t>(((py / tileRows) * cellsW + px / 8) * 2);
-        fetch(addr, px, py, out[x]);
+        fetch(addr, px, py, out[i]);
     }
 }
 
-void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t, 320>& number) {
+void VdpMd::drawSprites(int line, int left, int right, LineCells& out, std::array<uint8_t, VideoFrameMd::kMaxWidth>& number) {
     const bool wide = h40();
     const int width = wide ? 320 : 256;
     const int maxSprites = wide ? 80 : 64;
@@ -386,8 +399,12 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
         int index, x, y, hcells, vcells;
         uint16_t attr;
     };
-    std::array<Found, 20> found{};
-    int count = 0;
+    // Without the limit every sprite on the line is drawn, but the flags stay as the real
+    // VDP leaves them: `hwCount` sprites, and the cells up to its pixel budget, are what the
+    // console would draw, and only they set the overflow and collision bits. The game sees
+    // the same console either way; only the picture changes.
+    std::array<Found, 80> found{};
+    int count = 0, hwCount = -1;
     int link = 0;
     for (int n = 0; n < maxSprites; ++n) {
         const uint32_t a = (satb + static_cast<uint32_t>(link) * 8) & 0xFFFF;
@@ -396,9 +413,10 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
         const int next = vram_[(a + 3) & 0xFFFF] & 0x7F;
         const int hcells = ((size >> 2) & 3) + 1, vcells = (size & 3) + 1;
         if (yLine >= sy && yLine < sy + vcells * tileRows) {
-            if (count == maxPerLine) {
+            if (count == maxPerLine && hwCount < 0) {
                 spriteOverflow_ = true;
-                break;
+                hwCount = count;
+                if (!unlimitedSprites_) break;
             }
             const uint16_t attr = static_cast<uint16_t>(vram_[(a + 4) & 0xFFFF] << 8 | vram_[(a + 5) & 0xFFFF]);
             const int sx = (vram_[(a + 6) & 0xFFFF] << 8 | vram_[(a + 7) & 0xFFFF]) & 0x1FF;
@@ -407,8 +425,10 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
         if (next == 0 || next >= maxSprites) break;
         link = next;
     }
+    if (hwCount < 0) hwCount = count;
 
     int pixels = 0;
+    bool beyond = false;  // past what the real VDP would draw on this line
     bool masked = false, sawNonZeroX = false;
     for (int i = 0; i < count; ++i) {
         const Found& s = found[i];
@@ -419,10 +439,12 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
         const int height = s.vcells * tileRows;
         int row = yLine - s.y;
         if (vflip) row = height - 1 - row;
+        if (i == hwCount) beyond = true;
         for (int cx = 0; cx < s.hcells; ++cx) {
-            if (pixels >= maxPixels) {
+            if (pixels >= maxPixels && !beyond) {
                 spriteOverflow_ = true;
-                return;
+                if (!unlimitedSprites_) return;
+                beyond = true;
             }
             pixels += 8;
             if (masked) continue;
@@ -432,19 +454,21 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
             const int ty = row % tileRows;
             for (int px = 0; px < 8; ++px) {
                 const int x = s.x - 128 + cx * 8 + px;
-                if (x < 0 || x >= width) continue;
+                if (x < -left || x >= width + right) continue;
+                const int i = x + left;
                 const int tx = hflip ? 7 - px : px;
                 const uint8_t byte = vram_[(pattern + static_cast<uint32_t>(ty * 4 + tx / 2)) & 0xFFFF];
                 const int index = (tx & 1) ? (byte & 15) : (byte >> 4);
                 if (!index) continue;
-                if (out[x].color & 15) {
-                    spriteCollision_ = true;
+                if (out[i].color & 15) {
+                    // The console only sees collisions in its own picture.
+                    if (!beyond && x >= 0 && x < width) spriteCollision_ = true;
                     continue;
                 }
-                out[x].color = static_cast<uint8_t>(((s.attr >> 13) & 3) * 16 + index);
-                out[x].priority = (s.attr & 0x8000) != 0;
-                out[x].tile = static_cast<uint16_t>(tile);
-                number[x] = static_cast<uint8_t>(s.index);
+                out[i].color = static_cast<uint8_t>(((s.attr >> 13) & 3) * 16 + index);
+                out[i].priority = (s.attr & 0x8000) != 0;
+                out[i].tile = static_cast<uint16_t>(tile);
+                number[i] = static_cast<uint8_t>(s.index);
             }
         }
     }
@@ -453,9 +477,14 @@ void VdpMd::drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t
 void VdpMd::renderLine(int line) {
     VideoFrameMd& f = *frame_;
     const int width = h40() ? 320 : 256;
+    // The widescreen columns cover the same part of the screen in H32 as in H40.
+    const int left = (wideLeft_ * width + 160) / 320, right = (wideRight_ * width + 160) / 320;
+    const int total = width + left + right;
     const bool im2 = (regs_[12] & 0x06) == 0x06;
     if (line == 0) {
-        f.width = width;
+        f.width = total;
+        f.wideLeft = left;
+        f.wideRight = right;
         f.height = activeLines() * (im2 ? 2 : 1);
         f.interlaced = im2;
     }
@@ -478,15 +507,15 @@ void VdpMd::renderLine(int line) {
         return;
     }
 
-    std::array<Cell, 320> b, a, s;
-    std::array<bool, 320> isWindow{}, unusedWindow{};
-    std::array<uint8_t, 320> spriteNumber{};
-    drawPlane(line, false, b, unusedWindow);
-    drawPlane(line, true, a, isWindow);
-    drawSprites(line, s, spriteNumber);
+    LineCells b, a, s;
+    std::array<bool, VideoFrameMd::kMaxWidth> isWindow{}, unusedWindow{};
+    std::array<uint8_t, VideoFrameMd::kMaxWidth> spriteNumber{};
+    drawPlane(line, false, left, right, b, unusedWindow);
+    drawPlane(line, true, left, right, a, isWindow);
+    drawSprites(line, left, right, s, spriteNumber);
 
     f.backdrop[row] = color(backdropIndex, sh ? MdShade::Shadow : MdShade::Normal);
-    for (int x = 0; x < width; ++x) {
+    for (int x = 0; x < total; ++x) {
         const Cell& B = b[x];
         const Cell& A = a[x];
         const Cell& S = s[x];
@@ -559,7 +588,7 @@ void VdpMd::renderLine(int line) {
         f.sprites[o + x] = (sOpaque && !sOperator) ? color(S.color, sShade) : 0;
         f.spriteInfo[o + x] = {S.color, MdLayer::Sprite, S.priority, sShade, spriteNumber[x]};
     }
-    for (int x = width; x < VideoFrameMd::kMaxWidth; ++x) {
+    for (int x = total; x < VideoFrameMd::kMaxWidth; ++x) {
         f.rgba[o + x] = f.planeA[o + x] = f.planeB[o + x] = f.sprites[o + x] = 0;
         f.info[o + x] = f.planeAInfo[o + x] = f.planeBInfo[o + x] = f.spriteInfo[o + x] = MdPixel{};
     }

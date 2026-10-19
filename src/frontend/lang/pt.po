@@ -12,9 +12,6 @@ msgstr ""
 "\n"
 "Ao ativá-lo, o jogo recomeça."
 
-msgid "  (sugerido)"
-msgstr "  (sugerido)"
-
 msgid " (%+d oct.)"
 msgstr " (%+d oit.)"
 
@@ -39,26 +36,20 @@ msgstr "%d jogos. %s"
 msgid "%d juegos. Buscando carátulas, quedan %d..."
 msgstr "%d jogos. Procurando capas, faltam %d..."
 
-msgid "%d nota"
-msgstr "%d nota"
-
-msgid "%d notas"
-msgstr "%d notas"
-
 msgid "%d parecidas. Pulsa una para verla."
 msgstr "%d parecidas. Clique em uma para vê-la."
 
 msgid "%s no es un .wav que plumsg sepa leer"
 msgstr "%s não é um .wav que o plumsg saiba ler"
 
-msgid "%s no tiene música de YM2612: no es de Mega Drive."
-msgstr "%s não tem música de YM2612: não é do Mega Drive."
-
 msgid "%s, %u puntos"
 msgstr "%s, %u pontos"
 
 msgid "%s: %d %s, de %s a %s. Sugerencia: %s."
 msgstr "%s: %d %s, de %s a %s. Sugestão: %s."
+
+msgid "%s: %s Hz, %+d dB. Clic derecho: 0 dB."
+msgstr "%s: %s Hz, %+d dB. Clique direito: 0 dB."
 
 msgid "%u de %u logros, %u de %u puntos%s"
 msgstr "%u de %u conquistas, %u de %u pontos%s"
@@ -84,11 +75,17 @@ msgstr "(ajustados em Vídeo com o jogo aberto)"
 msgid "(sin nombre)"
 msgstr "(sem nome)"
 
+msgid "(sugerido)"
+msgstr "(sugerido)"
+
 msgid ", %d sin encontrar"
 msgstr ", %d não encontradas"
 
 msgid ". Modo hardcore"
 msgstr ". Modo hardcore"
+
+msgid "1 fotograma"
+msgstr "1 quadro"
 
 msgid ""
 "2D: la imagen normal de la Mega Drive.\n"
@@ -143,6 +140,9 @@ msgstr "Abra um jogo, ou escolha um na biblioteca com o botão direito."
 msgid "Abre una ROM para guardar estados."
 msgstr "Abra uma ROM para salvar estados."
 
+msgid "Abre una ROM para guardarle su propia pantalla ancha."
+msgstr "Abra uma ROM para lhe guardar o seu próprio ecrã panorâmico."
+
 msgid "Abre una ROM para guardarle un perfil 3D propio."
 msgstr "Abra uma ROM para salvar um perfil 3D próprio para ela."
 
@@ -163,6 +163,9 @@ msgstr "Abrir a biblioteca ao iniciar"
 
 msgid "Abrir la carpeta de SoundFonts"
 msgstr "Abrir a pasta de SoundFonts"
+
+msgid "Abrir la carpeta de grabaciones"
+msgstr "Abrir a pasta das gravações"
 
 msgid "Acción"
 msgstr "Ação"
@@ -187,6 +190,9 @@ msgstr "Agogô agudo"
 
 msgid "Agogó grave"
 msgstr "Agogô grave"
+
+msgid "Agudos"
+msgstr "Agudos"
 
 msgid "Ajustar"
 msgstr "Ajustar"
@@ -283,6 +289,9 @@ msgstr "Baixo elétrico (palheta)"
 
 msgid "Bajo sin trastes"
 msgstr "Baixo fretless"
+
+msgid "Bajo sintetizado"
+msgstr "Baixo sintetizado"
 
 msgid "Bajo sintetizado 1"
 msgstr "Baixo sintetizado 1"
@@ -430,6 +439,9 @@ msgstr "Sinos tubulares"
 msgid "Campanilla"
 msgstr "Sininho"
 
+msgid "Canal"
+msgstr "Canal"
+
 msgid "Canales"
 msgstr "Canais"
 
@@ -465,6 +477,9 @@ msgstr "Cowbell"
 
 msgid "Cerrar sesión"
 msgstr "Sair"
+
+msgid "Charles"
+msgstr "Chimbal"
 
 msgid "Charles abierto"
 msgstr "Chimbal aberto"
@@ -554,6 +569,9 @@ msgstr "Criar uma conta no retroachievements.org"
 msgid "Ctrl+O  abrir ROM;  F10  biblioteca de juegos"
 msgstr "Ctrl+O  abrir ROM;  F10  biblioteca de jogos"
 
+msgid "Ctrl+R  grabar vídeo;  Ctrl+G  grabar GIF (otra vez para parar)"
+msgstr "Ctrl+R  gravar vídeo;  Ctrl+G  gravar GIF (outra vez para parar)"
+
 msgid "Cuenta"
 msgstr "Conta"
 
@@ -621,6 +639,9 @@ msgstr ""
 msgid "Código"
 msgstr "Código"
 
+msgid "Códigos Game Genie (3A8-6CF-E66) o Action Replay (00C0-1205) de %s. Se guardan para este juego y se activan al abrirlo."
+msgstr "Códigos Game Genie (3A8-6CF-E66) ou Action Replay (00C0-1205) de %s. São guardados para este jogo e ativados ao abri-lo."
+
 msgid "Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. Se guardan para este juego y se activan al abrirlo."
 msgstr "Códigos Game Genie (ABCD-EFGH) ou Action Replay (FF0A12:0009) de %s. São salvos para este jogo e ativados ao abri-lo."
 
@@ -636,6 +657,9 @@ msgstr ""
 
 msgid "Derecha"
 msgstr "Direita"
+
+msgid "Desactivado (velocidad real)"
+msgstr "Desativado (velocidade real)"
 
 msgid "Desactivados"
 msgstr "Desativadas"
@@ -663,6 +687,9 @@ msgstr "EUA (NTSC)"
 
 msgid "EE. UU. (Sega CD)"
 msgstr "EUA (Sega CD)"
+
+msgid "Ecualizador..."
+msgstr "Equalizador..."
 
 msgid "Editor de instrumentos"
 msgstr "Editor de instrumentos"
@@ -724,8 +751,8 @@ msgstr "O SoundFont do sintetizador"
 msgid "El VGM está cortado."
 msgstr "O VGM está cortado."
 
-msgid "El VGM no es de Mega Drive: no tiene YM2612 ni PSG."
-msgstr "O VGM não é do Mega Drive: não tem YM2612 nem PSG."
+msgid "El VGM no es de una consola de Sega: no tiene YM2612, YM2413 ni PSG."
+msgstr "O VGM não é de um console Sega: não tem YM2612, YM2413 nem PSG."
 
 msgid "El anfitrión está jugando a otro juego: abrid los dos el mismo (la misma ROM)."
 msgstr "O anfitrião está jogando outro jogo: abram os dois o mesmo (a mesma ROM)."
@@ -759,6 +786,9 @@ msgstr "O jogo recomeça: é assim que se joga no hardcore."
 
 msgid "El juego vuelve a usar el 3D general"
 msgstr "O jogo volta a usar o 3D geral"
+
+msgid "El juego vuelve a usar la pantalla ancha general"
+msgstr "O jogo volta a usar o ecrã panorâmico geral"
 
 msgid "El otro jugador ha salido de la partida."
 msgstr "O outro jogador saiu da partida."
@@ -804,6 +834,19 @@ msgstr "Não podem ser mudadas numa partida em rede."
 
 msgid "Encontradas %d de 3."
 msgstr "Encontradas %d de 3."
+
+msgid ""
+"Enseña a los lados lo que el juego tiene más allá de los bordes de la pantalla.\n"
+"Cada lado se ajusta por separado y se ve al momento, con la imagen siempre centrada.\n"
+"En muchos juegos se ve bien; en otros aparecen enemigos antes de tiempo, trozos\n"
+"del nivel sin dibujar o cosas que se esconden fuera: entonces quita columnas de ese lado.\n"
+"El juego no lo nota, así que no afecta a partidas en red, logros ni estados."
+msgstr ""
+"Mostra dos lados o que o jogo tem para lá das bordas do ecrã.\n"
+"Cada lado ajusta-se à parte e vê-se logo, com a imagem sempre centrada.\n"
+"Em muitos jogos fica bem; noutros aparecem inimigos antes do tempo, partes\n"
+"do nível por desenhar ou coisas escondidas: então tire colunas desse lado.\n"
+"O jogo não dá por isso, portanto não afeta jogos em rede, conquistas nem estados."
 
 msgid "Enviando la partida al otro jugador..."
 msgstr "Enviando a partida ao outro jogador..."
@@ -971,6 +1014,9 @@ msgstr "Fundo polissintetizador"
 msgid "Fondos sintetizados"
 msgstr "Fundos sintetizados"
 
+msgid "GIF guardado en %s"
+msgstr "GIF guardado em %s"
+
 msgid "Gaita"
 msgstr "Gaita de foles"
 
@@ -990,6 +1036,20 @@ msgid "Golpe de orquesta"
 msgstr "Golpe de orquestra"
 
 msgid ""
+"Graba la partida con su sonido en un vídeo AVI, que abren Windows, VLC\n"
+"y los editores de vídeo. Vuelve a pulsarlo para parar."
+msgstr ""
+"Grava o jogo com o seu som num vídeo AVI, que o Windows, o VLC\n"
+"e os editores de vídeo abrem. Escolhe-o outra vez para parar."
+
+msgid ""
+"Graba la partida, sin sonido, en un GIF animado para compartirlo.\n"
+"Vuelve a pulsarlo para parar."
+msgstr ""
+"Grava o jogo, sem som, num GIF animado para partilhar.\n"
+"Escolhe-o outra vez para parar."
+
+msgid ""
 "Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
 "y elige con qué instrumento General MIDI suena en el sintetizador."
 msgstr ""
@@ -1002,8 +1062,29 @@ msgstr "Gravação %s"
 msgid "Grabando %s"
 msgstr "Gravando %s"
 
+msgid "Grabando un GIF (Ctrl+G para pararlo)"
+msgstr "A gravar um GIF (Ctrl+G para parar)"
+
+msgid "Grabando vídeo (Ctrl+R para pararlo)"
+msgstr "A gravar vídeo (Ctrl+R para parar)"
+
+msgid "Grabar"
+msgstr "Gravar"
+
+msgid "Grabar GIF"
+msgstr "Gravar GIF"
+
 msgid "Grabar del juego"
 msgstr "Gravar do jogo"
+
+msgid "Grabar vídeo"
+msgstr "Gravar vídeo"
+
+msgid "Graves"
+msgstr "Graves"
+
+msgid "Graves, medios y agudos del sintetizador, aquí y en los juegos."
+msgstr "Graves, médios e agudos do sintetizador, aqui e nos jogos."
 
 msgid "Grosor"
 msgstr "Espessura"
@@ -1017,6 +1098,12 @@ msgstr "Salvar estado"
 msgid "Guardar estado (ranura %d)"
 msgstr "Salvar estado (slot %d)"
 
+msgid "Guardar la pantalla ancha solo para este juego"
+msgstr "Guardar o ecrã panorâmico só para este jogo"
+
+msgid "Guitarra"
+msgstr "Violão"
+
 msgid "Guitarra de acero"
 msgstr "Violão de aço"
 
@@ -1025,6 +1112,9 @@ msgstr "Violão de náilon"
 
 msgid "Guitarra distorsionada"
 msgstr "Guitarra distorcida"
+
+msgid "Guitarra eléctrica"
+msgstr "Guitarra elétrica"
 
 msgid "Guitarra eléctrica apagada"
 msgstr "Guitarra elétrica abafada"
@@ -1046,6 +1136,17 @@ msgstr "Reco-reco curto"
 
 msgid "Güiro largo"
 msgstr "Reco-reco longo"
+
+msgid ""
+"Hace más rápido el procesador de la consola (el 68000), para los juegos que se ralentizan\n"
+"cuando hay mucho en pantalla. Cuanto más alto, más pide al ordenador. Algún juego puede ir\n"
+"demasiado rápido o fallar: si pasa, desactívalo para ese juego. En una partida en red manda\n"
+"el del anfitrión, y en modo hardcore se queda desactivado."
+msgstr ""
+"Torna mais rápido o processador da consola (o 68000), para os jogos que ficam lentos\n"
+"quando há muito no ecrã. Quanto mais alto, mais exige do computador. Algum jogo pode ir\n"
+"demasiado rápido ou falhar: se acontecer, desative-o para esse jogo. Num jogo em rede conta\n"
+"o do anfitrião, e no modo hardcore fica desativado."
 
 msgid "Has salido de la partida en red"
 msgstr "Você saiu da partida em rede"
@@ -1168,6 +1269,17 @@ msgstr ""
 "o .zip do vgmrips) aparece na lista.\n"
 "%s"
 
+msgid ""
+"La consola solo dibuja 20 sprites (16 en modo estrecho) por línea; los juegos alternan cuáles\n"
+"cada fotograma y por eso parpadean. Así se ven todos. El juego no lo nota, así que\n"
+"no afecta a partidas en red, logros ni estados. Si un juego parpadea igual, es que\n"
+"lo hace él mismo."
+msgstr ""
+"A consola só desenha 20 sprites (16 no modo estreito) por linha; os jogos alternam quais\n"
+"em cada fotograma, e por isso cintilam. Assim veem-se todos. O jogo não dá por isso, portanto\n"
+"não afeta jogos em rede, conquistas nem estados. Se um jogo continuar a cintilar, é ele\n"
+"próprio que o faz."
+
 msgid "La contraseña no se guarda: plumsg guarda la sesión que te da el servidor."
 msgstr "A senha não é salva: o plumsg guarda a sessão que o servidor lhe dá."
 
@@ -1181,6 +1293,9 @@ msgstr ""
 msgid "La música en CD de este juego (MSU-MD) necesita una BIOS del Mega CD: elígela en Consola > BIOS del Mega CD."
 msgstr "A música em CD deste jogo (MSU-MD) precisa de uma BIOS do Mega CD: escolha-a em Console > BIOS do Mega CD."
 
+msgid "La pantalla ancha se guarda ahora solo para %s"
+msgstr "O ecrã panorâmico guarda-se agora só para %s"
+
 msgid "La partida se ha descompasado y no se puede recuperar."
 msgstr "A partida perdeu a sincronia e não pode ser recuperada."
 
@@ -1189,6 +1304,9 @@ msgstr "O slot %d está vazio"
 
 msgid "La sesión ha caducado: vuelve a escribir la contraseña."
 msgstr "A sessão expirou: digite a senha de novo."
+
+msgid "La unidad FM (YM2413) venía en las Master System japonesas; con esto está también en las demás regiones, para los juegos que la usan si la encuentran."
+msgstr "A unidade FM (YM2413) vinha nos Master System japoneses; com isto ela também está nas outras regiões, para os jogos que a usam quando a encontram."
 
 msgid "La#"
 msgstr "Lá#"
@@ -1210,6 +1328,9 @@ msgstr ""
 "Cada som FM recebe um instrumento por regras, que pode ser mudado à mão no\n"
 "Editor de instrumentos."
 
+msgid "Latencia"
+msgstr "Latência"
+
 msgid "Lengüetas"
 msgstr "Palhetas"
 
@@ -1221,13 +1342,6 @@ msgstr "Lista: %s"
 
 msgid "Listas de libretro-database, la base de trucos de RetroArch (licencia CC BY-SA 4.0). Los nombres vienen en inglés; los añadidos quedan activados en la lista de arriba, con el código maestro (Master Code) del juego cuando lo pide."
 msgstr "Listas do libretro-database, a base de truques do RetroArch (licença CC BY-SA 4.0). Os nomes vêm em inglês; os adicionados ficam ativados na lista de cima, com o código mestre (Master Code) do jogo quando ele pede."
-
-msgid ""
-"Lo que elijas se guarda también en la lista común: el mismo sonido en otro juego\n"
-"saldrá ya asignado. Lo de cada juego manda sobre la lista común."
-msgstr ""
-"O que você escolher também é salvo na lista comum: o mesmo som em outro jogo\n"
-"já virá atribuído. O de cada jogo manda sobre a lista comum."
 
 msgid "Logros"
 msgstr "Conquistas"
@@ -1263,6 +1377,9 @@ msgstr ""
 msgid "Los códigos Game Genie no usan las letras I, O, Q ni U."
 msgstr "Os códigos Game Genie não usam as letras I, O, Q nem U."
 
+msgid "Los códigos de Master System y Game Gear son de cifras hexadecimales: 00C0-1205 (Action Replay) o 3A8-6CF-E66 (Game Genie)."
+msgstr "Os códigos de Master System e Game Gear são de dígitos hexadecimais: 00C0-1205 (Action Replay) ou 3A8-6CF-E66 (Game Genie)."
+
 msgid ""
 "Los discos de Mega CD y los juegos MSU-MD suenan\n"
 "siempre originales: su música son pistas de audio del CD."
@@ -1278,6 +1395,13 @@ msgstr ""
 "Os efeitos (anéis, pulos, golpes...) soam como no console e só a música\n"
 "passa pelo SoundFont. Para saber quais são, use antes Tirar músicas no Editor\n"
 "de instrumentos. Cada efeito também pode ser mudado à mão no editor."
+
+msgid ""
+"Los lados de arriba se guardan para %s y se recuperan al abrirlo.\n"
+"Al desmarcarlo, el juego vuelve a usar los generales."
+msgstr ""
+"Os lados acima guardam-se para %s e recuperam-se ao abri-lo.\n"
+"Ao desmarcar, o jogo volta a usar os gerais."
 
 msgid ""
 "Los logros cuentan para tu puntuación hardcore y las clasificaciones, pero sin\n"
@@ -1322,6 +1446,15 @@ msgstr "Pontuação enviada: %s"
 
 msgid "Marimba"
 msgstr "Marimba"
+
+msgid "Medios"
+msgstr "Médios"
+
+msgid "Medios agudos"
+msgstr "Médios agudos"
+
+msgid "Medios graves"
+msgstr "Médios graves"
 
 msgid "Menú de estados"
 msgstr "Menu de estados"
@@ -1377,8 +1510,8 @@ msgstr "Não há ROMs nesta pasta."
 msgid "No hay carpetas dentro de esta."
 msgstr "Não há pastas dentro desta."
 
-msgid "No hay juegos (.md, .bin, .gen, .smd, .32x, .zip, .cue, .chd, .iso) en estas carpetas."
-msgstr "Não há jogos (.md, .bin, .gen, .smd, .32x, .zip, .cue, .chd, .iso) nestas pastas."
+msgid "No hay juegos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd, .iso) en estas carpetas."
+msgstr "Não há jogos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd, .iso) nestas pastas."
 
 msgid "No hay juegos de esta consola en tus carpetas."
 msgstr "Não há jogos deste console nas suas pastas."
@@ -1444,6 +1577,9 @@ msgstr "Não foi possível conectar ao servidor de capas."
 msgid "No se pudo conectar con la base de trucos de libretro."
 msgstr "Não foi possível conectar à base de truques do libretro."
 
+msgid "No se pudo crear %s"
+msgstr "Não foi possível criar %s"
+
 msgid "No se pudo crear el socket UDP."
 msgstr "Não foi possível criar o socket UDP."
 
@@ -1452,6 +1588,9 @@ msgstr "Não foi possível baixar essa capa."
 
 msgid "No se pudo descargar la lista de trucos."
 msgstr "Não foi possível baixar a lista de truques."
+
+msgid "No se pudo escribir %s: ¿falta espacio en el disco?"
+msgstr "Não foi possível escrever %s: o disco está cheio?"
 
 msgid "No se pudo guardar el estado en %s"
 msgstr "Não foi possível salvar o estado em %s"
@@ -1486,6 +1625,9 @@ msgstr "Não foi possível preparar a partida: %s"
 msgid "No se puede conectar con RetroAchievements."
 msgstr "Não é possível conectar ao RetroAchievements."
 
+msgid "No se puede grabar con ese tamaño"
+msgstr "Não é possível gravar com esse tamanho"
+
 msgid "No se pueden conseguir en plumsg"
 msgstr "Não podem ser conquistadas no plumsg"
 
@@ -1500,6 +1642,9 @@ msgstr "Nome (opcional)"
 
 msgid "Nombre del juego"
 msgstr "Nome do jogo"
+
+msgid "Notas"
+msgstr "Notas"
 
 msgid "Oboe"
 msgstr "Oboé"
@@ -1537,6 +1682,9 @@ msgstr "Original"
 msgid "Original (YM2612 y PSG)"
 msgstr "Original (YM2612 e PSG)"
 
+msgid "Overclock"
+msgstr "Overclock"
+
 msgid "Oír todos"
 msgstr "Ouvir todos"
 
@@ -1551,6 +1699,9 @@ msgstr "Palmas"
 
 msgid "Pandereta"
 msgstr "Pandeiro"
+
+msgid "Pantalla ancha"
+msgstr "Ecrã panorâmico"
 
 msgid "Pantalla completa"
 msgstr "Tela cheia"
@@ -1585,6 +1736,9 @@ msgstr "Percussão"
 msgid "Percusión afinada"
 msgstr "Percussão cromática"
 
+msgid "Piano"
+msgstr "Piano"
+
 msgid "Piano brillante"
 msgstr "Piano brilhante"
 
@@ -1612,11 +1766,17 @@ msgstr "Peça do kit"
 msgid "Pista"
 msgstr "Faixa"
 
+msgid "Plano"
+msgstr "Plano"
+
 msgid "Plano B con prioridad delante"
 msgstr "Plano B com prioridade na frente"
 
 msgid "Plano B plano (como el cielo)"
 msgstr "Plano B achatado (como o céu)"
+
+msgid "Platillo"
+msgstr "Prato"
 
 msgid "Platillo al revés"
 msgstr "Prato invertido"
@@ -1683,6 +1843,22 @@ msgstr "Pixels quadrados"
 
 msgid "Píxeles cuadrados (sin estirar a 4:3)"
 msgstr "Pixels quadrados (sem esticar para 4:3)"
+
+msgid ""
+"Quita fotogramas de retardo entre pulsar un botón y verlo en pantalla: en cada\n"
+"fotograma el juego corre ese número de fotogramas por delante, enseña su imagen\n"
+"y vuelve atrás. Con 1 suele bastar; más piden más al ordenador y pueden notarse saltos."
+msgstr ""
+"Tira quadros de atraso entre carregar num botão e vê-lo no ecrã: em cada\n"
+"quadro o jogo corre esse número de quadros à frente, mostra a sua imagem\n"
+"e volta atrás. 1 costuma chegar; mais pedem mais ao computador e podem notar-se saltos."
+
+msgid ""
+"Quita todo lo elegido a mano para este juego: cada instrumento vuelve a sonar\n"
+"como sugieren las reglas."
+msgstr ""
+"Remove tudo o que foi escolhido à mão para este jogo: cada instrumento volta a soar\n"
+"como sugerem as regras."
 
 msgid "Quitar"
 msgstr "Remover"
@@ -1789,6 +1965,15 @@ msgstr "Ruído branco %s"
 msgid "Ruido periódico %s"
 msgstr "Ruído periódico %s"
 
+msgid "Run-ahead"
+msgstr "Run-ahead"
+
+msgid "Run-ahead (menos latencia)"
+msgstr "Run-ahead (menos latência)"
+
+msgid "Run-ahead desactivado: no se pudo volver al fotograma actual."
+msgstr "Run-ahead desativado: não foi possível voltar ao quadro atual."
+
 msgid "Saca las canciones de la ROM del juego (Sacar canciones), graba un trozo del juego (abre el juego, pulsa Grabar y juega hasta que suene la música que quieres probar) o abre un .vgm con su música, de vgmrips.net por ejemplo. Aquí saldrán sus instrumentos."
 msgstr "Tire as músicas da ROM do jogo (Tirar músicas), grave um trecho do jogo (abra o jogo, clique em Gravar e jogue até tocar a música que você quer testar) ou abra um .vgm com a música dele, do vgmrips.net por exemplo. Os instrumentos aparecerão aqui."
 
@@ -1882,6 +2067,12 @@ msgstr "Sem conexão: as conquistas serão enviadas quando ela voltar."
 msgid "Sin elegir"
 msgstr "Não escolhida"
 
+msgid "Sin límite de sprites"
+msgstr "Sem limite de sprites"
+
+msgid "Sin límite de sprites (sin parpadeo)"
+msgstr "Sem limite de sprites (sem cintilação)"
+
 msgid ""
 "Sin marcar, la cámara mira de frente y la imagen se ve como en 2D;\n"
 "la profundidad se nota con la iluminación y la cámara viva."
@@ -1949,6 +2140,9 @@ msgstr "Sombra dos sprites"
 msgid "Sonido"
 msgstr "Som"
 
+msgid "Sonido FM de la Master System"
+msgstr "Som FM do Master System"
+
 msgid "Sonido activado"
 msgstr "Som ligado"
 
@@ -1972,6 +2166,12 @@ msgstr "Suavizar pixels"
 
 msgid "Subir"
 msgstr "Subir"
+
+msgid "Suena como"
+msgstr "Soa como"
+
+msgid "Sí, todo a las sugerencias"
+msgstr "Sim, tudo para as sugestões"
 
 msgid "Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta"
 msgstr "Tab ou gatilho direito (segurar)  avanço rápido;  F9  câmera lenta"
@@ -2015,6 +2215,9 @@ msgstr "Tipo de controle"
 msgid "Tocar"
 msgstr "Tocar"
 
+msgid "Todo a las sugerencias..."
+msgstr "Tudo para as sugestões..."
+
 msgid "Todos"
 msgstr "Todos"
 
@@ -2023,6 +2226,9 @@ msgstr "Todos os ajustes do 3D"
 
 msgid "Todos los archivos"
 msgstr "Todos os arquivos"
+
+msgid "Tom"
+msgstr "Tom"
 
 msgid "Tom agudo"
 msgstr "Tom agudo"
@@ -2094,6 +2300,9 @@ msgstr ""
 "Um .vgm ou .vgz, ou o .zip com todas as músicas do jogo do vgmrips.net.\n"
 "É salvo com as faixas do jogo, para tê-lo da próxima vez."
 
+msgid "Un código Action Replay de Master System escribe en la RAM (C000-DFFF)."
+msgstr "Um código Action Replay de Master System escreve na RAM (C000-DFFF)."
+
 msgid "Un código Action Replay es como FF0A12:0009 (6 cifras hexadecimales y luego 4, o 2 para un byte)."
 msgstr "Um código Action Replay é como FF0A12:0009 (6 dígitos hexadecimais e depois 4, ou 2 para um byte)."
 
@@ -2126,9 +2335,6 @@ msgstr "Usar esta pasta"
 
 msgid "Usar esta carátula"
 msgstr "Usar esta capa"
-
-msgid "Usar también en otros juegos"
-msgstr "Usar também em outros jogos"
 
 msgid "Usuario"
 msgstr "Usuário"
@@ -2193,6 +2399,9 @@ msgstr "Voz sintetizada"
 msgid "Vídeo"
 msgstr "Vídeo"
 
+msgid "Vídeo guardado en %s"
+msgstr "Vídeo guardado em %s"
+
 msgid "Vídeo..."
 msgstr "Vídeo..."
 
@@ -2216,6 +2425,13 @@ msgstr "agudo"
 
 msgid "byte"
 msgstr "byte"
+
+msgid ""
+"dB por banda.\n"
+"Solo el sintetizador."
+msgstr ""
+"dB por banda.\n"
+"Só o sintetizador."
 
 msgid "de PSG 3"
 msgstr "do PSG 3"
@@ -2241,8 +2457,8 @@ msgstr "o .chd usa um tipo de faixa que o plumsg não lê (%s)"
 msgid "el archivo es demasiado pequeño para ser un disco"
 msgstr "o arquivo é pequeno demais para ser um disco"
 
-msgid "el archivo es demasiado pequeño para ser una ROM de Mega Drive: %s"
-msgstr "o arquivo é pequeno demais para ser uma ROM de Mega Drive: %s"
+msgid "el archivo es demasiado pequeño para ser una ROM: %s"
+msgstr "o arquivo é pequeno demais para ser uma ROM: %s"
 
 msgid "el archivo no es un estado de plumsg"
 msgstr "o arquivo não é um estado do plumsg"
@@ -2265,8 +2481,8 @@ msgstr "o incluído"
 msgid "el zip está dañado: %s"
 msgstr "o zip está danificado: %s"
 
-msgid "el zip no contiene ninguna ROM (.md, .gen, .bin, .smd o .32x): %s"
-msgstr "o zip não contém nenhuma ROM (.md, .gen, .bin, .smd ou .32x): %s"
+msgid "el zip no contiene ninguna ROM (.md, .gen, .bin, .smd, .32x, .sms o .gg): %s"
+msgstr "o zip não contém nenhuma ROM (.md, .gen, .bin, .smd, .32x, .sms ou .gg): %s"
 
 msgid "grave"
 msgstr "grave"
@@ -2334,7 +2550,7 @@ msgstr "palavra"
 msgid ""
 "plumsg [juego] [opciones]\n"
 "\n"
-"  juego                  cartucho (.md .gen .bin .smd .32x .zip) o disco (.cue .chd .iso)\n"
+"  juego                  cartucho (.md .gen .bin .smd .32x .sms .gg .zip) o disco (.cue .chd .iso)\n"
 "  --pantalla-completa    abrir a pantalla completa (o --fullscreen)\n"
 "  --ventana              abrir en ventana (o --windowed)\n"
 "  --3d / --2d            con o sin la vista pseudo-3D\n"
@@ -2352,13 +2568,14 @@ msgid ""
 "  --opciones-juego controles   ...en la pestaña de sus controles\n"
 "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
 "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
+"  --grabar f.avi        grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
 "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n"
 "\n"
 "La pantalla completa y la región dadas aquí valen solo para esta vez."
 msgstr ""
 "plumsg [jogo] [opções]\n"
 "\n"
-"  jogo                   cartucho (.md .gen .bin .smd .32x .zip) ou disco (.cue .chd .iso)\n"
+"  jogo                   cartucho (.md .gen .bin .smd .32x .sms .gg .zip) ou disco (.cue .chd .iso)\n"
 "  --pantalla-completa    abrir em tela cheia (ou --fullscreen)\n"
 "  --ventana              abrir em janela (ou --windowed)\n"
 "  --3d / --2d            com ou sem a visão pseudo-3D\n"
@@ -2376,6 +2593,7 @@ msgstr ""
 "  --opciones-juego controles   ...na aba dos seus controles\n"
 "  --instrumentos         abrir o editor de instrumentos (do jogo, se for dado)\n"
 "  --pista f.vgm          com --instrumentos: abrir essa música (.vgm ou .vgz)\n"
+"  --grabar f.avi        gravar o jogo desde o início, em vídeo (.avi) ou GIF (.gif)\n"
 "  --captura f.png        salvar uma captura após --cuadros N quadros e sair\n"
 "\n"
 "A tela cheia e a região dadas aqui valem só para esta vez."
@@ -2404,8 +2622,17 @@ msgstr "Jogo dominado! Você tem todas as conquistas dele no hardcore."
 msgid "¡Logro desbloqueado! (%u puntos)"
 msgstr "Conquista desbloqueada! (%u pontos)"
 
+msgid "¿Quitar lo elegido a mano en todos los instrumentos de esta pista?"
+msgstr "Remover o que foi escolhido à mão em todos os instrumentos desta faixa?"
+
+msgid "¿Quitar todo lo elegido a mano en %s?"
+msgstr "Remover tudo o que foi escolhido à mão em %s?"
+
 msgid "Étnicos"
 msgstr "Étnicos"
+
+msgid "Órgano"
+msgstr "Órgão"
 
 msgid "Órgano de barras"
 msgstr "Órgão de barras"

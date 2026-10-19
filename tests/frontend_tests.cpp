@@ -3,6 +3,7 @@
 #define SDL_MAIN_HANDLED
 #include <cstdio>
 #include <cstdlib>
+#include <sstream>
 #include <string>
 
 #include "frontend/game_options.h"
@@ -46,10 +47,121 @@ void testGameControls() {
           "juego: sin botones propios no se escribe [teclado]");
 }
 
+void testRunAheadOption() {
+    const Settings general;
+    const InputConfig generalInput = InputConfig::defaults();
+    check(general.runAhead == 0, "run-ahead: desactivado si no se dice");
+
+    // Its own value for a game, and back from its file.
+    const GameOverrides o = parseGameOverrides("[velocidad]\nrun_ahead = 1\n", general, generalInput);
+    check(o.has("run_ahead") && o.values.runAhead == 1, "run-ahead: un juego con su propio valor");
+    const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
+    check(back.has("run_ahead") && back.values.runAhead == 1, "run-ahead: se guarda y se lee igual en el juego");
+
+    // plumsg.ini keeps it, within 0 and kMaxRunAhead.
+    Settings s;
+    std::istringstream in("[velocidad]\nrun_ahead = 9\n");
+    Settings::parse(in, s);
+    check(s.runAhead == Settings::kMaxRunAhead, "run-ahead: no pasa del máximo");
+    s.runAhead = 2;
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.runAhead == 2, "run-ahead: plumsg.ini lo guarda");
+}
+
+void testSpriteLimitOption() {
+    const Settings general;
+    const InputConfig generalInput = InputConfig::defaults();
+    check(!general.unlimitedSprites, "sin límite de sprites: desactivado si no se dice");
+    const GameOverrides o = parseGameOverrides("[video]\nsin_limite_sprites = si\n", general, generalInput);
+    check(o.has("sin_limite_sprites") && o.values.unlimitedSprites, "sin límite de sprites: un juego con su propio valor");
+    const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
+    check(back.has("sin_limite_sprites") && back.values.unlimitedSprites,
+          "sin límite de sprites: se guarda y se lee igual en el juego");
+    Settings s;
+    s.unlimitedSprites = true;
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.unlimitedSprites, "sin límite de sprites: plumsg.ini lo guarda");
+}
+
+void testOverclockOption() {
+    const Settings general;
+    const InputConfig generalInput = InputConfig::defaults();
+    check(general.overclock == 100, "overclock: desactivado si no se dice");
+    const GameOverrides o = parseGameOverrides("[consola]\noverclock = 200\n", general, generalInput);
+    check(o.has("overclock") && o.values.overclock == 200, "overclock: un juego con su propio valor");
+    const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
+    check(back.has("overclock") && back.values.overclock == 200, "overclock: se guarda y se lee igual en el juego");
+    Settings s;
+    s.overclock = 300;
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.overclock == 300, "overclock: plumsg.ini lo guarda");
+    std::istringstream big("[consola]\noverclock = 5000\n");
+    Settings::parse(big, again);
+    check(again.overclock == Settings::kMaxOverclock, "overclock: como mucho 400");
+}
+
+void testEqualizerOption() {
+    Settings s;
+    check(s.equalizer == (std::array<int, 5>{}), "ecualizador: plano si no se dice");
+    s.equalizer = {6, -3, 0, 2, -12};
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.equalizer == s.equalizer, "ecualizador: plumsg.ini lo guarda");
+    std::istringstream loud("[audio]\necualizador = 40, 0, 0, 0, -40\n");
+    Settings::parse(loud, again);
+    check(again.equalizer[0] == 12 && again.equalizer[4] == -12, "ecualizador: de -12 a 12 dB");
+}
+
+void testWidescreenOption() {
+    const Settings general;
+    const InputConfig generalInput = InputConfig::defaults();
+    check(general.wideLeft == 0 && general.wideRight == 0, "pantalla ancha: desactivada si no se dice");
+    const GameOverrides o = parseGameOverrides("[video]\npantalla_ancha_izquierda = 53\npantalla_ancha_derecha = 16\n", general,
+                                               generalInput);
+    check(o.has("pantalla_ancha") && o.values.wideLeft == 53 && o.values.wideRight == 16,
+          "pantalla ancha: un juego con sus propios lados");
+    const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
+    check(back.has("pantalla_ancha") && back.values.wideLeft == 53 && back.values.wideRight == 16,
+          "pantalla ancha: se guarda y se lee igual en el juego");
+    const GameOverrides old = parseGameOverrides("[video]\npantalla_ancha = 16:9\n", general, generalInput);
+    check(old.has("pantalla_ancha") && old.values.wideLeft == 53 && old.values.wideRight == 53,
+          "pantalla ancha: lee los 16:9 de antes");
+    Settings s;
+    s.wideLeft = 32;
+    s.wideRight = 56;
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.wideLeft == 32 && again.wideRight == 56, "pantalla ancha: plumsg.ini lo guarda");
+}
+
+
 }  // namespace
 
 int main() {
     testGameControls();
+    testRunAheadOption();
+    testSpriteLimitOption();
+    testWidescreenOption();
+    testOverclockOption();
+    testEqualizerOption();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

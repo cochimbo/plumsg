@@ -28,7 +28,9 @@
 #include "miniz.h"
 #include "net/udp.h"
 #include "netplay.h"
+#include "recording.h"
 #include "pad_test_rom.h"
+#include "sms_test_rom.h"
 #include "song_extract.h"
 #include "system.h"
 #include "test_rom.h"
@@ -37,7 +39,7 @@ using namespace plumsg;
 
 namespace {
 
-const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom> [options]
+const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom|--sms-test-rom|--gg-test-rom> [options]
 
   game                  cartridge (.md .gen .bin .smd .32x .zip) or disc (.cue .chd .iso)
   --play-vgm FILE       no game: play this .vgm or .vgz for --frames sixtieths of a
@@ -47,6 +49,8 @@ const char* kUsage = R"(usage: plumsg-headless <game|--test-rom|--pad-test-rom> 
                         saying what it finds
   --test-rom            the built-in test program (planes, sprites, scroll, a tone)
   --pad-test-rom        the built-in pad test: the backdrop shows the pressed buttons
+  --sms-test-rom        the built-in Master System test (tiles, a sprite, scroll, a tone)
+  --gg-test-rom         the same for the Game Gear
   --two-pad-test-rom    the built-in two-pad test: every frame depends on all that both
                         pads pressed before it (for checking netplay)
 
@@ -54,6 +58,10 @@ Running
   --frames N            frames to run (default 600); frames are numbered from 0
   --region jp|us|eu     force the console's region (default: what the game says)
   --six-button          6-button pads instead of 3-button ones
+  --no-sprite-limit     draw every sprite on a line (the option against flicker)
+  --widescreen W:H      draw the picture W:H wide (16:9, 16:10) instead of 4:3
+  --widescreen L,R      or with L more columns on the left and R on the right (up to 56)
+  --overclock PERCENT   run the 68000 at 100-400% of its speed (default 100)
   --bios FILE           Mega CD BIOS; its region comes from its header (else: all)
   --bios-dir DIR        look for Mega CD BIOS files in DIR and its subfolders
   --load-state FILE     start from this savestate (after loading the game)
@@ -82,6 +90,9 @@ Output
   --png-every N         a PNG every N frames, as frame_000123.png in --out-dir
   --out-dir DIR         where screenshots without a name go (default: .)
   --wav FILE            the whole run's sound (44100 Hz stereo)
+  --gif FILE            the run as an animated GIF, as plumsg's Grabar GIF makes it
+  --avi FILE            the run as a video with its sound (Motion JPEG and PCM)
+                        (both at the console's own size, and not with netplay)
   --roland SF2          play the FM and PSG music as General MIDI on this SoundFont,
                         as the Roland sound does (the DAC stays as it is)
   --midi-log FILE       with --roland: the notes it played, one event per line
@@ -429,7 +440,10 @@ int playVgmFile(const std::string& path, long frames, const std::string& wav, co
     for (const auto& [fp, seen] : rolandSound.seen()) {
         const RolandSound::Assignment a = rolandSound.assignmentFor(fp);
         std::printf("  %08x %s voices %03x notes %d (%d-%d): %s\n", fp,
-                    seen.kind == RolandSound::Kind::Fm ? "FM" : seen.kind == RolandSound::Kind::PsgTone ? "PSG" : "noise",
+                    seen.kind == RolandSound::Kind::Fm        ? "FM"
+                    : seen.kind == RolandSound::Kind::PsgTone ? "PSG"
+                    : seen.kind == RolandSound::Kind::Rhythm  ? "rhythm"
+                                                              : "noise",
                     seen.channels, seen.notes, seen.low, seen.high,
                     a.drum >= 0 ? RolandSound::drumName(a.drum) : RolandSound::programName(a.program));
     }
@@ -447,13 +461,14 @@ int playVgmFile(const std::string& path, long frames, const std::string& wav, co
 
 int main(int argc, char** argv) {
     std::string effectsList;
-    std::string game, playVgm, vgmOut, png, layers, wav, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir, extractDir;
+    std::string game, playVgm, vgmOut, png, layers, wav, gifOut, aviOut, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir, extractDir;
     std::string outDir = ".";
     std::vector<std::string> bios, cheats, scripts, lines;
-    long frames = 600, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
+    long frames = 600, overclock = 100, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
     bool netHost = false;
     std::string netJoin;
-    bool sixButton = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
+    int wideLeft = 0, wideRight = 0;
+    bool sixButton = false, noSpriteLimit = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
     uint32_t expectHash = 0, expectAudio = 0;
     Region region = Region::Auto;
 
@@ -493,6 +508,14 @@ int main(int argc, char** argv) {
             else missing = true;
         } else if (a == "--pal") region = Region::EuropePal;
         else if (a == "--six-button") sixButton = true;
+        else if (a == "--no-sprite-limit") noSpriteLimit = true;
+        else if (a == "--widescreen") {
+            const std::string v = next();
+            int w = 0, h = 0;
+            if (std::sscanf(v.c_str(), "%d:%d", &w, &h) == 2 && w > 0 && h > 0) wideLeft = wideRight = VdpMd::wideColumnsFor(w, h);
+            else if (std::sscanf(v.c_str(), "%d,%d", &wideLeft, &wideRight) != 2 || wideLeft < 0 || wideRight < 0) missing = true;
+        }
+        else if (a == "--overclock") number(&overclock);
         else if (a == "--bios") bios.push_back(next());
         else if (a == "--bios-dir") biosDir = next();
         else if (a == "--load-state") stateIn = next();
@@ -504,6 +527,8 @@ int main(int argc, char** argv) {
         else if (a == "--png-every") number(&pngEvery);
         else if (a == "--out-dir") outDir = next();
         else if (a == "--wav") wav = next();
+        else if (a == "--gif") gifOut = next();
+        else if (a == "--avi") aviOut = next();
         else if (a == "--roland") roland = next();
         else if (a == "--midi-log") midiLog = next();
         else if (a == "--effects") effectsList = next();
@@ -532,7 +557,7 @@ int main(int argc, char** argv) {
             if (inputDelay > 10) missing = true;
         }
         else if (a.size() > 2 && a.compare(0, 2, "--") == 0 && a != "--test-rom" && a != "--pad-test-rom" &&
-                 a != "--two-pad-test-rom") {
+                 a != "--two-pad-test-rom" && a != "--sms-test-rom" && a != "--gg-test-rom") {
             std::fprintf(stderr, "unknown option %s (see --help)\n", a.c_str());
             return 2;
         } else if (!game.empty()) {
@@ -588,6 +613,9 @@ int main(int argc, char** argv) {
     MegaDrive md;
     md.setRegion(region);
     for (int p = 0; p < 2; ++p) md.setPadType(p, sixButton ? PadType::SixButton : PadType::ThreeButton);
+    md.vdp().setUnlimitedSprites(noSpriteLimit);
+    md.vdp().setWidescreen(wideLeft, wideRight);
+    md.setOverclock(static_cast<int>(overclock));
     static const Region kRegions[3] = {Region::JapanNtsc, Region::UsaNtsc, Region::EuropePal};
     if (!biosDir.empty()) {
         const auto found = findCdBios({biosDir});
@@ -612,6 +640,8 @@ int main(int argc, char** argv) {
     if (game == "--test-rom") md.loadRomData(testrom::build());
     else if (game == "--pad-test-rom") md.loadRomData(testrom::buildPadTest());
     else if (game == "--two-pad-test-rom") md.loadRomData(testrom::buildTwoPadTest());
+    else if (game == "--sms-test-rom") md.loadRomData(smstestrom::build());
+    else if (game == "--gg-test-rom") md.loadRomData(smstestrom::build(true));
     else {
         std::string error;
         if (!md.loadRom(game, &error)) {
@@ -625,7 +655,7 @@ int main(int argc, char** argv) {
         for (const std::string& code : cheats) {
             std::vector<CheatPatch> p;
             std::string error;
-            if (!decodeCheatCodes(code, &p, &error)) {
+            if (!decodeCheatCodes(code, &p, &error, md.isMasterSystem())) {
                 std::fprintf(stderr, "bad cheat %s: %s\n", code.c_str(), error.c_str());
                 return 2;
             }
@@ -709,6 +739,23 @@ int main(int argc, char** argv) {
     size_t nextExpected = 0;
     long ran = 0;
     bool ioError = false;
+    // --gif and --avi: started on the first frame, which gives them their size.
+    GameRecording gifRecording, aviRecording;
+    auto recordVideo = [&](GameRecording& r, const std::string& path, GameRecording::Format format) {
+        if (path.empty()) return;
+        const VideoFrameMd& f = md.frame();
+        std::string error;
+        // As wide as H40 (an H32 picture is stretched to it, as on a TV) and as tall as the
+        // first frame without interlace.
+        const int height = f.interlaced ? f.height / 2 : f.height;
+        if (!r.active() && !r.start(path, format, VideoFrameMd::kMaxWidth, height, md.refreshRate(), 44100, &error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            ioError = true;
+            return;
+        }
+        r.addAudio(md.audio().samples().data(), md.audio().samples().size());
+        r.addFrame(f.rgba.data(), f.width, f.height, VideoFrameMd::kMaxWidth);
+    };
 
     // What happens after each frame is final: the log, the expected log, the sound.
     auto record = [&](long frame, uint32_t picture, const std::vector<int16_t>& samples) {
@@ -822,6 +869,10 @@ int main(int argc, char** argv) {
         ++ran;
         const uint32_t picture = frameHash(md.frame());
         record(frame, picture, md.audio().samples());
+        if (!netplay) {
+            recordVideo(gifRecording, gifOut, GameRecording::Format::Gif);
+            recordVideo(aviRecording, aviOut, GameRecording::Format::Avi);
+        }
         md.audio().clearSamples();
         if (pngEvery > 0 && frame % pngEvery == 0 && !screenshot("", frame)) ioError = true;
         for (const Command& c : commands) {
@@ -857,6 +908,13 @@ int main(int argc, char** argv) {
             if (!writePng(layers + name, layer, f.width, f.height, VideoFrameMd::kMaxWidth)) ioError = true;
     }
     if (!wav.empty() && !writeWav(wav, sound, kRate)) ioError = true;
+    for (GameRecording* r : {&gifRecording, &aviRecording}) {
+        std::string error;
+        if (!r->finish(&error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            ioError = true;
+        }
+    }
     if (!vgmOut.empty()) {
         const bool compress = vgmOut.size() > 4 && vgmOut.compare(vgmOut.size() - 4, 4, ".vgz") == 0;
         const std::vector<uint8_t> file = vgmWriter.finish(md.masterClocks(), md.cartridge().header().title, compress);
@@ -879,13 +937,13 @@ int main(int argc, char** argv) {
         failures.push_back("sound hash " + hex8(audioHash) + ", expected " + hex8(expectAudio));
     if (divergence >= 0) failures.push_back("frame " + std::to_string(divergence) + ": " + divergenceWhat);
 
-    const char* system = md.hasMsuMd() ? "msu-md" : md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : "megadrive";
+    const char* system = md.hasMsuMd() ? "msu-md" : md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : md.isGameGear() ? "gamegear" : md.isMasterSystem() ? "mastersystem" : "megadrive";
     const double fps = seconds > 0 ? ran / seconds : 0;
     if (!quiet) {
         std::printf("title: %s\nsystem: %s  region: %s\nframes: %ld  size: %dx%d  hash: %08x\n",
                     md.cartridge().header().title.c_str(), system, md.pal() ? "pal" : "ntsc", ran, f.width, f.height,
                     lastHash);
-        std::printf("audio hash: %08x\npc: %06x\n", audioHash, md.cpu().pc);
+        std::printf("audio hash: %08x\npc: %06x\n", audioHash, md.isMasterSystem() ? md.z80().pc : md.cpu().pc);
         if (md.isMegaCd()) std::printf("sub pc: %06x\n", md.megaCd()->sub().pc);
         std::printf("speed: %.0f fps (%.1fx)\n", fps, fps / md.refreshRate());
         if (netplay) std::printf("netplay: %ld frames run again, ping %d ms\n", rollbacks, ping);
@@ -896,7 +954,7 @@ int main(int argc, char** argv) {
         j << "{\n  \"title\": " << jsonString(md.cartridge().header().title) << ",\n  \"system\": \"" << system
           << "\",\n  \"pal\": " << (md.pal() ? "true" : "false") << ",\n  \"frames\": " << ran
           << ",\n  \"width\": " << f.width << ",\n  \"height\": " << f.height << ",\n  \"hash\": \"" << hex8(lastHash)
-          << "\",\n  \"audio_hash\": \"" << hex8(audioHash) << "\",\n  \"pc\": \"" << hex8(md.cpu().pc) << "\"";
+          << "\",\n  \"audio_hash\": \"" << hex8(audioHash) << "\",\n  \"pc\": \"" << hex8(md.isMasterSystem() ? md.z80().pc : md.cpu().pc) << "\"";
         if (md.isMegaCd()) j << ",\n  \"sub_pc\": \"" << hex8(md.megaCd()->sub().pc) << "\"";
         j << ",\n  \"fps\": " << static_cast<long>(fps) << ",\n  \"divergence\": " << divergence;
         if (netplay) j << ",\n  \"netplay_rollback_frames\": " << rollbacks << ",\n  \"netplay_ping_ms\": " << ping;

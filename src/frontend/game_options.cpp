@@ -22,8 +22,13 @@ std::string lower(std::string s) {
     return s;
 }
 
-// The option a key of the file belongs to: both pads are one option.
-std::string optionFor(const std::string& key) { return key == "mando1" || key == "mando2" ? "mandos" : key; }
+// The option a key of the file belongs to: both pads are one option, and so are both
+// sides of the widescreen.
+std::string optionFor(const std::string& key) {
+    if (key == "mando1" || key == "mando2") return "mandos";
+    if (key == "pantalla_ancha_izquierda" || key == "pantalla_ancha_derecha") return "pantalla_ancha";
+    return key;
+}
 
 }  // namespace
 
@@ -37,6 +42,12 @@ const std::vector<GameOption>& gameOptions() {
          [](const Settings& f, Settings& t) { t.render.filterStrength = f.render.filterStrength; }},
         {"pixeles_cuadrados", N_("Píxeles cuadrados"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.squarePixels = f.render.squarePixels; }},
+        {"sin_limite_sprites", N_("Sin límite de sprites"), N_("Vídeo"),
+         [](const Settings& f, Settings& t) { t.unlimitedSprites = f.unlimitedSprites; }},
+        {"pantalla_ancha", N_("Pantalla ancha"), N_("Vídeo"), [](const Settings& f, Settings& t) {
+             t.wideLeft = f.wideLeft;
+             t.wideRight = f.wideRight;
+         }},
         {"perfil_3d", N_("Todos los ajustes del 3D"), "3D", [](const Settings& f, Settings& t) { copy3D(f.render, t.render); }},
         {"volumen", N_("Volumen"), N_("Sonido"), [](const Settings& f, Settings& t) { t.volume = f.volume; }},
         {"silencio", N_("Silencio"), N_("Sonido"), [](const Settings& f, Settings& t) { t.mute = f.mute; }},
@@ -49,10 +60,12 @@ const std::vector<GameOption>& gameOptions() {
          [](const Settings& f, Settings& t) { t.effectsOriginal = f.effectsOriginal; }},
         {"region", N_("Región"), N_("Consola"), [](const Settings& f, Settings& t) { t.region = f.region; }},
         {"mandos", N_("Tipo de mando"), N_("Consola"), [](const Settings& f, Settings& t) { t.padType = f.padType; }},
+        {"overclock", N_("Overclock"), N_("Consola"), [](const Settings& f, Settings& t) { t.overclock = f.overclock; }},
         {"rebobinado_segundos", N_("Segundos de rebobinado"), N_("Velocidad"),
          [](const Settings& f, Settings& t) { t.rewindSeconds = f.rewindSeconds; }},
         {"avance_rapido", N_("Avance rápido"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.fastForward = f.fastForward; }},
         {"camara_lenta", N_("Cámara lenta"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.slowMotion = f.slowMotion; }},
+        {"run_ahead", N_("Run-ahead (menos latencia)"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.runAhead = f.runAhead; }},
     };
     return options;
 }

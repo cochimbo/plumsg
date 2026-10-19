@@ -11,9 +11,11 @@
 namespace plumsg {
 
 class Ym2612;
+class Ym2413;
 class Psg;
 
-// The Roland sound: plays what the YM2612 and the PSG are playing as General MIDI
+// The Roland sound: plays what the YM2612 (or a Master System's YM2413) and the PSG
+// are playing as General MIDI
 // notes on a SoundFont, like a Roland SC-55 would. It watches the register writes:
 // a key on is a note on, the frequency is the note plus pitch bend, the carriers'
 // total level is the expression, and each FM instrument (its operator settings) is
@@ -28,9 +30,17 @@ public:
     static constexpr int kPsgFirst = 6;
     static constexpr int kDrums = 9;
     // The console's sound channels, as bits of the masks below: FM 1-6 (bits 0-5), PSG
-    // tone 1-3 (bits 6-8) and the PSG noise (bit 9). Each one is a voice.
-    static constexpr int kVoices = 10;
+    // tone 1-3 (bits 6-8) and the PSG noise (bit 9). Each one is a voice. A YM2413 has
+    // three more channels (FM 7-9, bits 11-13), and in rhythm mode, in their place, five
+    // drums (bits 14-18: bass drum, snare, tom, cymbal, hi-hat). Bit 10 is left to the
+    // players for the DAC.
+    static constexpr int kVoices = 19;
     static constexpr int kNoise = 9;
+    static constexpr int kOpllHigh = 11;  // FM 7
+    static constexpr int kRhythmFirst = 14;
+    static constexpr uint32_t kAllVoices = ((1u << kVoices) - 1) & ~(1u << 10);
+    // The YM2413 channels (bit 0 = channel 1) of which every voice is in `voices`.
+    static uint32_t opllChannels(uint32_t voices);
 
     // What an instrument plays instead of its own sound. Every instrument is known by its
     // fingerprint: for FM, a hash of its operator settings (not its volume); for the PSG,
@@ -48,10 +58,18 @@ public:
         bool operator!=(const Assignment& o) const { return !(*this == o); }
     };
     using Assignments = std::map<uint32_t, Assignment>;
-    enum class Kind : uint8_t { Fm, PsgTone, PsgNoise };
+    // A YM2413 instrument is FM: one of its 15 built in (opllFingerprint) or a hash of
+    // the game's own; its drums are Rhythm.
+    enum class Kind : uint8_t { Fm, PsgTone, PsgNoise, Rhythm };
     static Kind kindOf(uint32_t fingerprint);
     static uint32_t psgToneFingerprint(int channel) { return 0x50534700u + static_cast<uint32_t>(channel); }
     static uint32_t noiseFingerprint(int control) { return 0x4E4F4900u + static_cast<uint32_t>(control & 7); }
+    static uint32_t opllFingerprint(int instrument) { return 0x4F504C00u + static_cast<uint32_t>(instrument & 15); }
+    static uint32_t rhythmFingerprint(int drum) { return 0x4F524800u + static_cast<uint32_t>(drum); }  // 0-4
+    // The YM2413's built-in instrument of a fingerprint (1-15), or 0.
+    static int opllInstrument(uint32_t fingerprint);
+    static const char* opllInstrumentName(int instrument);  // 1-15
+    static const char* rhythmName(int drum);                // 0-4
 
     // An instrument heard since clearSeen(), for the instrument editor.
     struct Seen {
@@ -77,6 +95,11 @@ public:
 
     // 0..100 each.
     void setEffects(int reverb, int chorus);
+    // The equalizer: a gain in dB (-kEqRange..kEqRange) for each band, from the bass up.
+    static constexpr int kEqBands = 5;
+    static constexpr int kEqRange = 12;
+    static constexpr double kEqFrequencies[kEqBands] = {100, 400, 1200, 3500, 9000};
+    void setEqualizer(const std::array<int, kEqBands>& gains);
     void setVolume(int percent) { volume_ = percent; }
 
     // The instruments chosen by hand; the rest follow the rules. Takes effect from each
@@ -88,6 +111,11 @@ public:
     void setSoundEffects(std::set<uint32_t> effects, bool original);
     // What an instrument plays now: its assignment, or what the rules give it.
     Assignment assignmentFor(uint32_t fingerprint) const;
+    // The key its assignment is under: the fingerprint itself or one of its aliases (0
+    // for none). Aliases are the fingerprints an FM instrument had before 0.0.23, one for
+    // each release rate it was heard with; files saved then still use them.
+    uint32_t assignedAs(uint32_t fingerprint) const;
+    std::vector<uint32_t> aliases(uint32_t fingerprint) const;
 
     // For listening in the editor: voices (mask) and instruments that stay silent, in
     // the Roland sound and, through chipChannels(), in the chips'.
@@ -115,6 +143,8 @@ public:
     void beginFrame(uint64_t clock);
     void fmWrite(int offset, uint8_t value, const Ym2612& ym, uint64_t clock);
     void psgWrite(const Psg& psg, uint64_t clock);
+    // An address (offset 0) or data (1) write to a Master System's YM2413.
+    void opllWrite(int offset, uint8_t value, const Ym2413& opll, uint64_t clock);
     // Adds this frame's notes into `out` (interleaved stereo at `rate`), from sample
     // pair `from` to the end: they cover the frame that ends at `clock`.
     void endFrame(uint64_t clock, std::vector<int16_t>& out, size_t from, double rate);
@@ -134,6 +164,7 @@ public:
     // MIDI note (69 = A 440 Hz, fractional) of a YM2612 frequency setting.
     static double fmNote(int fnum, int block, double chipClock);
     static double psgNote(int period, double psgClock);
+    static double opllNote(int fnum, int block, double chipClock);
 
     // What the translator sent, for the tests: one line per event.
     void setLog(std::vector<std::string>* log) { log_ = log; }
@@ -179,8 +210,12 @@ private:
     void fmPitch(int ch, const Ym2612& ym, uint64_t clock);
     void fmLevel(int ch, const Ym2612& ym, uint64_t clock);
     double fmAmplitude(int ch, const Ym2612& ym) const;
-    uint32_t fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops) const;
+    uint32_t fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops, uint32_t* legacy) const;
+    bool isSoundEffect(uint32_t fingerprint) const;
     void pitchTo(int voice, double note, uint64_t clock);
+    void opllKey(int ch, const Ym2413& opll, uint64_t clock);
+    double opllNoteOf(int ch, const Ym2413& opll) const;
+    void opllRhythm(const Ym2413& opll, uint64_t clock);
     void apply(const Event& e);
     void render(int16_t* out, int frames);
 
@@ -189,8 +224,12 @@ private:
     std::array<Voice, kVoices> voices_{};
     std::array<Channel, 16> channels_{};
     std::array<uint8_t, 2> address_{};  // the register each YM2612 port points at
+    uint8_t opllAddress_ = 0;
+    uint8_t rhythmKeys_ = 0;            // the YM2413's rhythm keys, as last written (0x0E)
+    double opllClock_ = 53693175.0 / 15.0;
     std::map<uint32_t, int> rules_;     // FM fingerprint -> program the rules gave it
     Assignments assigned_;              // chosen by hand
+    std::map<uint32_t, std::set<uint32_t>> legacy_;  // FM fingerprint -> its old ones heard
     std::set<uint32_t> effects_;        // the game's sound effects
     bool effectsOriginal_ = false;      // and they sound as on the chip
     std::map<uint32_t, Seen> seen_;

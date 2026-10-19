@@ -19,6 +19,7 @@
 #include <filesystem>
 
 #include "megadrive.h"
+#include "ym2413.h"
 #include "sh2.h"
 #include "system.h"
 #include "miniz.h"
@@ -33,6 +34,7 @@
 #include "cd_image.h"
 #include "netplay.h"
 #include "pad_test_rom.h"
+#include "sms_test_rom.h"
 #include "music_rom.h"
 #include "song_extract.h"
 
@@ -267,6 +269,179 @@ void testVdpHblankFlag() {
         check(!active && blank && !hblank(VdpMd::kActiveClocks),
               h40 ? "VDP: HBlank status flag (H40)" : "VDP: HBlank status flag (H32)");
     }
+}
+
+void testVdpSpriteLimit() {
+    // H40 draws 20 sprites and 320 sprite pixels per line. Without the limit the rest are
+    // drawn too, but the status bits stay what the console would give: the game reads the
+    // same overflow, and sprites past the limit never set the collision bit.
+    auto run = [](bool unlimited, int wideCells, int step, int count, int overlapFrom) {
+        auto vdp = std::make_unique<VdpMd>();
+        vdp->reset();
+        vdp->setUnlimitedSprites(unlimited);
+        vdp->writeControl(0x8144);  // display on
+        vdp->writeControl(0x8C81);  // H40
+        vdp->writeControl(0x8578);  // sprite table at 0xF000
+        vdp->writeControl(0x8F02);
+        auto at = [&](uint32_t addr) {
+            vdp->writeControl(static_cast<uint16_t>(0x4000 | (addr & 0x3FFF)));
+            vdp->writeControl(static_cast<uint16_t>(addr >> 14));
+        };
+        at(0x20);  // tile 1: colour 1 everywhere
+        for (int i = 0; i < 16; ++i) vdp->writeData(0x1111);
+        vdp->writeControl(0xC002);  // CRAM colour 1
+        vdp->writeControl(0x0000);
+        vdp->writeData(0x0EEE);
+        at(0xF000);
+        for (int n = 0; n < count; ++n) {
+            const int x = n >= overlapFrom ? 300 : 128 + n * step;
+            vdp->writeData(128 + 10);                                              // y: line 10
+            vdp->writeData(static_cast<uint16_t>(((wideCells - 1) << 10) | (n + 1 < count ? n + 1 : 0)));
+            vdp->writeData(0x0001);                                                // tile 1
+            vdp->writeData(static_cast<uint16_t>(x));
+        }
+        vdp->readStatus(0);
+        vdp->renderLine(10);
+        const uint16_t status = vdp->readStatus(0);
+        return std::make_pair(std::move(vdp), status);
+    };
+    auto sprite = [](const VdpMd& v, int x) { return v.frame().info[10 * VideoFrameMd::kMaxWidth + x].layer == MdLayer::Sprite; };
+
+    // 30 one-cell sprites, the last ten on top of each other: past the 20 per line.
+    auto [limited, s1] = run(false, 1, 8, 30, 20);
+    auto [free, s2] = run(true, 1, 8, 30, 20);
+    check(sprite(*limited, 19 * 8) && !sprite(*limited, 300 - 128), "VDP: 20 sprites per line in H40");
+    check(sprite(*free, 300 - 128), "VDP: without the limit the 21st sprite is drawn");
+    check(s1 == s2 && (s1 & 0x40) && !(s1 & 0x20),
+          "VDP: without the limit the overflow bit is the same and sprites past it do not collide");
+
+    // 12 sprites four cells wide, 16 pixels apart (only their first cell has pixels): the
+    // 11th starts past the 320 pixels, so its first cell at x = 160 stays empty.
+    auto [narrow, s3] = run(false, 4, 16, 12, 99);
+    auto [wide, s4] = run(true, 4, 16, 12, 99);
+    check(sprite(*narrow, 9 * 16) && !sprite(*narrow, 160) && !sprite(*narrow, 178),
+          "VDP: 320 sprite pixels per line in H40");
+    check(sprite(*wide, 160) && sprite(*wide, 178) && s3 == s4 && (s3 & 0x40),
+          "VDP: past the 320 pixels without the limit, same status");
+}
+
+void testOverclock() {
+    // A 68000 loop adding 1 to a long in RAM: addq.l #1,($FF0000).l; bra.s back. At 200%
+    // it goes round about twice as often in the same frames.
+    std::vector<uint8_t> rom(0x400, 0);
+    const uint8_t vectors[] = {0x00, 0xFF, 0x80, 0x00, 0x00, 0x00, 0x02, 0x00};
+    const uint8_t loop[] = {0x52, 0xB9, 0x00, 0xFF, 0x00, 0x00, 0x60, 0xF8};
+    std::copy(std::begin(vectors), std::end(vectors), rom.begin());
+    std::copy(std::begin(loop), std::end(loop), rom.begin() + 0x200);
+    auto counter = [](const MegaDrive& md) {
+        const auto& ram = md.workRam();
+        return static_cast<uint32_t>(ram[0]) << 24 | ram[1] << 16 | ram[2] << 8 | ram[3];
+    };
+    auto run = [&](int percent) {
+        MegaDrive md;
+        md.loadRomData(rom);
+        md.setOverclock(percent);
+        for (int i = 0; i < 10; ++i) md.runFrame();
+        return counter(md);
+    };
+    const uint32_t normal = run(100), fast = run(200), fastest = run(400);
+    const double ratio = static_cast<double>(fast) / normal, ratio4 = static_cast<double>(fastest) / normal;
+    check(normal > 1000 && ratio > 1.95 && ratio < 2.05 && ratio4 > 3.9 && ratio4 < 4.1,
+          "overclock: the 68000 runs 2 and 4 times as much");
+    {
+        MegaDrive md;
+        md.setOverclock(1000);
+        const int high = md.overclock();
+        md.setOverclock(10);
+        check(high == MegaDrive::kMaxOverclock && md.overclock() == 100, "overclock: kept within 100-400%");
+    }
+
+    // It is part of the state (a netplay guest starts from the host's), and a state
+    // without it is from a console at its real speed.
+    MegaDrive a, b;
+    a.loadRomData(rom);
+    b.loadRomData(rom);
+    a.setOverclock(300);
+    b.setOverclock(200);
+    for (int i = 0; i < 3; ++i) a.runFrame();
+    std::vector<uint8_t> fastState, plainState;
+    std::string error;
+    a.saveState(fastState);
+    check(b.loadState(fastState, &error) && b.overclock() == 300, "overclock: the state carries it");
+    for (int i = 0; i < 5; ++i) {
+        a.runFrame();
+        b.runFrame();
+    }
+    check(counter(a) == counter(b), "overclock: the same run after loading it");
+    a.setOverclock(100);
+    a.saveState(plainState);
+    check(b.loadState(plainState, &error) && b.overclock() == 100, "overclock: a state without it loads at 100%");
+}
+
+void testVdpWidescreen() {
+    // 16:9 adds 53 columns on each side in H40 (42 in H32), drawn from the plane and the
+    // sprites past the edges. The console's own 320 columns stay as they were. Each side
+    // can have its own width.
+    auto render = [](int left, int right, bool h40) {
+        auto vdp = std::make_unique<VdpMd>();
+        vdp->reset();
+        vdp->setWidescreen(left, right);
+        vdp->writeControl(0x8144);                // display on
+        vdp->writeControl(h40 ? 0x8C81 : 0x8C00);  // H40 or H32
+        vdp->writeControl(0x8230);                // plane A at 0xC000
+        vdp->writeControl(0x8578);                // sprite table at 0xF000
+        vdp->writeControl(0x9001);                // 64x32 planes
+        vdp->writeControl(0x8F02);
+        auto at = [&](uint32_t addr) {
+            vdp->writeControl(static_cast<uint16_t>(0x4000 | (addr & 0x3FFF)));
+            vdp->writeControl(static_cast<uint16_t>(addr >> 14));
+        };
+        at(0x20);  // tile 1: colour 1 everywhere
+        for (int i = 0; i < 16; ++i) vdp->writeData(0x1111);
+        vdp->writeControl(0xC002);  // CRAM colour 1
+        vdp->writeControl(0x0000);
+        vdp->writeData(0x0EEE);
+        at(0xC000 + 63 * 2);  // plane A: tile 1 in the last column of row 0 only (x 504..511)
+        vdp->writeData(0x0001);
+        at(0xF000);  // one sprite with its left edge 16 pixels past the right of the screen
+        vdp->writeData(128);
+        vdp->writeData(0x0000);
+        vdp->writeData(0x0001);
+        vdp->writeData(static_cast<uint16_t>(128 + (h40 ? 320 : 256) + 16));
+        vdp->renderLine(0);
+        return vdp;
+    };
+    auto layer = [](const VdpMd& v, int x) { return v.frame().info[x].layer; };
+
+    auto off = render(0, 0, true);
+    check(off->frame().width == 320 && off->frame().wideLeft == 0 && off->frame().wideRight == 0,
+          "VDP widescreen: off by default");
+    check(VdpMd::wideColumnsFor(16, 9) == 53 && VdpMd::wideColumnsFor(16, 10) == 32, "VDP widescreen: 16:9 and 16:10");
+    auto wide = render(53, 53, true);
+    const VideoFrameMd& f = wide->frame();
+    check(f.width == 426 && f.wideLeft == 53 && f.wideRight == 53, "VDP widescreen: 16:9 in H40 is 426 pixels, 53 on each side");
+    // Plane x 504..511 is screen x -8..-1: only the widescreen columns show it.
+    check(layer(*off, 0) == MdLayer::Backdrop && layer(*wide, 53 - 8) == MdLayer::PlaneA &&
+              layer(*wide, 53 - 1) == MdLayer::PlaneA && layer(*wide, 53) == MdLayer::Backdrop,
+          "VDP widescreen: the plane past the left edge");
+    check(layer(*wide, 53 + 336) == MdLayer::Sprite && layer(*wide, 53 + 335) == MdLayer::Backdrop,
+          "VDP widescreen: a sprite past the right edge");
+    bool same = true;
+    for (int x = 0; x < 320; ++x) same &= off->frame().rgba[x] == f.rgba[53 + x];
+    check(same, "VDP widescreen: the console's own picture is the same");
+
+    auto narrow = render(53, 53, false);
+    check(narrow->frame().width == 340 && narrow->frame().wideLeft == 42 && layer(*narrow, 42 + 272) == MdLayer::Sprite,
+          "VDP widescreen: 16:9 in H32 is 340 pixels");
+    // Only the left side: the plane past the left edge shows, the sprite past the right does not.
+    auto leftOnly = render(50, 0, true);
+    const VideoFrameMd& g = leftOnly->frame();
+    check(g.width == 370 && g.wideLeft == 50 && g.wideRight == 0 && layer(*leftOnly, 50 - 8) == MdLayer::PlaneA &&
+              g.consoleWidth() == 320,
+          "VDP widescreen: only the left side");
+    bool sameLeft = true;
+    for (int x = 0; x < 320; ++x) sameLeft &= off->frame().rgba[x] == g.rgba[50 + x];
+    check(sameLeft, "VDP widescreen: one side only keeps the console's picture");
 }
 
 void testTestRom() {
@@ -1037,6 +1212,62 @@ void testRewindPlayback() {
     check(!MegaDrive::stateThumbnail(quick, pixels, &w, &h), "rewind: quick snapshots carry no thumbnail");
 }
 
+void testRunAhead() {
+    // Run-ahead shows the next frame now and leaves no trace: the console goes on as if
+    // it had never run ahead, with the same sound.
+    auto pads = [](int i) {
+        PadState p;
+        p.right = (i / 10) % 2 == 0;
+        p.a = (i / 7) % 2 == 0;
+        return p;
+    };
+    MegaDrive plain, ahead;
+    // The pad test ROM draws the buttons held, so the picture follows the pads.
+    plain.loadRomData(testrom::buildPadTest());
+    ahead.loadRomData(testrom::buildPadTest());
+    plain.setSampleRate(44100);
+    ahead.setSampleRate(44100);
+    std::vector<uint32_t> plainFrames, aheadFrames;
+    std::vector<int16_t> plainSound, aheadSound;
+    bool back = true;
+    double aheadMs = 0;
+    for (int i = 0; i < 120; ++i) {
+        plain.setPads(pads(i), PadState{});
+        plain.runFrame();
+        plainFrames.push_back(frameHash(plain.frame()));
+        plainSound.insert(plainSound.end(), plain.audio().samples().begin(), plain.audio().samples().end());
+        plain.audio().clearSamples();
+
+        ahead.setPads(pads(i), PadState{});
+        ahead.setDrawing(false);
+        ahead.runFrame();
+        ahead.setDrawing(true);
+        aheadSound.insert(aheadSound.end(), ahead.audio().samples().begin(), ahead.audio().samples().end());
+        ahead.audio().clearSamples();
+        const auto t0 = std::chrono::steady_clock::now();
+        back &= ahead.runAhead(1);
+        aheadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        aheadFrames.push_back(frameHash(ahead.frame()));
+    }
+    // Frame i shown with run-ahead is frame i + 1, wherever the pads did not change.
+    bool early = true;
+    int compared = 0;
+    for (int i = 0; i + 1 < 120; ++i) {
+        if (pads(i).right != pads(i + 1).right || pads(i).a != pads(i + 1).a) continue;
+        early &= aheadFrames[static_cast<size_t>(i)] == plainFrames[static_cast<size_t>(i + 1)];
+        ++compared;
+    }
+    std::printf("     (a frame of run-ahead took %.2f ms on average)\n", aheadMs / 120);
+    std::vector<uint8_t> a, b;
+    plain.saveState(a, true);
+    ahead.saveState(b, true);
+    check(back, "run-ahead: the console went back every frame");
+    const std::set<uint32_t> pictures(plainFrames.begin(), plainFrames.end());
+    check(early && compared > 90 && pictures.size() > 1, "run-ahead: the picture is the next frame's");
+    check(a == b && plain.frameCount() == ahead.frameCount(), "run-ahead: the console is where it would have been");
+    check(aheadSound == plainSound, "run-ahead: the sound is the same");
+}
+
 void testProfiles() {
     RenderOptions r;
     r.pseudo3d = true;
@@ -1583,6 +1814,29 @@ void testRoland() {
     fm(0, 0x28, 0xF0);
     check(log.empty(), "Roland: un canal en silencio no da notas");
     roland.setListening(0, {});
+    fm(0, 0x28, 0x00);
+
+    // Sonic's driver sets the release rates to the fastest to cut a note: it is still
+    // the same instrument, and what an old file chose under either old fingerprint holds.
+    for (int op : {0x80, 0x84, 0x88, 0x8C}) fm(0, op, 0x0F);
+    fm(0, 0x28, 0xF0);
+    fm(0, 0x28, 0x00);
+    int fmSeen = 0;
+    for (const auto& [fp, seen] : roland.seen()) fmSeen += seen.kind == RolandSound::Kind::Fm;
+    check(fmSeen == 1, "Roland: cambiar la velocidad de release no hace otro instrumento");
+    // With release rate 0 the old fingerprint was the same; with 15, another one.
+    const std::vector<uint32_t> old = roland.aliases(fmPrint);
+    check(old.size() == 1 && old[0] != fmPrint, "Roland: se recuerda la huella de antes del instrumento");
+    if (old.size() == 1) {
+        chosen.clear();
+        chosen[old[0]].drum = 42;
+        roland.setAssignments(chosen);
+        log.clear();
+        fm(0, 0x28, 0xF0);
+        check(has("9 on 42") && roland.assignedAs(fmPrint) == old[0], "Roland: una asignación con la huella de antes vale");
+        fm(0, 0x28, 0x00);
+        roland.setAssignments({});
+    }
 
     // The assignment files.
     RolandSound::Assignments files;
@@ -1702,6 +1956,448 @@ void testSongExtract(testrom::Asking asking) {
           "Canciones: con efectos Roland, el efecto pasa por el SoundFont");
 }
 
+void testMasterSystem() {
+    namespace st = smstestrom;
+    const std::vector<uint8_t> rom = st::build();
+    check(detectSystemFromData(rom) == ConsoleSystem::MasterSystem && smsRegion(rom) == Region::UsaNtsc,
+          "Master System: detected from its header");
+    MegaDrive md;
+    md.loadRomData(rom);
+    md.setSampleRate(44100);
+    check(md.isMasterSystem() && !md.is32x() && !md.isMegaCd(), "Master System: runs in its mode");
+    std::vector<int16_t> sound;
+    for (int i = 0; i < 60; ++i) {
+        md.runFrame();
+        sound.insert(sound.end(), md.audio().samples().begin(), md.audio().samples().end());
+        md.audio().clearSamples();
+    }
+    const VideoFrameMd& f = md.frame();
+    check(f.width == 256 && f.height == 192 && f.wideLeft == 0 && f.wideRight == 0, "Master System: 256x192");
+    const int frames = md.z80Ram()[0];
+    check(frames >= 55 && frames <= 60, "Master System: one frame interrupt a frame");
+    // The scroll was set by the interrupt during the last frame, so the picture shows the
+    // value before it.
+    const int h = f.lines[0].hscrollB;
+    check(h == ((frames - 1) & 0xFF), "Master System: the interrupt scrolls the background");
+    bool halves = true;
+    for (int x = 8; x < 256; ++x) halves &= f.pixel(x, 20) == (((x - h) & 7) < 4 ? st::kRed : st::kBlue);
+    check(halves, "Master System: background tiles, palette and scroll");
+    check(f.pixel(0, 20) == st::kYellow && f.pixel(7, 100) == st::kYellow &&
+              f.info[20 * VideoFrameMd::kMaxWidth + 3].layer == MdLayer::Backdrop,
+          "Master System: left column masked with the backdrop");
+    const int sx = st::kSpriteLeft + 2;
+    check(f.pixel(sx, st::kSpriteTop + 7) == st::kMagenta &&
+              f.info[(st::kSpriteTop + 7) * VideoFrameMd::kMaxWidth + sx].layer == MdLayer::Sprite,
+          "Master System: a sprite");
+    const int under = (st::kSpriteTop + 2) * VideoFrameMd::kMaxWidth + sx;
+    check(f.pixel(sx, st::kSpriteTop + 2) == st::kGreen && f.info[under].layer == MdLayer::PlaneA &&
+              (f.sprites[under] >> 24) != 0,
+          "Master System: a tile with priority in front of the sprite, the sprite still in its layer");
+    check(f.info[(st::kSpriteTop - 2) * VideoFrameMd::kMaxWidth + sx].layer != MdLayer::Sprite &&
+              f.info[(st::kSpriteTop + 8) * VideoFrameMd::kMaxWidth + sx].layer != MdLayer::Sprite,
+          "Master System: the sprite is only on its lines");
+    double sumSq = 0;
+    for (int16_t s : sound) sumSq += static_cast<double>(s) * s;
+    check(sound.size() / 2 > 43000 && sound.size() / 2 < 45000 && std::sqrt(sumSq / static_cast<double>(sound.size())) > 300,
+          "Master System: the PSG plays its tone");
+
+    // Pads (active low on port 0xDC) and the pause button.
+    PadState p;
+    p.up = p.b = true;
+    md.setPads(p, PadState{});
+    md.runFrame();
+    check(md.z80Ram()[2] == static_cast<uint8_t>(~0x11), "Master System: up and button 1 on port 0xDC");
+    p = PadState{};
+    p.c = p.right = true;
+    md.setPads(p, PadState{});
+    md.runFrame();
+    check(md.z80Ram()[2] == static_cast<uint8_t>(~0x28), "Master System: right and button 2 on port 0xDC");
+    p = PadState{};
+    p.start = true;
+    md.setPads(p, PadState{});
+    md.runFrame();
+    md.runFrame();  // held: still one press
+    md.setPads(PadState{}, PadState{});
+    md.runFrame();
+    check(md.z80Ram()[1] == 1, "Master System: Start is the pause button (one NMI a press)");
+
+    // Savestates.
+    std::vector<uint8_t> state;
+    check(md.saveState(state), "Master System: state saved");
+    auto run = [&](std::vector<uint32_t>& hashes) {
+        for (int i = 0; i < 30; ++i) {
+            md.runFrame();
+            hashes.push_back(frameHash(md.frame()));
+            md.audio().clearSamples();
+        }
+    };
+    std::vector<uint32_t> h1, h2;
+    run(h1);
+    std::string error;
+    check(md.loadState(state, &error), "Master System: state loaded");
+    run(h2);
+    check(h1 == h2, "Master System: the same frames after loading a state");
+    std::vector<uint32_t> pixels;
+    int tw = 0, th = 0;
+    check(MegaDrive::stateThumbnail(state, pixels, &tw, &th) && tw == 128 && th == 96, "Master System: thumbnail");
+
+    // A Mega Drive game afterwards leaves the mode.
+    md.loadRomData(testrom::build());
+    for (int i = 0; i < 3; ++i) md.runFrame();
+    check(!md.isMasterSystem() && md.frame().width == 320, "Master System: a Mega Drive game leaves the mode");
+}
+
+void testSmsMapper() {
+    // 128 KB: bank n has n in every byte, after its first KB.
+    std::vector<uint8_t> rom(0x20000);
+    for (size_t i = 0; i < rom.size(); ++i) rom[i] = static_cast<uint8_t>(i / 0x4000);
+    std::copy_n("TMR SEGA", 8, rom.begin() + 0x7FF0);
+    Cartridge cart;
+    cart.loadData(rom);
+    std::array<uint8_t, 0x2000> ram{};
+    auto frame = std::make_unique<VideoFrameMd>();
+    MasterSystem sms(cart, ram, *frame);
+    sms.powerOn();
+    check(sms.read(0x0000) == 0 && sms.read(0x4000) == 1 && sms.read(0x8000) == 2, "SMS mapper: banks 0, 1, 2 at power on");
+    sms.write(0xFFFF, 7);
+    sms.write(0xFFFE, 5);
+    sms.write(0xFFFD, 3);
+    check(sms.read(0x8000) == 7 && sms.read(0x4000) == 5 && sms.read(0x0400) == 3 && sms.read(0x0000) == 0,
+          "SMS mapper: banks switched, the first KB stays");
+    sms.write(0xFFFF, 9);
+    check(sms.read(0x8000) == 1, "SMS mapper: bank numbers wrap around the ROM");
+    check(ram[0x1FFF] == 9 && sms.read(0xDFFF) == 9 && sms.read(0xFFFF) == 9, "SMS mapper: registers are in RAM too");
+    sms.write(0xFFFC, 0x08);
+    sms.write(0x8000, 0x5A);
+    sms.write(0xFFFC, 0x0C);
+    sms.write(0x8000, 0xA5);
+    check(sms.read(0x8000) == 0xA5 && cart.saveRamByte(0x4000) == 0xA5 && cart.saveRamByte(0) == 0x5A &&
+              cart.hasSaveData(),
+          "SMS mapper: two pages of battery RAM");
+    sms.write(0xFFFC, 0);
+    check(sms.read(0x8000) == 1, "SMS mapper: back to ROM");
+    // The VDP: a register write, an address, VRAM through the data port and the read buffer.
+    sms.out(0xBF, 0x12);
+    sms.out(0xBF, 0x87);
+    check(sms.vdp().reg(7) == 0x12, "SMS VDP: register write");
+    sms.out(0xBF, 0x00);
+    sms.out(0xBF, 0x41);
+    sms.out(0xBE, 0xAB);
+    sms.out(0xBE, 0xCD);
+    sms.out(0xBF, 0x00);
+    sms.out(0xBF, 0x01);
+    check(sms.in(0xBE, 0) == 0xAB && sms.in(0xBE, 0) == 0xCD, "SMS VDP: VRAM written and read back");
+}
+
+void testSmsPhase2() {
+    // The FM unit: a note on the YM2413 sounds.
+    Ym2413 opll;
+    opll.setMasterClock(MegaDrive::kMasterNtsc);
+    auto reg = [&](int r, int v) {
+        opll.write(0, static_cast<uint8_t>(r));
+        opll.write(1, static_cast<uint8_t>(v));
+    };
+    reg(0x30, 0x10);  // channel 0: instrument 1 (violin), loudest
+    reg(0x10, 0xAC);
+    reg(0x20, 0x18);  // key on, block 4
+    opll.runUntil(15 * 72 * 4000);
+    double sumSq = 0;
+    for (int16_t v : opll.samples()) sumSq += static_cast<double>(v) * v;
+    check(opll.samples().size() == 8000 && std::sqrt(sumSq / 8000) > 200 && opll.reg(0x30) == 0x10,
+          "YM2413: a note on the FM unit");
+
+    // It is there on Japanese consoles (or always, if asked), and answers on port 0xF2.
+    MegaDrive md;
+    md.loadRomData(smstestrom::build());
+    check(md.isMasterSystem() && !md.masterSystem()->fmPresent() && md.ym2413(), "Master System FM: not on export consoles");
+    md.setRegion(Region::JapanNtsc);
+    md.powerCycle();
+    check(md.masterSystem()->fmPresent(), "Master System FM: on Japanese consoles");
+    md.setRegion(Region::UsaNtsc);
+    md.setMasterSystemFm(true);
+    check(md.masterSystem()->fmPresent(), "Master System FM: on any console if asked");
+    md.setPads(PadState{}, PadState{});
+    md.runFrame();
+    std::vector<uint8_t> state;
+    std::string error;
+    check(md.saveState(state) && md.loadState(state, &error), "Master System FM: in the savestates");
+
+    // Codemasters mapper: slots at 0x0000, 0x4000, 0x8000, the first one too.
+    std::vector<uint8_t> rom(0x40000);
+    for (size_t i = 0; i < rom.size(); ++i) rom[i] = static_cast<uint8_t>(i / 0x4000);
+    rom[0x7FE6] = 0x34;
+    rom[0x7FE7] = 0x12;
+    rom[0x7FE8] = 0xCC;
+    rom[0x7FE9] = 0xED;  // 0x1234 + 0xEDCC = 0x10000
+    Cartridge cart;
+    cart.loadData(rom);
+    std::array<uint8_t, 0x2000> ram{};
+    auto frame = std::make_unique<VideoFrameMd>();
+    MasterSystem sms(cart, ram, *frame);
+    sms.powerOn();
+    check(sms.codemasters() && sms.read(0x0000) == 0 && sms.read(0x4000) == 1 && sms.read(0x8000) == 0,
+          "Codemasters mapper: detected, banks 0, 1, 0");
+    sms.write(0x0000, 5);
+    sms.write(0x4000, 0x86);
+    sms.write(0x8000, 15);
+    sms.write(0xA000, 0x77);
+    check(sms.read(0x0000) == 5 && sms.read(0x4000) == 6 && sms.read(0x8000) == 15 && sms.read(0xA000) == 0x77 &&
+              cart.saveRamByte(0) == 0x77,
+          "Codemasters mapper: three slots and the RAM of Ernie Els Golf");
+
+    // The TMS9918's Graphics I mode with a sprite.
+    MasterSystem tms(cart, ram, *frame);
+    tms.powerOn();
+    auto vdpReg = [&](int r, int v) {
+        tms.out(0xBF, static_cast<uint8_t>(v));
+        tms.out(0xBF, static_cast<uint8_t>(0x80 | r));
+    };
+    auto vram = [&](int addr, std::initializer_list<int> bytes) {
+        tms.out(0xBF, static_cast<uint8_t>(addr));
+        tms.out(0xBF, static_cast<uint8_t>(0x40 | addr >> 8));
+        for (int b : bytes) tms.out(0xBE, static_cast<uint8_t>(b));
+    };
+    vdpReg(0, 0x00);
+    vdpReg(1, 0x40);  // display on, Graphics I
+    vdpReg(2, 0x06);  // names 0x1800
+    vdpReg(3, 0x80);  // colours 0x2000
+    vdpReg(4, 0x00);  // patterns 0x0000
+    vdpReg(5, 0x76);  // sprites 0x3B00
+    vdpReg(6, 0x00);
+    vdpReg(7, 0x04);  // backdrop dark blue
+    vram(0x0008, {0xF0});        // pattern 1, row 0: left half set
+    vram(0x0010, {0xFF, 0xFF});  // pattern 2: the sprite, rows 0-1
+    vram(0x1800, {0x01});
+    vram(0x2000, {0x2F});        // patterns 0-7: medium green on white
+    vram(0x3B00, {0x00, 16, 2, 0x09, 0xD0});
+    for (int line = 0; line < 3; ++line) tms.vdp().startLine(line, true);
+    const uint32_t green = 0xFF00AA00, white = 0xFFFFFFFF, lightRed = 0xFFFF0000;
+    check(frame->pixel(0, 0) == green && frame->pixel(4, 0) == white && frame->pixel(8, 1) == white &&
+              frame->pixel(16, 1) == lightRed && frame->info[VideoFrameMd::kMaxWidth + 16].layer == MdLayer::Sprite &&
+              frame->pixel(16, 0) != lightRed,
+          "SMS VDP: TMS9918 Graphics I with a sprite");
+}
+
+void testGameGear() {
+    namespace st = smstestrom;
+    const std::vector<uint8_t> rom = st::build(true);
+    check(detectSystemFromData(rom) == ConsoleSystem::GameGear, "Game Gear: detected from its header");
+    MegaDrive md;
+    md.loadRomData(rom);
+    md.setSampleRate(44100);
+    check(md.isGameGear() && md.isMasterSystem(), "Game Gear: runs in its mode");
+    std::vector<int16_t> sound;
+    for (int i = 0; i < 60; ++i) {
+        md.runFrame();
+        sound.insert(sound.end(), md.audio().samples().begin(), md.audio().samples().end());
+        md.audio().clearSamples();
+    }
+    const VideoFrameMd& f = md.frame();
+    check(f.width == 160 && f.height == 144 && f.aspectLines == 144, "Game Gear: a 160x144 screen");
+    const int h = f.lines[0].hscrollB;
+    bool halves = true;
+    for (int x = 0; x < 160; ++x) halves &= f.pixel(x, 10) == (((x + st::kGgLeft - h) & 7) < 4 ? st::kRed : st::kBlue);
+    check(halves, "Game Gear: the middle of the picture, in its 12-bit colours");
+    const int sx = st::kSpriteLeft + 2 - st::kGgLeft, sy = st::kSpriteTop + 7 - st::kGgTop;
+    check(f.pixel(sx, sy) == st::kMagenta && f.pixel(sx, sy - 5) == st::kGreen &&
+              f.info[sy * VideoFrameMd::kMaxWidth + sx].layer == MdLayer::Sprite,
+          "Game Gear: the sprite and the row in front of it");
+    double left = 0, right = 0;
+    for (size_t i = 0; i + 1 < sound.size(); i += 2) {
+        left += std::abs(sound[i]);
+        right += std::abs(sound[i + 1]);
+    }
+    check(left > 100 * right + 1, "Game Gear: the PSG's stereo (left only)");
+
+    PadState p;
+    p.start = true;
+    p.b = true;
+    md.setPads(p, p);
+    md.runFrame();
+    check(md.z80Ram()[3] == 0x40 && md.z80Ram()[2] == static_cast<uint8_t>(~0x10) && md.z80Ram()[1] == 0,
+          "Game Gear: START on port 0x00, one pad, no pause button");
+    std::vector<uint8_t> state;
+    std::string error;
+    md.saveState(state);
+    std::vector<uint32_t> h1, h2;
+    for (int i = 0; i < 20; ++i) {
+        md.runFrame();
+        h1.push_back(frameHash(md.frame()));
+    }
+    check(md.loadState(state, &error), "Game Gear: state loaded");
+    for (int i = 0; i < 20; ++i) {
+        md.runFrame();
+        h2.push_back(frameHash(md.frame()));
+    }
+    check(h1 == h2, "Game Gear: the same frames after loading a state");
+    md.loadRomData(st::build());
+    md.runFrame();
+    check(!md.isGameGear() && md.frame().width == 256 && md.frame().aspectLines == 224, "Game Gear: back to a Master System");
+}
+
+void testSmsCheats() {
+    CheatPatch p;
+    std::string error;
+    check(decodeCheat("00C0-1255", &p, &error, true) && p.address == 0xC012 && p.value == 0x55 && p.byte &&
+              p.compare < 0,
+          "SMS cheats: Action Replay");
+    check(!decodeCheat("0012-3455", &p, &error, true), "SMS cheats: Action Replay outside RAM refused");
+    check(decodeCheat("3A8-6CF", &p, &error, true) && p.address == 0x086C && p.value == 0x3A && p.compare < 0,
+          "SMS cheats: Game Genie without a compare byte");
+    check(decodeCheat("3a8-6cf-e66", &p, &error, true) && p.address == 0x086C && p.value == 0x3A && p.compare == 0x03,
+          "SMS cheats: Game Genie with a compare byte");
+    check(!decodeCheat("ABCD-EFGH", &p, &error, true), "SMS cheats: Mega Drive codes refused");
+
+    namespace st = smstestrom;
+    MegaDrive md;
+    md.loadRomData(st::build());
+    std::vector<CheatPatch> cheats;
+    check(decodeCheatCodes("00C0-1042", &cheats, &error, true), "SMS cheats: list decoded");
+    const uint8_t original = md.masterSystem()->read(0x0001);
+    CheatPatch rom;
+    rom.address = 0x0001;
+    rom.value = static_cast<uint8_t>(original ^ 0xFF);
+    rom.byte = true;
+    rom.compare = original;
+    cheats.push_back(rom);
+    md.setCheats(cheats);
+    md.runFrame();
+    check(md.z80Ram()[0x10] == 0x42, "SMS cheats: the RAM byte held");
+    check(md.masterSystem()->read(0x0001) == static_cast<uint8_t>(original ^ 0xFF), "SMS cheats: the ROM byte patched");
+    md.setCheats({});
+    check(md.masterSystem()->read(0x0001) == original, "SMS cheats: the ROM byte back");
+}
+
+void testSmsVgm() {
+    // A Master System recording: the YM2413's writes and the PSG, no YM2612.
+    Psg psg;
+    Ym2413 opll;
+    opll.setMasterClock(MegaDrive::kMasterNtsc);
+    VgmWriter writer;
+    writer.beginSms(psg, &opll, false, 0, MegaDrive::kMasterNtsc);
+    const uint64_t second = static_cast<uint64_t>(MegaDrive::kMasterNtsc);
+    for (auto [r, v] : std::initializer_list<std::pair<int, int>>{{0x30, 0x10}, {0x10, 0x80}, {0x20, 0x1C}}) {
+        writer.opll(0, static_cast<uint8_t>(r), second / 10);
+        writer.opll(1, static_cast<uint8_t>(v), second / 10);
+    }
+    VgmFile file;
+    std::string error;
+    check(file.parse(writer.finish(second, "Prueba SMS"), &error) && file.opllClock > 3500000 && file.ymClock == 0 &&
+              file.psgClock > 0 && std::fabs(file.seconds() - 1.0) < 0.01,
+          "SMS VGM: a recording with the YM2413 and the PSG, no YM2612");
+    VgmPlayer player;
+    player.load(file);
+    std::vector<int16_t> played;
+    while (!player.finished()) player.play(1.0 / 60, 44100, played);
+    double sumSq = 0;
+    for (size_t i = played.size() / 2; i < played.size(); ++i) sumSq += static_cast<double>(played[i]) * played[i];
+    check(std::sqrt(sumSq / static_cast<double>(played.size() / 2)) > 200, "SMS VGM: its FM note plays back");
+
+    // A Game Gear one keeps its stereo.
+    writer.beginSms(psg, nullptr, true, 0, MegaDrive::kMasterNtsc);
+    writer.ggStereo(0xF0, second / 2);
+    std::vector<uint8_t> bytes = writer.finish(second, "Prueba GG", false);
+    bool stereo = false;
+    for (size_t i = 0x40; i + 1 < bytes.size(); ++i) stereo |= bytes[i] == 0x4F && bytes[i + 1] == 0xF0;
+    check(file.parse(bytes, &error) && file.opllClock == 0 && file.ymClock == 0 && stereo,
+          "SMS VGM: a Game Gear recording with its stereo");
+}
+
+void testSmsRoland() {
+    // The YM2413's notes as General MIDI: its built-in instruments, its game's own and its drums.
+    Ym2413 opll;
+    opll.setMasterClock(MegaDrive::kMasterNtsc);
+    RolandSound roland;
+    std::vector<std::string> log;
+    roland.setLog(&log);
+    auto fm = [&](int reg, int value) {
+        opll.write(0, static_cast<uint8_t>(reg));
+        roland.opllWrite(0, static_cast<uint8_t>(reg), opll, 0);
+        opll.write(1, static_cast<uint8_t>(value));
+        roland.opllWrite(1, static_cast<uint8_t>(value), opll, 0);
+    };
+    auto has = [&](const std::string& line) { return std::find(log.begin(), log.end(), line) != log.end(); };
+    check(std::fabs(RolandSound::opllNote(289, 4, MegaDrive::kMasterNtsc / 15) - 69.0) < 0.1,
+          "SMS Roland: F-number 289 block 4 is the A 440");
+    fm(0x30, 0x10);  // channel 1: violin, full volume
+    fm(0x10, 289 & 0xFF);
+    fm(0x20, 0x18 | (289 >> 8));  // key on, block 4
+    check(has("0 program 40") && has("0 on 69"), "SMS Roland: the YM2413's violin plays a GM violin");
+    check(RolandSound::kindOf(RolandSound::opllFingerprint(1)) == RolandSound::Kind::Fm &&
+              roland.seen().count(RolandSound::opllFingerprint(1)),
+          "SMS Roland: the built-in instrument is seen");
+    fm(0x20, 0x08 | (289 >> 8));  // key off
+    check(has("0 off 69"), "SMS Roland: key off ends the note");
+    log.clear();
+    fm(0x38, 0x10);  // channel 9: violin too
+    fm(0x18, 289 & 0xFF);
+    fm(0x28, 0x18 | (289 >> 8));
+    check(has("13 on 69"), "SMS Roland: channel 9 plays on its own MIDI channel");
+    log.clear();
+    fm(0x0E, 0x30);  // rhythm mode: bass drum
+    check(has("13 off 69") && has("9 on 36"), "SMS Roland: rhythm mode stops channel 9 and hits the bass drum");
+    log.clear();
+    fm(0x0E, 0x30);
+    check(log.empty(), "SMS Roland: a drum held is one hit");
+    fm(0x0E, 0x21);  // hi-hat
+    check(has("9 on 42"), "SMS Roland: the hi-hat");
+    for (int r = 0; r < 8; ++r) fm(r, 0x21 + r);  // the game's own instrument
+    fm(0x31, 0x00);
+    fm(0x11, 0x80);
+    fm(0x21, 0x14);  // block 2: low
+    bool custom = false;
+    for (const auto& [fp, seen] : roland.seen())
+        custom |= seen.kind == RolandSound::Kind::Fm && !RolandSound::opllInstrument(fp) && seen.channels == 2;
+    check(custom, "SMS Roland: the game's own instrument is an FM instrument of its own");
+
+    RolandSound::Assignments original;
+    original[RolandSound::rhythmFingerprint(0)].original = true;
+    roland.setAssignments(original);
+    fm(0x0E, 0x20);
+    fm(0x0E, 0x30);
+    check(RolandSound::opllChannels(RolandSound::kAllVoices & ~roland.chipChannels()) == (0x1FF & ~0x40),
+          "SMS Roland: a drum left original keeps its channel on the chip");
+
+    // The Game Gear's stereo pans the PSG.
+    Psg psg;
+    psg.setStereo(0xE1);  // channel 1 right only
+    log.clear();
+    psg.write(0x8E);
+    psg.write(0x0F);
+    psg.write(0x90);
+    roland.psgWrite(psg, 0);
+    check(has("6 pan 127") && has("6 on 69"), "SMS Roland: a Game Gear channel on the right is panned right");
+}
+
+void testSmsSongExtract() {
+    // The Master System music test ROM: its driver takes requests from a byte of RAM.
+    const std::string path = (std::filesystem::temp_directory_path() / "plumsg-music-test.sms").string();
+    {
+        const std::vector<uint8_t> rom = smstestrom::buildMusic();
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(rom.data()), static_cast<std::streamsize>(rom.size()));
+    }
+    SongExtractor extractor;
+    std::vector<std::string> log;
+    extractor.setLog([&](const std::string& s) { log.push_back(s); });
+    std::vector<SongExtractor::Song> songs;
+    std::string error;
+    const bool ok = extractor.run(path, "Prueba SMS", nullptr, [&](const SongExtractor::Song& s) { songs.push_back(s); }, &error);
+    for (const std::string& s : log) std::printf("     %s\n", s.c_str());
+    if (!ok) std::printf("     %s\n", error.c_str());
+    bool asked = false;
+    for (const std::string& s : log) asked = asked || s.rfind("Pido las canciones en 00C010", 0) == 0;
+    check(ok && asked, "SMS songs: the extractor finds the request byte");
+    check(songs.size() == 4 && songs[0].number == 0x81 && songs[3].number == 0x84, "SMS songs: the four songs come out");
+    bool loops = !songs.empty();
+    for (const auto& s : songs) loops = loops && std::fabs(s.loopSeconds - 8.0) < 0.1 && s.seconds < 9.0;
+    check(loops, "SMS songs: each one round, with its loop");
+    VgmFile file;
+    check(!songs.empty() && file.parse(songs[0].vgz, &error) && file.ymClock == 0 && file.psgClock > 0,
+          "SMS songs: a Master System VGM");
+    std::filesystem::remove(path);
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -1712,11 +2408,15 @@ int main() {
     testVdpPorts();
     testVdpHblankFlag();
     testVdpFillScrollTable();
+    testVdpSpriteLimit();
+    testVdpWidescreen();
+    testOverclock();
     testTestRom();
     testStates();
     testRewindBuffer();
     testFramePacer();
     testRewindPlayback();
+    testRunAhead();
     testPlanes();
     testProfiles();
     testLiveCamera();
@@ -1725,6 +2425,14 @@ int main() {
     testCheats();
     testLibraryNames();
     testSystems();
+    testMasterSystem();
+    testSmsMapper();
+    testSmsPhase2();
+    testGameGear();
+    testSmsCheats();
+    testSmsVgm();
+    testSmsRoland();
+    testSmsSongExtract();
     testSh2();
     testMars();
     testMarsProgram();

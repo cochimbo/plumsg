@@ -21,6 +21,7 @@ public:
     void reset();
     void write(uint8_t value);                       // ports 0x40-0x7F
     void setStereo(uint8_t value) { stereo_ = value; }  // port 0x06: bits 4-7 left, 0-3 right
+    uint8_t stereo() const { return stereo_; }
     void setSampleRate(double hz) { sampleRate_ = hz; }
     void setClock(double hz) { clock_ = hz; }
     // Turns the channels in `mask` (bit 0 = tone 1 ... bit 3 = noise) down to percent

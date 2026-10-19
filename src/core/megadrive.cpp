@@ -40,6 +40,8 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
     Cartridge loaded;
     if (!loaded.loadFile(path, error)) return false;
     cart_ = std::move(loaded);
+    smsFile_ = detectSystem(path) == ConsoleSystem::MasterSystem;
+    ggFile_ = detectSystem(path) == ConsoleSystem::GameGear;
     loadNotice_.clear();
     std::unique_ptr<CdImage> disc;
     const std::string cue = detectSystemFromData(cart_.rom()) == ConsoleSystem::MegaDrive ? msuMdCue(path) : "";
@@ -61,12 +63,14 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
 
 void MegaDrive::loadRomData(std::vector<uint8_t> rom) {
     cart_.loadData(std::move(rom));
+    smsFile_ = ggFile_ = false;
     loadNotice_.clear();
     attachCd(nullptr, true);
 }
 
 void MegaDrive::loadRomDataWithDisc(std::vector<uint8_t> rom, std::unique_ptr<CdImage> disc) {
     cart_.loadData(std::move(rom));
+    smsFile_ = ggFile_ = false;
     loadNotice_.clear();
     attachCd(std::move(disc), true);
 }
@@ -83,6 +87,7 @@ void MegaDrive::attachCd(std::unique_ptr<CdImage> disc, bool cartridge) {
     romOriginal_.clear();
     ramCheats_.clear();
     setUpMars();
+    setUpSms();
     applyRegion();
     powerCycle();
 }
@@ -125,6 +130,7 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
         return false;
     }
     cart_ = std::move(loaded);
+    smsFile_ = ggFile_ = false;
     discRegion_ = wanted;
     loadNotice_.clear();
     attachCd(std::move(disc), false);
@@ -142,6 +148,23 @@ void MegaDrive::setUpMars() {
     if (wanted && !mars_) mars_ = std::make_unique<Mars>(cart_);
     if (!wanted) mars_.reset();
     vdp_.frame().mars.fill(0);
+}
+
+void MegaDrive::setUpSms() {
+    const ConsoleSystem inside = detectSystemFromData(cart_.rom());
+    const bool gameGear = !disc_ && (ggFile_ || (!smsFile_ && inside == ConsoleSystem::GameGear));
+    const bool wanted = gameGear || (!disc_ && (smsFile_ || inside == ConsoleSystem::MasterSystem));
+    if (sms_ && sms_->gameGear() != gameGear) sms_.reset();
+    if (wanted && !sms_) {
+        sms_ = std::make_unique<MasterSystem>(cart_, zram_, vdp_.frame(), gameGear);
+        opll_ = std::make_unique<Ym2413>();
+    }
+    if (wanted) cart_.setMasterSystemHeader(smsRegion(cart_.rom()), gameGear);
+    if (!wanted) {
+        sms_.reset();
+        opll_.reset();
+        vdp_.frame().aspectLines = 224;
+    }
 }
 
 void MegaDrive::setRegion(Region r) {
@@ -162,6 +185,17 @@ void MegaDrive::configureFor(Region r) {
     const double master = isPal ? kMasterPal : kMasterNtsc;
     ym_.setMasterClock(master);
     mixer_.setFmRate(ym_.sampleRate());
+    mixer_.setGains(100, 50);
+    if (sms_) {
+        sms_->vdp().setPal(isPal);
+        sms_->setJapanese(r == Region::JapanNtsc);
+        sms_->setFmPresent(!sms_->gameGear() && (r == Region::JapanNtsc || smsFmAlways_));
+        // The YM2413 stands in for the YM2612 in the mix; the PSG is the main voice here.
+        opll_->setMasterClock(master);
+        opll_->setVolume(sms_->fmAudible() ? 100 : 0);
+        mixer_.setFmRate(opll_->sampleRate());
+        mixer_.setGains(100, 100);
+    }
     if (mars_) mars_->setSampleRate(mixer_.outputRate(), master);
     if (mcd_) {
         mcd_->setMasterClock(master);
@@ -200,6 +234,7 @@ void MegaDrive::powerCycle() {
     vdp_.reset();
     if (mars_) mars_->powerOn();
     if (mcd_) mcd_->powerOn();
+    if (sms_) sms_->powerOn();
     reset();
 }
 
@@ -209,6 +244,11 @@ void MegaDrive::reset() {
     io_.reset();
     ym_.reset();
     ym_.samples().clear();
+    if (opll_) {
+        opll_->reset();
+        opll_->samples().clear();
+        opll_->setClockPosition(0);
+    }
     psg_.reset();
     if (roland_) roland_->allNotesOff();
     psg_.setStereo(0xFF);
@@ -233,6 +273,12 @@ void MegaDrive::reset() {
     }
     cpu_.setIrqLevel(0);
     cpu_.reset();
+    if (sms_) {
+        // The Z80 runs the cartridge from its first byte; there is no 68000 to wake it.
+        sms_->reset();
+        z80Reset_ = false;
+        z80_.setIrqLine(false);
+    }
 }
 
 // ---------------------------------------------------------------------------------
@@ -246,7 +292,10 @@ void MegaDrive::runUntil(uint64_t clock) {
             if (mars_) mars_->runUntil(m68kClock_);
             if (mcd_) mcd_->runUntil(m68kClock_);
             now_ = m68kClock_;
-            m68kClock_ += static_cast<uint64_t>(cpu_.step()) * 7;
+            const uint64_t cycles = static_cast<uint64_t>(cpu_.step());
+            // Overclocked, each cycle takes fewer master clocks (rounded, never 0).
+            m68kClock_ += overclock_ == 100 ? cycles * 7
+                                            : std::max<uint64_t>(1, (cycles * 700 + overclock_ / 2) / overclock_);
         } else if (z80Running()) {
             now_ = z80Clock_;
             z80Clock_ += static_cast<uint64_t>(z80_.step()) * 15;
@@ -266,7 +315,8 @@ void MegaDrive::syncSound() {
         psgRemainder_ = static_cast<int>(clocks % 15);
         psgClock_ = now_;
     }
-    ym_.runUntil(now_);
+    if (opll_) opll_->runUntil(now_);
+    else ym_.runUntil(now_);
 }
 
 void MegaDrive::setCheats(const std::vector<CheatPatch>& cheats) {
@@ -274,16 +324,35 @@ void MegaDrive::setCheats(const std::vector<CheatPatch>& cheats) {
     for (auto it = romOriginal_.rbegin(); it != romOriginal_.rend(); ++it) cart_.patchRom(it->first, it->second, nullptr);
     romOriginal_.clear();
     ramCheats_.clear();
+    auto patch = [&](uint32_t offset, uint8_t value) {
+        uint8_t old = 0;
+        if (cart_.patchRom(offset, value, &old)) romOriginal_.emplace_back(offset, old);
+    };
+    if (sms_) {
+        // Z80 addresses: RAM from 0xC000; below it the ROM, in the bank the slot shows
+        // at power on, or in every bank where the byte is what the code expects.
+        const std::vector<uint8_t>& rom = cart_.rom();
+        for (const CheatPatch& c : cheats) {
+            if (c.address >= 0xC000) {
+                ramCheats_.push_back(c);
+            } else if (c.compare < 0) {
+                patch(c.address, static_cast<uint8_t>(c.value));
+            } else {
+                const uint32_t start = c.address < 0x4000 ? c.address : c.address & 0x3FFF;
+                const uint32_t step = c.address < 0x4000 ? static_cast<uint32_t>(rom.size()) : 0x4000;
+                for (uint32_t o = start; o < rom.size(); o += step)
+                    if (rom[o] == c.compare) patch(o, static_cast<uint8_t>(c.value));
+            }
+        }
+        applyRamCheats();
+        return;
+    }
     for (const CheatPatch& c : cheats) {
         if (c.address >= 0xE00000) {
             ramCheats_.push_back(c);
             continue;
         }
         if (c.address >= 0x400000) continue;
-        auto patch = [&](uint32_t offset, uint8_t value) {
-            uint8_t old = 0;
-            if (cart_.patchRom(offset, value, &old)) romOriginal_.emplace_back(offset, old);
-        };
         if (c.byte) {
             patch(c.address, static_cast<uint8_t>(c.value));
         } else {
@@ -295,6 +364,10 @@ void MegaDrive::setCheats(const std::vector<CheatPatch>& cheats) {
 }
 
 void MegaDrive::applyRamCheats() {
+    if (sms_) {
+        for (const CheatPatch& c : ramCheats_) zram_[c.address & 0x1FFF] = static_cast<uint8_t>(c.value);
+        return;
+    }
     for (const CheatPatch& c : ramCheats_) {
         const uint32_t a = c.address & 0xFFFF;
         if (c.byte) {
@@ -321,21 +394,56 @@ void MegaDrive::setRoland(RolandSound* roland, int chipPercent) {
 // The chips play what the Roland sound does not: the instruments left original, and a
 // little of the rest if the mix says so.
 void MegaDrive::rolandChipChannels() {
-    const uint32_t chip = roland_ ? roland_->chipChannels() : 0x3FF;
+    const uint32_t chip = roland_ ? roland_->chipChannels() : RolandSound::kAllVoices;
     if (chip == rolandChip_) return;
     rolandChip_ = chip;
     ym_.setMuted(0x3F & ~chip, rolandPercent_);
     psg_.setMuted(0xF & ~(chip >> 6), rolandPercent_);
+    if (opll_) opll_->setMuted(RolandSound::opllChannels(RolandSound::kAllVoices & ~chip), rolandPercent_);
 }
 
 void MegaDrive::setVgmWriter(VgmWriter* writer) {
     vgm_ = writer;
-    if (vgm_) vgm_->begin(ym_, psg_, now_, masterClock());
+    if (vgm_ && sms_) vgm_->beginSms(psg_, sms_->fmPresent() ? opll_.get() : nullptr, sms_->gameGear(), now_, masterClock());
+    else if (vgm_) vgm_->begin(ym_, psg_, now_, masterClock());
+}
+
+void MegaDrive::runFrameSms() {
+    VdpSms& vdp = sms_->vdp();
+    if (sms_->pausePressed()) z80_.triggerNmi();
+    const int lines = vdp.linesPerFrame();
+    for (int line = 0; line < lines; ++line) {
+        lineStart_ = now_;
+        vdp.startLine(line, drawing_);
+        z80_.setIrqLine(vdp.irq());
+        const uint64_t end = lineStart_ + kMasterPerLine;
+        while (z80Clock_ < end) {
+            now_ = z80Clock_;
+            z80Clock_ += static_cast<uint64_t>(z80_.step()) * 15;
+        }
+        now_ = end;
+    }
+    vdp.endFrame();
 }
 
 void MegaDrive::runFrame() {
     applyRamCheats();
     if (roland_) roland_->beginFrame(now_);
+    if (sms_) runFrameSms();
+    else runFrameMd();
+    syncSound();
+    ++frames_;
+    loadedThumbnail_.clear();
+    // Hand this frame's sound to the mixer.
+    psgBuffer_.insert(psgBuffer_.end(), psg_.samples().begin(), psg_.samples().end());
+    psg_.clearSamples();
+    const size_t before = mixer_.samples().size() / 2;
+    if (sms_ && !sms_->psgAudible()) std::fill(psgBuffer_.begin(), psgBuffer_.end(), int16_t{0});
+    mixer_.mix(opll_ ? opll_->samples() : ym_.samples(), psgBuffer_, addOnSamples());
+    if (roland_) roland_->endFrame(now_, mixer_.output(), before, mixer_.outputRate());
+}
+
+void MegaDrive::runFrameMd() {
     const int lines = vdp_.linesPerFrame();
     for (int line = 0; line < lines; ++line) {
         lineStart_ = now_;
@@ -359,16 +467,28 @@ void MegaDrive::runFrame() {
         updateIrq();
         runUntil(lineStart_ + kMasterPerLine);
     }
-    syncSound();
     vdp_.endFrame();
-    ++frames_;
-    loadedThumbnail_.clear();
-    // Hand this frame's sound to the mixer.
-    psgBuffer_.insert(psgBuffer_.end(), psg_.samples().begin(), psg_.samples().end());
-    psg_.clearSamples();
-    const size_t before = mixer_.samples().size() / 2;
-    mixer_.mix(ym_.samples(), psgBuffer_, addOnSamples());
-    if (roland_) roland_->endFrame(now_, mixer_.output(), before, mixer_.outputRate());
+}
+
+bool MegaDrive::runAhead(int frames) {
+    if (frames <= 0) return true;
+    if (!saveState(aheadState_, true)) return false;
+    // The frames to come are run again for real, heard and recorded then.
+    RolandSound* roland = roland_;
+    VgmWriter* vgm = vgm_;
+    roland_ = nullptr;
+    vgm_ = nullptr;
+    const bool drawing = drawing_;
+    for (int i = 1; i <= frames; ++i) {
+        drawing_ = i == frames;  // only the last picture is seen
+        runFrame();
+    }
+    drawing_ = drawing;
+    roland_ = roland;
+    vgm_ = vgm;
+    // The picture is not part of the state, so loading it keeps the one just drawn.
+    std::string error;
+    return loadState(aheadState_, &error);
 }
 
 void MegaDrive::irqAcknowledge(int level) {
@@ -391,15 +511,7 @@ uint16_t MegaDrive::readVdp(uint32_t addr) {
 void MegaDrive::writeVdp(uint32_t addr, uint16_t value, bool byte) {
     const uint32_t port = addr & 0x1F;
     if (port >= 0x10 && port < 0x18) {
-        if (!byte || (addr & 1)) {
-            syncSound();
-            psg_.write(static_cast<uint8_t>(value));
-            if (vgm_) vgm_->psg(static_cast<uint8_t>(value), now_);
-            if (roland_) {
-                roland_->psgWrite(psg_, now_);
-                rolandChipChannels();
-            }
-        }
+        if (!byte || (addr & 1)) psgWrite(static_cast<uint8_t>(value));
         return;
     }
     // Byte writes reach the VDP with the byte on both halves of the bus.
@@ -436,7 +548,9 @@ void MegaDrive::lockSoundRequests(uint32_t addr, int count, bool all) {
 }
 
 void MegaDrive::poke(uint32_t addr, uint8_t value) {
-    if (addr >= 0xFF0000)
+    if (sms_ && addr >= 0xC000 && addr < 0x10000)
+        zram_[addr & 0x1FFF] = value;
+    else if (addr >= 0xFF0000)
         ram_[addr & 0xFFFF] = value;
     else if (addr >= 0xA00000 && addr < 0xA04000)
         zram_[addr & 0x1FFF] = value;
@@ -566,10 +680,62 @@ void MegaDrive::write16(uint32_t addr, uint16_t value) {
     }
 }
 
+void MegaDrive::psgWrite(uint8_t value) {
+    syncSound();
+    psg_.write(value);
+    if (vgm_) vgm_->psg(value, now_);
+    if (roland_) {
+        roland_->psgWrite(psg_, now_);
+        rolandChipChannels();
+    }
+}
+
 // ---------------------------------------------------------------------------------
 // Z80 memory map
 
+uint8_t MegaDrive::in(uint16_t port) {
+    if (!sms_) return 0xFF;
+    if (sms_->fmPresent() && (port & 0xFF) == 0xF2) return sms_->fmControl();
+    const uint8_t value = sms_->in(static_cast<uint8_t>(port), lineClock() / 15);
+    z80_.setIrqLine(sms_->vdp().irq());  // reading the status clears the interrupt
+    return value;
+}
+
+void MegaDrive::out(uint16_t port, uint8_t value) {
+    if (!sms_) return;
+    if ((port & 0xC0) == 0x40) {
+        if (watch_) watch_(0xA04000, value, true);  // who drives the sound chips
+        psgWrite(value);
+        return;
+    }
+    if (sms_->gameGear() && (port & 0xFF) == 0x06) {
+        syncSound();
+        psg_.setStereo(value);
+        if (vgm_) vgm_->ggStereo(value, now_);
+        return;
+    }
+    if (sms_->fmPresent() && (port & 0xFF) >= 0xF0 && (port & 0xFF) <= 0xF2) {
+        syncSound();
+        if ((port & 0xFF) == 0xF2) {
+            sms_->setFmControl(value);
+            opll_->setVolume(sms_->fmAudible() ? 100 : 0);
+        } else {
+            if (watch_) watch_(0xA04000, value, true);
+            opll_->write(port & 1, value);
+            if (vgm_) vgm_->opll(port & 1, value, now_);
+            if (roland_) {
+                roland_->opllWrite(port & 1, value, *opll_, now_);
+                rolandChipChannels();
+            }
+        }
+        return;
+    }
+    sms_->out(static_cast<uint8_t>(port), value);
+    z80_.setIrqLine(sms_->vdp().irq());  // an interrupt enable may have changed
+}
+
 uint8_t MegaDrive::read(uint16_t addr) {
+    if (sms_) return sms_->read(addr);
     if (addr < 0x4000) return zram_[addr & 0x1FFF];
     if (addr < 0x6000) {
         syncSound();
@@ -589,6 +755,12 @@ uint8_t MegaDrive::read(uint16_t addr) {
 }
 
 void MegaDrive::write(uint16_t addr, uint8_t value) {
+    if (sms_) {
+        // Watched by the program's own address (the RAM from 0xC000), all as the program's.
+        if (watching_ && addr >= 0xC000 && !watchWrite(addr, value, true)) return;
+        sms_->write(addr, value);
+        return;
+    }
     if (addr < 0x4000) {
         if (watching_ && !watchWrite(0xA00000 | (addr & 0x1FFF), value, fromM68k_)) return;
         zram_[addr & 0x1FFF] = value;
@@ -605,15 +777,7 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
         // Bank register: nine bits shifted in one at a time, low bit first.
         z80Bank_ = static_cast<uint16_t>(((z80Bank_ >> 1) | ((value & 1) << 8)) & 0x1FF);
     } else if (addr >= 0x7F00 && addr < 0x7F20) {
-        if ((addr & 0x1F) >= 0x10) {
-            syncSound();
-            psg_.write(value);
-            if (vgm_) vgm_->psg(value, now_);
-            if (roland_) {
-                roland_->psgWrite(psg_, now_);
-                rolandChipChannels();
-            }
-        }
+        if ((addr & 0x1F) >= 0x10) psgWrite(value);
     } else if (addr >= 0x8000) {
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);
         if (a < 0xA00000 || a >= 0xA10000) write8(a, value);
@@ -677,6 +841,12 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         io_.state(w);
         block("IO  ", w.data());
     }
+    if (overclock_ != 100) {
+        StateWriter w;
+        uint16_t percent = static_cast<uint16_t>(overclock_);
+        w(percent);
+        block("OVCK", w.data());
+    }
     {
         StateWriter w;
         cart_.state(w);
@@ -702,6 +872,19 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         mcd_->state(w);
         block("MCD ", w.data());
     }
+    if (sms_) {
+        StateWriter w;
+        sms_->state(w);
+        block("SMS ", w.data());
+    }
+    if (opll_) {
+        std::vector<uint8_t> chip;
+        opll_->saveState(chip);
+        StateWriter w;
+        uint64_t pos = opll_->clockPosition();
+        w(pos, chip);
+        block("OPLL", w.data());
+    }
     if (quick) {
         // No thumbnail: nobody looks at a rewind snapshot.
     } else if (!loadedThumbnail_.empty()) {
@@ -709,15 +892,15 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         // one from before, so keep the loaded state's thumbnail.
         block("THMB", loadedThumbnail_);
     } else {
-        // Thumbnail: the 2D picture at half size.
+        // Thumbnail: the 2D picture at half size, without the widescreen columns.
         const VideoFrameMd& f = vdp_.frame();
         const int step = f.interlaced ? 2 : 1;
-        uint16_t tw = static_cast<uint16_t>(f.width / 2), th = static_cast<uint16_t>(f.height / step / 2);
+        uint16_t tw = static_cast<uint16_t>(f.consoleWidth() / 2), th = static_cast<uint16_t>(f.height / step / 2);
         StateWriter w;
         w(tw, th);
         for (int y = 0; y < th; ++y)
             for (int x = 0; x < tw; ++x) {
-                uint32_t c = f.pixel(x * 2, y * 2 * step) & 0xFFFFFF;
+                uint32_t c = f.pixel(f.wideLeft + x * 2, y * 2 * step) & 0xFFFFFF;
                 uint8_t rgb[3] = {static_cast<uint8_t>(c >> 16), static_cast<uint8_t>(c >> 8), static_cast<uint8_t>(c)};
                 w.raw(rgb, 3);
             }
@@ -780,6 +963,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
 
     bool ok = true;
     bool hasMixer = false;
+    uint16_t overclock = 100;  // states without the block are from a console at its speed
     std::vector<uint8_t> thumbnail, addOnState;
     while (ok && !r.atEnd()) {
         uint32_t id = 0, size = 0;
@@ -804,11 +988,15 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("IO  ")) io_.state(b);
         else if (id == fourcc("CART")) cart_.state(b);
         else if (id == fourcc("THMB")) thumbnail = data;
+        else if (id == fourcc("OVCK")) b(overclock);
         else if (id == fourcc("32X ")) {
             if (mars_) mars_->state(b);
         }
         else if (id == fourcc("MCD ")) {
             if (mcd_) mcd_->state(b);
+        }
+        else if (id == fourcc("SMS ")) {
+            if (sms_) sms_->state(b);
         }
         else if (id == fourcc("MIXA")) addOnState = data;
         else if (id == fourcc("MIX ")) {
@@ -822,6 +1010,13 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
             b(pos, chip);
             if (b.ok() && ym_.loadState(chip)) ym_.setClockPosition(pos);
             else ok = false;
+        }
+        else if (id == fourcc("OPLL")) {
+            uint64_t pos = 0;
+            std::vector<uint8_t> chip;
+            b(pos, chip);
+            if (opll_ && b.ok() && opll_->loadState(chip)) opll_->setClockPosition(pos);
+            else if (opll_) ok = false;
         }
         // Unknown blocks (from newer versions) are skipped.
         if (!b.ok()) ok = false;
@@ -839,6 +1034,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         return fail(tr("el estado está dañado o es de una versión incompatible"));
     }
     configureFor(static_cast<Region>(region & 3));
+    setOverclock(overclock);
     if (!hasMixer) mixer_.reset();
     if (!addOnState.empty()) {
         // After the main mixer block, which empties the queue.
@@ -849,6 +1045,10 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     mixer_.clearSamples();
     psgBuffer_.clear();
     ym_.samples().clear();
+    if (opll_) {
+        opll_->samples().clear();
+        opll_->setVolume(sms_->fmAudible() ? 100 : 0);
+    }
     psg_.clearSamples();
     if (mars_) mars_->samples().clear();
     if (mcd_) mcd_->samples().clear();

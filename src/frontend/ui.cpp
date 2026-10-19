@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <iterator>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -59,10 +60,54 @@ std::string shortCode(const std::string& code) {
 }
 
 // ImGui::Combo with its items translated.
+// The widescreen's controls: a button per ready-made width and a slider per side. They
+// change the picture at once; the return value says when to save.
+bool widescreenControls(int& left, int& right) {
+    bool changed = false;
+    for (int i = 0; i < kWidescreenCount; ++i) {
+        if (i) ImGui::SameLine();
+        const Widescreen& w = kWidescreens[i];
+        if (ImGui::RadioButton(w.name, left == w.columns && right == w.columns)) {
+            left = right = w.columns;
+            changed = true;
+        }
+    }
+    ImGui::SliderInt(tr("Izquierda##ancha"), &left, 0, VideoFrameMd::kMaxWideSide, "%d px", ImGuiSliderFlags_AlwaysClamp);
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SliderInt(tr("Derecha##ancha"), &right, 0, VideoFrameMd::kMaxWideSide, "%d px", ImGuiSliderFlags_AlwaysClamp);
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    return changed;
+}
+
 bool comboTr(const char* label, int* current, const char* const items[], int count) {
     std::vector<const char*> shown(items, items + count);
     for (const char*& item : shown) item = tr(item);
     return ImGui::Combo(label, current, shown.data(), count);
+}
+
+// The run-ahead frames, 0 (off) to Settings::kMaxRunAhead.
+bool runAheadSlider(const char* label, int& frames) {
+    const char* shown = frames == 0 ? tr("desactivado") : frames == 1 ? tr("1 fotograma") : tr("%d fotogramas");
+    return ImGui::SliderInt(label, &frames, 0, Settings::kMaxRunAhead, shown, ImGuiSliderFlags_AlwaysClamp);
+}
+
+// The overclock's choices, as percent of the 68000's speed.
+constexpr int kOverclocks[] = {100, 150, 200, 300, 400};
+constexpr const char* kOverclockNames[] = {N_("Desactivado (velocidad real)"), "150 %", "200 %", "300 %", "400 %"};
+constexpr const char* kOverclockTip =
+    N_("Hace más rápido el procesador de la consola (el 68000), para los juegos que se ralentizan\n"
+       "cuando hay mucho en pantalla. Cuanto más alto, más pide al ordenador. Algún juego puede ir\n"
+       "demasiado rápido o fallar: si pasa, desactívalo para ese juego. En una partida en red manda\n"
+       "el del anfitrión, y en modo hardcore se queda desactivado.");
+
+// The combo for the overclock; `percent` takes the chosen value.
+bool overclockCombo(const char* label, int& percent) {
+    int i = 0;
+    for (int k = 0; k < static_cast<int>(std::size(kOverclocks)); ++k)
+        if (percent >= kOverclocks[k]) i = k;
+    if (!comboTr(label, &i, kOverclockNames, static_cast<int>(std::size(kOverclocks)))) return false;
+    percent = kOverclocks[i];
+    return true;
 }
 
 constexpr const char* kRegionNames[] = {N_("Automática (la de la ROM)"), N_("Japón (NTSC)"), N_("EE. UU. (NTSC)"),
@@ -308,6 +353,7 @@ UiActions Ui::frame(const UiState& state) {
         EditorRequests r;
         EditorView view = state.editor;
         view.drawSoundfont = [&] { drawSoundfontCombo(out, false); };  // the same list as Sonido's
+        view.drawEqualizer = [&] { drawEqualizer(out); };
         editor_->draw(view, r);
         if (r.chooseTrack) chooseTrack();
         if (!r.load.empty()) out.load = r.load;
@@ -417,6 +463,16 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
             out.optionsFor = state.romPath;
             showGameOptions_ = true;
         }
+        ImGui::SeparatorText(tr("Grabar"));
+        if (ImGui::MenuItem(tr("Grabar vídeo"), "Ctrl+R", state.recording == 2, state.romLoaded)) out.record = 2;
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", tr("Graba la partida con su sonido en un vídeo AVI, que abren Windows, VLC\n"
+                              "y los editores de vídeo. Vuelve a pulsarlo para parar."));
+        if (ImGui::MenuItem(tr("Grabar GIF"), "Ctrl+G", state.recording == 1, state.romLoaded)) out.record = 1;
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", tr("Graba la partida, sin sonido, en un GIF animado para compartirlo.\n"
+                              "Vuelve a pulsarlo para parar."));
+        if (ImGui::MenuItem(tr("Abrir la carpeta de grabaciones"))) out.openRecordings = true;
         ImGui::SeparatorText(tr("Velocidad"));
         if (ImGui::MenuItem(tr("Cámara lenta"), "F9", state.slowMotion, solo && !state.hardcore)) out.toggleSlowMotion = true;
         if (state.hardcore) ImGui::TextDisabled("%s", tr("Modo hardcore: sin trucos, cámara lenta ni rebobinado"));
@@ -432,6 +488,14 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         ImGui::SetNextItemWidth(160);
         ImGui::SliderInt(tr("Cámara lenta##velocidad"), &settings_.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
         if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        ImGui::SeparatorText(tr("Latencia"));
+        ImGui::SetNextItemWidth(160);
+        runAheadSlider(tr("Run-ahead"), settings_.runAhead);
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", tr("Quita fotogramas de retardo entre pulsar un botón y verlo en pantalla: en cada\n"
+                              "fotograma el juego corre ese número de fotogramas por delante, enseña su imagen\n"
+                              "y vuelve atrás. Con 1 suele bastar; más piden más al ordenador y pueden notarse saltos."));
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu(tr("Estado"))) {
@@ -468,6 +532,13 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
                 settings_.region = static_cast<Region>(i);
                 out.consoleChanged = out.settingsChanged = true;
             }
+        if (ImGui::MenuItem(tr("Sonido FM de la Master System"), nullptr, settings_.smsFm)) {
+            settings_.smsFm = !settings_.smsFm;
+            out.consoleChanged = out.settingsChanged = true;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", tr("La unidad FM (YM2413) venía en las Master System japonesas; con esto está "
+                                       "también en las demás regiones, para los juegos que la usan si la encuentran."));
         for (int port = 0; port < 2; ++port) {
             ImGui::SeparatorText(port == 0 ? tr("Mando 1") : tr("Mando 2"));
             ImGui::PushID(port);
@@ -478,6 +549,16 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
                     out.consoleChanged = out.settingsChanged = true;
                 }
             ImGui::PopID();
+        }
+        ImGui::EndDisabled();
+        ImGui::SeparatorText(tr("Overclock"));
+        ImGui::BeginDisabled(state.netPlaying || state.hardcore);
+        for (int k = 0; k < static_cast<int>(std::size(kOverclocks)); ++k) {
+            if (ImGui::MenuItem(tr(kOverclockNames[k]), nullptr, settings_.overclock == kOverclocks[k])) {
+                settings_.overclock = kOverclocks[k];
+                out.settingsChanged = true;
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", tr(kOverclockTip));
         }
         ImGui::EndDisabled();
         ImGui::Separator();
@@ -591,6 +672,46 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
                           "y elige con qué instrumento General MIDI suena en el sintetizador."));
+}
+
+// The synthesizer's equalizer, in the instrument editor: a slider per band, heard as it
+// moves and saved when let go.
+void Ui::drawEqualizer(UiActions& out) {
+    static const char* const kBands[RolandSound::kEqBands] = {N_("Graves"), N_("Medios graves"), N_("Medios"),
+                                                              N_("Medios agudos"), N_("Agudos")};
+    const float height = ImGui::GetFrameHeight() * 4;
+    for (int b = 0; b < RolandSound::kEqBands; ++b) {
+        ImGui::PushID(b);
+        if (b) ImGui::SameLine();
+        ImGui::BeginGroup();
+        int& gain = settings_.equalizer[static_cast<size_t>(b)];
+        if (ImGui::VSliderInt("##banda", ImVec2(ImGui::GetFrameHeight() * 1.6f, height), &gain, -RolandSound::kEqRange,
+                              RolandSound::kEqRange, "%+d", ImGuiSliderFlags_AlwaysClamp))
+            out.equalizerChanged = true;
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        // Right-click: back to 0 dB.
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && gain) {
+            gain = 0;
+            out.equalizerChanged = out.settingsChanged = true;
+        }
+        const double hz = RolandSound::kEqFrequencies[b];
+        char freq[16];
+        if (hz >= 1000) std::snprintf(freq, sizeof freq, "%gk", hz / 1000);
+        else std::snprintf(freq, sizeof freq, "%g", hz);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(tr("%s: %s Hz, %+d dB. Clic derecho: 0 dB."), tr(kBands[b]), freq, gain);
+        ImGui::TextDisabled("%s", freq);
+        ImGui::EndGroup();
+        ImGui::PopID();
+    }
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+    if (ImGui::Button(tr("Plano"))) {
+        settings_.equalizer = {};
+        out.equalizerChanged = out.settingsChanged = true;
+    }
+    ImGui::TextDisabled("%s", tr("dB por banda.\nSolo el sintetizador."));
+    ImGui::EndGroup();
 }
 
 void Ui::setSoundfonts(std::string included, std::string folder) {
@@ -806,6 +927,31 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     settings_.render.scale = static_cast<ScaleMode>(scale);
     changed |= ImGui::Checkbox(tr("Suavizar píxeles"), &settings_.render.smooth);
     changed |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &settings_.render.squarePixels);
+    changed |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &settings_.unlimitedSprites);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("La consola solo dibuja 20 sprites (16 en modo estrecho) por línea; los juegos alternan cuáles\n"
+                          "cada fotograma y por eso parpadean. Así se ven todos. El juego no lo nota, así que\n"
+                          "no afecta a partidas en red, logros ni estados. Si un juego parpadea igual, es que\n"
+                          "lo hace él mismo."));
+
+    ImGui::SeparatorText(tr("Pantalla ancha"));
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Enseña a los lados lo que el juego tiene más allá de los bordes de la pantalla.\n"
+                          "Cada lado se ajusta por separado y se ve al momento, con la imagen siempre centrada.\n"
+                          "En muchos juegos se ve bien; en otros aparecen enemigos antes de tiempo, trozos\n"
+                          "del nivel sin dibujar o cosas que se esconden fuera: entonces quita columnas de ese lado.\n"
+                          "El juego no lo nota, así que no afecta a partidas en red, logros ni estados."));
+    changed |= widescreenControls(settings_.wideLeft, settings_.wideRight);
+    ImGui::BeginDisabled(!state.romLoaded);
+    bool wideProfile = state.hasWideProfile;
+    if (ImGui::Checkbox(tr("Guardar la pantalla ancha solo para este juego"), &wideProfile)) out.wideProfile = wideProfile ? 1 : 0;
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("%s", state.romLoaded ? trf("Los lados de arriba se guardan para %s y se recuperan al abrirlo.\n"
+                                                      "Al desmarcarlo, el juego vuelve a usar los generales.",
+                                                      state.gameName.c_str()).c_str()
+                                                : tr("Abre una ROM para guardarle su propia pantalla ancha."));
+    ImGui::Separator();
     int filter = static_cast<int>(settings_.render.filter);
     ImGui::TextUnformatted(tr("Filtro 2D:"));
     ImGui::SameLine();
@@ -1009,6 +1155,7 @@ void Ui::drawAbout() {
     ImGui::BulletText("%s", tr("Ctrl+O  abrir ROM;  F10  biblioteca de juegos"));
     ImGui::BulletText("%s", tr("F1  reiniciar;  F12  parar la emulación y volver al inicio"));
     ImGui::BulletText("%s", tr("F2  cambiar de vista"));
+    ImGui::BulletText("%s", tr("Ctrl+R  grabar vídeo;  Ctrl+G  grabar GIF (otra vez para parar)"));
     ImGui::BulletText("%s", tr("P  pausa"));
     ImGui::BulletText("%s", tr("M  silenciar el sonido"));
     ImGui::BulletText("%s", tr("F11  pantalla completa"));
@@ -1083,6 +1230,16 @@ void Ui::drawOverlays(const UiState& state) {
     if (state.romLoaded) {
         if (state.paused) badge = tr("PAUSA");
         else if (!state.speed.empty()) badge = state.speed.c_str();
+    }
+    if (state.romLoaded && state.recording) {
+        // At the top in the middle: the achievements' corner is on the left, the speed's on the right.
+        ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, top + 10), ImGuiCond_Always, ImVec2(0.5f, 0));
+        ImGui::SetNextWindowBgAlpha(0.6f);
+        ImGui::Begin("##grabando", nullptr, flags);
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", state.recording == 1 ? "GIF" : "REC");
+        ImGui::SameLine();
+        ImGui::Text("%d:%02d", state.recordingSeconds / 60, state.recordingSeconds % 60);
+        ImGui::End();
     }
     if (badge) {
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x - 10, top + 10), ImGuiCond_Always, ImVec2(1, 0));
@@ -1347,7 +1504,7 @@ void Ui::drawLibrary(UiActions& out) {
                         "B o Esc: cerrar   L / R o RePág / AvPág: consola"));
     ImGui::Separator();
 
-    if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .zip, .cue, .chd, .iso) en estas carpetas."));
+    if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd, .iso) en estas carpetas."));
     else if (visible.empty() && libraryView_.search[0]) ImGui::TextDisabled("%s", tr("Ningún juego coincide con la búsqueda."));
     else if (visible.empty()) ImGui::TextDisabled("%s", tr("No hay juegos de esta consola en tus carpetas."));
 
@@ -1404,7 +1561,10 @@ void Ui::drawLibrary(UiActions& out) {
             const char* badge = systemName(g.system);
             const ImVec2 size = ImGui::CalcTextSize(badge);
             const ImVec2 b0(box.x + coverW - size.x - 10, box.y + 4);
-            const ImU32 colour = g.system == ConsoleSystem::Mega32X ? IM_COL32(200, 60, 50, 230) : IM_COL32(40, 110, 200, 230);
+            const ImU32 colour = g.system == ConsoleSystem::Mega32X        ? IM_COL32(200, 60, 50, 230)
+                                 : g.system == ConsoleSystem::MasterSystem ? IM_COL32(40, 140, 80, 230)
+                                 : g.system == ConsoleSystem::GameGear     ? IM_COL32(120, 70, 170, 230)
+                                                                          : IM_COL32(40, 110, 200, 230);
             draw->AddRectFilled(b0, ImVec2(b0.x + size.x + 8, b0.y + size.y + 4), colour, 3.0f);
             draw->AddText(ImVec2(b0.x + 4, b0.y + 2), IM_COL32(255, 255, 255, 255), badge);
         }
@@ -1724,6 +1884,7 @@ void Ui::drawNetplay(const UiState& state, UiActions& out) {
 }
 
 void Ui::drawCheats(const UiState& state, UiActions& out) {
+    const bool smsCodes = state.cheatsSms;
     ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
     if (cheatsRefit_ > 0) ImGui::SetNextWindowSize(ImVec2(cheatsWidth_, 0));  // grow to fit the list that arrived
     if (!ImGui::Begin(tr("Trucos"), &showCheats_)) {
@@ -1736,8 +1897,12 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
         return;
     }
     std::vector<Cheat>& cheats = *state.cheats;
-    ImGui::TextWrapped(tr("Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. "
-                       "Se guardan para este juego y se activan al abrirlo."), state.cheatsGame.c_str());
+    if (smsCodes)
+        ImGui::TextWrapped(tr("Códigos Game Genie (3A8-6CF-E66) o Action Replay (00C0-1205) de %s. "
+                           "Se guardan para este juego y se activan al abrirlo."), state.cheatsGame.c_str());
+    else
+        ImGui::TextWrapped(tr("Códigos Game Genie (ABCD-EFGH) o Action Replay (FF0A12:0009) de %s. "
+                           "Se guardan para este juego y se activan al abrirlo."), state.cheatsGame.c_str());
     ImGui::Spacing();
     int remove = -1;
     if (cheats.empty()) ImGui::TextDisabled("%s", tr("Este juego no tiene trucos todavía."));
@@ -1755,7 +1920,7 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
             ImGui::TableNextColumn();
             std::vector<CheatPatch> patches;
             std::string error;
-            const bool valid = decodeCheatCodes(c.code, &patches, &error);
+            const bool valid = decodeCheatCodes(c.code, &patches, &error, smsCodes);
             const std::string shown = shortCode(c.code);
             if (valid) ImGui::TextUnformatted(shown.c_str());
             else ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", shown.c_str());
@@ -1790,7 +1955,7 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
     add |= ImGui::Button(tr("Añadir"));
     if (add) {
         std::vector<CheatPatch> patches;
-        if (decodeCheatCodes(cheatCode_, &patches, &cheatError_)) {
+        if (decodeCheatCodes(cheatCode_, &patches, &cheatError_, smsCodes)) {
             cheats.push_back({normalizeCheat(cheatCode_), cheatName_, true});
             cheatCode_[0] = cheatName_[0] = '\0';
             cheatError_.clear();
@@ -1809,6 +1974,7 @@ void Ui::drawCheats(const UiState& state, UiActions& out) {
 // The game's ready-made cheat lists from libretro-database, looked for when the window
 // is opened for it: pick a list (the one named like the ROM comes first) and add codes.
 void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
+    const bool smsCodes = state.cheatsSms;
     ImGui::SeparatorText(tr("Trucos de internet"));
     if (cheatDb_.view().game != state.cheatsPath) {
         cheatFilter_[0] = '\0';
@@ -1870,7 +2036,7 @@ void Ui::drawCheatDatabase(const UiState& state, UiActions& out) {
                 ImGui::TableNextColumn();
                 std::vector<CheatPatch> patches;
                 std::string error;
-                const bool valid = decodeCheatCodes(c.code, &patches, &error);
+                const bool valid = decodeCheatCodes(c.code, &patches, &error, smsCodes);
                 const std::string code = shortCode(c.code);
                 ImGui::AlignTextToFramePadding();
                 if (valid) ImGui::TextUnformatted(code.c_str());
@@ -2048,6 +2214,11 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "pixeles_cuadrados") {
             edited |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &s.render.squarePixels);
+        } else if (key == "sin_limite_sprites") {
+            edited |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &s.unlimitedSprites);
+        } else if (key == "pantalla_ancha") {
+            ImGui::TextUnformatted(tr(opt.label));
+            edited |= widescreenControls(s.wideLeft, s.wideRight);
         } else if (key == "perfil_3d") {
             ImGui::TextUnformatted(tr(opt.label));
             ImGui::SameLine();
@@ -2092,6 +2263,9 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
                     edited = true;
                 }
             }
+        } else if (key == "overclock") {
+            edited |= overclockCombo(tr(opt.label), s.overclock);
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", tr(kOverclockTip));
         } else if (key == "rebobinado_segundos") {
             ImGui::SliderInt(tr(opt.label), &s.rewindSeconds, 0, Settings::kMaxRewindSeconds,
                              s.rewindSeconds ? "%d s" : tr("desactivado"), ImGuiSliderFlags_AlwaysClamp);
@@ -2101,6 +2275,9 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "camara_lenta") {
             ImGui::SliderInt(tr(opt.label), &s.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else if (key == "run_ahead") {
+            runAheadSlider(tr(opt.label), s.runAhead);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         }
         ImGui::EndDisabled();

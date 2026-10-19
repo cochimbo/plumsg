@@ -20,6 +20,12 @@ endfunction()
 # draws differently (on purpose or not; if on purpose, update the hash).
 run(0 --test-rom --frames 120 --expect-hash d171be7e --quiet)
 run(3 --test-rom --frames 120 --expect-hash 00000000 --quiet)
+# The same for the Master System test ROM, and its savestates.
+run(0 --sms-test-rom --frames 120 --expect-hash 4220de49 --quiet)
+run(0 --gg-test-rom --frames 120 --expect-hash 72c5cc29 --quiet)
+run(0 --sms-test-rom --frames 120 --hash-log "${WORK}/sms-log.txt" --quiet)
+run(0 --sms-test-rom --frames 120 --expect-log "${WORK}/sms-log.txt" --quiet
+    --do "59 savestate ${WORK}/sms.state" --do "60 loadstate ${WORK}/sms.state")
 
 # Two runs give the same frames and sound, and a savestate taken after frame 59 and
 # loaded back before frame 60 changes nothing.
@@ -32,6 +38,21 @@ foreach(f 000000 000060 000120)
     message(FATAL_ERROR "--png-every did not write frame_${f}.png")
   endif()
 endforeach()
+# --gif and --avi record the run: a GIF89a and an AVI with its picture and sound.
+run(0 --test-rom --frames 120 --gif "${WORK}/run.gif" --avi "${WORK}/run.avi" --quiet)
+file(READ "${WORK}/run.gif" head LIMIT 6 HEX)
+if(NOT head STREQUAL "474946383961")
+  message(FATAL_ERROR "--gif did not write a GIF89a: ${head}")
+endif()
+file(READ "${WORK}/run.avi" head LIMIT 12 HEX)
+if(NOT head MATCHES "^52494646........41564920$")
+  message(FATAL_ERROR "--avi did not write an AVI: ${head}")
+endif()
+file(SIZE "${WORK}/run.avi" size)
+if(size LESS 100000)
+  message(FATAL_ERROR "--avi wrote only ${size} bytes")
+endif()
+
 # A run that goes different is caught on its first different frame: a reset before
 # frame 100 changes nothing before it.
 run(3 --test-rom --frames 180 --expect-log "${WORK}/log.txt" --do "100 reset")

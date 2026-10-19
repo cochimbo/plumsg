@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -11,8 +12,9 @@ namespace plumsg {
 
 // Mega Drive VDP (Yamaha YM7101): 64 KB VRAM, 64-colour CRAM, 40-entry VSRAM and 24
 // registers. Draws whole lines: planes A and B with full/cell/line horizontal scroll
-// and full/2-cell vertical scroll, the window, sprites with the per-line limits and
-// masking, priorities, shadow/highlight, H32/H40, V28/V30 and interlace mode 2.
+// and full/2-cell vertical scroll, the window, sprites with the per-line limits (or
+// without them, as an option) and masking, priorities, shadow/highlight, H32/H40,
+// V28/V30 and interlace mode 2.
 // DMA (68000 to VRAM/CRAM/VSRAM, fill and copy) runs at once; the time a 68000 DMA
 // would take is returned so the CPU can be stalled for it.
 //
@@ -68,6 +70,22 @@ public:
     uint8_t reg(int r) const { return regs_[r]; }
     const std::array<uint8_t, 0x10000>& vram() const { return vram_; }
     const std::array<uint16_t, 64>& cram() const { return cram_; }
+    // Draws every sprite on a line instead of stopping at the console's 16/20 sprites and
+    // 256/320 pixels per line, which is what makes games flicker. The status bits and
+    // everything the game can read stay as on the console, so it is not part of the state.
+    void setUnlimitedSprites(bool on) { unlimitedSprites_ = on; }
+    bool unlimitedSprites() const { return unlimitedSprites_; }
+    // Widescreen: draws `left` and `right` more columns (counted at 320 pixels a line; H32
+    // gets as many as cover the same part of the screen) that the console never shows,
+    // taken from the planes and sprites past its edges. 0 and 0 turn it off. Only the
+    // picture changes, as with the sprite limit, so it is not part of the state either.
+    // It can change at any frame.
+    void setWidescreen(int left, int right) {
+        wideLeft_ = std::clamp(left, 0, VideoFrameMd::kMaxWideSide);
+        wideRight_ = std::clamp(right, 0, VideoFrameMd::kMaxWideSide);
+    }
+    // The columns on each side, at 320 pixels a line, that make a W:H picture (16:9: 53).
+    static int wideColumnsFor(int aspectW, int aspectH);
 
     template <class Ar>
     void state(Ar& ar) {
@@ -92,8 +110,11 @@ private:
         bool priority;
         uint16_t tile;
     };
-    void drawPlane(int line, bool planeA, std::array<Cell, 320>& out, std::array<bool, 320>& isWindow);
-    void drawSprites(int line, std::array<Cell, 320>& out, std::array<uint8_t, 320>& number);
+    // They fill `out[0, left + width + right)` for screen columns -left .. width + right.
+    using LineCells = std::array<Cell, VideoFrameMd::kMaxWidth>;
+    void drawPlane(int line, bool planeA, int left, int right, LineCells& out,
+                   std::array<bool, VideoFrameMd::kMaxWidth>& isWindow);
+    void drawSprites(int line, int left, int right, LineCells& out, std::array<uint8_t, VideoFrameMd::kMaxWidth>& number);
 
     std::array<uint8_t, 0x10000> vram_{};
     std::array<uint16_t, 64> cram_{};
@@ -118,6 +139,8 @@ private:
     int dmaBusyLines_ = 0;  // fill/copy still "running", for the status bit
     bool pal_ = false;
     uint64_t frameNumber_ = 0;
+    bool unlimitedSprites_ = false;
+    int wideLeft_ = 0, wideRight_ = 0;
 
     std::array<uint32_t, 64 * 3> colors_{};  // CRAM as RGBA, normal/shadow/highlight
     std::unique_ptr<VideoFrameMd> frame_;

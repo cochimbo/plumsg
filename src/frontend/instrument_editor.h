@@ -24,6 +24,7 @@ struct EditorView {
     double recordedSeconds = 0;
     bool soundfontReady = false;  // the Roland sound can play
     std::function<void()> drawSoundfont;  // the SoundFont drop-down, next to Sintetizador
+    std::function<void()> drawEqualizer;  // the synthesizer's equalizer, which the settings keep
 };
 
 // What the editor asks of the emulator this frame.
@@ -40,9 +41,9 @@ struct EditorRequests {
 // .vgm, lists the instruments in it and lets each one be given a General MIDI
 // instrument, a drum, or its own sound, comparing with the original as it plays.
 //
-// What is chosen is kept per game in sonido/<game>.ini and, unless told otherwise,
-// also in sonido/cache.ini, which every game shares: the same FM sound in another
-// game comes out assigned already. The game's own file wins over the cache.
+// What is chosen is kept per game in sonido/<game>.ini. With no game it goes to
+// sonido/cache.ini, which every game reads (and where plumsg 0.0.22 and older also put
+// each game's choices); the game's own file wins over it.
 class InstrumentEditor {
 public:
     explicit InstrumentEditor(std::string soundFolder);
@@ -64,7 +65,8 @@ public:
     bool playing() const { return open_ && playing_; }
 
     // The SoundFont to play the Roland sound with, shared with the emulator's.
-    void useSoundfont(const RolandSound& from, int reverb, int chorus);
+    void useSoundfont(const RolandSound& from, int reverb, int chorus, const std::array<int, RolandSound::kEqBands>& equalizer);
+    void useEqualizer(const std::array<int, RolandSound::kEqBands>& equalizer) { synth_.setEqualizer(equalizer); }
     void play(double seconds, double rate, std::vector<int16_t>& out);
 
     // Opens a .vgm or .vgz, or a .zip of them (a vgmrips pack: all its songs go in the
@@ -101,11 +103,13 @@ private:
     std::string gameTracksFolder() const { return tracksFolder() + gameName_ + "/"; }
     void loadAssignments();
     void assign(uint32_t fingerprint, const RolandSound::Assignment* a, EditorRequests& out);  // null: back to the rules
+    void resetAll(const std::vector<Instrument>& list, EditorRequests& out);  // everything back to the rules
+    void save(EditorRequests& out);  // writes the files and hands the synth what they say
     void applyListening();
     void stop();
     void drawTrack(const EditorView& view, EditorRequests& out);
     void drawInstruments(const std::vector<Instrument>& list);
-    void drawChannels();
+    void drawChannels(const std::vector<Instrument>& list);
     void drawAssignment(const std::vector<Instrument>& list, EditorRequests& out);
     // Sacar canciones: the game's songs taken out of its ROM, on a thread of its own,
     // into its track folder as they are found.
@@ -143,7 +147,6 @@ private:
     uint32_t mutedVoices_ = 0, soloVoices_ = 0;  // RolandSound voice bits, and bit 10 the DAC
     uint32_t soloInstrument_ = 0;
     bool pendingSlide_ = false;  // the volume slider changed an instrument not yet saved
-    bool share_ = true;  // what is chosen also goes to the shared cache
     std::string message_;
 };
 

@@ -16,6 +16,15 @@ namespace plumsg {
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
 // the [teclado] / [mando] sections, under [interfaz], [video], [audio], [consola],
 // [velocidad], [estados], [biblioteca], [bios], [red], [logros] and [recientes].
+// Ready-made widths for the widescreen: the columns on each side (at 320 pixels a line,
+// VdpMd::wideColumnsFor) that make the picture that aspect, and its name.
+struct Widescreen {
+    int columns;
+    const char* name;
+};
+constexpr Widescreen kWidescreens[] = {{0, "4:3"}, {32, "16:10"}, {53, "16:9"}};
+constexpr int kWidescreenCount = 3;
+
 struct Settings {
     static constexpr size_t kMaxRecent = 10;
     static constexpr int kMaxRewindSeconds = 60;
@@ -23,6 +32,11 @@ struct Settings {
     std::string language;  // "es", "en", "fr" or "pt"; empty: the system's, decided at start
     std::string view = "2D";  // Renderer::name() of the active view
     RenderOptions render;
+    // Draw every sprite on a line, without the console's limit that makes them flicker.
+    bool unlimitedSprites = false;
+    // Widescreen: columns added on the left and on the right (at 320 pixels a line, up to
+    // VideoFrameMd::kMaxWideSide), with the planes and sprites past the edges of the screen.
+    int wideLeft = 0, wideRight = 0;
     int windowScale = 3;
     bool fullscreen = false;
     bool showMenu = true;
@@ -34,13 +48,23 @@ struct Settings {
     int chipMix = 0;        // how much of the chips' own music stays, 0-100
     int reverb = 40;        // 0-100
     int chorus = 20;        // 0-100
+    std::array<int, 5> equalizer{};  // the synthesizer's, dB per band (RolandSound::kEqBands), -12..12
     bool effectsOriginal = true;  // the game's sound effects keep the chips' sound
     Region region = Region::Auto;
     std::array<PadType, 2> padType{PadType::SixButton, PadType::SixButton};
+    bool smsFm = false;  // the Master System's FM sound unit on every console, not only Japanese ones
+    // The 68000's speed in percent (100 off, up to kMaxOverclock), for games that slow
+    // down. In a netplay game the host's counts; hardcore mode keeps it at 100.
+    static constexpr int kMaxOverclock = 400;  // MegaDrive::kMaxOverclock
+    int overclock = 100;
     int stateSlot = 0;  // 0-9
     int rewindSeconds = 20;  // how far back rewinding reaches, 0 = off
     int fastForward = 4;     // fast-forward speed, times normal (2-10)
     int slowMotion = 50;     // slow-motion speed, percent of normal (10-90)
+    // Run-ahead: frames of input lag taken away by showing the picture that many frames
+    // ahead (0 off, up to kMaxRunAhead).
+    static constexpr int kMaxRunAhead = 4;
+    int runAhead = 0;
     std::vector<std::string> recent;  // most recent first
     std::string lastFolder;
     std::vector<std::string> libraryFolders;  // where the game library looks for games

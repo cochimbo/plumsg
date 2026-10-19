@@ -14,6 +14,7 @@
 #include "../core/i18n.h"
 #include "../core/megadrive.h"
 #include "../core/netplay.h"
+#include "../core/recording.h"
 #include "../core/rewind.h"
 #include "../core/system.h"
 #include "../render/gl_renderers.h"
@@ -76,6 +77,7 @@ struct Paths {
     std::string covers;    // folder for the library's downloaded covers
     std::string soundfont; // the SoundFont that comes with plumsg, next to the executable
     std::string sound;     // the instrument editor's folder: assignments and recordings
+    std::string videos;    // folder for the games' video and GIF recordings
 };
 
 const char* const kSoundfont = "soundfonts/GeneralUser-GS.sf2";
@@ -89,17 +91,17 @@ Paths findPaths() {
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
             return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont,
-                    base + "sonido/"};
+                    base + "sonido/", base + "grabaciones/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
         return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/", base + kSoundfont,
-                dir + "sonido/"};
+                dir + "sonido/", dir + "grabaciones/"};
     }
     return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont,
-            base + "sonido/"};
+            base + "sonido/", base + "grabaciones/"};
 }
 
 struct App {
@@ -136,7 +138,7 @@ struct App {
         }
         for (const Cheat& c : cheats) {
             std::vector<CheatPatch> p;
-            if (c.enabled && decodeCheatCodes(c.code, &p, nullptr)) patches.insert(patches.end(), p.begin(), p.end());
+            if (c.enabled && decodeCheatCodes(c.code, &p, nullptr, console.isMasterSystem())) patches.insert(patches.end(), p.begin(), p.end());
         }
         console.setCheats(patches);
     }
@@ -327,9 +329,12 @@ bool captureWindow(SDL_Window* window, const std::string& path) {
     return writeFile(path, bytes);
 }
 
-// Window size for a scale factor: 4:3 at 224 lines per scale step, plus the menu bar.
-void applyWindowScale(SDL_Window* window, int scale, int menuHeight) {
-    SDL_SetWindowSize(window, 299 * scale, 224 * scale + menuHeight);
+// Width of the picture at 224 lines: 4:3, plus the widescreen columns.
+int pictureWidth(const Settings& s) { return 299 * (320 + s.wideLeft + s.wideRight) / 320; }
+
+// Window size for a scale factor: the picture at 224 lines per scale step, plus the menu bar.
+void applyWindowScale(SDL_Window* window, int scale, int menuHeight, const Settings& s) {
+    SDL_SetWindowSize(window, pictureWidth(s) * scale, 224 * scale + menuHeight);
 }
 
 struct CommandLine {
@@ -357,13 +362,14 @@ struct CommandLine {
     int slot = -1;                // --estado N: load the game's state N once it is open
     bool netHost = false;         // --alojar: host a netplay game with the open game
     std::string netJoin;          // --unirse address: join that host
+    std::string record;           // --grabar file.avi|file.gif: record the game from the start
     bool help = false;            // --ayuda
     std::vector<std::string> unknown;  // options plumsg does not know
 };
 
 const char* const kHelp = N_(
     "plumsg [juego] [opciones]\n\n"
-    "  juego                  cartucho (.md .gen .bin .smd .32x .zip) o disco (.cue .chd .iso)\n"
+    "  juego                  cartucho (.md .gen .bin .smd .32x .sms .gg .zip) o disco (.cue .chd .iso)\n"
     "  --pantalla-completa    abrir a pantalla completa (o --fullscreen)\n"
     "  --ventana              abrir en ventana (o --windowed)\n"
     "  --3d / --2d            con o sin la vista pseudo-3D\n"
@@ -381,6 +387,7 @@ const char* const kHelp = N_(
     "  --opciones-juego controles   ...en la pestaña de sus controles\n"
     "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
     "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
+    "  --grabar f.avi        grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
     "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
     "La pantalla completa y la región dadas aquí valen solo para esta vez.");
 
@@ -390,6 +397,7 @@ CommandLine parse(int argc, char** argv) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
         if (a == "--captura") c.capture = next();
+        else if (a == "--grabar") c.record = next();
         else if (a == "--cuadros") c.frames = std::max(1, std::atoi(next().c_str()));
         else if (a == "--3d") c.pseudo3d = 1;
         else if (a == "--2d") c.pseudo3d = 0;
@@ -500,7 +508,7 @@ int main(int argc, char** argv) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_Window* window = SDL_CreateWindow("plumsg", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          299 * settings.windowScale, 224 * settings.windowScale,
+                                          pictureWidth(settings) * settings.windowScale, 224 * settings.windowScale,
                                           SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
@@ -572,6 +580,7 @@ int main(int argc, char** argv) {
         app->console.setRegion(settings.region);
         app->console.setPadType(0, settings.padType[0]);
         app->console.setPadType(1, settings.padType[1]);
+        app->console.setMasterSystemFm(settings.smsFm);
     };
     applyConsole();
     // The Roland sound, when chosen and its SoundFont opens; else the chips' own.
@@ -601,6 +610,7 @@ int main(int argc, char** argv) {
         // cartridge, which plays its music from CD tracks too.
         const bool on = settings.roland && !app->console.megaCd() && loadSoundfont();
         roland->setEffects(settings.reverb, settings.chorus);
+        roland->setEqualizer(settings.equalizer);
         app->console.setRoland(on ? roland.get() : nullptr, settings.chipMix);
     };
     applySound();
@@ -618,6 +628,7 @@ int main(int argc, char** argv) {
         app->writeOverrides(app->romPath, game);
     };
     RewindBuffer rewind;
+    bool runAheadFailed = false;  // the console could not go back once: no more for this game
     FramePacer pacer;
     auto setRewindLimits = [&] {
         rewind.setLimits(static_cast<size_t>(settings.rewindSeconds * app->console.refreshRate()), kRewindBytes);
@@ -645,8 +656,64 @@ int main(int argc, char** argv) {
         editor.saveRecording(recorder.finish(app->console.masterClocks(), withoutExtension(fileName(app->romPath))),
                              app->romPath);
     };
+    // Grabar vídeo / Grabar GIF: the game as it is played, in the grabaciones folder.
+    GameRecording video;
+    std::vector<uint32_t> screen;  // the game's part of the window, read back for it
+    // The 2D view records the console's own picture, sharp and without the filter; the
+    // other views what is on screen, the only place their picture exists.
+    auto recordsConsole = [&] { return !settings.render.pseudo3d && viewIndex() == 0; };
+    auto stopVideo = [&] {
+        if (!video.active()) return;
+        const bool gif = video.format() == GameRecording::Format::Gif;
+        std::string error;
+        if (!video.finish(&error)) ui->showError(error);
+        else if (gif) ui->notify(trf("GIF guardado en %s", video.path().c_str()));
+        else ui->notify(trf("Vídeo guardado en %s", video.path().c_str()));
+    };
+    // Into `path`, or a new file in the grabaciones folder.
+    auto startVideo = [&](GameRecording::Format format, std::string path = {}) {
+        if (!app->romLoaded) return;
+        const bool gif = format == GameRecording::Format::Gif;
+        int width, height;
+        if (recordsConsole()) {
+            // As wide as H40 (H32 is stretched to it, as on a TV); a video three times that.
+            const VideoFrameMd& f = app->console.frame();
+            const int scale = gif ? 1 : 3;
+            width = VideoFrameMd::kMaxWidth * scale;
+            height = (f.interlaced ? f.height / 2 : f.height) * scale;
+        } else {
+            // The screen, made smaller by a whole number: a GIF to about 480x360, a video
+            // to 720 lines at most.
+            int w, h;
+            SDL_GL_GetDrawableSize(window, &w, &h);
+            width = w;
+            height = std::max(1, h - ui->menuHeight());
+            const int k = gif ? std::max((width + 479) / 480, (height + 359) / 360) : (height + 719) / 720;
+            width = std::max(2, width / k / 2 * 2);
+            height = std::max(2, height / k / 2 * 2);
+        }
+        if (path.empty()) {
+            char stamp[32] = "";
+            const std::time_t now = std::time(nullptr);
+            std::strftime(stamp, sizeof stamp, "%Y-%m-%d_%H-%M-%S", std::localtime(&now));
+            path = paths.videos + withoutExtension(fileName(app->romPath)) + "_" + stamp + (gif ? ".gif" : ".avi");
+        }
+        std::string error;
+        if (!video.start(path, format, width, height, app->console.refreshRate(), audio->freq(), &error)) {
+            ui->showError(error);
+            return;
+        }
+        ui->notify(gif ? tr("Grabando un GIF (Ctrl+G para pararlo)") : tr("Grabando vídeo (Ctrl+R para pararlo)"));
+    };
+    // The same kind again stops it; the other kind takes its place.
+    auto toggleVideo = [&](GameRecording::Format format) {
+        const bool same = video.active() && video.format() == format;
+        stopVideo();
+        if (!same) startVideo(format);
+    };
     auto load = [&](const std::string& path) {
         stopRecording();
+        stopVideo();
         const ConsoleSystem system = detectSystem(path);
         if (system == ConsoleSystem::MegaCD || !msuMdCue(path).empty()) {
             // Discs boot with the BIOS of their region, from the files the user chose, and
@@ -669,6 +736,7 @@ int main(int argc, char** argv) {
             else if (app->console.hasMsuMd()) ui->notify(tr("Música en CD (MSU-MD)"));
             rewind.clear();
             setRewindLimits();
+            runAheadFailed = false;
         } else {
             useGameOptions(app->romLoaded ? app->romPath : std::string());
             if (!capturing) ui->showError(app->lastError);
@@ -684,6 +752,10 @@ int main(int argc, char** argv) {
         applyCommandLine();  // over the game's profile too
         if (cmd.slot >= 0 && app->romLoaded && !hardcore()) ui->notify(app->loadState(cmd.slot));
         roland->allNotesOff();
+        if (!cmd.record.empty()) {
+            const bool gif = cmd.record.size() > 4 && cmd.record.compare(cmd.record.size() - 4, 4, ".gif") == 0;
+            startVideo(gif ? GameRecording::Format::Gif : GameRecording::Format::Avi, cmd.record);
+        }
     }
     bool openStateMenu = cmd.stateMenu;
     if (!cmd.library.empty()) settings.libraryFolders = cmd.library;
@@ -693,7 +765,7 @@ int main(int argc, char** argv) {
     if (cmd.achievements) ui->openAchievements();
     if (cmd.editor) {
         loadSoundfont();
-        editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+        editor.useSoundfont(*roland, settings.reverb, settings.chorus, settings.equalizer);
         editor.open(app->romLoaded ? app->romPath : std::string());
         if (!cmd.track.empty()) editor.openTrack(cmd.track);
     }
@@ -758,18 +830,33 @@ int main(int argc, char** argv) {
         }
         save();
     };
+    auto setWideProfile = [&](bool on) {
+        if (!app->romLoaded || on == game.has("pantalla_ancha")) return;
+        if (on) {
+            game.own.insert("pantalla_ancha");
+            ui->notify(trf("La pantalla ancha se guarda ahora solo para %s", fileName(app->romPath).c_str()));
+        } else {
+            game.own.erase("pantalla_ancha");
+            findGameOption("pantalla_ancha")->copy(general, settings);
+            ui->notify(tr("El juego vuelve a usar la pantalla ancha general"));
+        }
+        save();
+    };
     // The Opciones de este juego and Trucos windows can be for a game that is not loaded
     // (opened from the library): then they work on these copies, saved to its files.
     std::string optionsGame, cheatsGame;
     std::string windowsRom;  // the game loaded when they were opened
     GameOverrides otherOptions;
     std::vector<Cheat> otherCheats;
+    bool cheatsSms = false;  // the cheats' game is a Master System or Game Gear one
     auto openGameOptions = [&](const std::string& path) {
         optionsGame = path;
         if (path != app->romPath || !app->romLoaded) otherOptions = app->readOverrides(path, general, input->config());
     };
     auto openCheats = [&](const std::string& path) {
         cheatsGame = path;
+        const ConsoleSystem system = detectSystem(path);
+        cheatsSms = system == ConsoleSystem::MasterSystem || system == ConsoleSystem::GameGear;
         if (path != app->romPath || !app->romLoaded) otherCheats = app->readCheats(path);
     };
     if (cmd.cheats && app->romLoaded) {
@@ -825,6 +912,7 @@ int main(int argc, char** argv) {
         if (!app->romLoaded) return;
         stopNet(tr("Has salido de la partida en red"), false);
         stopRecording();
+        stopVideo();
         save();  // the game's own options, while they are still its
         app->unload(capturing ? nullptr : window);
         achievements.unloadGame();
@@ -848,6 +936,13 @@ int main(int argc, char** argv) {
         ui->openNetplay();  // shows how the connection goes
     }
     while (running) {
+        // Only the picture changes with them, so they can follow the menus at any frame.
+        app->console.vdp().setUnlimitedSprites(settings.unlimitedSprites);
+        if (MasterSystem* sms = app->console.masterSystem()) sms->vdp().setUnlimitedSprites(settings.unlimitedSprites);
+        app->console.vdp().setWidescreen(settings.wideLeft, settings.wideRight);
+        // The overclock does change the game: in a netplay game the speed is the host's,
+        // which came in the state both started from, and hardcore mode keeps the real one.
+        if (!netPlaying()) app->console.setOverclock(hardcore() ? 100 : settings.overclock);
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             input->handleEvent(e);  // first, so it sees every trigger pull and release
@@ -917,6 +1012,12 @@ int main(int argc, char** argv) {
                 case SDL_SCANCODE_L:
                     if (ctrl) ui->toggleLibrary();
                     break;
+                case SDL_SCANCODE_R:
+                    if (ctrl) toggleVideo(GameRecording::Format::Avi);
+                    break;
+                case SDL_SCANCODE_G:
+                    if (ctrl) toggleVideo(GameRecording::Format::Gif);
+                    break;
                 case SDL_SCANCODE_F1:
                     if (!netPlaying() && app->romLoaded) resetConsole();
                     break;
@@ -961,12 +1062,14 @@ int main(int argc, char** argv) {
         uiState.paused = paused;
         uiState.slowMotion = slowMotion;
         uiState.hasProfile = game.has("perfil_3d");
+        uiState.hasWideProfile = game.has("pantalla_ancha");
         uiState.gameName = app->romLoaded ? fileName(app->romPath) : std::string();
         uiState.slots = app->slots;
         const bool cheatsLoaded = app->romLoaded && cheatsGame == app->romPath;
         uiState.cheats = cheatsGame.empty() ? nullptr : cheatsLoaded ? &app->cheats : &otherCheats;
         uiState.cheatsGame = cheatsGame.empty() ? std::string() : fileName(cheatsGame);
         uiState.cheatsPath = cheatsGame;
+        uiState.cheatsSms = cheatsSms;
         const bool optionsLoaded = app->romLoaded && optionsGame == app->romPath;
         uiState.gameOptions.game = optionsGame.empty() ? std::string() : fileName(optionsGame);
         uiState.gameOptions.values = optionsLoaded ? &settings : &otherOptions.values;
@@ -980,6 +1083,8 @@ int main(int argc, char** argv) {
         uiState.editor.soundfontReady = rolandFontOk;
         uiState.disc = app->romLoaded && app->console.megaCd();
         uiState.hardcore = hardcore();
+        uiState.recording = !video.active() ? 0 : video.format() == GameRecording::Format::Gif ? 1 : 2;
+        uiState.recordingSeconds = static_cast<int>(video.seconds());
         uiState.netSession = net != nullptr;
         uiState.netPlaying = netPlaying();
         uiState.netProgress = -1;
@@ -1019,10 +1124,17 @@ int main(int argc, char** argv) {
         const bool netBusy = netPlaying();
         if (act.reset && !netBusy && app->romLoaded) resetConsole();
         if (act.stop) stop();
+        if (act.record == 1) toggleVideo(GameRecording::Format::Gif);
+        if (act.record == 2) toggleVideo(GameRecording::Format::Avi);
+        if (act.openRecordings) {
+            std::error_code ec;
+            std::filesystem::create_directories(std::filesystem::u8path(paths.videos), ec);
+            SDL_OpenURL(("file:///" + paths.videos).c_str());
+        }
         if (act.togglePause && !netBusy) paused = !paused;
         if (act.quit) running = false;
         if (act.fullscreenChanged) setFullscreen();
-        if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight());
+        if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight(), settings);
         if (act.saveState >= 0) saveState(act.saveState);
         if (act.loadState >= 0 && !netBusy) loadState(act.loadState);
         if (act.consoleChanged && !netBusy) {
@@ -1045,6 +1157,7 @@ int main(int argc, char** argv) {
         }
         if (act.rewindChanged) setRewindLimits();
         if (act.profile >= 0) setProfile(act.profile == 1);
+        if (act.wideProfile >= 0) setWideProfile(act.wideProfile == 1);
         if (!act.cheatsFor.empty()) openCheats(act.cheatsFor);
         if (act.cheatsChanged && cheatsLoaded) {
             if (!net) app->applyCheats();
@@ -1061,13 +1174,17 @@ int main(int argc, char** argv) {
             app->writeOverrides(optionsGame, otherOptions);
         }
         if (act.settingsChanged) save();
+        if (act.equalizerChanged) {
+            roland->setEqualizer(settings.equalizer);
+            editor.useEqualizer(settings.equalizer);
+        }
         if (act.soundChanged) applySound();
         if (act.soundChanged && app->romLoaded) applyInstruments(app->romPath);
         if (act.soundChanged && editor.isOpen() && loadSoundfont())
-            editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+            editor.useSoundfont(*roland, settings.reverb, settings.chorus, settings.equalizer);
         if (act.openEditor) {
             loadSoundfont();
-            editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+            editor.useSoundfont(*roland, settings.reverb, settings.chorus, settings.equalizer);
             editor.open(act.editorFor);
         }
         if (act.startRecording && app->romLoaded && !recording) {
@@ -1079,7 +1196,7 @@ int main(int argc, char** argv) {
         if (act.assignmentsChanged && app->romLoaded) applyInstruments(app->romPath);
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
         if (!sizedForMenu && !settings.fullscreen) {
-            applyWindowScale(window, settings.windowScale, ui->menuHeight());
+            applyWindowScale(window, settings.windowScale, ui->menuHeight(), settings);
             sizedForMenu = true;
         }
 
@@ -1123,6 +1240,7 @@ int main(int argc, char** argv) {
                         ranFrame = true;
                         ++framesRun;
                         audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
+                        video.addAudio(app->console.audio().samples().data(), app->console.audio().samples().size());
                         app->console.audio().clearSamples();
                     }
                 }
@@ -1168,6 +1286,10 @@ int main(int argc, char** argv) {
                 const double speed = fast ? settings.fastForward : slowMotion ? settings.slowMotion / 100.0 : 1.0;
                 if (fast) uiState.speed = ">> x" + std::to_string(settings.fastForward);
                 else if (slowMotion) uiState.speed = trf("Cámara lenta %d%%", settings.slowMotion);
+                // Run-ahead: the last frame of the tick is followed by a few more with the
+                // same pads, whose picture is shown, and the console goes back. Not in fast
+                // forward, where a frame or two less of lag is not felt.
+                const int ahead = fast || runAheadFailed ? 0 : settings.runAhead;
                 for (int n = pacer.framesForTick(speed); n > 0; --n) {
                     if (canRewind) {
                         std::vector<uint8_t> snapshot;
@@ -1175,13 +1297,21 @@ int main(int argc, char** argv) {
                     }
                     app->console.setPads(input->poll(0, keyboard), input->poll(1, keyboard));
                     app->console.setSampleRate(audio->rate() / speed);
+                    // The picture shown is run-ahead's, so these need not be drawn.
+                    app->console.setDrawing(ahead == 0);
                     app->console.runFrame();
                     achievements.doFrame();
                     ranFrame = true;
                     ++framesRun;
                     audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
+                    video.addAudio(app->console.audio().samples().data(), app->console.audio().samples().size());
                     app->console.audio().clearSamples();
+                    if (ahead > 0 && n == 1 && !app->console.runAhead(ahead)) {
+                        runAheadFailed = true;
+                        ui->notify(tr("Run-ahead desactivado: no se pudo volver al fotograma actual."));
+                    }
                 }
+                app->console.setDrawing(true);
             }
         }
 
@@ -1210,6 +1340,19 @@ int main(int argc, char** argv) {
         Renderer& view = settings.render.pseudo3d ? *pseudo3d : *renderers[viewIndex()];
         view.setOptions(settings.render);
         if (app->romLoaded) view.draw(app->console.frame(), game);  // stopped: the start screen
+        // A recording takes the game's picture before the menus are drawn over it.
+        if (video.active() && app->romLoaded) {
+            if (recordsConsole()) {
+                const VideoFrameMd& f = app->console.frame();
+                video.addFrame(f.rgba.data(), f.width, f.height, VideoFrameMd::kMaxWidth);
+            } else {
+                screen.resize(static_cast<size_t>(game.width) * game.height);
+                gl::ReadPixels(0, 0, game.width, game.height, gl::BGRA, gl::UNSIGNED_INT_8_8_8_8_REV, screen.data());
+                video.addFrame(screen.data() + static_cast<size_t>(game.height - 1) * game.width, game.width, game.height,
+                               -static_cast<ptrdiff_t>(game.width));  // OpenGL's rows go bottom up
+            }
+            if (video.failed()) stopVideo();
+        }
         ui->render();
         ++loops;
         if (downloadCovers && ui->library().pending() == 0 && loops > 5) {
@@ -1251,6 +1394,7 @@ int main(int argc, char** argv) {
     net.reset();
     netSocket.reset();
     stopRecording();
+    stopVideo();
     app->saveBattery();
     save();
     for (auto& s : app->slots)

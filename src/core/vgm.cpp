@@ -123,7 +123,7 @@ bool gunzip(const std::vector<uint8_t>& in, std::vector<uint8_t>* out) {
 // ---------------------------------------------------------------------------------
 // Recording
 
-void VgmWriter::begin(const Ym2612& ym, const Psg& psg, uint64_t clock, double masterClock) {
+void VgmWriter::beginPsg(const Psg& psg, uint64_t clock, double masterClock) {
     recording_ = true;
     data_.clear();
     start_ = clock;
@@ -131,8 +131,8 @@ void VgmWriter::begin(const Ym2612& ym, const Psg& psg, uint64_t clock, double m
     master_ = masterClock;
     psgClock_ = psg.clock();
     address_ = {};
-    // The chips as they are: the PSG's tones and volumes, then every YM2612 register
-    // that shapes a sound (the frequencies' high bytes first: they are latched).
+    opllAddress_ = 0;
+    // The chips as they are, from the PSG's tones and volumes.
     for (int ch = 0; ch < 3; ++ch) {
         const uint16_t period = psg.period(ch);
         data_.insert(data_.end(), {0x50, static_cast<uint8_t>(0x80 | ch << 5 | (period & 0x0F)), 0x50,
@@ -141,6 +141,14 @@ void VgmWriter::begin(const Ym2612& ym, const Psg& psg, uint64_t clock, double m
     data_.insert(data_.end(), {0x50, static_cast<uint8_t>(0xE0 | (psg.period(3) & 7))});
     for (int ch = 0; ch < 4; ++ch)
         data_.insert(data_.end(), {0x50, static_cast<uint8_t>(0x90 | ch << 5 | (psg.attenuation(ch) & 0x0F))});
+}
+
+void VgmWriter::begin(const Ym2612& ym, const Psg& psg, uint64_t clock, double masterClock) {
+    beginPsg(psg, clock, masterClock);
+    machine_ = Machine::MegaDrive;
+    opllClock_ = 0;
+    // Then every YM2612 register that shapes a sound (the frequencies' high bytes
+    // first: they are latched).
     ymWrite(0, 0x22, ym.reg(0x22));
     ymWrite(0, 0x27, ym.reg(0x27) & 0xC0);  // channel 3 mode, not the timers
     ymWrite(0, 0x2B, ym.reg(0x2B));
@@ -161,6 +169,21 @@ void VgmWriter::begin(const Ym2612& ym, const Psg& psg, uint64_t clock, double m
     // The notes held now.
     for (int ch = 0; ch < 6; ++ch)
         if (ym.keys(ch)) ymWrite(0, 0x28, static_cast<uint8_t>(ym.keys(ch) | (ch % 3) | (ch >= 3 ? 4 : 0)));
+}
+
+void VgmWriter::beginSms(const Psg& psg, const Ym2413* opll, bool gameGear, uint64_t clock, double masterClock) {
+    beginPsg(psg, clock, masterClock);
+    machine_ = gameGear ? Machine::GameGear : Machine::MasterSystem;
+    opllClock_ = opll ? masterClock / 15 : 0;
+    if (gameGear) data_.insert(data_.end(), {0x4F, psg.stereo()});
+    if (!opll) return;
+    // The game's own instrument, the rhythm, then each channel's instrument and volume,
+    // its frequency and, last, its key and the frequency's high bit.
+    for (int reg : {0, 1, 2, 3, 4, 5, 6, 7, 0x0E})
+        data_.insert(data_.end(), {0x51, static_cast<uint8_t>(reg), opll->reg(reg)});
+    for (int base : {0x30, 0x10, 0x20})
+        for (int ch = 0; ch < 9; ++ch)
+            data_.insert(data_.end(), {0x51, static_cast<uint8_t>(base + ch), opll->reg(base + ch)});
 }
 
 double VgmWriter::secondsAt(uint64_t clock) const {
@@ -204,6 +227,22 @@ void VgmWriter::psg(uint8_t value, uint64_t clock) {
     data_.insert(data_.end(), {0x50, value});
 }
 
+void VgmWriter::opll(int offset, uint8_t value, uint64_t clock) {
+    if (!recording_ || opllClock_ <= 0) return;
+    if (!(offset & 1)) {
+        opllAddress_ = value;
+        return;
+    }
+    wait(clock);
+    data_.insert(data_.end(), {0x51, opllAddress_, value});
+}
+
+void VgmWriter::ggStereo(uint8_t value, uint64_t clock) {
+    if (!recording_ || machine_ != Machine::GameGear) return;
+    wait(clock);
+    data_.insert(data_.end(), {0x4F, value});
+}
+
 void VgmWriter::fmReset(uint64_t clock) {
     if (!recording_) return;
     wait(clock);
@@ -239,7 +278,8 @@ std::vector<uint8_t> VgmWriter::finish(uint64_t clock, const Tag& tag, bool comp
     put32(file, 0x24, master_ < 53500000 ? 50 : 60);
     file[0x28] = 0x09;  // the Sega PSG's noise feedback and shift register width
     file[0x2A] = 16;
-    put32(file, 0x2C, static_cast<uint32_t>(std::lround(master_ / 7)));
+    if (machine_ == Machine::MegaDrive) put32(file, 0x2C, static_cast<uint32_t>(std::lround(master_ / 7)));
+    put32(file, 0x10, static_cast<uint32_t>(std::lround(opllClock_)));
     put32(file, 0x34, 0x40 - 0x34);
     if (loop) {
         put32(file, 0x1C, static_cast<uint32_t>(0x40 + loop->bytes - 0x1C));
@@ -252,7 +292,9 @@ std::vector<uint8_t> VgmWriter::finish(uint64_t clock, const Tag& tag, bool comp
     // who made the file, notes.
     put32(file, 0x14, static_cast<uint32_t>(file.size() - 0x14));
     std::vector<uint8_t> gd3;
-    for (const std::string& s : {tag.title, std::string(), tag.game, std::string(), std::string("Sega Mega Drive / Genesis"),
+    for (const std::string& s : {tag.title, std::string(), tag.game, std::string(), std::string(machine_ == Machine::GameGear       ? "Sega Game Gear"
+                                                                      : machine_ == Machine::MasterSystem ? "Sega Master System"
+                                                                                                          : "Sega Mega Drive / Genesis"),
                                  std::string(), std::string(), std::string(), std::string(), std::string("plumsg"),
                                  tag.notes})
         appendUtf16(gd3, s);
@@ -277,8 +319,12 @@ bool VgmFile::parse(std::vector<uint8_t> bytes, std::string* error) {
     if (d.size() < 0x40 || std::memcmp(d.data(), "Vgm ", 4) != 0) return fail(tr("No es un archivo VGM."));
     const uint32_t version = get32(d, 0x08);
     psgClock = get32(d, 0x0C) & 0x3FFFFFFF;
-    ymClock = version >= 0x110 ? get32(d, 0x2C) & 0x3FFFFFFF : get32(d, 0x10);
-    if (ymClock == 0 && psgClock == 0) return fail(tr("El VGM no es de Mega Drive: no tiene YM2612 ni PSG."));
+    // Before version 1.10 the YM2612 and the YM2151 shared the YM2413's clock field.
+    ymClock = version >= 0x110 ? get32(d, 0x2C) & 0x3FFFFFFF : 0;
+    opllClock = get32(d, 0x10) & 0x3FFFFFFF;
+    if (version < 0x110 && opllClock > 5000000) ymClock = opllClock, opllClock = 0;
+    if (ymClock == 0 && psgClock == 0 && opllClock == 0)
+        return fail(tr("El VGM no es de una consola de Sega: no tiene YM2612, YM2413 ni PSG."));
     start = version >= 0x150 && get32(d, 0x34) ? 0x34 + get32(d, 0x34) : 0x40;
     if (start >= d.size()) return fail(tr("El VGM está cortado."));
     samples = get32(d, 0x18);
@@ -309,7 +355,14 @@ void VgmPlayer::load(VgmFile file) {
 }
 
 void VgmPlayer::reset() {
-    master_ = file_.ymClock > 0 ? file_.ymClock * 7 : file_.psgClock > 0 ? file_.psgClock * 15 : 53693175.0;
+    master_ = file_.ymClock > 0     ? file_.ymClock * 7
+              : file_.opllClock > 0 ? file_.opllClock * 15
+              : file_.psgClock > 0  ? file_.psgClock * 15
+                                    : 53693175.0;
+    opll_.reset();
+    opll_.samples().clear();
+    opll_.setMasterClock(master_);
+    opll_.setClockPosition(0);
     ym_.reset();
     ym_.samples().clear();
     ym_.setMasterClock(master_);
@@ -318,7 +371,8 @@ void VgmPlayer::reset() {
     psg_.setClock(file_.psgClock > 0 ? file_.psgClock : Psg::kClockNtsc);
     psg_.setStereo(0xFF);
     mixer_.reset();
-    mixer_.setFmRate(ym_.sampleRate());
+    mixer_.setFmRate(file_.opllClock > 0 ? opll_.sampleRate() : ym_.sampleRate());
+    mixer_.setGains(100, file_.opllClock > 0 || file_.ymClock == 0 ? 100 : 50);
     pc_ = file_.start;
     position_ = ticks_ = waitEnd_ = clock_ = 0;
     psgDone_ = 0;
@@ -341,24 +395,25 @@ void VgmPlayer::setRolandOutput(bool on) {
 void VgmPlayer::setListening(uint32_t mutedVoices, std::set<uint32_t> silenced) {
     mutedVoices_ = mutedVoices;
     silenced_ = silenced;
-    if (roland_) roland_->setListening(mutedVoices & 0x3FF, std::move(silenced));
+    if (roland_) roland_->setListening(mutedVoices & RolandSound::kAllVoices, std::move(silenced));
     applyMasks();
 }
 
 // Which chip channels are heard: in the Roland sound only the instruments left
 // original; in the chips' own, all but the ones muted or silenced.
 void VgmPlayer::applyMasks() {
-    uint32_t quiet = mutedVoices_ & 0x3FF;
+    uint32_t quiet = mutedVoices_ & RolandSound::kAllVoices;
     if (roland_) {
         if (rolandOutput_) {
-            quiet |= 0x3FF & ~roland_->chipChannels();
+            quiet |= RolandSound::kAllVoices & ~roland_->chipChannels();
         } else {
             for (int v = 0; v < RolandSound::kVoices; ++v)
                 if (silenced_.count(roland_->voiceInstrument(v))) quiet |= 1u << v;
         }
     }
     ym_.setMuted((quiet & 0x3F) | ((mutedVoices_ & kDacVoice) ? 0x40 : 0), 0);
-    psg_.setMuted(quiet >> 6, 0);
+    psg_.setMuted((quiet >> 6) & 0xF, 0);
+    opll_.setMuted(RolandSound::opllChannels(quiet), 0);
 }
 
 void VgmPlayer::restart() { reset(); }
@@ -373,8 +428,10 @@ void VgmPlayer::syncChips(uint64_t clock, bool silent) {
     if (clock <= clock_) return;
     if (silent) {
         ym_.setClockPosition(clock);
+        opll_.setClockPosition(clock);
     } else {
-        ym_.runUntil(clock);
+        if (file_.opllClock > 0) opll_.runUntil(clock);
+        else ym_.runUntil(clock);
         const double cycles = static_cast<double>(clock) * psg_.clock() / master_ - psgDone_;
         const int whole = static_cast<int>(cycles);
         psg_.run(whole);
@@ -391,6 +448,17 @@ void VgmPlayer::fmWrite(int port, uint8_t reg, uint8_t value, uint64_t clock, bo
     if (roland_) {
         roland_->fmWrite(port * 2, reg, ym_, clock);
         roland_->fmWrite(port * 2 + 1, value, ym_, clock);
+        if (!silent) applyMasks();
+    }
+}
+
+void VgmPlayer::opllWrite(uint8_t reg, uint8_t value, uint64_t clock, bool silent) {
+    syncChips(clock, silent);
+    opll_.write(0, reg);
+    opll_.write(1, value);
+    if (roland_) {
+        roland_->opllWrite(0, reg, opll_, clock);
+        roland_->opllWrite(1, value, opll_, clock);
         if (!silent) applyMasks();
     }
 }
@@ -429,6 +497,7 @@ bool VgmPlayer::step(uint64_t clock, bool silent) {
     switch (cmd) {
         case 0x4F: psg_.setStereo(at(pc_ + 1)); pc_ += 2; return true;
         case 0x50: psgWrite(at(pc_ + 1), clock, silent); pc_ += 2; return true;
+        case 0x51: opllWrite(at(pc_ + 1), at(pc_ + 2), clock, silent); pc_ += 3; return true;
         case 0x52:
         case 0x53: fmWrite(cmd & 1, at(pc_ + 1), at(pc_ + 2), clock, silent); pc_ += 3; return true;
         case 0x61: wait(at(pc_ + 1) | at(pc_ + 2) << 8, 3); return true;
@@ -561,7 +630,7 @@ void VgmPlayer::play(double seconds, double rate, std::vector<int16_t>& out) {
     runTo(target, false);
     psgScratch_.insert(psgScratch_.end(), psg_.samples().begin(), psg_.samples().end());
     psg_.clearSamples();
-    mixer_.mix(ym_.samples(), psgScratch_);
+    mixer_.mix(file_.opllClock > 0 ? opll_.samples() : ym_.samples(), psgScratch_);
     const size_t from = out.size() / 2;
     out.insert(out.end(), mixer_.samples().begin(), mixer_.samples().end());
     mixer_.clearSamples();

@@ -64,8 +64,8 @@ DialogResult openFileDialog(SDL_Window* window, const std::string& startFolder, 
         filter += widen(name) + L'\0' + patterns + L'\0';
     };
     if (pick == Pick::Game)
-        addFilter(std::string(tr("Juegos")) + " (*.md, *.gen, *.smd, *.bin, *.32x, *.zip, *.cue, *.chd, *.iso)",
-                  L"*.md;*.gen;*.smd;*.bin;*.32x;*.zip;*.cue;*.chd;*.iso");
+        addFilter(std::string(tr("Juegos")) + " (*.md, *.gen, *.smd, *.bin, *.32x, *.sms, *.gg, *.zip, *.cue, *.chd, *.iso)",
+                  L"*.md;*.gen;*.smd;*.bin;*.32x;*.sms;*.gg;*.zip;*.cue;*.chd;*.iso");
     addFilter(tr("Todos los archivos"), L"*.*");
     filter += L'\0';
     ofn.lpstrFilter = filter.c_str();

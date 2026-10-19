@@ -41,6 +41,8 @@ add_library(plumsg_ymfm STATIC
   ${ymfm_SOURCE_DIR}/src/ymfm_adpcm.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_ssg.cpp
   ${ymfm_SOURCE_DIR}/src/ymfm_misc.cpp
+  src/core/ymfm_opl_all.cpp
+  ${ymfm_SOURCE_DIR}/src/ymfm_pcm.cpp
 )
 target_include_directories(plumsg_ymfm SYSTEM PUBLIC ${ymfm_SOURCE_DIR}/src)
 if(MSVC)
@@ -111,6 +113,7 @@ add_library(plumsg_core STATIC
   src/core/io.cpp
   src/core/psg.cpp
   src/core/ym2612.cpp
+  src/core/ym2413.cpp
   src/core/audio_mixer.cpp
   src/core/roland.cpp
   src/core/vgm.cpp
@@ -118,6 +121,8 @@ add_library(plumsg_core STATIC
   src/core/megadrive.cpp
   src/core/rewind.cpp
   src/core/cheats.cpp
+  src/core/sms.cpp
+  src/core/vdp_sms.cpp
   src/core/system.cpp
   src/core/sh2.cpp
   src/core/mars.cpp
@@ -125,11 +130,13 @@ add_library(plumsg_core STATIC
   src/core/megacd.cpp
   src/core/netplay.cpp
   src/core/i18n.cpp
+  src/core/recording.cpp
   src/render/planes.cpp
   src/render/profile3d.cpp
 )
-target_include_directories(plumsg_core PUBLIC src src/core PRIVATE third_party/tsf)
-target_link_libraries(plumsg_core PUBLIC plumsg_miniz PRIVATE plumsg_ymfm chdr-static)
+# stb_image_write (public domain / MIT, vendored) encodes the JPEG frames of the AVI recordings.
+target_include_directories(plumsg_core PUBLIC src src/core PRIVATE third_party/tsf third_party/stb)
+target_link_libraries(plumsg_core PUBLIC plumsg_miniz Threads::Threads PRIVATE plumsg_ymfm chdr-static)
 
 # UDP sockets for netplay (the session itself is in the core).
 add_library(plumsg_net STATIC src/net/udp.cpp)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -17,6 +18,8 @@
 #include "megacd.h"
 #include "psg.h"
 #include "roland.h"
+#include "sms.h"
+#include "ym2413.h"
 #include "vgm.h"
 #include "vdp_md.h"
 #include "ym2612.h"
@@ -27,7 +30,9 @@ namespace plumsg {
 // The whole console: 68000 and Z80 with their buses and memory maps, VDP, YM2612, PSG,
 // I/O and cartridge, plus the scheduler that interleaves them line by line. With a 32X
 // game it also has the 32X, whose two SH-2s run alongside the 68000, and with a disc
-// the Mega CD, whose BIOS and memory take the cartridge's place. It knows
+// the Mega CD, whose BIOS and memory take the cartridge's place.
+// With a Master System cartridge it runs in the console's Master System mode instead:
+// only the Z80, the PSG and the Master System's own VDP and memory map. It knows
 // nothing about windows, rendering or audio devices: frontends call runFrame(), then
 // read frame() and audio().samples(), and feed the pads in.
 class MegaDrive : private M68kBus, private Z80Bus {
@@ -67,6 +72,7 @@ public:
     void setPads(const PadState& p1, const PadState& p2) {
         io_.setPad(0, p1);
         io_.setPad(1, p2);
+        if (sms_) sms_->setPads(p1, p2);
     }
     void setPadType(int port, PadType t) { io_.setPadType(port, t); }
 
@@ -74,7 +80,22 @@ public:
     // call (or by loading another ROM); RAM writes are made at the start of every frame.
     void setCheats(const std::vector<CheatPatch>& cheats);
 
+    // Overclock: the 68000 runs at `percent` of its speed (kMinOverclock to kMaxOverclock),
+    // so games that slow down when there is much on screen get each frame done in time.
+    // The rest of the console (Z80, VDP, sound, the Mega CD and 32X CPUs) keeps its speed.
+    // Unlike the sprite limit the game does run differently, so it is part of the state:
+    // a netplay guest runs at the host's speed, and states without it load at 100.
+    static constexpr int kMinOverclock = 100, kMaxOverclock = 400;
+    void setOverclock(int percent) { overclock_ = std::clamp(percent, kMinOverclock, kMaxOverclock); }
+    int overclock() const { return overclock_; }
+
     void runFrame();  // up to the start of the next frame (just after VBlank ends)
+    // Run-ahead, to take frames of input lag away: runs `frames` more frames with the
+    // pads as they are, without sound, the Roland sound or the VGM recording, so that
+    // frame() shows the last of them (drawn even under setDrawing(false)), and then
+    // puts the console back as it was. Only the picture is left from the future;
+    // false if the state could not be put back.
+    bool runAhead(int frames);
 
     // The Roland sound (not owned; null for the console's own). It plays the FM and PSG
     // music instead, which stays at `chipPercent` of its volume; the DAC is untouched.
@@ -114,6 +135,17 @@ public:
     Psg& psg() { return psg_; }
     Mars* mars() { return mars_.get(); }  // null unless the game is a 32X one
     bool is32x() const { return mars_ != nullptr; }
+    MasterSystem* masterSystem() { return sms_.get(); }  // null unless the game is a Master System one
+    bool isMasterSystem() const { return sms_ != nullptr; }  // the Game Gear too
+    bool isGameGear() const { return sms_ && sms_->gameGear(); }
+    // The Master System's FM sound unit is built into Japanese consoles; this puts it in
+    // the others too, for games that use it wherever they find it. Takes effect on the
+    // next reset or power cycle.
+    void setMasterSystemFm(bool always) {
+        smsFmAlways_ = always;
+        applyRegion();
+    }
+    Ym2413* ym2413() { return opll_.get(); }  // null unless the game is a Master System one
     MegaCd* megaCd() { return mcd_.get(); }  // null unless a disc is loaded
     bool isMegaCd() const { return mcd_ != nullptr; }
     CdImage* disc() { return disc_.get(); }  // the disc in the Mega CD, null if none
@@ -125,14 +157,17 @@ public:
 
     // Song extraction (SongExtractor). The watch hears every byte written to work RAM
     // (0xFF0000 up) and to the Z80's RAM (0xA00000 up), and whether the 68000 wrote it;
-    // also the 68000's writes to the YM2612, as 0xA04000-0xA04003. Empty for none.
+    // also the 68000's writes to the YM2612, as 0xA04000-0xA04003. On a Master System:
+    // the Z80's writes to its RAM, by their own address (0xC000 up), and to the sound
+    // chips, as 0xA04000, all as the program's (m68k true). Empty for none.
     using MemoryWatch = std::function<void(uint32_t addr, uint8_t value, bool m68k)>;
     void setMemoryWatch(MemoryWatch watch);
     // Keeps the game from asking for music and sounds: the 68000's writes to
     // [addr, addr + count) of anything but 0 or 0x80 (of anything, if all) are dropped.
     // count 0: none.
     void lockSoundRequests(uint32_t addr, int count, bool all = false);
-    // Writes a byte of work RAM or Z80 RAM directly, past the lock.
+    // Writes a byte of work RAM or Z80 RAM (a Master System's at 0xC000) directly, past
+    // the lock.
     void poke(uint32_t addr, uint8_t value);
     // Runs without drawing the picture (faster, for when only the sound matters).
     void setDrawing(bool on) { drawing_ = on; }
@@ -148,8 +183,9 @@ private:
     // Z80 bus.
     uint8_t read(uint16_t addr) override;
     void write(uint16_t addr, uint8_t value) override;
-    uint8_t in(uint16_t) override { return 0xFF; }
-    void out(uint16_t, uint8_t) override {}
+    uint8_t in(uint16_t port) override;
+    void out(uint16_t port, uint8_t value) override;
+    void psgWrite(uint8_t value);
 
     uint16_t readVdp(uint32_t addr);
     void writeVdp(uint32_t addr, uint16_t value, bool byte);
@@ -166,6 +202,9 @@ private:
     int cdBiosSlot(Region r) const;  // the BIOS for `r`, or with a cartridge any there is; -1 for none
     void attachCd(std::unique_ptr<CdImage> disc, bool cartridge);
     void setUpMars();             // adds or removes the 32X to suit the cartridge
+    void setUpSms();              // switches to Master System mode for its cartridges, or back
+    void runFrameSms();
+    void runFrameMd();
     std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
 
@@ -188,6 +227,11 @@ private:
     std::unique_ptr<Mars> mars_;
     std::unique_ptr<CdImage> disc_;
     std::unique_ptr<MegaCd> mcd_;
+    std::unique_ptr<MasterSystem> sms_;
+    std::unique_ptr<Ym2413> opll_;  // the Master System's FM unit, with sms_
+    bool smsFmAlways_ = false;
+    bool smsFile_ = false;  // the file loaded is a Master System one by its name
+    bool ggFile_ = false;   // ...or a Game Gear one
     std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe
     std::string loadNotice_;
 
@@ -206,9 +250,11 @@ private:
     uint64_t z80Clock_ = 0;
     uint64_t psgClock_ = 0;
     int psgRemainder_ = 0;     // master clocks not yet worth a PSG cycle
+    int overclock_ = 100;      // the 68000's speed, percent of the real one
     uint64_t frames_ = 0;
     std::vector<int16_t> psgBuffer_;
     std::vector<uint8_t> loadedThumbnail_;
+    std::vector<uint8_t> aheadState_;  // runAhead()'s way back, kept to reuse its memory
     std::vector<CheatPatch> ramCheats_;
     std::vector<std::pair<uint32_t, uint8_t>> romOriginal_;  // bytes the ROM cheats replaced
     void applyRamCheats();
