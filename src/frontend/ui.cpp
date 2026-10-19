@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <iterator>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -69,6 +70,25 @@ bool comboTr(const char* label, int* current, const char* const items[], int cou
 bool runAheadSlider(const char* label, int& frames) {
     const char* shown = frames == 0 ? tr("desactivado") : frames == 1 ? tr("1 fotograma") : tr("%d fotogramas");
     return ImGui::SliderInt(label, &frames, 0, Settings::kMaxRunAhead, shown, ImGuiSliderFlags_AlwaysClamp);
+}
+
+// The overclock's choices, as percent of the 68000's speed.
+constexpr int kOverclocks[] = {100, 150, 200, 300, 400};
+constexpr const char* kOverclockNames[] = {N_("Desactivado (velocidad real)"), "150 %", "200 %", "300 %", "400 %"};
+constexpr const char* kOverclockTip =
+    N_("Hace más rápido el procesador de la consola (el 68000), para los juegos que se ralentizan\n"
+       "cuando hay mucho en pantalla. Cuanto más alto, más pide al ordenador. Algún juego puede ir\n"
+       "demasiado rápido o fallar: si pasa, desactívalo para ese juego. En una partida en red manda\n"
+       "el del anfitrión, y en modo hardcore se queda desactivado.");
+
+// The combo for the overclock; `percent` takes the chosen value.
+bool overclockCombo(const char* label, int& percent) {
+    int i = 0;
+    for (int k = 0; k < static_cast<int>(std::size(kOverclocks)); ++k)
+        if (percent >= kOverclocks[k]) i = k;
+    if (!comboTr(label, &i, kOverclockNames, static_cast<int>(std::size(kOverclocks)))) return false;
+    percent = kOverclocks[i];
+    return true;
 }
 
 constexpr const char* kRegionNames[] = {N_("Automática (la de la ROM)"), N_("Japón (NTSC)"), N_("EE. UU. (NTSC)"),
@@ -492,6 +512,16 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
                     out.consoleChanged = out.settingsChanged = true;
                 }
             ImGui::PopID();
+        }
+        ImGui::EndDisabled();
+        ImGui::SeparatorText(tr("Overclock"));
+        ImGui::BeginDisabled(state.netPlaying || state.hardcore);
+        for (int k = 0; k < static_cast<int>(std::size(kOverclocks)); ++k) {
+            if (ImGui::MenuItem(tr(kOverclockNames[k]), nullptr, settings_.overclock == kOverclocks[k])) {
+                settings_.overclock = kOverclocks[k];
+                out.settingsChanged = true;
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", tr(kOverclockTip));
         }
         ImGui::EndDisabled();
         ImGui::Separator();
@@ -2114,6 +2144,9 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
                     edited = true;
                 }
             }
+        } else if (key == "overclock") {
+            edited |= overclockCombo(tr(opt.label), s.overclock);
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", tr(kOverclockTip));
         } else if (key == "rebobinado_segundos") {
             ImGui::SliderInt(tr(opt.label), &s.rewindSeconds, 0, Settings::kMaxRewindSeconds,
                              s.rewindSeconds ? "%d s" : tr("desactivado"), ImGuiSliderFlags_AlwaysClamp);

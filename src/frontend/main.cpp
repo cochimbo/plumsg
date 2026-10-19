@@ -852,6 +852,9 @@ int main(int argc, char** argv) {
     while (running) {
         // Only the picture changes with it, so it can follow the menus at any frame.
         app->console.vdp().setUnlimitedSprites(settings.unlimitedSprites);
+        // The overclock does change the game: in a netplay game the speed is the host's,
+        // which came in the state both started from, and hardcore mode keeps the real one.
+        if (!netPlaying()) app->console.setOverclock(hardcore() ? 100 : settings.overclock);
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             input->handleEvent(e);  // first, so it sees every trigger pull and release

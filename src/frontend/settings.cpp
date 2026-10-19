@@ -102,6 +102,8 @@ void Settings::parse(std::istream& in, Settings& s) {
                     if (lower(value) == kRegionNames[i]) s.region = static_cast<Region>(i);
             } else if (key == "mando1" || key == "mando2") {
                 s.padType[key == "mando1" ? 0 : 1] = value == "3" ? PadType::ThreeButton : PadType::SixButton;
+            } else if (key == "overclock") {
+                s.overclock = std::clamp(std::atoi(value.c_str()), 100, kMaxOverclock);
             }
         } else if (section == "velocidad") {
             if (key == "rebobinado_segundos") s.rewindSeconds = std::clamp(std::atoi(value.c_str()), 0, kMaxRewindSeconds);
@@ -189,6 +191,9 @@ void Settings::write(std::ostream& out) const {
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"
         << "mando1 = " << (padType[0] == PadType::ThreeButton ? 3 : 6) << "\n"
         << "mando2 = " << (padType[1] == PadType::ThreeButton ? 3 : 6) << "\n"
+        << "# overclock: velocidad del procesador (68000) en porcentaje, de 100 (la de la consola) a 400.\n"
+        << "# Quita las ralentizaciones de algunos juegos; alguno puede ir demasiado rápido o fallar.\n"
+        << "overclock = " << overclock << "\n"
         << "\n[velocidad]\n"
         << "# rebobinado_segundos: cuántos segundos se pueden rebobinar (0 lo desactiva, hasta 60).\n"
         << "# avance_rapido: veces más rápido, de 2 a 10. camara_lenta: porcentaje de la velocidad, de 10 a 90.\n"
