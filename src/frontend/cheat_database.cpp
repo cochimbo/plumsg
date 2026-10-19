@@ -1,6 +1,7 @@
 #include "cheat_database.h"
 
 #include "http.h"
+#include "../core/i18n.h"
 #include "library_names.h"
 
 namespace plumsg {
@@ -31,7 +32,8 @@ std::string fileStem(const std::string& path) {
     return dot == std::string::npos || dot == 0 ? name : name.substr(0, dot);
 }
 
-const char* kOffline = "No se pudo conectar con la base de trucos de libretro.";
+// Texts for the user, translated on the worker thread as they are handed over.
+const char* const kOffline = N_("No se pudo conectar con la base de trucos de libretro.");
 
 }  // namespace
 
@@ -108,7 +110,7 @@ bool CheatDatabase::loadIndex(ConsoleSystem s, std::string* error) {
     const int status = httpGet(cheatSet(s).list, body);
     if (status == 200) index = parseFileList(std::string(body.begin(), body.end()), ".cht");
     if (!index.empty()) return true;
-    *error = status == 0 ? kOffline : "No se pudo leer la lista de trucos de libretro (error " + std::to_string(status) + ").";
+    *error = status == 0 ? std::string(tr(kOffline)) : trf("No se pudo leer la lista de trucos de libretro (error %d).", status);
     return false;
 }
 
@@ -139,9 +141,9 @@ void CheatDatabase::work() {
             std::string indexError;
             if (loadIndex(task.system, &indexError)) {
                 r.files = cheatFileNames(index_[static_cast<int>(task.system)], stem, 20);
-                if (r.files.empty()) r.status = "La base de trucos de libretro no tiene listas para este juego.";
+                if (r.files.empty()) r.status = tr("La base de trucos de libretro no tiene listas para este juego.");
                 else if (!download(task.system, r.files.front(), &r.cheats, &status))
-                    r.status = status == 0 ? kOffline : "No se pudo descargar la lista de trucos.";
+                    r.status = status == 0 ? tr(kOffline) : tr("No se pudo descargar la lista de trucos.");
                 if (!r.files.empty()) r.file = r.files.front();
             } else {
                 // Without the list of names (GitHub limits how often it is asked for),
@@ -161,12 +163,12 @@ void CheatDatabase::work() {
                     }
                     if (status == 0) break;
                 }
-                if (r.files.empty()) r.status = status == 0 ? kOffline : indexError;
+                if (r.files.empty()) r.status = status == 0 ? std::string(tr(kOffline)) : indexError;
             }
         } else {
             r.file = task.file;
             if (!download(task.system, task.file, &r.cheats, &status))
-                r.status = status == 0 ? kOffline : "No se pudo descargar la lista de trucos.";
+                r.status = status == 0 ? tr(kOffline) : tr("No se pudo descargar la lista de trucos.");
         }
         std::lock_guard<std::mutex> lock(mutex_);
         reply_ = std::move(r);

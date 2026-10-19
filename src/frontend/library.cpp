@@ -6,6 +6,7 @@
 #include <fstream>
 #include <system_error>
 
+#include "../core/i18n.h"
 #include "../render/gl.h"
 #include "http.h"
 #include "library_names.h"
@@ -214,10 +215,10 @@ void Library::downloadMissing() {
 
 std::string Library::downloadStatus() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (offline_) return "No se pudo conectar con el servidor de carátulas.";
+    if (offline_) return tr("No se pudo conectar con el servidor de carátulas.");
     if (downloaded_ == 0 && notFound_ == 0) return {};
-    std::string s = std::to_string(downloaded_) + (downloaded_ == 1 ? " carátula descargada" : " carátulas descargadas");
-    if (notFound_) s += ", " + std::to_string(notFound_) + " sin encontrar";
+    std::string s = trf(downloaded_ == 1 ? N_("%d carátula descargada") : N_("%d carátulas descargadas"), downloaded_);
+    if (notFound_) s += trf(", %d sin encontrar", notFound_);
     return s;
 }
 
@@ -260,7 +261,7 @@ bool Library::useCover(size_t game) {
         std::ofstream f(fs::u8path(target + g.stem + ".png"), std::ios::binary);
         f.write(reinterpret_cast<const char*>(previewImage_.data()), static_cast<std::streamsize>(previewImage_.size()));
         if (!f) {
-            search_.status = "No se pudo guardar la carátula en " + target;
+            search_.status = trf("No se pudo guardar la carátula en %s", target.c_str());
             return false;
         }
     }
@@ -425,8 +426,8 @@ bool Library::loadCoverIndex(ConsoleSystem s, std::string* error) {
         if (status == 200) index = parseCoverList(std::string(body.begin(), body.end()));
         if (!index.empty()) return true;
     }
-    *error = status == 0 ? "No se pudo conectar con el servidor de carátulas."
-                         : "No se pudo leer la lista de carátulas (error " + std::to_string(status) + ").";
+    *error = status == 0 ? std::string(tr("No se pudo conectar con el servidor de carátulas."))
+                         : trf("No se pudo leer la lista de carátulas (error %d).", status);
     return false;
 }
 
@@ -447,7 +448,7 @@ void Library::searchWork() {
         if (task.kind == SearchTask::Names) {
             if (loadCoverIndex(task.system, &r.status)) {
                 r.names = similarCoverNames(coverIndex_[static_cast<int>(task.system)], task.text, 60);
-                if (r.names.empty()) r.status = "Ninguna carátula se parece a ese nombre.";
+                if (r.names.empty()) r.status = tr("Ninguna carátula se parece a ese nombre.");
             }
         } else {
             const CoverSet& set = coverSet(task.system);
@@ -457,7 +458,7 @@ void Library::searchWork() {
             if (status != 200 || !isImage(r.image) || !decode(r.image, r.pixels, &r.width, &r.height)) {
                 r.image.clear();
                 r.pixels.clear();
-                r.status = status == 0 ? "No se pudo conectar con el servidor de carátulas." : "No se pudo descargar esa carátula.";
+                r.status = status == 0 ? tr("No se pudo conectar con el servidor de carátulas.") : tr("No se pudo descargar esa carátula.");
             }
         }
         std::lock_guard<std::mutex> lock(mutex_);

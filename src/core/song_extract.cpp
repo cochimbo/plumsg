@@ -1,5 +1,7 @@
 #include "song_extract.h"
 
+#include "i18n.h"
+
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -210,7 +212,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     effects_.clear();
     auto md = std::make_unique<MegaDrive>();
     if (!md->loadRom(romPath, error)) return false;
-    if (md->isMegaCd()) return fail("Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip.");
+    if (md->isMegaCd()) return fail(tr("Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip."));
     md->setDrawing(false);
 
     Progress p;
@@ -287,7 +289,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         pendingValue[i] = 0;
     });
     std::map<uint64_t, std::vector<uint8_t>> checkpoints;
-    if (!report("Arrancando el juego")) return fail("");
+    if (!report(tr("Arrancando el juego"))) return fail("");
     for (int f = 0; f < kBootFrames; ++f) {
         if (f % kCheckpointEvery == 0) md->saveState(checkpoints[md->frameCount()], true);
         frame();
@@ -612,7 +614,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         }
     if (list.size() > kMaxCandidates) list.resize(kMaxCandidates);
     std::vector<Candidate> queues;
-    if (!report("Buscando dónde pide el juego la música")) return fail("");
+    if (!report(tr("Buscando dónde pide el juego la música"))) return fail("");
     for (Candidate& c : list) {
         // Its first few different requests: the first may be a short sound.
         std::set<uint32_t> tried;
@@ -641,9 +643,9 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     md->lockSoundRequests(0, 0);
     md->cpu().skipRoutine = 0;
     if (queues.empty())
-        return fail("No he encontrado cómo pide la música este juego. Por ahora sé sacarla de los juegos cuyo driver toma "
-                    "las peticiones de un byte de la memoria (como el de Sonic, SMPS), de una llamada a una rutina suya "
-                    "(como el de Streets of Rage 2) o de mensajes en la memoria del Z80 (GEMS).");
+        return fail(tr("No he encontrado cómo pide la música este juego. Por ahora sé sacarla de los juegos cuyo driver toma "
+                       "las peticiones de un byte de la memoria (como el de Sonic, SMPS), de una llamada a una rutina suya "
+                       "(como el de Streets of Rage 2) o de mensajes en la memoria del Z80 (GEMS)."));
 
     // Where the driver takes the requests first, then where asking made most music. A
     // queue where no number plays a song (a variable of the game that only looked like
@@ -778,7 +780,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         for (size_t at = 0; at < numbers.size(); ++at) {
             const uint32_t number = numbers[at];
             p.tried = static_cast<int>(at);
-            if (!report("Probando el " + std::to_string(p.tried + 1))) return -1;
+            if (!report(trf("Probando el %d", p.tried + 1))) return -1;
             md->loadState(origin, nullptr);
             lock(c, lockFrom, lockTo);
             md->cpu().holdMain(hold);
@@ -876,9 +878,9 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             Song song;
             song.number = static_cast<int>(number);
             VgmWriter::Tag tag;
-            tag.title = "Canción " + std::to_string(p.found + 1);
+            tag.title = trf("Canción %d", p.found + 1);
             tag.game = game;
-            tag.notes = "Sacada de la ROM (petición " + hex(number, digits) + ")";
+            tag.notes = trf("Sacada de la ROM (petición %s)", hex(number, digits).c_str());
             if (loopStart >= 0) {
                 const VgmWriter::Mark loop = marks[static_cast<size_t>(loopStart)];
                 const VgmWriter::Mark end = marks[static_cast<size_t>(loopEnd)];
@@ -902,7 +904,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
         // that comes before a level's song): the numbers that played nothing, once more with
         // the game's own song started. What they add to it are their instruments.
         p.tried = p.total;
-        if (!silent.empty() && report("Buscando los efectos de sonido")) {
+        if (!silent.empty() && report(tr("Buscando los efectos de sonido"))) {
             md->loadState(origin, nullptr);
             lock(c, lockFrom, lockTo);
             md->cpu().holdMain(hold);
@@ -924,7 +926,7 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
             };
             const std::set<uint32_t> alone = over(0);
             for (uint32_t number : silent) {
-                if (!report("Buscando los efectos de sonido")) break;
+                if (!report(tr("Buscando los efectos de sonido"))) break;
                 for (uint32_t fp : over(number))
                     if (!alone.count(fp)) shortSounds.insert(fp);
             }
@@ -948,8 +950,8 @@ bool SongExtractor::run(const std::string& romPath, const std::string& game, con
     p.found = static_cast<int>(best.size());
     for (const Song& song : best)
         if (onSong) onSong(song);
-    if (!report("Hecho")) return fail("");
-    if (best.empty()) return fail("El juego responde a las peticiones, pero ninguna ha sonado como una canción.");
+    if (!report(tr("Hecho"))) return fail("");
+    if (best.empty()) return fail(tr("El juego responde a las peticiones, pero ninguna ha sonado como una canción."));
     return true;
 }
 

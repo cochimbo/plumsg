@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "../core/cd_image.h"
+#include "../core/i18n.h"
 #include "../core/megadrive.h"
 #include "md5.h"
 #include "rc_client.h"
@@ -123,15 +124,15 @@ void Achievements::loginDone(int result, const char* error, rc_client_t* client,
     Achievements* self = owner(client);
     self->loggingIn_ = false;
     if (result != RC_OK) {
-        self->loginError_ = result == RC_INVALID_CREDENTIALS ? "Usuario o contraseña incorrectos."
-                            : result == RC_EXPIRED_TOKEN  ? "La sesión ha caducado: vuelve a escribir la contraseña."
-                            : result == RC_NO_RESPONSE    ? "No se puede conectar con RetroAchievements."
-                                                          : "No se pudo iniciar sesión: " + text(error);
+        self->loginError_ = result == RC_INVALID_CREDENTIALS ? std::string(tr("Usuario o contraseña incorrectos."))
+                            : result == RC_EXPIRED_TOKEN  ? std::string(tr("La sesión ha caducado: vuelve a escribir la contraseña."))
+                            : result == RC_NO_RESPONSE    ? std::string(tr("No se puede conectar con RetroAchievements."))
+                                                          : trf("No se pudo iniciar sesión: %s", text(error).c_str());
         self->notice(Notice::Kind::Info, "RetroAchievements", self->loginError_, {}, 0, true);
         return;
     }
     self->notice(Notice::Kind::Info, "RetroAchievements",
-                 "Sesión iniciada como " + self->userName() + " (" + std::to_string(self->score()) + " puntos)");
+                 trf("Sesión iniciada como %s (%u puntos)", self->userName().c_str(), self->score()));
     if (self->wantGame_) self->beginLoadGame();
 }
 
@@ -185,23 +186,22 @@ void Achievements::gameDone(int result, const char* error, rc_client_t* client, 
     if (result == RC_ABORTED) return;  // another game was loaded meanwhile
     if (result != RC_OK) {
         self->notice(Notice::Kind::Info, "RetroAchievements",
-                     result == RC_NO_GAME_LOADED ? "RetroAchievements no conoce este juego (o esta versión de la ROM)."
-                                                 : "No se pudieron cargar los logros: " + text(error),
+                     result == RC_NO_GAME_LOADED ? std::string(tr("RetroAchievements no conoce este juego (o esta versión de la ROM)."))
+                                                 : trf("No se pudieron cargar los logros: %s", text(error).c_str()),
                      {}, 0, result != RC_NO_GAME_LOADED);
         return;
     }
     const rc_client_game_t* game = rc_client_get_game_info(client);
     if (!rc_client_has_achievements(client)) {
-        self->notice(Notice::Kind::GameStarted, text(game->title), "Este juego no tiene logros todavía.",
+        self->notice(Notice::Kind::GameStarted, text(game->title), tr("Este juego no tiene logros todavía."),
                      text(game->badge_url));
         return;
     }
     rc_client_user_game_summary_t s{};
     rc_client_get_user_game_summary(client, &s);
-    std::string line = "Tienes " + std::to_string(s.num_unlocked_achievements) + " de " +
-                       std::to_string(s.num_core_achievements) + " logros (" + std::to_string(s.points_unlocked) + " de " +
-                       std::to_string(s.points_core) + " puntos)";
-    if (self->hardcore()) line += ". Modo hardcore";
+    std::string line = trf("Tienes %u de %u logros (%u de %u puntos)", s.num_unlocked_achievements,
+                           s.num_core_achievements, s.points_unlocked, s.points_core);
+    if (self->hardcore()) line += tr(". Modo hardcore");
     self->notice(Notice::Kind::GameStarted, text(game->title), line, text(game->badge_url));
 }
 
@@ -359,19 +359,18 @@ void Achievements::eventHandler(const rc_client_event_t* event, rc_client_t* cli
             self->progressShown_ = false;
             break;
         case RC_CLIENT_EVENT_LEADERBOARD_STARTED:
-            self->notice(Notice::Kind::Leaderboard, "Reto empezado: " + text(lb->title), text(lb->description));
+            self->notice(Notice::Kind::Leaderboard, trf("Reto empezado: %s", text(lb->title).c_str()), text(lb->description));
             break;
         case RC_CLIENT_EVENT_LEADERBOARD_FAILED:
-            self->notice(Notice::Kind::Leaderboard, "Reto fallido: " + text(lb->title));
+            self->notice(Notice::Kind::Leaderboard, trf("Reto fallido: %s", text(lb->title).c_str()));
             break;
         case RC_CLIENT_EVENT_LEADERBOARD_SUBMITTED:
-            self->notice(Notice::Kind::Leaderboard, "Marca enviada: " + text(lb->title), text(lb->tracker_value));
+            self->notice(Notice::Kind::Leaderboard, trf("Marca enviada: %s", text(lb->title).c_str()), text(lb->tracker_value));
             break;
         case RC_CLIENT_EVENT_LEADERBOARD_SCOREBOARD: {
             const rc_client_leaderboard_scoreboard_t* s = event->leaderboard_scoreboard;
-            self->notice(Notice::Kind::Leaderboard, "Tu puesto: " + std::to_string(s->new_rank) + " de " +
-                                                        std::to_string(s->num_entries),
-                         "Tu mejor marca: " + text(s->best_score));
+            self->notice(Notice::Kind::Leaderboard, trf("Tu puesto: %u de %u", s->new_rank, s->num_entries),
+                         trf("Tu mejor marca: %s", text(s->best_score).c_str()));
             break;
         }
         case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_SHOW:
@@ -386,26 +385,26 @@ void Achievements::eventHandler(const rc_client_event_t* event, rc_client_t* cli
                 if (t.id == event->leaderboard_tracker->id) t.text = text(event->leaderboard_tracker->display);
             break;
         case RC_CLIENT_EVENT_RESET:
-            self->notice(Notice::Kind::Reset, "Modo hardcore", "El juego vuelve a empezar: así se juega en hardcore.");
+            self->notice(Notice::Kind::Reset, tr("Modo hardcore"), tr("El juego vuelve a empezar: así se juega en hardcore."));
             break;
         case RC_CLIENT_EVENT_GAME_COMPLETED: {
             const rc_client_game_t* game = rc_client_get_game_info(client);
             self->notice(Notice::Kind::GameCompleted, game ? text(game->title) : std::string(),
-                         self->hardcore() ? "¡Juego dominado! Tienes todos sus logros en hardcore."
-                                          : "¡Juego completado! Tienes todos sus logros.",
+                         self->hardcore() ? tr("¡Juego dominado! Tienes todos sus logros en hardcore.")
+                                          : tr("¡Juego completado! Tienes todos sus logros."),
                          game ? text(game->badge_url) : std::string());
             break;
         }
         case RC_CLIENT_EVENT_SERVER_ERROR:
-            self->notice(Notice::Kind::Info, "RetroAchievements", "Error del servidor: " + text(event->server_error->error_message),
+            self->notice(Notice::Kind::Info, "RetroAchievements", trf("Error del servidor: %s", text(event->server_error->error_message).c_str()),
                          {}, 0, true);
             break;
         case RC_CLIENT_EVENT_DISCONNECTED:
             self->notice(Notice::Kind::Info, "RetroAchievements",
-                         "Sin conexión: los logros se enviarán cuando vuelva.", {}, 0, true);
+                         tr("Sin conexión: los logros se enviarán cuando vuelva."), {}, 0, true);
             break;
         case RC_CLIENT_EVENT_RECONNECTED:
-            self->notice(Notice::Kind::Info, "RetroAchievements", "Conexión recuperada: logros enviados.");
+            self->notice(Notice::Kind::Info, "RetroAchievements", tr("Conexión recuperada: logros enviados."));
             break;
         default: break;
     }
@@ -423,14 +422,14 @@ std::vector<Achievements::Group> Achievements::achievementList() {
         const rc_client_achievement_bucket_t& bucket = list->buckets[b];
         Group g;
         switch (bucket.bucket_type) {
-            case RC_CLIENT_ACHIEVEMENT_BUCKET_LOCKED: g.label = "Por conseguir"; break;
-            case RC_CLIENT_ACHIEVEMENT_BUCKET_UNLOCKED: g.label = "Conseguidos"; break;
-            case RC_CLIENT_ACHIEVEMENT_BUCKET_UNSUPPORTED: g.label = "No se pueden conseguir en plumsg"; break;
-            case RC_CLIENT_ACHIEVEMENT_BUCKET_UNOFFICIAL: g.label = "No oficiales"; break;
-            case RC_CLIENT_ACHIEVEMENT_BUCKET_RECENTLY_UNLOCKED: g.label = "Recién conseguidos"; break;
-            case RC_CLIENT_ACHIEVEMENT_BUCKET_ACTIVE_CHALLENGE: g.label = "A punto (reto en marcha)"; break;
-            case RC_CLIENT_ACHIEVEMENT_BUCKET_ALMOST_THERE: g.label = "Casi"; break;
-            case RC_CLIENT_ACHIEVEMENT_BUCKET_UNSYNCED: g.label = "Conseguidos, sin enviar todavía"; break;
+            case RC_CLIENT_ACHIEVEMENT_BUCKET_LOCKED: g.label = tr("Por conseguir"); break;
+            case RC_CLIENT_ACHIEVEMENT_BUCKET_UNLOCKED: g.label = tr("Conseguidos"); break;
+            case RC_CLIENT_ACHIEVEMENT_BUCKET_UNSUPPORTED: g.label = tr("No se pueden conseguir en plumsg"); break;
+            case RC_CLIENT_ACHIEVEMENT_BUCKET_UNOFFICIAL: g.label = tr("No oficiales"); break;
+            case RC_CLIENT_ACHIEVEMENT_BUCKET_RECENTLY_UNLOCKED: g.label = tr("Recién conseguidos"); break;
+            case RC_CLIENT_ACHIEVEMENT_BUCKET_ACTIVE_CHALLENGE: g.label = tr("A punto (reto en marcha)"); break;
+            case RC_CLIENT_ACHIEVEMENT_BUCKET_ALMOST_THERE: g.label = tr("Casi"); break;
+            case RC_CLIENT_ACHIEVEMENT_BUCKET_UNSYNCED: g.label = tr("Conseguidos, sin enviar todavía"); break;
             default: g.label = text(bucket.label); break;
         }
         for (uint32_t i = 0; i < bucket.num_achievements; ++i) {

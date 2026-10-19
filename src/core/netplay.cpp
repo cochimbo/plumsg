@@ -1,5 +1,7 @@
 #include "netplay.h"
 
+#include "i18n.h"
+
 #include <algorithm>
 #include <cstddef>
 
@@ -120,7 +122,7 @@ void NetplaySession::end() {
         // UDP may lose one; three is plenty, and a lost Bye only means a timeout.
         for (int i = 0; i < 3; ++i) sendPacket(Bye, body);
     }
-    fail("Has salido de la partida.");
+    fail(tr("Has salido de la partida."));
 }
 
 void NetplaySession::poll(MegaDrive& md, uint32_t nowMs) {
@@ -140,7 +142,7 @@ void NetplaySession::poll(MegaDrive& md, uint32_t nowMs) {
     const uint32_t silence = nowMs - lastHeard_;
     if (phase_ == Phase::Connecting) {
         if (nowMs - phaseStart_ > kConnectTimeoutMs) {
-            fail("El anfitrión no responde. Comprueba la dirección y que tenga el puerto UDP abierto.");
+            fail(tr("El anfitrión no responde. Comprueba la dirección y que tenga el puerto UDP abierto."));
             return;
         }
         if (nowMs - lastSent_ >= kHelloEveryMs) {
@@ -152,7 +154,7 @@ void NetplaySession::poll(MegaDrive& md, uint32_t nowMs) {
         return;
     }
     if (silence > kSilenceTimeoutMs) {
-        fail("Se ha perdido la conexión con el otro jugador.");
+        fail(tr("Se ha perdido la conexión con el otro jugador."));
         return;
     }
     if (phase_ == Phase::Syncing) {
@@ -184,7 +186,7 @@ void NetplaySession::handle(const std::vector<uint8_t>& p, MegaDrive& md, uint32
             PacketWriter(body).u8(1);
             sendPacket(Reject, body);
         } else if (role_ == Role::Guest && phase_ == Phase::Connecting) {
-            fail("El anfitrión usa otra versión de plumsg: tenéis que usar la misma.");
+            fail(tr("El anfitrión usa otra versión de plumsg: tenéis que usar la misma."));
         }
         return;
     }
@@ -208,7 +210,7 @@ void NetplaySession::handle(const std::vector<uint8_t>& p, MegaDrive& md, uint32
             transport_.keepPeer();
             std::string error;
             if (!md.saveState(start_) || !md.loadState(start_, &error)) {
-                fail("No se pudo preparar la partida: " + error);
+                fail(trf("No se pudo preparar la partida: %s", error.c_str()));
                 return;
             }
             session_ = (nowMs * 2654435761u) ^ crc ^ static_cast<uint32_t>(start_.size()) ^ 0x504C554Du;
@@ -231,9 +233,9 @@ void NetplaySession::handle(const std::vector<uint8_t>& p, MegaDrive& md, uint32
     }
     if (role_ == Role::Guest && type == Reject && phase_ == Phase::Connecting) {
         const uint8_t why = r.u8();
-        fail(why == 2 ? "El anfitrión está jugando a otro juego: abrid los dos el mismo (la misma ROM)."
-             : why == 1 ? "El anfitrión usa otra versión de plumsg: tenéis que usar la misma."
-                        : "El anfitrión no ha aceptado la conexión.");
+        fail(why == 2 ? tr("El anfitrión está jugando a otro juego: abrid los dos el mismo (la misma ROM).")
+             : why == 1 ? tr("El anfitrión usa otra versión de plumsg: tenéis que usar la misma.")
+                        : tr("El anfitrión no ha aceptado la conexión."));
         return;
     }
     if (role_ == Role::Guest && type == Welcome && phase_ == Phase::Connecting) {
@@ -256,7 +258,7 @@ void NetplaySession::handle(const std::vector<uint8_t>& p, MegaDrive& md, uint32
     lastHeard_ = nowMs;
     switch (type) {
         case Bye:
-            fail("El otro jugador ha salido de la partida.");
+            fail(tr("El otro jugador ha salido de la partida."));
             return;
         case Chunk: {
             if (role_ != Role::Guest || phase_ != Phase::Syncing) return;
@@ -276,7 +278,7 @@ void NetplaySession::handle(const std::vector<uint8_t>& p, MegaDrive& md, uint32
             std::string error;
             if (!md.loadState(start_, &error)) {
                 end();
-                fail("No se pudo cargar la partida del anfitrión: " + error);
+                fail(trf("No se pudo cargar la partida del anfitrión: %s", error.c_str()));
                 return;
             }
             startPlaying(nowMs);
@@ -442,7 +444,7 @@ void NetplaySession::catchUp(MegaDrive& md) {
     std::string error;
     if (stateFrame_[ring(from)] != from || !md.loadState(states_[ring(from)], &error)) {
         end();
-        fail("La partida se ha descompasado y no se puede recuperar.");
+        fail(tr("La partida se ha descompasado y no se puede recuperar."));
         return;
     }
     for (uint32_t f = from; f < frame_; ++f) {
