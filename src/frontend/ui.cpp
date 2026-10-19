@@ -353,6 +353,7 @@ UiActions Ui::frame(const UiState& state) {
         EditorRequests r;
         EditorView view = state.editor;
         view.drawSoundfont = [&] { drawSoundfontCombo(out, false); };  // the same list as Sonido's
+        view.drawEqualizer = [&] { drawEqualizer(out); };
         editor_->draw(view, r);
         if (r.chooseTrack) chooseTrack();
         if (!r.load.empty()) out.load = r.load;
@@ -671,6 +672,46 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
                           "y elige con qué instrumento General MIDI suena en el sintetizador."));
+}
+
+// The synthesizer's equalizer, in the instrument editor: a slider per band, heard as it
+// moves and saved when let go.
+void Ui::drawEqualizer(UiActions& out) {
+    static const char* const kBands[RolandSound::kEqBands] = {N_("Graves"), N_("Medios graves"), N_("Medios"),
+                                                              N_("Medios agudos"), N_("Agudos")};
+    const float height = ImGui::GetFrameHeight() * 4;
+    for (int b = 0; b < RolandSound::kEqBands; ++b) {
+        ImGui::PushID(b);
+        if (b) ImGui::SameLine();
+        ImGui::BeginGroup();
+        int& gain = settings_.equalizer[static_cast<size_t>(b)];
+        if (ImGui::VSliderInt("##banda", ImVec2(ImGui::GetFrameHeight() * 1.6f, height), &gain, -RolandSound::kEqRange,
+                              RolandSound::kEqRange, "%+d", ImGuiSliderFlags_AlwaysClamp))
+            out.equalizerChanged = true;
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        // Right-click: back to 0 dB.
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && gain) {
+            gain = 0;
+            out.equalizerChanged = out.settingsChanged = true;
+        }
+        const double hz = RolandSound::kEqFrequencies[b];
+        char freq[16];
+        if (hz >= 1000) std::snprintf(freq, sizeof freq, "%gk", hz / 1000);
+        else std::snprintf(freq, sizeof freq, "%g", hz);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(tr("%s: %s Hz, %+d dB. Clic derecho: 0 dB."), tr(kBands[b]), freq, gain);
+        ImGui::TextDisabled("%s", freq);
+        ImGui::EndGroup();
+        ImGui::PopID();
+    }
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+    if (ImGui::Button(tr("Plano"))) {
+        settings_.equalizer = {};
+        out.equalizerChanged = out.settingsChanged = true;
+    }
+    ImGui::TextDisabled("%s", tr("dB por banda.\nSolo el sintetizador."));
+    ImGui::EndGroup();
 }
 
 void Ui::setSoundfonts(std::string included, std::string folder) {

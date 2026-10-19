@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <iterator>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 
@@ -104,6 +105,11 @@ void Settings::parse(std::istream& in, Settings& s) {
             else if (key == "mezcla_chip") s.chipMix = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "reverb") s.reverb = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "chorus") s.chorus = std::clamp(std::atoi(value.c_str()), 0, 100);
+            else if (key == "ecualizador") {
+                std::array<int, 5> eq{};
+                if (std::sscanf(value.c_str(), "%d , %d , %d , %d , %d", &eq[0], &eq[1], &eq[2], &eq[3], &eq[4]) == 5)
+                    for (size_t i = 0; i < eq.size(); ++i) s.equalizer[i] = std::clamp(eq[i], -12, 12);
+            }
             else if (key == "efectos") s.effectsOriginal = lower(value) == "original";
         } else if (section == "consola") {
             if (key == "region") {
@@ -198,6 +204,9 @@ void Settings::write(std::ostream& out) const {
         << "mezcla_chip = " << chipMix << "\n"
         << "reverb = " << reverb << "\n"
         << "chorus = " << chorus << "\n"
+        << "# ecualizador: los dB (de -12 a 12) de graves, medios graves, medios, medios agudos y agudos.\n"
+        << "ecualizador = " << equalizer[0] << ", " << equalizer[1] << ", " << equalizer[2] << ", " << equalizer[3]
+        << ", " << equalizer[4] << "\n"
         << "# efectos: original (los efectos de sonido suenan como en la consola) o sintetizador. Hace falta\n"
         << "# haber usado Sacar canciones en el juego para saber cuáles son sus efectos.\n"
         << "efectos = " << (effectsOriginal ? "original" : "sintetizador") << "\n"

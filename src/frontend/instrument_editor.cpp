@@ -81,6 +81,13 @@ const char* const kFamilies[16] = {N_("Pianos"), N_("Percusión afinada"), N_("�
                                    N_("Fondos sintetizados"), N_("Efectos sintetizados"), N_("Étnicos"), N_("Percusión"),
                                    N_("Efectos de sonido")};
 
+// A, B ... Z, then AA, AB...
+std::string instrumentLetter(int n) {
+    std::string s;
+    for (++n; n > 0; n = (n - 1) / 26) s.insert(s.begin(), static_cast<char>('A' + (n - 1) % 26));
+    return s;
+}
+
 std::string describe(const RolandSound::Assignment& a) {
     if (a.original) return tr("Sonido original");
     if (a.drum >= 0) return trf("Batería: %s", RolandSound::drumName(a.drum));
@@ -235,10 +242,12 @@ void InstrumentEditor::addTracks(const std::string& path) {
     if (std::find(tracks_.begin(), tracks_.end(), t) == tracks_.end()) tracks_.push_back(t);
 }
 
-void InstrumentEditor::useSoundfont(const RolandSound& from, int reverb, int chorus) {
+void InstrumentEditor::useSoundfont(const RolandSound& from, int reverb, int chorus,
+                                    const std::array<int, RolandSound::kEqBands>& equalizer) {
     // Shared again each time: the emulator's may have changed.
     soundfontReady_ = synth_.shareSoundfont(from) || synth_.ready();
     synth_.setEffects(reverb, chorus);
+    synth_.setEqualizer(equalizer);
     if (!soundfontReady_) rolandOutput_ = false;
     player_.setRolandOutput(rolandOutput_);
 }
@@ -336,14 +345,18 @@ void InstrumentEditor::applyListening() {
     player_.setListening(muted, std::move(silenced));
 }
 
-void InstrumentEditor::assign(uint32_t fingerprint, const RolandSound::Assignment* a, EditorRequests& out) {
-    if (a) {
-        if (!game_.empty()) own_[fingerprint] = *a;
-        if (game_.empty() || share_) cache_[fingerprint] = *a;
-    } else {
-        own_.erase(fingerprint);
-        if (game_.empty() || share_) cache_.erase(fingerprint);
+void InstrumentEditor::resetAll(const std::vector<Instrument>& list, EditorRequests& out) {
+    // The game's file empties, and the shared list loses this list's instruments (not
+    // other games'): what an older plumsg saved there would still be heard.
+    own_.clear();
+    for (const Instrument& i : list) {
+        cache_.erase(i.fingerprint);
+        for (uint32_t old : synth_.aliases(i.fingerprint)) cache_.erase(old);
     }
+    save(out);
+}
+
+void InstrumentEditor::save(EditorRequests& out) {
     const std::string ownText = RolandSound::formatAssignments(own_), cacheText = RolandSound::formatAssignments(cache_);
     bool ok = writeBytes(cachePath(), cacheText.data(), cacheText.size());
     if (!game_.empty()) ok = writeBytes(gamePath(), ownText.data(), ownText.size()) && ok;
@@ -355,13 +368,36 @@ void InstrumentEditor::assign(uint32_t fingerprint, const RolandSound::Assignmen
     out.assignmentsChanged = true;
 }
 
+void InstrumentEditor::assign(uint32_t fingerprint, const RolandSound::Assignment* a, EditorRequests& out) {
+    // What is chosen goes to the game's file; with no game, to the shared list, which
+    // every game reads (older plumsgs also put each game's choices there). Saved under its
+    // fingerprint from now on: what an old file had under an old one goes.
+    for (uint32_t old : synth_.aliases(fingerprint)) {
+        own_.erase(old);
+        if (game_.empty()) cache_.erase(old);
+    }
+    if (a) {
+        if (game_.empty()) cache_[fingerprint] = *a;
+        else own_[fingerprint] = *a;
+    } else {
+        // Back to the suggestion: also out of the shared list, or it would still be heard.
+        own_.erase(fingerprint);
+        cache_.erase(fingerprint);
+        for (uint32_t old : synth_.aliases(fingerprint)) cache_.erase(old);
+    }
+    save(out);
+}
+
 // The instruments in the track, and those the game's file assigns that the track does
 // not play: FM first, then the PSG; each kind in the order of the channel it plays on.
 std::vector<InstrumentEditor::Instrument> InstrumentEditor::instruments() const {
     std::vector<Instrument> list;
     for (const auto& [fp, seen] : trackSeen_) list.push_back({fp, seen, true, {}});
+    std::set<uint32_t> aliases;  // the old fingerprints of the track's instruments
+    for (const auto& [fp, seen] : trackSeen_)
+        for (uint32_t old : synth_.aliases(fp)) aliases.insert(old);
     for (const auto& [fp, a] : own_) {
-        if (trackSeen_.count(fp)) continue;
+        if (trackSeen_.count(fp) || aliases.count(fp)) continue;
         Instrument i;
         i.fingerprint = fp;
         i.seen.kind = RolandSound::kindOf(fp);
@@ -383,7 +419,7 @@ std::vector<InstrumentEditor::Instrument> InstrumentEditor::instruments() const 
         switch (i.seen.kind) {
             case RolandSound::Kind::Fm:
                 if (const int n = RolandSound::opllInstrument(i.fingerprint)) i.label = std::string("FM: ") + RolandSound::opllInstrumentName(n);
-                else i.label = "FM " + std::to_string(++fm);
+                else i.label = "FM " + instrumentLetter(fm++);  // letters: FM 1-6 are the channels
                 break;
             case RolandSound::Kind::Rhythm: i.label = std::string("FM: ") + RolandSound::rhythmName(static_cast<int>(i.fingerprint & 0xFF)); break;
             case RolandSound::Kind::PsgTone: i.label = "PSG " + std::to_string((i.fingerprint & 0xFF) + 1); break;
@@ -438,7 +474,7 @@ void InstrumentEditor::draw(const EditorView& view, EditorRequests& out) {
     ImGui::EndChild();
     ImGui::SameLine();
     ImGui::BeginChild("canales", ImVec2(0, height));
-    drawChannels();
+    drawChannels(list);
     ImGui::EndChild();
     ImGui::Separator();
     drawAssignment(list, out);
@@ -559,8 +595,18 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
         ImGui::SameLine();
         view.drawSoundfont();
     }
-    if (player_.loaded() && !player_.file().game.empty()) {
+    if (view.drawEqualizer) {
         if (view.drawSoundfont) ImGui::SameLine();
+        if (ImGui::Button(tr("Ecualizador..."))) ImGui::OpenPopup("ecualizador");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", tr("Graves, medios y agudos del sintetizador, aquí y en los juegos."));
+        if (ImGui::BeginPopup("ecualizador")) {
+            view.drawEqualizer();
+            ImGui::EndPopup();
+        }
+    }
+    if (player_.loaded() && !player_.file().game.empty()) {
+        if (view.drawSoundfont || view.drawEqualizer) ImGui::SameLine();
         ImGui::TextDisabled("%s%s%s", player_.file().game.c_str(), player_.file().title.empty() ? "" : " - ",
                             player_.file().title.c_str());
     }
@@ -660,57 +706,116 @@ void InstrumentEditor::drawExtraction(EditorRequests& out) {
     }
 }
 
+// The instruments and the channels are two tables side by side with rows of the same
+// height, a header each and their first row level, so that a line across reads straight.
+namespace {
+constexpr ImGuiTableFlags kListFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerV |
+                                       ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp;
+const ImVec4 kPlaying(0.45f, 0.95f, 0.55f, 1.0f);
+}  // namespace
+
 void InstrumentEditor::drawInstruments(const std::vector<Instrument>& list) {
     ImGui::TextDisabled("%s", tr("Instrumentos (elige uno para cambiarlo)"));
-    ImGui::BeginChild("lista", ImVec2(0, 0), ImGuiChildFlags_Borders);
     std::set<uint32_t> now;  // the instruments playing a note now
     const uint32_t active = synth_.activeVoices();
     for (int v = 0; v < RolandSound::kVoices; ++v)
         if ((active >> v) & 1) now.insert(synth_.voiceInstrument(v));
     if (!selected_ || std::none_of(list.begin(), list.end(), [&](const Instrument& i) { return i.fingerprint == selected_; }))
         selected_ = list.front().fingerprint;
+    if (!ImGui::BeginTable("lista", 4, kListFlags | ImGuiTableFlags_Resizable)) return;
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableSetupColumn(tr("Instrumento"), ImGuiTableColumnFlags_WidthStretch, 1.8f);
+    ImGui::TableSetupColumn(tr("Suena como"), ImGuiTableColumnFlags_WidthStretch, 2.2f);
+    ImGui::TableSetupColumn(tr("Canales"), ImGuiTableColumnFlags_WidthStretch, 1.3f);
+    ImGui::TableSetupColumn(tr("Notas"), ImGuiTableColumnFlags_WidthStretch, 0.5f);
+    ImGui::TableHeadersRow();
+    const float row = ImGui::GetFrameHeight();
     for (const Instrument& i : list) {
         ImGui::PushID(static_cast<int>(i.fingerprint));
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, row);
         const RolandSound::Assignment a = synth_.assignmentFor(i.fingerprint);
-        const bool byHand = synth_.assignments().count(i.fingerprint) != 0;
-        std::string text = i.label + "   " + describe(a) + (byHand ? "" : tr("  (sugerido)"));
-        if (i.heard) {
-            std::string channels;
-            for (int v = 0; v < RolandSound::kVoices; ++v)
-                if ((i.seen.channels >> v) & 1) channels += (channels.empty() ? "" : ", ") + std::string(tr(kVoiceNames[v]));
-            text += "   [" + channels + "; " + trf(i.seen.notes == 1 ? N_("%d nota") : N_("%d notas"), i.seen.notes) + "]";
-        } else {
-            text += std::string("   [") + tr("no suena en esta pista") + "]";
-        }
+        const bool byHand = synth_.assignedAs(i.fingerprint) != 0;
         const bool on = playing_ && now.count(i.fingerprint);
-        if (on) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.95f, 0.55f, 1.0f));
-        if (ImGui::Selectable(text.c_str(), selected_ == i.fingerprint)) selected_ = i.fingerprint;
+        if (on) ImGui::PushStyleColor(ImGuiCol_Text, kPlaying);
+        ImGui::TableSetColumnIndex(0);
+        ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));  // level with the other columns
+        if (ImGui::Selectable(i.label.c_str(), selected_ == i.fingerprint,
+                              ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap, ImVec2(0, row)))
+            selected_ = i.fingerprint;
+        ImGui::PopStyleVar();
+        ImGui::TableSetColumnIndex(1);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(describe(a).c_str());
+        if (!byHand) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", tr("(sugerido)"));
+        }
+        ImGui::TableSetColumnIndex(2);
+        ImGui::AlignTextToFramePadding();
+        if (i.heard) {
+            // "FM 1, 3, 4", not "FM 1, FM 3, FM 4": it fits.
+            std::string channels, kind;
+            for (int v = 0; v < RolandSound::kVoices; ++v) {
+                if (!((i.seen.channels >> v) & 1)) continue;
+                const std::string name = tr(kVoiceNames[v]);
+                const size_t space = name.find(' ');
+                const std::string prefix = space == std::string::npos ? std::string() : name.substr(0, space + 1);
+                if (!channels.empty()) channels += ", ";
+                channels += !prefix.empty() && prefix == kind ? name.substr(space + 1) : name;
+                kind = prefix;
+            }
+            ImGui::TextUnformatted(channels.c_str());
+            ImGui::TableSetColumnIndex(3);
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("%d", i.seen.notes);
+        } else {
+            ImGui::TextDisabled("%s", tr("no suena en esta pista"));
+        }
         if (on) ImGui::PopStyleColor();
         ImGui::PopID();
     }
-    ImGui::EndChild();
+    ImGui::EndTable();
 }
 
-void InstrumentEditor::drawChannels() {
+void InstrumentEditor::drawChannels(const std::vector<Instrument>& list) {
     ImGui::TextDisabled("%s", tr("Canales"));
+    // The channels the chosen instrument plays on stand out.
+    uint32_t chosen = 0;
+    for (const Instrument& i : list)
+        if (i.fingerprint == selected_) chosen = i.seen.channels;
     const uint32_t active = synth_.activeVoices();
     bool changed = false;
-    for (int v : player_.file().opllClock > 0 ? kVoiceOrderOpll : kVoiceOrder) {
-        ImGui::PushID(v);
-        const bool on = playing_ && v < RolandSound::kVoices && ((active >> v) & 1);
-        ImGui::TextColored(on ? ImVec4(0.45f, 0.95f, 0.55f, 1.0f) : ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%-6s", tr(kVoiceNames[v]));
-        ImGui::SameLine(80);
-        bool solo = (soloVoices_ >> v) & 1, mute = (mutedVoices_ >> v) & 1;
-        if (ImGui::Checkbox(tr("Solo"), &solo)) {
-            soloVoices_ ^= 1u << v;
-            changed = true;
+    // Room left below the table for Oír todos.
+    const float height = std::max(ImGui::GetFrameHeight() * 3, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing());
+    if (ImGui::BeginTable("canales", 3, kListFlags, ImVec2(0, height))) {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn(tr("Canal"), ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn(tr("Solo"), ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn(tr("Silencio"), ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableHeadersRow();
+        const float row = ImGui::GetFrameHeight();
+        for (int v : player_.file().opllClock > 0 ? kVoiceOrderOpll : kVoiceOrder) {
+            ImGui::PushID(v);
+            ImGui::TableNextRow(ImGuiTableRowFlags_None, row);
+            const bool on = playing_ && v < RolandSound::kVoices && ((active >> v) & 1);
+            if ((chosen >> v) & 1) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1, ImGui::GetColorU32(ImGuiCol_Header));
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextColored(on ? kPlaying : ImGui::GetStyleColorVec4(ImGuiCol_Text), "%s", tr(kVoiceNames[v]));
+            bool solo = (soloVoices_ >> v) & 1, mute = (mutedVoices_ >> v) & 1;
+            ImGui::TableSetColumnIndex(1);
+            if (ImGui::Checkbox("##solo", &solo)) {
+                soloVoices_ ^= 1u << v;
+                changed = true;
+            }
+            ImGui::TableSetColumnIndex(2);
+            if (ImGui::Checkbox("##silencio", &mute)) {
+                mutedVoices_ ^= 1u << v;
+                changed = true;
+            }
+            ImGui::PopID();
         }
-        ImGui::SameLine();
-        if (ImGui::Checkbox(tr("Silencio"), &mute)) {
-            mutedVoices_ ^= 1u << v;
-            changed = true;
-        }
-        ImGui::PopID();
+        ImGui::EndTable();
     }
     if (ImGui::Button(tr("Oír todos"))) {
         soloVoices_ = mutedVoices_ = 0;
@@ -789,7 +894,7 @@ void InstrumentEditor::drawAssignment(const std::vector<Instrument>& list, Edito
         applyListening();
     }
     ImGui::SameLine();
-    ImGui::BeginDisabled(!synth_.assignments().count(inst.fingerprint));
+    ImGui::BeginDisabled(!synth_.assignedAs(inst.fingerprint));
     if (ImGui::Button(tr("Volver a la sugerencia"))) {
         assign(inst.fingerprint, nullptr, out);
         ImGui::EndDisabled();
@@ -797,12 +902,26 @@ void InstrumentEditor::drawAssignment(const std::vector<Instrument>& list, Edito
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
-    ImGui::BeginDisabled(game_.empty());
-    ImGui::Checkbox(tr("Usar también en otros juegos"), &share_);
+    const bool anyByHand = std::any_of(list.begin(), list.end(), [&](const Instrument& i) { return synth_.assignedAs(i.fingerprint) != 0; });
+    ImGui::BeginDisabled(!anyByHand && own_.empty());
+    if (ImGui::Button(tr("Todo a las sugerencias..."))) ImGui::OpenPopup("todo");
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("%s", tr("Lo que elijas se guarda también en la lista común: el mismo sonido en otro juego\n"
-                          "saldrá ya asignado. Lo de cada juego manda sobre la lista común."));
+        ImGui::SetTooltip("%s", tr("Quita todo lo elegido a mano para este juego: cada instrumento vuelve a sonar\n"
+                          "como sugieren las reglas."));
+    if (ImGui::BeginPopup("todo")) {
+        ImGui::TextUnformatted(game_.empty() ? tr("¿Quitar lo elegido a mano en todos los instrumentos de esta pista?")
+                                             : trf("¿Quitar todo lo elegido a mano en %s?", gameName_.c_str()).c_str());
+        if (ImGui::Button(tr("Sí, todo a las sugerencias"))) {
+            resetAll(list, out);
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            return;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(tr("Cancelar"))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
 
     if (a != before || (!sliding && pendingSlide_)) {
         if (sliding) {

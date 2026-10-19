@@ -1814,6 +1814,29 @@ void testRoland() {
     fm(0, 0x28, 0xF0);
     check(log.empty(), "Roland: un canal en silencio no da notas");
     roland.setListening(0, {});
+    fm(0, 0x28, 0x00);
+
+    // Sonic's driver sets the release rates to the fastest to cut a note: it is still
+    // the same instrument, and what an old file chose under either old fingerprint holds.
+    for (int op : {0x80, 0x84, 0x88, 0x8C}) fm(0, op, 0x0F);
+    fm(0, 0x28, 0xF0);
+    fm(0, 0x28, 0x00);
+    int fmSeen = 0;
+    for (const auto& [fp, seen] : roland.seen()) fmSeen += seen.kind == RolandSound::Kind::Fm;
+    check(fmSeen == 1, "Roland: cambiar la velocidad de release no hace otro instrumento");
+    // With release rate 0 the old fingerprint was the same; with 15, another one.
+    const std::vector<uint32_t> old = roland.aliases(fmPrint);
+    check(old.size() == 1 && old[0] != fmPrint, "Roland: se recuerda la huella de antes del instrumento");
+    if (old.size() == 1) {
+        chosen.clear();
+        chosen[old[0]].drum = 42;
+        roland.setAssignments(chosen);
+        log.clear();
+        fm(0, 0x28, 0xF0);
+        check(has("9 on 42") && roland.assignedAs(fmPrint) == old[0], "Roland: una asignación con la huella de antes vale");
+        fm(0, 0x28, 0x00);
+        roland.setAssignments({});
+    }
 
     // The assignment files.
     RolandSound::Assignments files;

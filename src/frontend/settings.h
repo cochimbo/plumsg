@@ -48,6 +48,7 @@ struct Settings {
     int chipMix = 0;        // how much of the chips' own music stays, 0-100
     int reverb = 40;        // 0-100
     int chorus = 20;        // 0-100
+    std::array<int, 5> equalizer{};  // the synthesizer's, dB per band (RolandSound::kEqBands), -12..12
     bool effectsOriginal = true;  // the game's sound effects keep the chips' sound
     Region region = Region::Auto;
     std::array<PadType, 2> padType{PadType::SixButton, PadType::SixButton};

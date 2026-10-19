@@ -45,6 +45,7 @@ struct UiActions {
     std::string optionsFor;        // open the Opciones de este juego window for this game
     bool gameOptionsChanged = false;  // a game's own options were edited: save them (and apply if loaded)
     bool soundChanged = false;        // the Roland sound was switched or retuned
+    bool equalizerChanged = false;    // settings.equalizer moved: heard at once, saved with settingsChanged
     bool openEditor = false;          // open the instrument editor for editorFor (empty: no game)
     std::string editorFor;
     bool startRecording = false;      // the editor's requests: record the game's music,
@@ -222,6 +223,7 @@ private:
     std::string includedSoundfont_, soundfontFolder_;
     void drawSoundfontMenu(UiActions& out);
     void drawSoundfontCombo(UiActions& out, bool labelled = true);
+    void drawEqualizer(UiActions& out);
     unsigned int logoTexture_ = 0;  // the PLUMSG marquee, 0 if it could not be decoded
     int logoWidth_ = 0, logoHeight_ = 0;
     unsigned int iconTexture_ = 0;  // the plum, 0 if it could not be decoded

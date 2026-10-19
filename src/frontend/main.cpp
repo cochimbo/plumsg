@@ -610,6 +610,7 @@ int main(int argc, char** argv) {
         // cartridge, which plays its music from CD tracks too.
         const bool on = settings.roland && !app->console.megaCd() && loadSoundfont();
         roland->setEffects(settings.reverb, settings.chorus);
+        roland->setEqualizer(settings.equalizer);
         app->console.setRoland(on ? roland.get() : nullptr, settings.chipMix);
     };
     applySound();
@@ -764,7 +765,7 @@ int main(int argc, char** argv) {
     if (cmd.achievements) ui->openAchievements();
     if (cmd.editor) {
         loadSoundfont();
-        editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+        editor.useSoundfont(*roland, settings.reverb, settings.chorus, settings.equalizer);
         editor.open(app->romLoaded ? app->romPath : std::string());
         if (!cmd.track.empty()) editor.openTrack(cmd.track);
     }
@@ -1173,13 +1174,17 @@ int main(int argc, char** argv) {
             app->writeOverrides(optionsGame, otherOptions);
         }
         if (act.settingsChanged) save();
+        if (act.equalizerChanged) {
+            roland->setEqualizer(settings.equalizer);
+            editor.useEqualizer(settings.equalizer);
+        }
         if (act.soundChanged) applySound();
         if (act.soundChanged && app->romLoaded) applyInstruments(app->romPath);
         if (act.soundChanged && editor.isOpen() && loadSoundfont())
-            editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+            editor.useSoundfont(*roland, settings.reverb, settings.chorus, settings.equalizer);
         if (act.openEditor) {
             loadSoundfont();
-            editor.useSoundfont(*roland, settings.reverb, settings.chorus);
+            editor.useSoundfont(*roland, settings.reverb, settings.chorus, settings.equalizer);
             editor.open(act.editorFor);
         }
         if (act.startRecording && app->romLoaded && !recording) {

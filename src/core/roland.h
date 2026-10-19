@@ -95,6 +95,11 @@ public:
 
     // 0..100 each.
     void setEffects(int reverb, int chorus);
+    // The equalizer: a gain in dB (-kEqRange..kEqRange) for each band, from the bass up.
+    static constexpr int kEqBands = 5;
+    static constexpr int kEqRange = 12;
+    static constexpr double kEqFrequencies[kEqBands] = {100, 400, 1200, 3500, 9000};
+    void setEqualizer(const std::array<int, kEqBands>& gains);
     void setVolume(int percent) { volume_ = percent; }
 
     // The instruments chosen by hand; the rest follow the rules. Takes effect from each
@@ -106,6 +111,11 @@ public:
     void setSoundEffects(std::set<uint32_t> effects, bool original);
     // What an instrument plays now: its assignment, or what the rules give it.
     Assignment assignmentFor(uint32_t fingerprint) const;
+    // The key its assignment is under: the fingerprint itself or one of its aliases (0
+    // for none). Aliases are the fingerprints an FM instrument had before 0.0.23, one for
+    // each release rate it was heard with; files saved then still use them.
+    uint32_t assignedAs(uint32_t fingerprint) const;
+    std::vector<uint32_t> aliases(uint32_t fingerprint) const;
 
     // For listening in the editor: voices (mask) and instruments that stay silent, in
     // the Roland sound and, through chipChannels(), in the chips'.
@@ -200,7 +210,8 @@ private:
     void fmPitch(int ch, const Ym2612& ym, uint64_t clock);
     void fmLevel(int ch, const Ym2612& ym, uint64_t clock);
     double fmAmplitude(int ch, const Ym2612& ym) const;
-    uint32_t fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops) const;
+    uint32_t fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops, uint32_t* legacy) const;
+    bool isSoundEffect(uint32_t fingerprint) const;
     void pitchTo(int voice, double note, uint64_t clock);
     void opllKey(int ch, const Ym2413& opll, uint64_t clock);
     double opllNoteOf(int ch, const Ym2413& opll) const;
@@ -218,6 +229,7 @@ private:
     double opllClock_ = 53693175.0 / 15.0;
     std::map<uint32_t, int> rules_;     // FM fingerprint -> program the rules gave it
     Assignments assigned_;              // chosen by hand
+    std::map<uint32_t, std::set<uint32_t>> legacy_;  // FM fingerprint -> its old ones heard
     std::set<uint32_t> effects_;        // the game's sound effects
     bool effectsOriginal_ = false;      // and they sound as on the chip
     std::map<uint32_t, Seen> seen_;

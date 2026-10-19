@@ -12,9 +12,6 @@ msgstr ""
 "\n"
 "L'activer redémarre le jeu."
 
-msgid "  (sugerido)"
-msgstr "  (suggéré)"
-
 msgid " (%+d oct.)"
 msgstr " (%+d oct.)"
 
@@ -39,12 +36,6 @@ msgstr "%d jeux. %s"
 msgid "%d juegos. Buscando carátulas, quedan %d..."
 msgstr "%d jeux. Recherche des jaquettes, encore %d..."
 
-msgid "%d nota"
-msgstr "%d note"
-
-msgid "%d notas"
-msgstr "%d notes"
-
 msgid "%d parecidas. Pulsa una para verla."
 msgstr "%d ressemblantes. Cliquez sur l'une pour la voir."
 
@@ -56,6 +47,9 @@ msgstr "%s, %u points"
 
 msgid "%s: %d %s, de %s a %s. Sugerencia: %s."
 msgstr "%s : %d %s, de %s à %s. Suggestion : %s."
+
+msgid "%s: %s Hz, %+d dB. Clic derecho: 0 dB."
+msgstr "%s : %s Hz, %+d dB. Clic droit : 0 dB."
 
 msgid "%u de %u logros, %u de %u puntos%s"
 msgstr "%u succès sur %u, %u points sur %u%s"
@@ -80,6 +74,9 @@ msgstr "(se règlent dans Vidéo avec le jeu ouvert)"
 
 msgid "(sin nombre)"
 msgstr "(sans nom)"
+
+msgid "(sugerido)"
+msgstr "(suggéré)"
 
 msgid ", %d sin encontrar"
 msgstr ", %d introuvables"
@@ -193,6 +190,9 @@ msgstr "Agogo aigu"
 
 msgid "Agogó grave"
 msgstr "Agogo grave"
+
+msgid "Agudos"
+msgstr "Aigus"
 
 msgid "Ajustar"
 msgstr "Ajuster"
@@ -439,6 +439,9 @@ msgstr "Cloches tubulaires"
 msgid "Campanilla"
 msgstr "Clochette"
 
+msgid "Canal"
+msgstr "Canal"
+
 msgid "Canales"
 msgstr "Canaux"
 
@@ -684,6 +687,9 @@ msgstr "États-Unis (NTSC)"
 
 msgid "EE. UU. (Sega CD)"
 msgstr "États-Unis (Sega CD)"
+
+msgid "Ecualizador..."
+msgstr "Égaliseur..."
 
 msgid "Editor de instrumentos"
 msgstr "Éditeur d'instruments"
@@ -1074,6 +1080,12 @@ msgstr "Enregistrer depuis le jeu"
 msgid "Grabar vídeo"
 msgstr "Enregistrer une vidéo"
 
+msgid "Graves"
+msgstr "Graves"
+
+msgid "Graves, medios y agudos del sintetizador, aquí y en los juegos."
+msgstr "Les graves, médiums et aigus du synthétiseur, ici et dans les jeux."
+
 msgid "Grosor"
 msgstr "Épaisseur"
 
@@ -1331,13 +1343,6 @@ msgstr "Liste : %s"
 msgid "Listas de libretro-database, la base de trucos de RetroArch (licencia CC BY-SA 4.0). Los nombres vienen en inglés; los añadidos quedan activados en la lista de arriba, con el código maestro (Master Code) del juego cuando lo pide."
 msgstr "Listes de libretro-database, la base de codes de RetroArch (licence CC BY-SA 4.0). Les noms sont en anglais ; ceux ajoutés sont activés dans la liste du haut, avec le code maître (Master Code) du jeu quand il le demande."
 
-msgid ""
-"Lo que elijas se guarda también en la lista común: el mismo sonido en otro juego\n"
-"saldrá ya asignado. Lo de cada juego manda sobre la lista común."
-msgstr ""
-"Ce que vous choisissez est aussi gardé dans la liste commune : le même son dans un autre jeu\n"
-"sera déjà attribué. Les choix propres à chaque jeu priment sur la liste commune."
-
 msgid "Logros"
 msgstr "Succès"
 
@@ -1441,6 +1446,15 @@ msgstr "Score envoyé : %s"
 
 msgid "Marimba"
 msgstr "Marimba"
+
+msgid "Medios"
+msgstr "Médiums"
+
+msgid "Medios agudos"
+msgstr "Hauts médiums"
+
+msgid "Medios graves"
+msgstr "Bas médiums"
 
 msgid "Menú de estados"
 msgstr "Menu des états"
@@ -1629,6 +1643,9 @@ msgstr "Nom (facultatif)"
 msgid "Nombre del juego"
 msgstr "Nom du jeu"
 
+msgid "Notas"
+msgstr "Notes"
+
 msgid "Oboe"
 msgstr "Hautbois"
 
@@ -1749,6 +1766,9 @@ msgstr "Élément du kit"
 msgid "Pista"
 msgstr "Piste"
 
+msgid "Plano"
+msgstr "Plat"
+
 msgid "Plano B con prioridad delante"
 msgstr "Plan B prioritaire devant"
 
@@ -1832,6 +1852,13 @@ msgstr ""
 "Retire des images de retard entre l'appui sur un bouton et son effet à l'écran : à chaque\n"
 "image, le jeu calcule ce nombre d'images en avance, affiche la dernière\n"
 "et revient en arrière. 1 suffit souvent ; plus demande davantage à l'ordinateur et peut saccader."
+
+msgid ""
+"Quita todo lo elegido a mano para este juego: cada instrumento vuelve a sonar\n"
+"como sugieren las reglas."
+msgstr ""
+"Retire tout ce qui a été choisi à la main pour ce jeu : chaque instrument sonne\n"
+"de nouveau comme le suggèrent les règles."
 
 msgid "Quitar"
 msgstr "Retirer"
@@ -2140,6 +2167,12 @@ msgstr "Lisser les pixels"
 msgid "Subir"
 msgstr "Remonter"
 
+msgid "Suena como"
+msgstr "Sonne comme"
+
+msgid "Sí, todo a las sugerencias"
+msgstr "Oui, tout aux suggestions"
+
 msgid "Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta"
 msgstr "Tab ou gâchette droite (maintenir)  avance rapide ;  F9  ralenti"
 
@@ -2181,6 +2214,9 @@ msgstr "Type de manette"
 
 msgid "Tocar"
 msgstr "Jouer"
+
+msgid "Todo a las sugerencias..."
+msgstr "Tout aux suggestions..."
 
 msgid "Todos"
 msgstr "Tous"
@@ -2300,9 +2336,6 @@ msgstr "Utiliser ce dossier"
 msgid "Usar esta carátula"
 msgstr "Utiliser cette jaquette"
 
-msgid "Usar también en otros juegos"
-msgstr "Utiliser aussi dans d'autres jeux"
-
 msgid "Usuario"
 msgstr "Utilisateur"
 
@@ -2392,6 +2425,13 @@ msgstr "aigu"
 
 msgid "byte"
 msgstr "octet"
+
+msgid ""
+"dB por banda.\n"
+"Solo el sintetizador."
+msgstr ""
+"dB par bande.\n"
+"Synthétiseur seulement."
 
 msgid "de PSG 3"
 msgstr "du PSG 3"
@@ -2581,6 +2621,12 @@ msgstr "Jeu maîtrisé ! Vous avez tous ses succès en hardcore."
 
 msgid "¡Logro desbloqueado! (%u puntos)"
 msgstr "Succès débloqué ! (%u points)"
+
+msgid "¿Quitar lo elegido a mano en todos los instrumentos de esta pista?"
+msgstr "Retirer ce qui a été choisi à la main pour tous les instruments de cette piste ?"
+
+msgid "¿Quitar todo lo elegido a mano en %s?"
+msgstr "Retirer tout ce qui a été choisi à la main dans %s ?"
 
 msgid "Étnicos"
 msgstr "Ethniques"
