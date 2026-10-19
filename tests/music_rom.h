@@ -14,6 +14,8 @@
 // game's).
 // Asking::byStack: the game pushes the number and calls a routine of its own, which
 // passes it on to the driver's and takes it off the stack as it returns, as EA's games do.
+// Asking::bySlot: the same, but put where the stack has room for it already and left
+// there by the routine, as code from a C compiler does (Ecco's).
 // Asking::byRing: the game writes FF 10 n to a ring of 64 bytes in the Z80's memory
 // ($A01B40), a byte at a time, each followed by where the next goes ($A00036), as GEMS
 // games do; the driver plays the last FF 10 n written.
@@ -22,10 +24,11 @@
 
 namespace plumsg::testrom {
 
-enum class Asking { byQueue, byCall, byStack, byRing };
+enum class Asking { byQueue, byCall, byStack, bySlot, byRing };
 
 inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
-    const bool byCall = asking == Asking::byCall, byStack = asking == Asking::byStack, byRing = asking == Asking::byRing;
+    const bool byCall = asking == Asking::byCall, byStack = asking == Asking::byStack, bySlot = asking == Asking::bySlot,
+               byRing = asking == Asking::byRing;
     Emitter e;
     auto text = [&](uint32_t at, const char* s, size_t width) {
         for (size_t i = 0; i < width; ++i) e.rom[at + i] = static_cast<uint8_t>(i < std::strlen(s) ? s[i] : ' ');
@@ -46,6 +49,7 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
     };
     std::vector<uint32_t> calls;  // where the address of the driver's routine goes
     std::vector<uint32_t> fronts;  // and of the game's in front of it
+    std::vector<uint32_t> slots;   // or of the one that leaves the number on the stack
     auto request = [&](uint16_t frame, uint8_t value, uint16_t addr, const std::string& skip) {
         e.w16(0x0C41); e.w16(frame);                   // cmp.w  #frame,d1
         e.w16(0x6600); e.rel(skip);                    // bne.w  skip
@@ -55,6 +59,10 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
         } else if (byStack && addr == 0xF00A) {
             e.w16(0x3F3C); e.w16(value);               // move.w #value,-(sp)
             e.w16(0x4EB9); fronts.push_back(e.here()); e.w32(0);  // jsr    front
+        } else if (bySlot && addr == 0xF00A) {
+            e.w16(0x203C); e.w32(value);               // move.l #value,d0
+            e.w16(0x2E80);                             // move.l d0,(sp)
+            e.w16(0x4EB9); slots.push_back(e.here()); e.w32(0);  // jsr    slot
         } else if (byRing && addr == 0xF00A) {
             for (uint16_t b : {uint16_t{0xFF}, uint16_t{0x10}, uint16_t{value}}) {
                 e.w16(0x303C); e.w16(b);               // move.w #b,d0
@@ -80,6 +88,7 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
     }
     ym(0xB0, 0x07);
     ym(0xB4, 0xC0);
+    if (bySlot) e.w16(0x598F);                         // subq.l #4,sp  (the room)
     e.w16(0x46FC); e.w16(0x2000);                      // move   #$2000,sr
     e.label("main");
     e.w16(0x4E72); e.w16(0x2000);                      // stop   #$2000
@@ -110,8 +119,12 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
     e.w16(0x2F57); e.w16(0x0002);                      // move.l (sp),2(sp)
     e.w16(0x544F);                                     // addq.w #2,sp
     e.w16(0x4E75);                                     // rts
+    e.label("slot");                                   // the number where the stack had room
+    e.w16(0x302F); e.w16(0x0006);                      // move.w 6(sp),d0
+    e.w16(0x4EB9); calls.push_back(e.here()); e.w32(0);  // jsr    ask
+    e.w16(0x4E75);                                     // rts
 
-    if (byCall || byStack || byRing)
+    if (byCall || byStack || bySlot || byRing)
         while (e.here() < 0x8000) e.w16(0x4E71);       // nop
     e.label("ask");
     e.w16(0x11C0); e.w16(0xF00A);                      // move.b d0,($F00A).w
@@ -207,6 +220,7 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
     e.link();
     for (uint32_t at : calls) e.put32(at, e.at("ask"));
     for (uint32_t at : fronts) e.put32(at, e.at("front"));
+    for (uint32_t at : slots) e.put32(at, e.at("slot"));
     e.put32(0, 0x00FFFE00);
     e.put32(4, e.at("reset"));
     for (uint32_t v = 2; v < 64; ++v) e.put32(v * 4, e.at("other"));

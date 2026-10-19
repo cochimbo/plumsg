@@ -1914,10 +1914,13 @@ void testSongExtract(testrom::Asking asking) {
     }
     const std::string how = asking == testrom::Asking::byCall    ? " (llamando a una rutina)"
                             : asking == testrom::Asking::byStack ? " (con el número en la pila)"
+                            : asking == testrom::Asking::bySlot  ? " (con el número en su sitio de la pila)"
                             : asking == testrom::Asking::byRing  ? " (con mensajes en un anillo)"
                                                                  : "";
     const std::string said = asking == testrom::Asking::byCall    ? "Pido las canciones llamando a"
                              : asking == testrom::Asking::byStack ? "Pido las canciones llamando a"
+                             // (The call only on the second boot: the byte the routine writes first.)
+                             : asking == testrom::Asking::bySlot  ? "Pido las canciones en"
                              : asking == testrom::Asking::byRing  ? "Pido las canciones con el mensaje FF 10 n"
                                                                   : "Pido las canciones en";
     SongExtractor extractor;
@@ -2443,6 +2446,7 @@ int main() {
     testSongExtract(testrom::Asking::byQueue);
     testSongExtract(testrom::Asking::byCall);
     testSongExtract(testrom::Asking::byStack);
+    testSongExtract(testrom::Asking::bySlot);
     testSongExtract(testrom::Asking::byRing);
     {
         // The Z80's reset also resets the YM2612; what it already played must stay.
