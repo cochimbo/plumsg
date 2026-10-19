@@ -106,6 +106,7 @@ void Settings::parse(std::istream& in, Settings& s) {
             if (key == "rebobinado_segundos") s.rewindSeconds = std::clamp(std::atoi(value.c_str()), 0, kMaxRewindSeconds);
             else if (key == "avance_rapido") s.fastForward = std::clamp(std::atoi(value.c_str()), 2, 10);
             else if (key == "camara_lenta") s.slowMotion = std::clamp(std::atoi(value.c_str()), 10, 90);
+            else if (key == "run_ahead") s.runAhead = std::clamp(std::atoi(value.c_str()), 0, kMaxRunAhead);
         } else if (section == "estados") {
             if (key == "ranura") s.stateSlot = std::clamp(std::atoi(value.c_str()), 0, 9);
         } else if (section == "biblioteca") {
@@ -187,9 +188,11 @@ void Settings::write(std::ostream& out) const {
         << "\n[velocidad]\n"
         << "# rebobinado_segundos: cuántos segundos se pueden rebobinar (0 lo desactiva, hasta 60).\n"
         << "# avance_rapido: veces más rápido, de 2 a 10. camara_lenta: porcentaje de la velocidad, de 10 a 90.\n"
+        << "# run_ahead: fotogramas de retardo de los mandos que se quitan, de 0 (desactivado) a 4.\n"
         << "rebobinado_segundos = " << rewindSeconds << "\n"
         << "avance_rapido = " << fastForward << "\n"
         << "camara_lenta = " << slowMotion << "\n"
+        << "run_ahead = " << runAhead << "\n"
         << "\n[estados]\n"
         << "# ranura: la ranura de estado activa, de 0 a 9.\n"
         << "ranura = " << stateSlot << "\n"

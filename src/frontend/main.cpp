@@ -618,6 +618,7 @@ int main(int argc, char** argv) {
         app->writeOverrides(app->romPath, game);
     };
     RewindBuffer rewind;
+    bool runAheadFailed = false;  // the console could not go back once: no more for this game
     FramePacer pacer;
     auto setRewindLimits = [&] {
         rewind.setLimits(static_cast<size_t>(settings.rewindSeconds * app->console.refreshRate()), kRewindBytes);
@@ -669,6 +670,7 @@ int main(int argc, char** argv) {
             else if (app->console.hasMsuMd()) ui->notify(tr("Música en CD (MSU-MD)"));
             rewind.clear();
             setRewindLimits();
+            runAheadFailed = false;
         } else {
             useGameOptions(app->romLoaded ? app->romPath : std::string());
             if (!capturing) ui->showError(app->lastError);
@@ -1168,6 +1170,10 @@ int main(int argc, char** argv) {
                 const double speed = fast ? settings.fastForward : slowMotion ? settings.slowMotion / 100.0 : 1.0;
                 if (fast) uiState.speed = ">> x" + std::to_string(settings.fastForward);
                 else if (slowMotion) uiState.speed = trf("Cámara lenta %d%%", settings.slowMotion);
+                // Run-ahead: the last frame of the tick is followed by a few more with the
+                // same pads, whose picture is shown, and the console goes back. Not in fast
+                // forward, where a frame or two less of lag is not felt.
+                const int ahead = fast || runAheadFailed ? 0 : settings.runAhead;
                 for (int n = pacer.framesForTick(speed); n > 0; --n) {
                     if (canRewind) {
                         std::vector<uint8_t> snapshot;
@@ -1175,13 +1181,20 @@ int main(int argc, char** argv) {
                     }
                     app->console.setPads(input->poll(0, keyboard), input->poll(1, keyboard));
                     app->console.setSampleRate(audio->rate() / speed);
+                    // The picture shown is run-ahead's, so these need not be drawn.
+                    app->console.setDrawing(ahead == 0);
                     app->console.runFrame();
                     achievements.doFrame();
                     ranFrame = true;
                     ++framesRun;
                     audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
                     app->console.audio().clearSamples();
+                    if (ahead > 0 && n == 1 && !app->console.runAhead(ahead)) {
+                        runAheadFailed = true;
+                        ui->notify(tr("Run-ahead desactivado: no se pudo volver al fotograma actual."));
+                    }
                 }
+                app->console.setDrawing(true);
             }
         }
 

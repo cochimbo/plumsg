@@ -90,6 +90,9 @@ msgstr ", %d não encontradas"
 msgid ". Modo hardcore"
 msgstr ". Modo hardcore"
 
+msgid "1 fotograma"
+msgstr "1 quadro"
+
 msgid ""
 "2D: la imagen normal de la Mega Drive.\n"
 "capas (depuración): pinta cada píxel según su capa (plano B azul, plano A\n"
@@ -1210,6 +1213,9 @@ msgstr ""
 "Cada som FM recebe um instrumento por regras, que pode ser mudado à mão no\n"
 "Editor de instrumentos."
 
+msgid "Latencia"
+msgstr "Latência"
+
 msgid "Lengüetas"
 msgstr "Palhetas"
 
@@ -1684,6 +1690,15 @@ msgstr "Pixels quadrados"
 msgid "Píxeles cuadrados (sin estirar a 4:3)"
 msgstr "Pixels quadrados (sem esticar para 4:3)"
 
+msgid ""
+"Quita fotogramas de retardo entre pulsar un botón y verlo en pantalla: en cada\n"
+"fotograma el juego corre ese número de fotogramas por delante, enseña su imagen\n"
+"y vuelve atrás. Con 1 suele bastar; más piden más al ordenador y pueden notarse saltos."
+msgstr ""
+"Tira quadros de atraso entre carregar num botão e vê-lo no ecrã: em cada\n"
+"quadro o jogo corre esse número de quadros à frente, mostra a sua imagem\n"
+"e volta atrás. 1 costuma chegar; mais pedem mais ao computador e podem notar-se saltos."
+
 msgid "Quitar"
 msgstr "Remover"
 
@@ -1788,6 +1803,15 @@ msgstr "Ruído branco %s"
 
 msgid "Ruido periódico %s"
 msgstr "Ruído periódico %s"
+
+msgid "Run-ahead"
+msgstr "Run-ahead"
+
+msgid "Run-ahead (menos latencia)"
+msgstr "Run-ahead (menos latência)"
+
+msgid "Run-ahead desactivado: no se pudo volver al fotograma actual."
+msgstr "Run-ahead desativado: não foi possível voltar ao quadro atual."
 
 msgid "Saca las canciones de la ROM del juego (Sacar canciones), graba un trozo del juego (abre el juego, pulsa Grabar y juega hasta que suene la música que quieres probar) o abre un .vgm con su música, de vgmrips.net por ejemplo. Aquí saldrán sus instrumentos."
 msgstr "Tire as músicas da ROM do jogo (Tirar músicas), grave um trecho do jogo (abra o jogo, clique em Gravar e jogue até tocar a música que você quer testar) ou abra um .vgm com a música dele, do vgmrips.net por exemplo. Os instrumentos aparecerão aqui."

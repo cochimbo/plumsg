@@ -1037,6 +1037,62 @@ void testRewindPlayback() {
     check(!MegaDrive::stateThumbnail(quick, pixels, &w, &h), "rewind: quick snapshots carry no thumbnail");
 }
 
+void testRunAhead() {
+    // Run-ahead shows the next frame now and leaves no trace: the console goes on as if
+    // it had never run ahead, with the same sound.
+    auto pads = [](int i) {
+        PadState p;
+        p.right = (i / 10) % 2 == 0;
+        p.a = (i / 7) % 2 == 0;
+        return p;
+    };
+    MegaDrive plain, ahead;
+    // The pad test ROM draws the buttons held, so the picture follows the pads.
+    plain.loadRomData(testrom::buildPadTest());
+    ahead.loadRomData(testrom::buildPadTest());
+    plain.setSampleRate(44100);
+    ahead.setSampleRate(44100);
+    std::vector<uint32_t> plainFrames, aheadFrames;
+    std::vector<int16_t> plainSound, aheadSound;
+    bool back = true;
+    double aheadMs = 0;
+    for (int i = 0; i < 120; ++i) {
+        plain.setPads(pads(i), PadState{});
+        plain.runFrame();
+        plainFrames.push_back(frameHash(plain.frame()));
+        plainSound.insert(plainSound.end(), plain.audio().samples().begin(), plain.audio().samples().end());
+        plain.audio().clearSamples();
+
+        ahead.setPads(pads(i), PadState{});
+        ahead.setDrawing(false);
+        ahead.runFrame();
+        ahead.setDrawing(true);
+        aheadSound.insert(aheadSound.end(), ahead.audio().samples().begin(), ahead.audio().samples().end());
+        ahead.audio().clearSamples();
+        const auto t0 = std::chrono::steady_clock::now();
+        back &= ahead.runAhead(1);
+        aheadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        aheadFrames.push_back(frameHash(ahead.frame()));
+    }
+    // Frame i shown with run-ahead is frame i + 1, wherever the pads did not change.
+    bool early = true;
+    int compared = 0;
+    for (int i = 0; i + 1 < 120; ++i) {
+        if (pads(i).right != pads(i + 1).right || pads(i).a != pads(i + 1).a) continue;
+        early &= aheadFrames[static_cast<size_t>(i)] == plainFrames[static_cast<size_t>(i + 1)];
+        ++compared;
+    }
+    std::printf("     (a frame of run-ahead took %.2f ms on average)\n", aheadMs / 120);
+    std::vector<uint8_t> a, b;
+    plain.saveState(a, true);
+    ahead.saveState(b, true);
+    check(back, "run-ahead: the console went back every frame");
+    const std::set<uint32_t> pictures(plainFrames.begin(), plainFrames.end());
+    check(early && compared > 90 && pictures.size() > 1, "run-ahead: the picture is the next frame's");
+    check(a == b && plain.frameCount() == ahead.frameCount(), "run-ahead: the console is where it would have been");
+    check(aheadSound == plainSound, "run-ahead: the sound is the same");
+}
+
 void testProfiles() {
     RenderOptions r;
     r.pseudo3d = true;
@@ -1714,6 +1770,7 @@ int main() {
     testRewindBuffer();
     testFramePacer();
     testRewindPlayback();
+    testRunAhead();
     testPlanes();
     testProfiles();
     testLiveCamera();

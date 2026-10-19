@@ -55,6 +55,7 @@ Primera versión. Lo que hay:
   siguiendo la acción, y la inclinación de la cámara se puede quitar para mirar de frente.
 - **Perfiles 3D por juego**: cada ROM puede guardar sus propios ajustes del 3D.
 - **Rebobinado, avance rápido y cámara lenta**.
+- **Run-ahead**: quita 1 o más fotogramas de retardo a los mandos, como en RetroArch.
 - **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
 - **Trucos** Game Genie y Action Replay, guardados por juego, con las listas de trucos de
   cada juego de libretro-database para elegirlos de un menú.
@@ -121,6 +122,10 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   lenta (50 %). El sonido acompaña: más agudo al acelerar y más grave a cámara lenta. Al
   rebobinar el juego va hacia atrás fotograma a fotograma, en silencio, y al soltar sigue
   desde ahí.
+- **Juego > Latencia > Run-ahead** (desactivado por defecto, de 1 a 4 fotogramas): en cada
+  fotograma el juego corre por delante ese número de fotogramas, sin sonido, se ve su
+  imagen y vuelve atrás, así lo que pulsas se ve antes. Con 1 suele bastar; cada fotograma
+  más pide más al ordenador. También se puede fijar por juego en Opciones de este juego.
 - **Consola**: región (automática según la cabecera, Japón, EE. UU. o Europa/PAL) y tipo
   de mando (3 o 6 botones) de cada puerto. Cambiar la región reinicia el juego.
 - **Opciones > Vídeo**: escalado, 4:3 o píxeles cuadrados, y las opciones del 3D

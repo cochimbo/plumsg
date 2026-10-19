@@ -53,6 +53,7 @@ const std::vector<GameOption>& gameOptions() {
          [](const Settings& f, Settings& t) { t.rewindSeconds = f.rewindSeconds; }},
         {"avance_rapido", N_("Avance rápido"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.fastForward = f.fastForward; }},
         {"camara_lenta", N_("Cámara lenta"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.slowMotion = f.slowMotion; }},
+        {"run_ahead", N_("Run-ahead (menos latencia)"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.runAhead = f.runAhead; }},
     };
     return options;
 }

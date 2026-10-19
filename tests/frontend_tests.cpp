@@ -3,6 +3,7 @@
 #define SDL_MAIN_HANDLED
 #include <cstdio>
 #include <cstdlib>
+#include <sstream>
 #include <string>
 
 #include "frontend/game_options.h"
@@ -46,10 +47,36 @@ void testGameControls() {
           "juego: sin botones propios no se escribe [teclado]");
 }
 
+void testRunAheadOption() {
+    const Settings general;
+    const InputConfig generalInput = InputConfig::defaults();
+    check(general.runAhead == 0, "run-ahead: desactivado si no se dice");
+
+    // Its own value for a game, and back from its file.
+    const GameOverrides o = parseGameOverrides("[velocidad]\nrun_ahead = 1\n", general, generalInput);
+    check(o.has("run_ahead") && o.values.runAhead == 1, "run-ahead: un juego con su propio valor");
+    const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
+    check(back.has("run_ahead") && back.values.runAhead == 1, "run-ahead: se guarda y se lee igual en el juego");
+
+    // plumsg.ini keeps it, within 0 and kMaxRunAhead.
+    Settings s;
+    std::istringstream in("[velocidad]\nrun_ahead = 9\n");
+    Settings::parse(in, s);
+    check(s.runAhead == Settings::kMaxRunAhead, "run-ahead: no pasa del máximo");
+    s.runAhead = 2;
+    std::ostringstream out;
+    s.write(out);
+    Settings again;
+    std::istringstream text(out.str());
+    Settings::parse(text, again);
+    check(again.runAhead == 2, "run-ahead: plumsg.ini lo guarda");
+}
+
 }  // namespace
 
 int main() {
     testGameControls();
+    testRunAheadOption();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

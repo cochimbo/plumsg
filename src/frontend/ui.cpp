@@ -65,6 +65,12 @@ bool comboTr(const char* label, int* current, const char* const items[], int cou
     return ImGui::Combo(label, current, shown.data(), count);
 }
 
+// The run-ahead frames, 0 (off) to Settings::kMaxRunAhead.
+bool runAheadSlider(const char* label, int& frames) {
+    const char* shown = frames == 0 ? tr("desactivado") : frames == 1 ? tr("1 fotograma") : tr("%d fotogramas");
+    return ImGui::SliderInt(label, &frames, 0, Settings::kMaxRunAhead, shown, ImGuiSliderFlags_AlwaysClamp);
+}
+
 constexpr const char* kRegionNames[] = {N_("Automática (la de la ROM)"), N_("Japón (NTSC)"), N_("EE. UU. (NTSC)"),
                                         N_("Europa (PAL)")};
 
@@ -432,6 +438,14 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         ImGui::SetNextItemWidth(160);
         ImGui::SliderInt(tr("Cámara lenta##velocidad"), &settings_.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
         if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        ImGui::SeparatorText(tr("Latencia"));
+        ImGui::SetNextItemWidth(160);
+        runAheadSlider(tr("Run-ahead"), settings_.runAhead);
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", tr("Quita fotogramas de retardo entre pulsar un botón y verlo en pantalla: en cada\n"
+                              "fotograma el juego corre ese número de fotogramas por delante, enseña su imagen\n"
+                              "y vuelve atrás. Con 1 suele bastar; más piden más al ordenador y pueden notarse saltos."));
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu(tr("Estado"))) {
@@ -2101,6 +2115,9 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "camara_lenta") {
             ImGui::SliderInt(tr(opt.label), &s.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else if (key == "run_ahead") {
+            runAheadSlider(tr(opt.label), s.runAhead);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         }
         ImGui::EndDisabled();

@@ -75,6 +75,12 @@ public:
     void setCheats(const std::vector<CheatPatch>& cheats);
 
     void runFrame();  // up to the start of the next frame (just after VBlank ends)
+    // Run-ahead, to take frames of input lag away: runs `frames` more frames with the
+    // pads as they are, without sound, the Roland sound or the VGM recording, so that
+    // frame() shows the last of them (drawn even under setDrawing(false)), and then
+    // puts the console back as it was. Only the picture is left from the future;
+    // false if the state could not be put back.
+    bool runAhead(int frames);
 
     // The Roland sound (not owned; null for the console's own). It plays the FM and PSG
     // music instead, which stays at `chipPercent` of its volume; the DAC is untouched.
@@ -209,6 +215,7 @@ private:
     uint64_t frames_ = 0;
     std::vector<int16_t> psgBuffer_;
     std::vector<uint8_t> loadedThumbnail_;
+    std::vector<uint8_t> aheadState_;  // runAhead()'s way back, kept to reuse its memory
     std::vector<CheatPatch> ramCheats_;
     std::vector<std::pair<uint32_t, uint8_t>> romOriginal_;  // bytes the ROM cheats replaced
     void applyRamCheats();

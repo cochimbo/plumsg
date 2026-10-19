@@ -371,6 +371,27 @@ void MegaDrive::runFrame() {
     if (roland_) roland_->endFrame(now_, mixer_.output(), before, mixer_.outputRate());
 }
 
+bool MegaDrive::runAhead(int frames) {
+    if (frames <= 0) return true;
+    if (!saveState(aheadState_, true)) return false;
+    // The frames to come are run again for real, heard and recorded then.
+    RolandSound* roland = roland_;
+    VgmWriter* vgm = vgm_;
+    roland_ = nullptr;
+    vgm_ = nullptr;
+    const bool drawing = drawing_;
+    for (int i = 1; i <= frames; ++i) {
+        drawing_ = i == frames;  // only the last picture is seen
+        runFrame();
+    }
+    drawing_ = drawing;
+    roland_ = roland;
+    vgm_ = vgm;
+    // The picture is not part of the state, so loading it keeps the one just drawn.
+    std::string error;
+    return loadState(aheadState_, &error);
+}
+
 void MegaDrive::irqAcknowledge(int level) {
     vdp_.acknowledge(level);
     updateIrq();
