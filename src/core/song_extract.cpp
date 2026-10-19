@@ -366,11 +366,18 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             }
             return 0;
         };
-        // A routine that calls the driver, or a routine that does, from its first bytes
-        // (the game's own "play this", in front of the driver's).
+        // A routine that writes the Z80's memory (where a Z80 driver takes its orders,
+        // Ecco's), from its first bytes: an address there in its code.
+        auto writesZ80 = [&](uint32_t routine) {
+            for (uint32_t at = routine; at < routine + 0x100 && at + 4 <= size; at += 2)
+                if (word(at) == 0x00A0 && word(at + 2) < 0x2000) return true;
+            return false;
+        };
+        // A routine of the driver, or one that calls one, or a routine that does, from its
+        // first bytes (the game's own "play this", in front of the driver's).
         std::map<std::pair<uint32_t, int>, bool> leads;
         std::function<bool(uint32_t, int)> leadsToDriver = [&](uint32_t routine, int depth) {
-            if (inDriver(routine)) return true;
+            if (inDriver(routine) || writesZ80(routine)) return true;
             if (depth == 0) return false;
             const auto key = std::make_pair(routine, depth);
             if (auto it = leads.find(key); it != leads.end()) return it->second;
@@ -390,12 +397,16 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             const uint32_t target = callAt(at, length);
             if (target >= size || (target & 1) || inDriver(at) || !leadsToDriver(target, 2)) continue;
             // The registers given a number right before (MOVE.L/MOVE.W/MOVE.B #n,Dn, MOVEQ),
-            // and the number pushed last (MOVE.W/MOVE.L #n,-(A7), PEA (n).W).
+            // and the number pushed last (MOVE.W/MOVE.L #n,-(A7), PEA (n).W) or put where
+            // the stack has room for it already (MOVE.L/MOVE.W Dn,(A7), as C compilers do:
+            // the caller's room, which it takes off itself).
             Site site;
             site.regs.fill(kKeep);
             site.argBytes = 0;
+            site.callerPops = false;
             uint32_t pos = at;
             bool any = false;
+            int stackFrom = -1;  // the register put on the stack
             for (int k = 0; k < 3; ++k) {
                 size_t reg;
                 uint32_t value;
@@ -427,6 +438,12 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
                     value = static_cast<uint32_t>(word(pos - 4)) << 16 | word(pos - 2);
                     pushed = 4;
                     pos -= 6;
+                } else if (pos >= 2 && k == 0 && ((word(pos - 2) & 0xFFF8) == 0x2E80 || (word(pos - 2) & 0xFFF8) == 0x3E80)) {
+                    stackFrom = word(pos - 2) & 7;
+                    site.argBytes = (word(pos - 2) & 0x1000) ? 2 : 4;
+                    site.callerPops = true;
+                    pos -= 2;
+                    continue;
                 } else {
                     break;
                 }
@@ -437,10 +454,14 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
                 if (site.regs[reg] == kKeep) site.regs[reg] = value;  // the last one loaded
                 any = true;
             }
-            if (!any) continue;
+            if (stackFrom >= 0) {
+                site.regs[kStack] = site.regs[static_cast<size_t>(stackFrom)];
+                site.regs[static_cast<size_t>(stackFrom)] = kKeep;
+            }
+            if (!any || (stackFrom >= 0 && site.regs[kStack] == kKeep)) continue;
             // ADDQ #n,A7 or LEA (d,A7),A7 right after.
             const uint16_t next = word(at + length);
-            site.callerPops = (next & 0xF13F) == 0x500F || next == 0x4FEF;
+            site.callerPops = site.callerPops || (next & 0xF13F) == 0x500F || next == 0x4FEF;
             sites[target].push_back(site);
         }
         for (const auto& [routine, list] : sites) {
