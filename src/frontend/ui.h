@@ -50,6 +50,8 @@ struct UiActions {
     bool stopRecording = false;       // stop and hand it over,
     bool assignmentsChanged = false;  // and the game's instruments changed
     bool achievementsChanged = false; // RetroAchievements switched on or off, or hardcore
+    int record = 0;                   // start or stop recording: 1 a GIF, 2 a video
+    bool openRecordings = false;      // show the folder the recordings go to
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -93,6 +95,8 @@ struct UiState {
     float netProgress = -1;   // 0..1 while the game is sent, else -1
     // RetroAchievements' hardcore mode is on: no rewinding, slow motion, cheats or loading states.
     bool hardcore = false;
+    int recording = 0;         // being recorded: 1 a GIF, 2 a video
+    int recordingSeconds = 0;  // and for how long
     EditorView editor;
 };
 

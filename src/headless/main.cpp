@@ -28,6 +28,7 @@
 #include "miniz.h"
 #include "net/udp.h"
 #include "netplay.h"
+#include "recording.h"
 #include "pad_test_rom.h"
 #include "song_extract.h"
 #include "system.h"
@@ -84,6 +85,9 @@ Output
   --png-every N         a PNG every N frames, as frame_000123.png in --out-dir
   --out-dir DIR         where screenshots without a name go (default: .)
   --wav FILE            the whole run's sound (44100 Hz stereo)
+  --gif FILE            the run as an animated GIF, as plumsg's Grabar GIF makes it
+  --avi FILE            the run as a video with its sound (Motion JPEG and PCM)
+                        (both at the console's own size, and not with netplay)
   --roland SF2          play the FM and PSG music as General MIDI on this SoundFont,
                         as the Roland sound does (the DAC stays as it is)
   --midi-log FILE       with --roland: the notes it played, one event per line
@@ -449,7 +453,7 @@ int playVgmFile(const std::string& path, long frames, const std::string& wav, co
 
 int main(int argc, char** argv) {
     std::string effectsList;
-    std::string game, playVgm, vgmOut, png, layers, wav, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir, extractDir;
+    std::string game, playVgm, vgmOut, png, layers, wav, gifOut, aviOut, roland, midiLog, stateIn, stateOut, ramOut, hashLog, json, expectLog, biosDir, extractDir;
     std::string outDir = ".";
     std::vector<std::string> bios, cheats, scripts, lines;
     long frames = 600, overclock = 100, pngEvery = 0, netPort = 0, inputDelay = 2, netLag = 0, netLoss = 0;
@@ -508,6 +512,8 @@ int main(int argc, char** argv) {
         else if (a == "--png-every") number(&pngEvery);
         else if (a == "--out-dir") outDir = next();
         else if (a == "--wav") wav = next();
+        else if (a == "--gif") gifOut = next();
+        else if (a == "--avi") aviOut = next();
         else if (a == "--roland") roland = next();
         else if (a == "--midi-log") midiLog = next();
         else if (a == "--effects") effectsList = next();
@@ -715,6 +721,23 @@ int main(int argc, char** argv) {
     size_t nextExpected = 0;
     long ran = 0;
     bool ioError = false;
+    // --gif and --avi: started on the first frame, which gives them their size.
+    GameRecording gifRecording, aviRecording;
+    auto recordVideo = [&](GameRecording& r, const std::string& path, GameRecording::Format format) {
+        if (path.empty()) return;
+        const VideoFrameMd& f = md.frame();
+        std::string error;
+        // As wide as H40 (an H32 picture is stretched to it, as on a TV) and as tall as the
+        // first frame without interlace.
+        const int height = f.interlaced ? f.height / 2 : f.height;
+        if (!r.active() && !r.start(path, format, VideoFrameMd::kMaxWidth, height, md.refreshRate(), 44100, &error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            ioError = true;
+            return;
+        }
+        r.addAudio(md.audio().samples().data(), md.audio().samples().size());
+        r.addFrame(f.rgba.data(), f.width, f.height, VideoFrameMd::kMaxWidth);
+    };
 
     // What happens after each frame is final: the log, the expected log, the sound.
     auto record = [&](long frame, uint32_t picture, const std::vector<int16_t>& samples) {
@@ -828,6 +851,10 @@ int main(int argc, char** argv) {
         ++ran;
         const uint32_t picture = frameHash(md.frame());
         record(frame, picture, md.audio().samples());
+        if (!netplay) {
+            recordVideo(gifRecording, gifOut, GameRecording::Format::Gif);
+            recordVideo(aviRecording, aviOut, GameRecording::Format::Avi);
+        }
         md.audio().clearSamples();
         if (pngEvery > 0 && frame % pngEvery == 0 && !screenshot("", frame)) ioError = true;
         for (const Command& c : commands) {
@@ -863,6 +890,13 @@ int main(int argc, char** argv) {
             if (!writePng(layers + name, layer, f.width, f.height, VideoFrameMd::kMaxWidth)) ioError = true;
     }
     if (!wav.empty() && !writeWav(wav, sound, kRate)) ioError = true;
+    for (GameRecording* r : {&gifRecording, &aviRecording}) {
+        std::string error;
+        if (!r->finish(&error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            ioError = true;
+        }
+    }
     if (!vgmOut.empty()) {
         const bool compress = vgmOut.size() > 4 && vgmOut.compare(vgmOut.size() - 4, 4, ".vgz") == 0;
         const std::vector<uint8_t> file = vgmWriter.finish(md.masterClocks(), md.cartridge().header().title, compress);

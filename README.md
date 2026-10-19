@@ -268,6 +268,24 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
 
 La configuración se guarda en `plumsg.ini`.
 
+### Grabar vídeo o GIF
+
+En **Juego > Grabar**:
+
+- **Grabar vídeo** (`Ctrl+R`) graba la partida con su sonido en un `.avi` (Motion JPEG y
+  PCM), que abren Windows, VLC y los editores de vídeo sin instalar nada. Pasa sin problema
+  de 1 GB.
+- **Grabar GIF** (`Ctrl+G`) graba un GIF animado sin sonido, a 30 imágenes por segundo,
+  para compartir un trozo de partida.
+
+Se para con el mismo atajo (o en el menú); arriba en el centro se ve el tiempo grabado. Los
+archivos van a la carpeta `grabaciones` (junto a `states`), con el nombre del juego y la
+fecha; **Abrir la carpeta de grabaciones** la abre. En la vista 2D se graba la imagen de la
+consola tal cual, nítida y sin el filtro (el vídeo a 960x672); en 3D, lo que se ve en
+pantalla, sin los menús (el vídeo hasta 720 líneas y el GIF hacia 480x360). Los menús, la
+pausa o el rebobinado quedan en la grabación como en pantalla; si el juego se para o se
+cambia de juego, la grabación se cierra.
+
 ### Jugar en red
 
 Menú **Red > Jugar en red...**. Los dos abren antes el mismo juego (la misma ROM).
@@ -334,6 +352,7 @@ plumsg.exe "C:\Juegos\Sonic CD.cue" --region eu --estado 1
 | `--region r` | `auto`, `jp`, `us` o `eu` |
 | `--estado N` | carga el estado guardado N (0-9) del juego al abrirlo |
 | `--biblioteca carpeta` | abre la biblioteca de esa carpeta |
+| `--grabar f.avi` | graba la partida desde el principio, en vídeo (`.avi`) o GIF (`.gif`) |
 | `--alojar` | aloja una partida en red con el juego (en el puerto del menú Red) |
 | `--unirse direccion` | se une a la partida en red de ese anfitrión (`IP` o `IP:puerto`) |
 | `--ayuda` | muestra las opciones |
@@ -410,7 +429,7 @@ En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Se
 `plumsg-headless` es el emulador sin ventana, sin sonido y sin tarjeta gráfica, para
 pruebas, CI y reproducir fallos. Ejecuta un cartucho o un disco durante N fotogramas,
 pulsa los botones que diga un guion y guarda lo que se le pida: capturas PNG, el sonido
-en WAV, un hash por fotograma, estados y volcados de la RAM. También comprueba
+en WAV, la partida en GIF o en vídeo (`--gif`, `--avi`), un hash por fotograma, estados y volcados de la RAM. También comprueba
 resultados y dice en qué fotograma una ejecución empieza a ser distinta.
 
 Para compilar solo esto (sin SDL2, ImGui ni OpenGL):
@@ -478,7 +497,7 @@ sus capturas, sonido y hashes como artefacto.
 ## Licencias
 
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
-miniz (MIT, en `third_party/miniz`), stb_image (dominio público o MIT, en `third_party/stb`),
+miniz (MIT, en `third_party/miniz`), stb_image y stb_image_write (dominio público o MIT, en `third_party/stb`),
 ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
 `third_party/tsf`), rcheevos (MIT, para RetroAchievements). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
 propia licencia libre (`soundfonts\GeneralUser-GS-LICENSE.txt` en la instalación). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de

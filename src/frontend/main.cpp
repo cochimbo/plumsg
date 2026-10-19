@@ -14,6 +14,7 @@
 #include "../core/i18n.h"
 #include "../core/megadrive.h"
 #include "../core/netplay.h"
+#include "../core/recording.h"
 #include "../core/rewind.h"
 #include "../core/system.h"
 #include "../render/gl_renderers.h"
@@ -76,6 +77,7 @@ struct Paths {
     std::string covers;    // folder for the library's downloaded covers
     std::string soundfont; // the SoundFont that comes with plumsg, next to the executable
     std::string sound;     // the instrument editor's folder: assignments and recordings
+    std::string videos;    // folder for the games' video and GIF recordings
 };
 
 const char* const kSoundfont = "soundfonts/GeneralUser-GS.sf2";
@@ -89,17 +91,17 @@ Paths findPaths() {
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
             return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont,
-                    base + "sonido/"};
+                    base + "sonido/", base + "grabaciones/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
         return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/", base + kSoundfont,
-                dir + "sonido/"};
+                dir + "sonido/", dir + "grabaciones/"};
     }
     return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont,
-            base + "sonido/"};
+            base + "sonido/", base + "grabaciones/"};
 }
 
 struct App {
@@ -357,6 +359,7 @@ struct CommandLine {
     int slot = -1;                // --estado N: load the game's state N once it is open
     bool netHost = false;         // --alojar: host a netplay game with the open game
     std::string netJoin;          // --unirse address: join that host
+    std::string record;           // --grabar file.avi|file.gif: record the game from the start
     bool help = false;            // --ayuda
     std::vector<std::string> unknown;  // options plumsg does not know
 };
@@ -381,6 +384,7 @@ const char* const kHelp = N_(
     "  --opciones-juego controles   ...en la pestaña de sus controles\n"
     "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
     "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
+    "  --grabar f.avi        grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
     "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
     "La pantalla completa y la región dadas aquí valen solo para esta vez.");
 
@@ -390,6 +394,7 @@ CommandLine parse(int argc, char** argv) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
         if (a == "--captura") c.capture = next();
+        else if (a == "--grabar") c.record = next();
         else if (a == "--cuadros") c.frames = std::max(1, std::atoi(next().c_str()));
         else if (a == "--3d") c.pseudo3d = 1;
         else if (a == "--2d") c.pseudo3d = 0;
@@ -646,8 +651,64 @@ int main(int argc, char** argv) {
         editor.saveRecording(recorder.finish(app->console.masterClocks(), withoutExtension(fileName(app->romPath))),
                              app->romPath);
     };
+    // Grabar vídeo / Grabar GIF: the game as it is played, in the grabaciones folder.
+    GameRecording video;
+    std::vector<uint32_t> screen;  // the game's part of the window, read back for it
+    // The 2D view records the console's own picture, sharp and without the filter; the
+    // other views what is on screen, the only place their picture exists.
+    auto recordsConsole = [&] { return !settings.render.pseudo3d && viewIndex() == 0; };
+    auto stopVideo = [&] {
+        if (!video.active()) return;
+        const bool gif = video.format() == GameRecording::Format::Gif;
+        std::string error;
+        if (!video.finish(&error)) ui->showError(error);
+        else if (gif) ui->notify(trf("GIF guardado en %s", video.path().c_str()));
+        else ui->notify(trf("Vídeo guardado en %s", video.path().c_str()));
+    };
+    // Into `path`, or a new file in the grabaciones folder.
+    auto startVideo = [&](GameRecording::Format format, std::string path = {}) {
+        if (!app->romLoaded) return;
+        const bool gif = format == GameRecording::Format::Gif;
+        int width, height;
+        if (recordsConsole()) {
+            // As wide as H40 (H32 is stretched to it, as on a TV); a video three times that.
+            const VideoFrameMd& f = app->console.frame();
+            const int scale = gif ? 1 : 3;
+            width = VideoFrameMd::kMaxWidth * scale;
+            height = (f.interlaced ? f.height / 2 : f.height) * scale;
+        } else {
+            // The screen, made smaller by a whole number: a GIF to about 480x360, a video
+            // to 720 lines at most.
+            int w, h;
+            SDL_GL_GetDrawableSize(window, &w, &h);
+            width = w;
+            height = std::max(1, h - ui->menuHeight());
+            const int k = gif ? std::max((width + 479) / 480, (height + 359) / 360) : (height + 719) / 720;
+            width = std::max(2, width / k / 2 * 2);
+            height = std::max(2, height / k / 2 * 2);
+        }
+        if (path.empty()) {
+            char stamp[32] = "";
+            const std::time_t now = std::time(nullptr);
+            std::strftime(stamp, sizeof stamp, "%Y-%m-%d_%H-%M-%S", std::localtime(&now));
+            path = paths.videos + withoutExtension(fileName(app->romPath)) + "_" + stamp + (gif ? ".gif" : ".avi");
+        }
+        std::string error;
+        if (!video.start(path, format, width, height, app->console.refreshRate(), audio->freq(), &error)) {
+            ui->showError(error);
+            return;
+        }
+        ui->notify(gif ? tr("Grabando un GIF (Ctrl+G para pararlo)") : tr("Grabando vídeo (Ctrl+R para pararlo)"));
+    };
+    // The same kind again stops it; the other kind takes its place.
+    auto toggleVideo = [&](GameRecording::Format format) {
+        const bool same = video.active() && video.format() == format;
+        stopVideo();
+        if (!same) startVideo(format);
+    };
     auto load = [&](const std::string& path) {
         stopRecording();
+        stopVideo();
         const ConsoleSystem system = detectSystem(path);
         if (system == ConsoleSystem::MegaCD || !msuMdCue(path).empty()) {
             // Discs boot with the BIOS of their region, from the files the user chose, and
@@ -686,6 +747,10 @@ int main(int argc, char** argv) {
         applyCommandLine();  // over the game's profile too
         if (cmd.slot >= 0 && app->romLoaded && !hardcore()) ui->notify(app->loadState(cmd.slot));
         roland->allNotesOff();
+        if (!cmd.record.empty()) {
+            const bool gif = cmd.record.size() > 4 && cmd.record.compare(cmd.record.size() - 4, 4, ".gif") == 0;
+            startVideo(gif ? GameRecording::Format::Gif : GameRecording::Format::Avi, cmd.record);
+        }
     }
     bool openStateMenu = cmd.stateMenu;
     if (!cmd.library.empty()) settings.libraryFolders = cmd.library;
@@ -827,6 +892,7 @@ int main(int argc, char** argv) {
         if (!app->romLoaded) return;
         stopNet(tr("Has salido de la partida en red"), false);
         stopRecording();
+        stopVideo();
         save();  // the game's own options, while they are still its
         app->unload(capturing ? nullptr : window);
         achievements.unloadGame();
@@ -924,6 +990,12 @@ int main(int argc, char** argv) {
                 case SDL_SCANCODE_L:
                     if (ctrl) ui->toggleLibrary();
                     break;
+                case SDL_SCANCODE_R:
+                    if (ctrl) toggleVideo(GameRecording::Format::Avi);
+                    break;
+                case SDL_SCANCODE_G:
+                    if (ctrl) toggleVideo(GameRecording::Format::Gif);
+                    break;
                 case SDL_SCANCODE_F1:
                     if (!netPlaying() && app->romLoaded) resetConsole();
                     break;
@@ -987,6 +1059,8 @@ int main(int argc, char** argv) {
         uiState.editor.soundfontReady = rolandFontOk;
         uiState.disc = app->romLoaded && app->console.megaCd();
         uiState.hardcore = hardcore();
+        uiState.recording = !video.active() ? 0 : video.format() == GameRecording::Format::Gif ? 1 : 2;
+        uiState.recordingSeconds = static_cast<int>(video.seconds());
         uiState.netSession = net != nullptr;
         uiState.netPlaying = netPlaying();
         uiState.netProgress = -1;
@@ -1026,6 +1100,13 @@ int main(int argc, char** argv) {
         const bool netBusy = netPlaying();
         if (act.reset && !netBusy && app->romLoaded) resetConsole();
         if (act.stop) stop();
+        if (act.record == 1) toggleVideo(GameRecording::Format::Gif);
+        if (act.record == 2) toggleVideo(GameRecording::Format::Avi);
+        if (act.openRecordings) {
+            std::error_code ec;
+            std::filesystem::create_directories(std::filesystem::u8path(paths.videos), ec);
+            SDL_OpenURL(("file:///" + paths.videos).c_str());
+        }
         if (act.togglePause && !netBusy) paused = !paused;
         if (act.quit) running = false;
         if (act.fullscreenChanged) setFullscreen();
@@ -1130,6 +1211,7 @@ int main(int argc, char** argv) {
                         ranFrame = true;
                         ++framesRun;
                         audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
+                        video.addAudio(app->console.audio().samples().data(), app->console.audio().samples().size());
                         app->console.audio().clearSamples();
                     }
                 }
@@ -1193,6 +1275,7 @@ int main(int argc, char** argv) {
                     ranFrame = true;
                     ++framesRun;
                     audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
+                    video.addAudio(app->console.audio().samples().data(), app->console.audio().samples().size());
                     app->console.audio().clearSamples();
                     if (ahead > 0 && n == 1 && !app->console.runAhead(ahead)) {
                         runAheadFailed = true;
@@ -1228,6 +1311,19 @@ int main(int argc, char** argv) {
         Renderer& view = settings.render.pseudo3d ? *pseudo3d : *renderers[viewIndex()];
         view.setOptions(settings.render);
         if (app->romLoaded) view.draw(app->console.frame(), game);  // stopped: the start screen
+        // A recording takes the game's picture before the menus are drawn over it.
+        if (video.active() && app->romLoaded) {
+            if (recordsConsole()) {
+                const VideoFrameMd& f = app->console.frame();
+                video.addFrame(f.rgba.data(), f.width, f.height, VideoFrameMd::kMaxWidth);
+            } else {
+                screen.resize(static_cast<size_t>(game.width) * game.height);
+                gl::ReadPixels(0, 0, game.width, game.height, gl::BGRA, gl::UNSIGNED_INT_8_8_8_8_REV, screen.data());
+                video.addFrame(screen.data() + static_cast<size_t>(game.height - 1) * game.width, game.width, game.height,
+                               -static_cast<ptrdiff_t>(game.width));  // OpenGL's rows go bottom up
+            }
+            if (video.failed()) stopVideo();
+        }
         ui->render();
         ++loops;
         if (downloadCovers && ui->library().pending() == 0 && loops > 5) {
@@ -1269,6 +1365,7 @@ int main(int argc, char** argv) {
     net.reset();
     netSocket.reset();
     stopRecording();
+    stopVideo();
     app->saveBattery();
     save();
     for (auto& s : app->slots)

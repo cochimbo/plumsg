@@ -167,6 +167,9 @@ msgstr "Open the library at start"
 msgid "Abrir la carpeta de SoundFonts"
 msgstr "Open the SoundFonts folder"
 
+msgid "Abrir la carpeta de grabaciones"
+msgstr "Open the recordings folder"
+
 msgid "Acción"
 msgstr "Action"
 
@@ -556,6 +559,9 @@ msgstr "Create an account on retroachievements.org"
 
 msgid "Ctrl+O  abrir ROM;  F10  biblioteca de juegos"
 msgstr "Ctrl+O  open ROM;  F10  game library"
+
+msgid "Ctrl+R  grabar vídeo;  Ctrl+G  grabar GIF (otra vez para parar)"
+msgstr "Ctrl+R  record video;  Ctrl+G  record a GIF (again to stop)"
 
 msgid "Cuenta"
 msgstr "Account"
@@ -977,6 +983,9 @@ msgstr "Pad polysynth"
 msgid "Fondos sintetizados"
 msgstr "Synth pad"
 
+msgid "GIF guardado en %s"
+msgstr "GIF saved to %s"
+
 msgid "Gaita"
 msgstr "Bagpipe"
 
@@ -996,6 +1005,20 @@ msgid "Golpe de orquesta"
 msgstr "Orchestra hit"
 
 msgid ""
+"Graba la partida con su sonido en un vídeo AVI, que abren Windows, VLC\n"
+"y los editores de vídeo. Vuelve a pulsarlo para parar."
+msgstr ""
+"Records the game with its sound as an AVI video, which Windows, VLC\n"
+"and video editors open. Choose it again to stop."
+
+msgid ""
+"Graba la partida, sin sonido, en un GIF animado para compartirlo.\n"
+"Vuelve a pulsarlo para parar."
+msgstr ""
+"Records the game, without sound, as an animated GIF to share.\n"
+"Choose it again to stop."
+
+msgid ""
 "Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
 "y elige con qué instrumento General MIDI suena en el sintetizador."
 msgstr ""
@@ -1008,8 +1031,23 @@ msgstr "Recording %s"
 msgid "Grabando %s"
 msgstr "Recording %s"
 
+msgid "Grabando un GIF (Ctrl+G para pararlo)"
+msgstr "Recording a GIF (Ctrl+G to stop)"
+
+msgid "Grabando vídeo (Ctrl+R para pararlo)"
+msgstr "Recording video (Ctrl+R to stop)"
+
+msgid "Grabar"
+msgstr "Record"
+
+msgid "Grabar GIF"
+msgstr "Record GIF"
+
 msgid "Grabar del juego"
 msgstr "Record from the game"
+
+msgid "Grabar vídeo"
+msgstr "Record video"
 
 msgid "Grosor"
 msgstr "Thickness"
@@ -1475,6 +1513,9 @@ msgstr "Could not connect to the covers server."
 msgid "No se pudo conectar con la base de trucos de libretro."
 msgstr "Could not connect to libretro's cheat database."
 
+msgid "No se pudo crear %s"
+msgstr "Could not create %s"
+
 msgid "No se pudo crear el socket UDP."
 msgstr "The UDP socket could not be created."
 
@@ -1483,6 +1524,9 @@ msgstr "That cover could not be downloaded."
 
 msgid "No se pudo descargar la lista de trucos."
 msgstr "The cheat list could not be downloaded."
+
+msgid "No se pudo escribir %s: ¿falta espacio en el disco?"
+msgstr "Could not write %s: is the disk full?"
 
 msgid "No se pudo guardar el estado en %s"
 msgstr "The state could not be saved to %s"
@@ -1516,6 +1560,9 @@ msgstr "The game could not be prepared: %s"
 
 msgid "No se puede conectar con RetroAchievements."
 msgstr "Cannot connect to RetroAchievements."
+
+msgid "No se puede grabar con ese tamaño"
+msgstr "Cannot record at that size"
 
 msgid "No se pueden conseguir en plumsg"
 msgstr "Cannot be unlocked in plumsg"
@@ -2251,6 +2298,9 @@ msgstr "Synth voice"
 msgid "Vídeo"
 msgstr "Video"
 
+msgid "Vídeo guardado en %s"
+msgstr "Video saved to %s"
+
 msgid "Vídeo..."
 msgstr "Video..."
 
@@ -2410,6 +2460,7 @@ msgid ""
 "  --opciones-juego controles   ...en la pestaña de sus controles\n"
 "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
 "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
+"  --grabar f.avi        grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
 "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n"
 "\n"
 "La pantalla completa y la región dadas aquí valen solo para esta vez."
@@ -2434,6 +2485,7 @@ msgstr ""
 "  --opciones-juego controles   ...on the tab of its controls\n"
 "  --instrumentos         open the instrument editor (for the game, if given)\n"
 "  --pista f.vgm          with --instrumentos: open that music (.vgm or .vgz)\n"
+"  --grabar f.avi        record the game from the start, as video (.avi) or GIF (.gif)\n"
 "  --captura f.png        save a screenshot after --cuadros N frames and quit\n"
 "\n"
 "The full screen and region given here apply to this time only."
