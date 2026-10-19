@@ -16,12 +16,13 @@ namespace plumsg {
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
 // the [teclado] / [mando] sections, under [interfaz], [video], [audio], [consola],
 // [velocidad], [estados], [biblioteca], [bios], [red], [logros] and [recientes].
-// The widescreen choices: the picture's aspect, and the name in plumsg.ini.
+// Ready-made widths for the widescreen: the columns on each side (at 320 pixels a line,
+// VdpMd::wideColumnsFor) that make the picture that aspect, and its name.
 struct Widescreen {
-    int w, h;
+    int columns;
     const char* name;
 };
-constexpr Widescreen kWidescreens[] = {{4, 3, "no"}, {16, 10, "16:10"}, {16, 9, "16:9"}};
+constexpr Widescreen kWidescreens[] = {{0, "4:3"}, {32, "16:10"}, {53, "16:9"}};
 constexpr int kWidescreenCount = 3;
 
 struct Settings {
@@ -33,9 +34,9 @@ struct Settings {
     RenderOptions render;
     // Draw every sprite on a line, without the console's limit that makes them flicker.
     bool unlimitedSprites = false;
-    // Widescreen: 0 the console's 4:3, 1 16:10, 2 16:9 (kWidescreens), with the planes and
-    // sprites past the edges of the screen at the sides.
-    int widescreen = 0;
+    // Widescreen: columns added on the left and on the right (at 320 pixels a line, up to
+    // VideoFrameMd::kMaxWideSide), with the planes and sprites past the edges of the screen.
+    int wideLeft = 0, wideRight = 0;
     int windowScale = 3;
     bool fullscreen = false;
     bool showMenu = true;

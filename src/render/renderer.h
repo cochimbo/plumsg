@@ -46,7 +46,7 @@ struct RenderOptions {
 // shows its 144 lines at 4:3.
 inline float pixelAspect(const VideoFrameMd& frame, bool squarePixels) {
     return squarePixels ? 1.0f
-                        : static_cast<float>(frame.aspectLines) * 4.0f / 3.0f / static_cast<float>(frame.width - 2 * frame.wide);
+                        : static_cast<float>(frame.aspectLines) * 4.0f / 3.0f / static_cast<float>(frame.consoleWidth());
 }
 
 // Where to draw, in OpenGL window coordinates (origin at the bottom left).

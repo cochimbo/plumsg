@@ -371,12 +371,12 @@ void Mars::renderLine(int line, VideoFrameMd& frame) {
     const uint16_t* fb = frontBuffer();
     uint16_t addr = fb[line];
     const int width = std::min(frame.width, VideoFrameMd::kMaxWidth);
-    // With widescreen the Mega Drive's picture starts `wide` columns in; the 32X's is
+    // With widescreen the Mega Drive's picture starts `wideLeft` columns in; the 32X's is
     // only as wide as the console's.
-    layer += frame.wide;
-    const size_t row = static_cast<size_t>(frame.interlaced ? line * 2 : line) * VideoFrameMd::kMaxWidth + frame.wide;
+    layer += frame.wideLeft;
+    const size_t row = static_cast<size_t>(frame.interlaced ? line * 2 : line) * VideoFrameMd::kMaxWidth + frame.wideLeft;
     auto plot = [&](int x, uint16_t color) {
-        if (x + frame.wide >= width) return;
+        if (x + frame.wideLeft >= width) return;
         const uint32_t rgba = colorOf(color);
         layer[x] = rgba;
         MdPixel& info = frame.info[row + static_cast<size_t>(x)];

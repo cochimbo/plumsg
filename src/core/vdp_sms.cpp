@@ -156,7 +156,7 @@ void VdpSms::startLine(int line, bool draw) {
     if (line == 0) {
         vscrollLatch_ = regs_[9];
         frame_.width = gameGear_ ? kGgWidth : 256;
-        frame_.wide = 0;
+        frame_.wideLeft = frame_.wideRight = 0;
         frame_.height = gameGear_ ? kGgHeight : active;
         frame_.interlaced = false;
         frame_.aspectLines = gameGear_ ? kGgHeight : 224;

@@ -379,12 +379,13 @@ void testOverclock() {
 }
 
 void testVdpWidescreen() {
-    // 16:9 adds 53 columns on each side in H40 (43 in H32), drawn from the plane and the
-    // sprites past the edges. The console's own 320 columns stay as they were.
-    auto render = [](int aspectW, int aspectH, bool h40) {
+    // 16:9 adds 53 columns on each side in H40 (42 in H32), drawn from the plane and the
+    // sprites past the edges. The console's own 320 columns stay as they were. Each side
+    // can have its own width.
+    auto render = [](int left, int right, bool h40) {
         auto vdp = std::make_unique<VdpMd>();
         vdp->reset();
-        vdp->setWidescreen(aspectW, aspectH);
+        vdp->setWidescreen(left, right);
         vdp->writeControl(0x8144);                // display on
         vdp->writeControl(h40 ? 0x8C81 : 0x8C00);  // H40 or H32
         vdp->writeControl(0x8230);                // plane A at 0xC000
@@ -413,10 +414,12 @@ void testVdpWidescreen() {
     auto layer = [](const VdpMd& v, int x) { return v.frame().info[x].layer; };
 
     auto off = render(0, 0, true);
-    check(off->frame().width == 320 && off->frame().wide == 0, "VDP widescreen: off by default");
-    auto wide = render(16, 9, true);
+    check(off->frame().width == 320 && off->frame().wideLeft == 0 && off->frame().wideRight == 0,
+          "VDP widescreen: off by default");
+    check(VdpMd::wideColumnsFor(16, 9) == 53 && VdpMd::wideColumnsFor(16, 10) == 32, "VDP widescreen: 16:9 and 16:10");
+    auto wide = render(53, 53, true);
     const VideoFrameMd& f = wide->frame();
-    check(f.width == 426 && f.wide == 53, "VDP widescreen: 16:9 in H40 is 426 pixels, 53 on each side");
+    check(f.width == 426 && f.wideLeft == 53 && f.wideRight == 53, "VDP widescreen: 16:9 in H40 is 426 pixels, 53 on each side");
     // Plane x 504..511 is screen x -8..-1: only the widescreen columns show it.
     check(layer(*off, 0) == MdLayer::Backdrop && layer(*wide, 53 - 8) == MdLayer::PlaneA &&
               layer(*wide, 53 - 1) == MdLayer::PlaneA && layer(*wide, 53) == MdLayer::Backdrop,
@@ -427,11 +430,18 @@ void testVdpWidescreen() {
     for (int x = 0; x < 320; ++x) same &= off->frame().rgba[x] == f.rgba[53 + x];
     check(same, "VDP widescreen: the console's own picture is the same");
 
-    auto narrow = render(16, 9, false);
-    check(narrow->frame().width == 342 && narrow->frame().wide == 43 && layer(*narrow, 43 + 272) == MdLayer::Sprite,
-          "VDP widescreen: 16:9 in H32 is 342 pixels");
-    auto tall = render(16, 10, true);
-    check(tall->frame().width == 384 && tall->frame().wide == 32, "VDP widescreen: 16:10 in H40 is 384 pixels");
+    auto narrow = render(53, 53, false);
+    check(narrow->frame().width == 340 && narrow->frame().wideLeft == 42 && layer(*narrow, 42 + 272) == MdLayer::Sprite,
+          "VDP widescreen: 16:9 in H32 is 340 pixels");
+    // Only the left side: the plane past the left edge shows, the sprite past the right does not.
+    auto leftOnly = render(50, 0, true);
+    const VideoFrameMd& g = leftOnly->frame();
+    check(g.width == 370 && g.wideLeft == 50 && g.wideRight == 0 && layer(*leftOnly, 50 - 8) == MdLayer::PlaneA &&
+              g.consoleWidth() == 320,
+          "VDP widescreen: only the left side");
+    bool sameLeft = true;
+    for (int x = 0; x < 320; ++x) sameLeft &= off->frame().rgba[x] == g.rgba[50 + x];
+    check(sameLeft, "VDP widescreen: one side only keeps the console's picture");
 }
 
 void testTestRom() {
@@ -1936,7 +1946,7 @@ void testMasterSystem() {
         md.audio().clearSamples();
     }
     const VideoFrameMd& f = md.frame();
-    check(f.width == 256 && f.height == 192 && f.wide == 0, "Master System: 256x192");
+    check(f.width == 256 && f.height == 192 && f.wideLeft == 0 && f.wideRight == 0, "Master System: 256x192");
     const int frames = md.z80Ram()[0];
     check(frames >= 55 && frames <= 60, "Master System: one frame interrupt a frame");
     // The scroll was set by the interrupt during the last frame, so the picture shows the

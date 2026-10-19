@@ -329,15 +329,12 @@ bool captureWindow(SDL_Window* window, const std::string& path) {
     return writeFile(path, bytes);
 }
 
-// Width of the picture at 224 lines: 4:3, or as wide as the widescreen option makes it.
-int pictureWidth(int widescreen) {
-    const Widescreen& w = kWidescreens[std::clamp(widescreen, 0, kWidescreenCount - 1)];
-    return 224 * w.w / w.h;
-}
+// Width of the picture at 224 lines: 4:3, plus the widescreen columns.
+int pictureWidth(const Settings& s) { return 299 * (320 + s.wideLeft + s.wideRight) / 320; }
 
 // Window size for a scale factor: the picture at 224 lines per scale step, plus the menu bar.
-void applyWindowScale(SDL_Window* window, int scale, int menuHeight, int widescreen) {
-    SDL_SetWindowSize(window, pictureWidth(widescreen) * scale, 224 * scale + menuHeight);
+void applyWindowScale(SDL_Window* window, int scale, int menuHeight, const Settings& s) {
+    SDL_SetWindowSize(window, pictureWidth(s) * scale, 224 * scale + menuHeight);
 }
 
 struct CommandLine {
@@ -511,7 +508,7 @@ int main(int argc, char** argv) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_Window* window = SDL_CreateWindow("plumsg", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          pictureWidth(settings.widescreen) * settings.windowScale, 224 * settings.windowScale,
+                                          pictureWidth(settings) * settings.windowScale, 224 * settings.windowScale,
                                           SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
@@ -832,6 +829,18 @@ int main(int argc, char** argv) {
         }
         save();
     };
+    auto setWideProfile = [&](bool on) {
+        if (!app->romLoaded || on == game.has("pantalla_ancha")) return;
+        if (on) {
+            game.own.insert("pantalla_ancha");
+            ui->notify(trf("La pantalla ancha se guarda ahora solo para %s", fileName(app->romPath).c_str()));
+        } else {
+            game.own.erase("pantalla_ancha");
+            findGameOption("pantalla_ancha")->copy(general, settings);
+            ui->notify(tr("El juego vuelve a usar la pantalla ancha general"));
+        }
+        save();
+    };
     // The Opciones de este juego and Trucos windows can be for a game that is not loaded
     // (opened from the library): then they work on these copies, saved to its files.
     std::string optionsGame, cheatsGame;
@@ -929,8 +938,7 @@ int main(int argc, char** argv) {
         // Only the picture changes with them, so they can follow the menus at any frame.
         app->console.vdp().setUnlimitedSprites(settings.unlimitedSprites);
         if (MasterSystem* sms = app->console.masterSystem()) sms->vdp().setUnlimitedSprites(settings.unlimitedSprites);
-        const Widescreen& wide = kWidescreens[std::clamp(settings.widescreen, 0, kWidescreenCount - 1)];
-        app->console.vdp().setWidescreen(settings.widescreen ? wide.w : 0, wide.h);
+        app->console.vdp().setWidescreen(settings.wideLeft, settings.wideRight);
         // The overclock does change the game: in a netplay game the speed is the host's,
         // which came in the state both started from, and hardcore mode keeps the real one.
         if (!netPlaying()) app->console.setOverclock(hardcore() ? 100 : settings.overclock);
@@ -1053,6 +1061,7 @@ int main(int argc, char** argv) {
         uiState.paused = paused;
         uiState.slowMotion = slowMotion;
         uiState.hasProfile = game.has("perfil_3d");
+        uiState.hasWideProfile = game.has("pantalla_ancha");
         uiState.gameName = app->romLoaded ? fileName(app->romPath) : std::string();
         uiState.slots = app->slots;
         const bool cheatsLoaded = app->romLoaded && cheatsGame == app->romPath;
@@ -1124,7 +1133,7 @@ int main(int argc, char** argv) {
         if (act.togglePause && !netBusy) paused = !paused;
         if (act.quit) running = false;
         if (act.fullscreenChanged) setFullscreen();
-        if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight(), settings.widescreen);
+        if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight(), settings);
         if (act.saveState >= 0) saveState(act.saveState);
         if (act.loadState >= 0 && !netBusy) loadState(act.loadState);
         if (act.consoleChanged && !netBusy) {
@@ -1147,6 +1156,7 @@ int main(int argc, char** argv) {
         }
         if (act.rewindChanged) setRewindLimits();
         if (act.profile >= 0) setProfile(act.profile == 1);
+        if (act.wideProfile >= 0) setWideProfile(act.wideProfile == 1);
         if (!act.cheatsFor.empty()) openCheats(act.cheatsFor);
         if (act.cheatsChanged && cheatsLoaded) {
             if (!net) app->applyCheats();
@@ -1181,7 +1191,7 @@ int main(int argc, char** argv) {
         if (act.assignmentsChanged && app->romLoaded) applyInstruments(app->romPath);
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
         if (!sizedForMenu && !settings.fullscreen) {
-            applyWindowScale(window, settings.windowScale, ui->menuHeight(), settings.widescreen);
+            applyWindowScale(window, settings.windowScale, ui->menuHeight(), settings);
             sizedForMenu = true;
         }
 
