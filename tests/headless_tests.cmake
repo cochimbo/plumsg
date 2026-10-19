@@ -22,6 +22,7 @@ run(0 --test-rom --frames 120 --expect-hash d171be7e --quiet)
 run(3 --test-rom --frames 120 --expect-hash 00000000 --quiet)
 # The same for the Master System test ROM, and its savestates.
 run(0 --sms-test-rom --frames 120 --expect-hash 4220de49 --quiet)
+run(0 --gg-test-rom --frames 120 --expect-hash 72c5cc29 --quiet)
 run(0 --sms-test-rom --frames 120 --hash-log "${WORK}/sms-log.txt" --quiet)
 run(0 --sms-test-rom --frames 120 --expect-log "${WORK}/sms-log.txt" --quiet
     --do "59 savestate ${WORK}/sms.state" --do "60 loadstate ${WORK}/sms.state")

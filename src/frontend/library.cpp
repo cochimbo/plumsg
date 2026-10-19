@@ -1,6 +1,7 @@
 #include "library.h"
 
 #include <algorithm>
+#include <iterator>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
@@ -48,7 +49,7 @@ struct CoverSet {
     const char* subfolder;  // under the covers folder ("" for the Mega Drive's, as before)
     const char* list;       // GitHub's tree of the folder
 };
-constexpr CoverSet kCoverSets[kSystemCount] = {
+constexpr CoverSet kCoverSets[] = {
     {"https://thumbnails.libretro.com/Sega%20-%20Mega%20Drive%20-%20Genesis/Named_Boxarts/",
      "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/master/Named_Boxarts/", "",
      "https://api.github.com/repos/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/git/trees/master:Named_Boxarts"},
@@ -62,7 +63,11 @@ constexpr CoverSet kCoverSets[kSystemCount] = {
      "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Master_System_-_Mark_III/master/Named_Boxarts/",
      "MasterSystem",
      "https://api.github.com/repos/libretro-thumbnails/Sega_-_Master_System_-_Mark_III/git/trees/master:Named_Boxarts"},
+    {"https://thumbnails.libretro.com/Sega%20-%20Game%20Gear/Named_Boxarts/",
+     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Game_Gear/master/Named_Boxarts/", "GameGear",
+     "https://api.github.com/repos/libretro-thumbnails/Sega_-_Game_Gear/git/trees/master:Named_Boxarts"},
 };
+static_assert(std::size(kCoverSets) == kSystemCount, "one set per console");
 
 const CoverSet& coverSet(ConsoleSystem s) { return kCoverSets[static_cast<int>(s)]; }
 

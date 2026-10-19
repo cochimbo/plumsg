@@ -41,6 +41,7 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
     if (!loaded.loadFile(path, error)) return false;
     cart_ = std::move(loaded);
     smsFile_ = detectSystem(path) == ConsoleSystem::MasterSystem;
+    ggFile_ = detectSystem(path) == ConsoleSystem::GameGear;
     loadNotice_.clear();
     std::unique_ptr<CdImage> disc;
     const std::string cue = detectSystemFromData(cart_.rom()) == ConsoleSystem::MegaDrive ? msuMdCue(path) : "";
@@ -62,14 +63,14 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
 
 void MegaDrive::loadRomData(std::vector<uint8_t> rom) {
     cart_.loadData(std::move(rom));
-    smsFile_ = false;
+    smsFile_ = ggFile_ = false;
     loadNotice_.clear();
     attachCd(nullptr, true);
 }
 
 void MegaDrive::loadRomDataWithDisc(std::vector<uint8_t> rom, std::unique_ptr<CdImage> disc) {
     cart_.loadData(std::move(rom));
-    smsFile_ = false;
+    smsFile_ = ggFile_ = false;
     loadNotice_.clear();
     attachCd(std::move(disc), true);
 }
@@ -129,7 +130,7 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
         return false;
     }
     cart_ = std::move(loaded);
-    smsFile_ = false;
+    smsFile_ = ggFile_ = false;
     discRegion_ = wanted;
     loadNotice_.clear();
     attachCd(std::move(disc), false);
@@ -150,15 +151,19 @@ void MegaDrive::setUpMars() {
 }
 
 void MegaDrive::setUpSms() {
-    const bool wanted = !disc_ && (smsFile_ || detectSystemFromData(cart_.rom()) == ConsoleSystem::MasterSystem);
+    const ConsoleSystem inside = detectSystemFromData(cart_.rom());
+    const bool gameGear = !disc_ && (ggFile_ || (!smsFile_ && inside == ConsoleSystem::GameGear));
+    const bool wanted = gameGear || (!disc_ && (smsFile_ || inside == ConsoleSystem::MasterSystem));
+    if (sms_ && sms_->gameGear() != gameGear) sms_.reset();
     if (wanted && !sms_) {
-        sms_ = std::make_unique<MasterSystem>(cart_, zram_, vdp_.frame());
+        sms_ = std::make_unique<MasterSystem>(cart_, zram_, vdp_.frame(), gameGear);
         opll_ = std::make_unique<Ym2413>();
     }
-    if (wanted) cart_.setMasterSystemHeader(smsRegion(cart_.rom()));
+    if (wanted) cart_.setMasterSystemHeader(smsRegion(cart_.rom()), gameGear);
     if (!wanted) {
         sms_.reset();
         opll_.reset();
+        vdp_.frame().aspectLines = 224;
     }
 }
 
@@ -184,7 +189,7 @@ void MegaDrive::configureFor(Region r) {
     if (sms_) {
         sms_->vdp().setPal(isPal);
         sms_->setJapanese(r == Region::JapanNtsc);
-        sms_->setFmPresent(r == Region::JapanNtsc || smsFmAlways_);
+        sms_->setFmPresent(!sms_->gameGear() && (r == Region::JapanNtsc || smsFmAlways_));
         // The YM2413 stands in for the YM2612 in the mix; the PSG is the main voice here.
         opll_->setMasterClock(master);
         opll_->setVolume(sms_->fmAudible() ? 100 : 0);
@@ -673,6 +678,11 @@ void MegaDrive::out(uint16_t port, uint8_t value) {
     if (!sms_) return;
     if ((port & 0xC0) == 0x40) {
         psgWrite(value);
+        return;
+    }
+    if (sms_->gameGear() && (port & 0xFF) == 0x06) {
+        syncSound();
+        psg_.setStereo(value);
         return;
     }
     if (sms_->fmPresent() && (port & 0xFF) >= 0xF0 && (port & 0xFF) <= 0xF2) {

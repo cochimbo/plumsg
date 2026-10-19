@@ -36,10 +36,10 @@ public:
     // The region the header asks for, preferring USA, then Japan, then Europe.
     Region preferredRegion() const;
 
-    // The cartridge is a Master System one: its header is not where a Mega Drive's is,
+    // The cartridge is a Master System (or Game Gear) one: its header is not where a Mega Drive's is,
     // so what was read there is forgotten (the title comes from the file name) and the
     // region is the one its own header asks for.
-    void setMasterSystemHeader(Region region);
+    void setMasterSystemHeader(Region region, bool gameGear);
 
     // Changes one byte of the ROM image (cheats); false if `offset` is past its end.
     bool patchRom(uint32_t offset, uint8_t value, uint8_t* previous);

@@ -38,6 +38,9 @@ struct VideoFrameMd {
     int wide = 0;
     int height = 224;   // 224 or 240; 448 or 480 in interlace mode 2
     bool interlaced = false;
+    // How many lines make the height of a 4:3 picture: a TV's 224 for the consoles on
+    // one, 144 for the Game Gear's screen, which shows all of its picture.
+    int aspectLines = 224;
 
     // Row stride is always kMaxWidth.
     std::array<uint32_t, kPixels> rgba{};  // final picture, 0xAARRGGBB

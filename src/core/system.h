@@ -10,26 +10,27 @@
 namespace plumsg {
 
 // The consoles plumsg knows: the Mega Drive alone, with the 32X on top or with the
-// Mega CD underneath, and the Master System, whose games it runs as the Mega Drive does.
-enum class ConsoleSystem : uint8_t { MegaDrive = 0, Mega32X = 1, MegaCD = 2, MasterSystem = 3 };
-constexpr int kSystemCount = 4;
+// Mega CD underneath, the Master System, whose games it runs as the Mega Drive does,
+// and the Game Gear, a Master System in a handheld.
+enum class ConsoleSystem : uint8_t { MegaDrive = 0, Mega32X = 1, MegaCD = 2, MasterSystem = 3, GameGear = 4 };
+constexpr int kSystemCount = 5;
 
-// "Mega Drive", "32X", "Mega CD", "Master System".
+// "Mega Drive", "32X", "Mega CD", "Master System", "Game Gear".
 const char* systemName(ConsoleSystem s);
 
-// True for the files plumsg can open: cartridges (.md .gen .smd .bin .32x .sms .zip)
+// True for the files plumsg can open: cartridges (.md .gen .smd .bin .32x .sms .gg .zip)
 // and discs (.cue .chd .iso).
 bool isGameFile(const std::string& path);
 
 // Which console a game file is for. Mostly by extension (.32x is 32X; .sms is Master
-// System; .cue, .chd and .iso are Mega CD); a .bin is also looked into, since 32X and
-// Master System cartridges and single-track discs are sometimes dumped as .bin, and so
-// is a .zip (a .32x or .sms inside it).
+// System; .gg is Game Gear; .cue, .chd and .iso are Mega CD); a .bin is also looked
+// into, since 32X, Master System and Game Gear cartridges and single-track discs are
+// sometimes dumped as .bin, and so is a .zip (a .32x, .sms or .gg inside it).
 ConsoleSystem detectSystem(const std::string& path);
 // The same from the first bytes of a .bin (at least 0x8000 if there are that many, for
 // the Master System's header).
 ConsoleSystem detectSystemFromData(const std::vector<uint8_t>& start);
-// The region a Master System cartridge's header asks for: Japan, else USA.
+// The region a Master System or Game Gear cartridge's header asks for: Japan, else USA.
 Region smsRegion(const std::vector<uint8_t>& rom);
 
 // The files a .cue sheet points to (FILE lines), as full paths next to the .cue.

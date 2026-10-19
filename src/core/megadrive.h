@@ -136,7 +136,8 @@ public:
     Mars* mars() { return mars_.get(); }  // null unless the game is a 32X one
     bool is32x() const { return mars_ != nullptr; }
     MasterSystem* masterSystem() { return sms_.get(); }  // null unless the game is a Master System one
-    bool isMasterSystem() const { return sms_ != nullptr; }
+    bool isMasterSystem() const { return sms_ != nullptr; }  // the Game Gear too
+    bool isGameGear() const { return sms_ && sms_->gameGear(); }
     // The Master System's FM sound unit is built into Japanese consoles; this puts it in
     // the others too, for games that use it wherever they find it. Takes effect on the
     // next reset or power cycle.
@@ -227,6 +228,7 @@ private:
     std::unique_ptr<Ym2413> opll_;  // the Master System's FM unit, with sms_
     bool smsFmAlways_ = false;
     bool smsFile_ = false;  // the file loaded is a Master System one by its name
+    bool ggFile_ = false;   // ...or a Game Gear one
     std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe
     std::string loadNotice_;
 

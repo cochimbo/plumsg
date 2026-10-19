@@ -372,7 +372,7 @@ struct CommandLine {
 
 const char* const kHelp = N_(
     "plumsg [juego] [opciones]\n\n"
-    "  juego                  cartucho (.md .gen .bin .smd .32x .sms .zip) o disco (.cue .chd .iso)\n"
+    "  juego                  cartucho (.md .gen .bin .smd .32x .sms .gg .zip) o disco (.cue .chd .iso)\n"
     "  --pantalla-completa    abrir a pantalla completa (o --fullscreen)\n"
     "  --ventana              abrir en ventana (o --windowed)\n"
     "  --3d / --2d            con o sin la vista pseudo-3D\n"

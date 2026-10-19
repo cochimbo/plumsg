@@ -4,6 +4,8 @@
 #include "../core/i18n.h"
 #include "library_names.h"
 
+#include <iterator>
+
 namespace plumsg {
 
 namespace {
@@ -14,7 +16,7 @@ struct CheatSet {
     const char* files;
     const char* list;
 };
-constexpr CheatSet kCheatSets[kSystemCount] = {
+constexpr CheatSet kCheatSets[] = {
     {"https://raw.githubusercontent.com/libretro/libretro-database/master/cht/Sega%20-%20Mega%20Drive%20-%20Genesis/",
      "https://api.github.com/repos/libretro/libretro-database/git/trees/master:cht/Sega%20-%20Mega%20Drive%20-%20Genesis"},
     {"https://raw.githubusercontent.com/libretro/libretro-database/master/cht/Sega%20-%2032X/",
@@ -23,7 +25,10 @@ constexpr CheatSet kCheatSets[kSystemCount] = {
      "https://api.github.com/repos/libretro/libretro-database/git/trees/master:cht/Sega%20-%20Mega-CD%20-%20Sega%20CD"},
     {"https://raw.githubusercontent.com/libretro/libretro-database/master/cht/Sega%20-%20Master%20System%20-%20Mark%20III/",
      "https://api.github.com/repos/libretro/libretro-database/git/trees/master:cht/Sega%20-%20Master%20System%20-%20Mark%20III"},
+    {"https://raw.githubusercontent.com/libretro/libretro-database/master/cht/Sega%20-%20Game%20Gear/",
+     "https://api.github.com/repos/libretro/libretro-database/git/trees/master:cht/Sega%20-%20Game%20Gear"},
 };
+static_assert(std::size(kCheatSets) == kSystemCount, "one set per console");
 
 const CheatSet& cheatSet(ConsoleSystem s) { return kCheatSets[static_cast<int>(s)]; }
 

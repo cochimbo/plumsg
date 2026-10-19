@@ -14,8 +14,10 @@ bool isCodemasters(const std::vector<uint8_t>& rom) {
 
 }  // namespace
 
-MasterSystem::MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame)
-    : cart_(cart), ram_(ram), vdp_(frame) {}
+MasterSystem::MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame, bool gameGear)
+    : cart_(cart), ram_(ram), vdp_(frame), gameGear_(gameGear) {
+    vdp_.setGameGear(gameGear);
+}
 
 void MasterSystem::powerOn() {
     vdp_.reset();
@@ -78,6 +80,12 @@ void MasterSystem::write(uint16_t addr, uint8_t value) {
 }
 
 uint8_t MasterSystem::in(uint8_t port, int cycle) {
+    if (gameGear_ && port < 0x07) {
+        // START (active low), export console, NTSC; then the link port, idle.
+        static constexpr uint8_t kLink[6] = {0x7F, 0xFF, 0x00, 0xFF, 0x00, 0xFF};
+        if (port == 0) return static_cast<uint8_t>((pads_[0].start ? 0x00 : 0x80) | (japanese_ ? 0x00 : 0x40));
+        return kLink[port - 1];
+    }
     // The ports are decoded by address lines 7, 6 and 0 only.
     switch (port & 0xC1) {
         case 0x40: return vdp_.vcounter();
@@ -102,8 +110,9 @@ void MasterSystem::out(uint8_t port, uint8_t value) {
 
 // Both ports read active low.
 uint8_t MasterSystem::portA() const {
+    static const PadState kNone{};
     const PadState& a = pads_[0];
-    const PadState& b = pads_[1];
+    const PadState& b = gameGear_ ? kNone : pads_[1];
     uint8_t v = 0xFF;
     if (a.up) v &= ~0x01;
     if (a.down) v &= ~0x02;
@@ -117,7 +126,8 @@ uint8_t MasterSystem::portA() const {
 }
 
 uint8_t MasterSystem::portB() const {
-    const PadState& b = pads_[1];
+    static const PadState kNone{};
+    const PadState& b = gameGear_ ? kNone : pads_[1];
     uint8_t v = 0xFF;
     if (b.left) v &= ~0x01;
     if (b.right) v &= ~0x02;
