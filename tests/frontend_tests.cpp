@@ -128,13 +128,13 @@ void testWidescreenOption() {
           "pantalla ancha: lee los 16:9 de antes");
     Settings s;
     s.wideLeft = 32;
-    s.wideRight = 96;
+    s.wideRight = 56;
     std::ostringstream out;
     s.write(out);
     Settings again;
     std::istringstream text(out.str());
     Settings::parse(text, again);
-    check(again.wideLeft == 32 && again.wideRight == 96, "pantalla ancha: plumsg.ini lo guarda");
+    check(again.wideLeft == 32 && again.wideRight == 56, "pantalla ancha: plumsg.ini lo guarda");
 }
 
 

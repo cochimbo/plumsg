@@ -152,7 +152,7 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   truco de tapar sprites con uno en x = 0 se respeta. Si un juego parpadea igual, es que
   esconde los sprites él mismo. También se puede fijar por juego.
 - **Opciones > Vídeo > Pantalla ancha** (desactivada por defecto): botones para 4:3, 16:10 y
-  16:9, y un deslizador por lado (de 0 a 96 columnas) que cambia la imagen al momento,
+  16:9, y un deslizador por lado (de 0 a 56 columnas) que cambia la imagen al momento,
   siempre centrada. A los lados se dibuja lo que el juego tiene en los planos y los sprites
   más allá de los bordes. Como el juego nunca pensó que eso se viera, en algunos aparecen
   enemigos antes de tiempo, trozos del nivel aún sin dibujar o cosas escondidas fuera; se

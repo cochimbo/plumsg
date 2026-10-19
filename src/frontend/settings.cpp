@@ -179,7 +179,7 @@ void Settings::write(std::ostream& out) const {
         << "# sin_limite_sprites: dibujar todos los sprites de cada línea, sin el límite de la consola\n"
         << "# que los hace parpadear o desaparecer. El juego no lo nota.\n"
         << "sin_limite_sprites = " << flag(unlimitedSprites) << "\n"
-        << "# pantalla_ancha_izquierda/derecha: columnas de más a cada lado (0 a 96; 53 y 53 es 16:9).\n"
+        << "# pantalla_ancha_izquierda/derecha: columnas de más a cada lado (0 a 56; 53 y 53 es 16:9).\n"
         << "# Enseñan lo que hay más allá de los bordes; en algunos juegos se ven cosas que no tendrían que verse.\n"
         << "pantalla_ancha_izquierda = " << wideLeft << "\n"
         << "pantalla_ancha_derecha = " << wideRight << "\n"

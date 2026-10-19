@@ -434,13 +434,13 @@ void testVdpWidescreen() {
     check(narrow->frame().width == 340 && narrow->frame().wideLeft == 42 && layer(*narrow, 42 + 272) == MdLayer::Sprite,
           "VDP widescreen: 16:9 in H32 is 340 pixels");
     // Only the left side: the plane past the left edge shows, the sprite past the right does not.
-    auto leftOnly = render(60, 0, true);
+    auto leftOnly = render(50, 0, true);
     const VideoFrameMd& g = leftOnly->frame();
-    check(g.width == 380 && g.wideLeft == 60 && g.wideRight == 0 && layer(*leftOnly, 60 - 8) == MdLayer::PlaneA &&
+    check(g.width == 370 && g.wideLeft == 50 && g.wideRight == 0 && layer(*leftOnly, 50 - 8) == MdLayer::PlaneA &&
               g.consoleWidth() == 320,
           "VDP widescreen: only the left side");
     bool sameLeft = true;
-    for (int x = 0; x < 320; ++x) sameLeft &= off->frame().rgba[x] == g.rgba[60 + x];
+    for (int x = 0; x < 320; ++x) sameLeft &= off->frame().rgba[x] == g.rgba[50 + x];
     check(sameLeft, "VDP widescreen: one side only keeps the console's picture");
 }
 

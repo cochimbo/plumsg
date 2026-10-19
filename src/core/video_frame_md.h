@@ -27,8 +27,9 @@ struct MdPixel {
 // that line and with shadow/highlight applied, so mid-frame palette changes survive
 // in 3D too.
 struct VideoFrameMd {
-    // Most columns the widescreen option adds on one side.
-    static constexpr int kMaxWideSide = 96;
+    // Most columns the widescreen option adds on one side: a little past 16:9. Much
+    // larger frames make MSVC run out of heap space compiling this struct.
+    static constexpr int kMaxWideSide = 56;
     // 320 plus what the widescreen option adds on both sides.
     static constexpr int kMaxWidth = 320 + 2 * kMaxWideSide;
     static constexpr int kMaxHeight = 480;  // 240 lines, doubled in interlace mode 2

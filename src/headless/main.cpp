@@ -60,7 +60,7 @@ Running
   --six-button          6-button pads instead of 3-button ones
   --no-sprite-limit     draw every sprite on a line (the option against flicker)
   --widescreen W:H      draw the picture W:H wide (16:9, 16:10) instead of 4:3
-  --widescreen L,R      or with L more columns on the left and R on the right (up to 96)
+  --widescreen L,R      or with L more columns on the left and R on the right (up to 56)
   --overclock PERCENT   run the 68000 at 100-400% of its speed (default 100)
   --bios FILE           Mega CD BIOS; its region comes from its header (else: all)
   --bios-dir DIR        look for Mega CD BIOS files in DIR and its subfolders
