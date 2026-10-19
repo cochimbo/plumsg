@@ -1665,7 +1665,8 @@ void testSongExtract(testrom::Asking asking) {
                                                                  : "";
     const std::string said = asking == testrom::Asking::byCall    ? "Pido las canciones llamando a"
                              : asking == testrom::Asking::byStack ? "Pido las canciones llamando a"
-                             : asking == testrom::Asking::bySlot  ? "Pido las canciones llamando a"
+                             // (The call only on the second boot: the byte the routine writes first.)
+                             : asking == testrom::Asking::bySlot  ? "Pido las canciones en"
                              : asking == testrom::Asking::byRing  ? "Pido las canciones con el mensaje FF 10 n"
                                                                   : "Pido las canciones en";
     SongExtractor extractor;
