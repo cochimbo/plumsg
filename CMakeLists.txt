@@ -118,6 +118,8 @@ add_library(plumsg_core STATIC
   src/core/megadrive.cpp
   src/core/rewind.cpp
   src/core/cheats.cpp
+  src/core/sms.cpp
+  src/core/vdp_sms.cpp
   src/core/system.cpp
   src/core/sh2.cpp
   src/core/mars.cpp

@@ -49,13 +49,14 @@ const char* systemName(ConsoleSystem s) {
     switch (s) {
         case ConsoleSystem::Mega32X: return "32X";
         case ConsoleSystem::MegaCD: return "Mega CD";
+        case ConsoleSystem::MasterSystem: return "Master System";
         default: return "Mega Drive";
     }
 }
 
 bool isGameFile(const std::string& path) {
     const std::string e = extensionOf(path);
-    return e == ".md" || e == ".gen" || e == ".smd" || e == ".bin" || e == ".zip" || e == ".32x" || e == ".cue" ||
+    return e == ".md" || e == ".gen" || e == ".smd" || e == ".bin" || e == ".zip" || e == ".32x" || e == ".sms" || e == ".cue" ||
            e == ".chd" || e == ".iso";
 }
 
@@ -65,14 +66,26 @@ ConsoleSystem detectSystemFromData(const std::vector<uint8_t>& d) {
     if (startsWith(d, 0, "SEGADISCSYSTEM") || startsWith(d, 0x10, "SEGADISCSYSTEM")) return ConsoleSystem::MegaCD;
     // A 32X cartridge says so in its header, and has the "MARS" security code.
     if (startsWith(d, 0x100, "SEGA 32X") || startsWith(d, 0x101, "SEGA 32X")) return ConsoleSystem::Mega32X;
+    // A Mega Drive cartridge says SEGA at 0x100; a Master System one has "TMR SEGA" at
+    // the end of its first 8, 16 or 32 KB.
+    if (startsWith(d, 0x100, "SEGA") || startsWith(d, 0x101, "SEGA")) return ConsoleSystem::MegaDrive;
+    for (size_t at : {0x7FF0, 0x3FF0, 0x1FF0})
+        if (startsWith(d, at, "TMR SEGA")) return ConsoleSystem::MasterSystem;
     return ConsoleSystem::MegaDrive;
+}
+
+Region smsRegion(const std::vector<uint8_t>& rom) {
+    for (size_t at : {0x7FF0, 0x3FF0, 0x1FF0})
+        if (startsWith(rom, at, "TMR SEGA")) return (rom[at + 0xF] >> 4) == 3 ? Region::JapanNtsc : Region::UsaNtsc;
+    return Region::UsaNtsc;
 }
 
 ConsoleSystem detectSystem(const std::string& path) {
     const std::string e = extensionOf(path);
     if (e == ".32x") return ConsoleSystem::Mega32X;
+    if (e == ".sms") return ConsoleSystem::MasterSystem;
     if (e == ".cue" || e == ".chd" || e == ".iso") return ConsoleSystem::MegaCD;
-    if (e == ".bin") return detectSystemFromData(readStart(path, 0x200));
+    if (e == ".bin") return detectSystemFromData(readStart(path, 0x8000));
     if (e == ".zip") {
         // Only the central directory is needed for the names, but miniz wants the file
         // in memory; zips of cartridges are small.
@@ -84,8 +97,10 @@ ConsoleSystem detectSystem(const std::string& path) {
             const mz_uint count = mz_zip_reader_get_num_files(&zip);
             for (mz_uint i = 0; i < count; ++i) {
                 mz_zip_archive_file_stat st;
-                if (mz_zip_reader_file_stat(&zip, i, &st) && extensionOf(st.m_filename) == ".32x") {
-                    s = ConsoleSystem::Mega32X;
+                if (!mz_zip_reader_file_stat(&zip, i, &st)) continue;
+                const std::string inner = extensionOf(st.m_filename);
+                if (inner == ".32x" || inner == ".sms") {
+                    s = inner == ".32x" ? ConsoleSystem::Mega32X : ConsoleSystem::MasterSystem;
                     break;
                 }
             }

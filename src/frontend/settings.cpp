@@ -31,7 +31,7 @@ bool yes(const std::string& v) {
 constexpr const char* kScaleNames[] = {"entero", "ajustar", "estirar"};
 constexpr const char* kFilterNames[] = {"ninguno", "scanlines", "crt"};
 constexpr const char* kRegionNames[] = {"auto", "japon", "usa", "europa"};
-constexpr const char* kSystemKeys[] = {"megadrive", "32x", "megacd"};
+constexpr const char* kSystemKeys[] = {"megadrive", "32x", "megacd", "mastersystem"};
 constexpr const char* kBiosKeys[] = {"megacd_japon", "megacd_usa", "megacd_europa"};
 
 }  // namespace
@@ -215,7 +215,7 @@ void Settings::write(std::ostream& out) const {
         << "ranura = " << stateSlot << "\n"
         << "\n[biblioteca]\n"
         << "# carpeta: donde están tus juegos (una línea por carpeta). abrir_al_empezar: mostrar la biblioteca\n"
-        << "# al abrir plumsg sin juego. sistema: pestaña elegida (todos, megadrive, 32x o megacd).\n";
+        << "# al abrir plumsg sin juego. sistema: pestaña elegida (todos, megadrive, 32x, megacd o mastersystem).\n";
     for (const auto& f : libraryFolders) out << "carpeta = " << f << "\n";
     out << "abrir_al_empezar = " << flag(libraryAtStart) << "\n"
         << "sistema = " << (librarySystem >= 0 && librarySystem < kSystemCount ? kSystemKeys[librarySystem] : "todos") << "\n"

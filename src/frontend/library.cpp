@@ -58,6 +58,10 @@ constexpr CoverSet kCoverSets[kSystemCount] = {
     {"https://thumbnails.libretro.com/Sega%20-%20Mega-CD%20-%20Sega%20CD/Named_Boxarts/",
      "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega-CD_-_Sega_CD/master/Named_Boxarts/", "MegaCD",
      "https://api.github.com/repos/libretro-thumbnails/Sega_-_Mega-CD_-_Sega_CD/git/trees/master:Named_Boxarts"},
+    {"https://thumbnails.libretro.com/Sega%20-%20Master%20System%20-%20Mark%20III/Named_Boxarts/",
+     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Master_System_-_Mark_III/master/Named_Boxarts/",
+     "MasterSystem",
+     "https://api.github.com/repos/libretro-thumbnails/Sega_-_Master_System_-_Mark_III/git/trees/master:Named_Boxarts"},
 };
 
 const CoverSet& coverSet(ConsoleSystem s) { return kCoverSets[static_cast<int>(s)]; }

@@ -231,6 +231,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
     auto md = std::make_unique<MegaDrive>();
     if (!md->loadRom(romPath, error)) return false;
     if (md->isMegaCd()) return fail(tr("Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip."));
+    if (md->isMasterSystem()) return fail(tr("Sacar las canciones de los juegos de Master System aún no está hecho."));
     md->setDrawing(false);
 
     Progress p;

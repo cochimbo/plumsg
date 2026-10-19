@@ -33,6 +33,7 @@
 #include "cd_image.h"
 #include "netplay.h"
 #include "pad_test_rom.h"
+#include "sms_test_rom.h"
 #include "music_rom.h"
 #include "song_extract.h"
 
@@ -1918,6 +1919,139 @@ void testSongExtract(testrom::Asking asking) {
           "Canciones: con efectos Roland, el efecto pasa por el SoundFont");
 }
 
+void testMasterSystem() {
+    namespace st = smstestrom;
+    const std::vector<uint8_t> rom = st::build();
+    check(detectSystemFromData(rom) == ConsoleSystem::MasterSystem && smsRegion(rom) == Region::UsaNtsc,
+          "Master System: detected from its header");
+    MegaDrive md;
+    md.loadRomData(rom);
+    md.setSampleRate(44100);
+    check(md.isMasterSystem() && !md.is32x() && !md.isMegaCd(), "Master System: runs in its mode");
+    std::vector<int16_t> sound;
+    for (int i = 0; i < 60; ++i) {
+        md.runFrame();
+        sound.insert(sound.end(), md.audio().samples().begin(), md.audio().samples().end());
+        md.audio().clearSamples();
+    }
+    const VideoFrameMd& f = md.frame();
+    check(f.width == 256 && f.height == 192 && f.wide == 0, "Master System: 256x192");
+    const int frames = md.z80Ram()[0];
+    check(frames >= 55 && frames <= 60, "Master System: one frame interrupt a frame");
+    // The scroll was set by the interrupt during the last frame, so the picture shows the
+    // value before it.
+    const int h = f.lines[0].hscrollB;
+    check(h == ((frames - 1) & 0xFF), "Master System: the interrupt scrolls the background");
+    bool halves = true;
+    for (int x = 8; x < 256; ++x) halves &= f.pixel(x, 20) == (((x - h) & 7) < 4 ? st::kRed : st::kBlue);
+    check(halves, "Master System: background tiles, palette and scroll");
+    check(f.pixel(0, 20) == st::kYellow && f.pixel(7, 100) == st::kYellow &&
+              f.info[20 * VideoFrameMd::kMaxWidth + 3].layer == MdLayer::Backdrop,
+          "Master System: left column masked with the backdrop");
+    const int sx = st::kSpriteLeft + 2;
+    check(f.pixel(sx, st::kSpriteTop + 7) == st::kMagenta &&
+              f.info[(st::kSpriteTop + 7) * VideoFrameMd::kMaxWidth + sx].layer == MdLayer::Sprite,
+          "Master System: a sprite");
+    const int under = (st::kSpriteTop + 2) * VideoFrameMd::kMaxWidth + sx;
+    check(f.pixel(sx, st::kSpriteTop + 2) == st::kGreen && f.info[under].layer == MdLayer::PlaneA &&
+              (f.sprites[under] >> 24) != 0,
+          "Master System: a tile with priority in front of the sprite, the sprite still in its layer");
+    check(f.info[(st::kSpriteTop - 2) * VideoFrameMd::kMaxWidth + sx].layer != MdLayer::Sprite &&
+              f.info[(st::kSpriteTop + 8) * VideoFrameMd::kMaxWidth + sx].layer != MdLayer::Sprite,
+          "Master System: the sprite is only on its lines");
+    double sumSq = 0;
+    for (int16_t s : sound) sumSq += static_cast<double>(s) * s;
+    check(sound.size() / 2 > 43000 && sound.size() / 2 < 45000 && std::sqrt(sumSq / static_cast<double>(sound.size())) > 300,
+          "Master System: the PSG plays its tone");
+
+    // Pads (active low on port 0xDC) and the pause button.
+    PadState p;
+    p.up = p.b = true;
+    md.setPads(p, PadState{});
+    md.runFrame();
+    check(md.z80Ram()[2] == static_cast<uint8_t>(~0x11), "Master System: up and button 1 on port 0xDC");
+    p = PadState{};
+    p.c = p.right = true;
+    md.setPads(p, PadState{});
+    md.runFrame();
+    check(md.z80Ram()[2] == static_cast<uint8_t>(~0x28), "Master System: right and button 2 on port 0xDC");
+    p = PadState{};
+    p.start = true;
+    md.setPads(p, PadState{});
+    md.runFrame();
+    md.runFrame();  // held: still one press
+    md.setPads(PadState{}, PadState{});
+    md.runFrame();
+    check(md.z80Ram()[1] == 1, "Master System: Start is the pause button (one NMI a press)");
+
+    // Savestates.
+    std::vector<uint8_t> state;
+    check(md.saveState(state), "Master System: state saved");
+    auto run = [&](std::vector<uint32_t>& hashes) {
+        for (int i = 0; i < 30; ++i) {
+            md.runFrame();
+            hashes.push_back(frameHash(md.frame()));
+            md.audio().clearSamples();
+        }
+    };
+    std::vector<uint32_t> h1, h2;
+    run(h1);
+    std::string error;
+    check(md.loadState(state, &error), "Master System: state loaded");
+    run(h2);
+    check(h1 == h2, "Master System: the same frames after loading a state");
+    std::vector<uint32_t> pixels;
+    int tw = 0, th = 0;
+    check(MegaDrive::stateThumbnail(state, pixels, &tw, &th) && tw == 128 && th == 96, "Master System: thumbnail");
+
+    // A Mega Drive game afterwards leaves the mode.
+    md.loadRomData(testrom::build());
+    for (int i = 0; i < 3; ++i) md.runFrame();
+    check(!md.isMasterSystem() && md.frame().width == 320, "Master System: a Mega Drive game leaves the mode");
+}
+
+void testSmsMapper() {
+    // 128 KB: bank n has n in every byte, after its first KB.
+    std::vector<uint8_t> rom(0x20000);
+    for (size_t i = 0; i < rom.size(); ++i) rom[i] = static_cast<uint8_t>(i / 0x4000);
+    std::copy_n("TMR SEGA", 8, rom.begin() + 0x7FF0);
+    Cartridge cart;
+    cart.loadData(rom);
+    std::array<uint8_t, 0x2000> ram{};
+    auto frame = std::make_unique<VideoFrameMd>();
+    MasterSystem sms(cart, ram, *frame);
+    sms.powerOn();
+    check(sms.read(0x0000) == 0 && sms.read(0x4000) == 1 && sms.read(0x8000) == 2, "SMS mapper: banks 0, 1, 2 at power on");
+    sms.write(0xFFFF, 7);
+    sms.write(0xFFFE, 5);
+    sms.write(0xFFFD, 3);
+    check(sms.read(0x8000) == 7 && sms.read(0x4000) == 5 && sms.read(0x0400) == 3 && sms.read(0x0000) == 0,
+          "SMS mapper: banks switched, the first KB stays");
+    sms.write(0xFFFF, 9);
+    check(sms.read(0x8000) == 1, "SMS mapper: bank numbers wrap around the ROM");
+    check(ram[0x1FFF] == 9 && sms.read(0xDFFF) == 9 && sms.read(0xFFFF) == 9, "SMS mapper: registers are in RAM too");
+    sms.write(0xFFFC, 0x08);
+    sms.write(0x8000, 0x5A);
+    sms.write(0xFFFC, 0x0C);
+    sms.write(0x8000, 0xA5);
+    check(sms.read(0x8000) == 0xA5 && cart.saveRamByte(0x4000) == 0xA5 && cart.saveRamByte(0) == 0x5A &&
+              cart.hasSaveData(),
+          "SMS mapper: two pages of battery RAM");
+    sms.write(0xFFFC, 0);
+    check(sms.read(0x8000) == 1, "SMS mapper: back to ROM");
+    // The VDP: a register write, an address, VRAM through the data port and the read buffer.
+    sms.out(0xBF, 0x12);
+    sms.out(0xBF, 0x87);
+    check(sms.vdp().reg(7) == 0x12, "SMS VDP: register write");
+    sms.out(0xBF, 0x00);
+    sms.out(0xBF, 0x41);
+    sms.out(0xBE, 0xAB);
+    sms.out(0xBE, 0xCD);
+    sms.out(0xBF, 0x00);
+    sms.out(0xBF, 0x01);
+    check(sms.in(0xBE, 0) == 0xAB && sms.in(0xBE, 0) == 0xCD, "SMS VDP: VRAM written and read back");
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -1945,6 +2079,8 @@ int main() {
     testCheats();
     testLibraryNames();
     testSystems();
+    testMasterSystem();
+    testSmsMapper();
     testSh2();
     testMars();
     testMarsProgram();

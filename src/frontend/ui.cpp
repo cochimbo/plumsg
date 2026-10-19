@@ -1427,7 +1427,7 @@ void Ui::drawLibrary(UiActions& out) {
                         "B o Esc: cerrar   L / R o RePág / AvPág: consola"));
     ImGui::Separator();
 
-    if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .zip, .cue, .chd, .iso) en estas carpetas."));
+    if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .sms, .zip, .cue, .chd, .iso) en estas carpetas."));
     else if (visible.empty() && libraryView_.search[0]) ImGui::TextDisabled("%s", tr("Ningún juego coincide con la búsqueda."));
     else if (visible.empty()) ImGui::TextDisabled("%s", tr("No hay juegos de esta consola en tus carpetas."));
 
@@ -1484,7 +1484,9 @@ void Ui::drawLibrary(UiActions& out) {
             const char* badge = systemName(g.system);
             const ImVec2 size = ImGui::CalcTextSize(badge);
             const ImVec2 b0(box.x + coverW - size.x - 10, box.y + 4);
-            const ImU32 colour = g.system == ConsoleSystem::Mega32X ? IM_COL32(200, 60, 50, 230) : IM_COL32(40, 110, 200, 230);
+            const ImU32 colour = g.system == ConsoleSystem::Mega32X        ? IM_COL32(200, 60, 50, 230)
+                                 : g.system == ConsoleSystem::MasterSystem ? IM_COL32(40, 140, 80, 230)
+                                                                          : IM_COL32(40, 110, 200, 230);
             draw->AddRectFilled(b0, ImVec2(b0.x + size.x + 8, b0.y + size.y + 4), colour, 3.0f);
             draw->AddText(ImVec2(b0.x + 4, b0.y + 2), IM_COL32(255, 255, 255, 255), badge);
         }

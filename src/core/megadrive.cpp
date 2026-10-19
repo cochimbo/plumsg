@@ -40,6 +40,7 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
     Cartridge loaded;
     if (!loaded.loadFile(path, error)) return false;
     cart_ = std::move(loaded);
+    smsFile_ = detectSystem(path) == ConsoleSystem::MasterSystem;
     loadNotice_.clear();
     std::unique_ptr<CdImage> disc;
     const std::string cue = detectSystemFromData(cart_.rom()) == ConsoleSystem::MegaDrive ? msuMdCue(path) : "";
@@ -61,12 +62,14 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
 
 void MegaDrive::loadRomData(std::vector<uint8_t> rom) {
     cart_.loadData(std::move(rom));
+    smsFile_ = false;
     loadNotice_.clear();
     attachCd(nullptr, true);
 }
 
 void MegaDrive::loadRomDataWithDisc(std::vector<uint8_t> rom, std::unique_ptr<CdImage> disc) {
     cart_.loadData(std::move(rom));
+    smsFile_ = false;
     loadNotice_.clear();
     attachCd(std::move(disc), true);
 }
@@ -83,6 +86,7 @@ void MegaDrive::attachCd(std::unique_ptr<CdImage> disc, bool cartridge) {
     romOriginal_.clear();
     ramCheats_.clear();
     setUpMars();
+    setUpSms();
     applyRegion();
     powerCycle();
 }
@@ -125,6 +129,7 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
         return false;
     }
     cart_ = std::move(loaded);
+    smsFile_ = false;
     discRegion_ = wanted;
     loadNotice_.clear();
     attachCd(std::move(disc), false);
@@ -144,6 +149,13 @@ void MegaDrive::setUpMars() {
     vdp_.frame().mars.fill(0);
 }
 
+void MegaDrive::setUpSms() {
+    const bool wanted = !disc_ && (smsFile_ || detectSystemFromData(cart_.rom()) == ConsoleSystem::MasterSystem);
+    if (wanted && !sms_) sms_ = std::make_unique<MasterSystem>(cart_, zram_, vdp_.frame());
+    if (wanted) cart_.setMasterSystemHeader(smsRegion(cart_.rom()));
+    if (!wanted) sms_.reset();
+}
+
 void MegaDrive::setRegion(Region r) {
     region_ = r;
     applyRegion();
@@ -158,6 +170,10 @@ void MegaDrive::configureFor(Region r) {
     effectiveRegion_ = r;
     const bool isPal = effectiveRegion_ == Region::EuropePal;
     vdp_.setPal(isPal);
+    if (sms_) {
+        sms_->vdp().setPal(isPal);
+        sms_->setJapanese(r == Region::JapanNtsc);
+    }
     psg_.setClock(isPal ? Psg::kClockPal : Psg::kClockNtsc);
     const double master = isPal ? kMasterPal : kMasterNtsc;
     ym_.setMasterClock(master);
@@ -200,6 +216,7 @@ void MegaDrive::powerCycle() {
     vdp_.reset();
     if (mars_) mars_->powerOn();
     if (mcd_) mcd_->powerOn();
+    if (sms_) sms_->powerOn();
     reset();
 }
 
@@ -233,6 +250,12 @@ void MegaDrive::reset() {
     }
     cpu_.setIrqLevel(0);
     cpu_.reset();
+    if (sms_) {
+        // The Z80 runs the cartridge from its first byte; there is no 68000 to wake it.
+        sms_->reset();
+        z80Reset_ = false;
+        z80_.setIrqLine(false);
+    }
 }
 
 // ---------------------------------------------------------------------------------
@@ -336,9 +359,41 @@ void MegaDrive::setVgmWriter(VgmWriter* writer) {
     if (vgm_) vgm_->begin(ym_, psg_, now_, masterClock());
 }
 
+void MegaDrive::runFrameSms() {
+    VdpSms& vdp = sms_->vdp();
+    if (sms_->pausePressed()) z80_.triggerNmi();
+    const int lines = vdp.linesPerFrame();
+    for (int line = 0; line < lines; ++line) {
+        lineStart_ = now_;
+        vdp.startLine(line, drawing_);
+        z80_.setIrqLine(vdp.irq());
+        const uint64_t end = lineStart_ + kMasterPerLine;
+        while (z80Clock_ < end) {
+            now_ = z80Clock_;
+            z80Clock_ += static_cast<uint64_t>(z80_.step()) * 15;
+        }
+        now_ = end;
+    }
+    vdp.endFrame();
+}
+
 void MegaDrive::runFrame() {
     applyRamCheats();
     if (roland_) roland_->beginFrame(now_);
+    if (sms_) runFrameSms();
+    else runFrameMd();
+    syncSound();
+    ++frames_;
+    loadedThumbnail_.clear();
+    // Hand this frame's sound to the mixer.
+    psgBuffer_.insert(psgBuffer_.end(), psg_.samples().begin(), psg_.samples().end());
+    psg_.clearSamples();
+    const size_t before = mixer_.samples().size() / 2;
+    mixer_.mix(ym_.samples(), psgBuffer_, addOnSamples());
+    if (roland_) roland_->endFrame(now_, mixer_.output(), before, mixer_.outputRate());
+}
+
+void MegaDrive::runFrameMd() {
     const int lines = vdp_.linesPerFrame();
     for (int line = 0; line < lines; ++line) {
         lineStart_ = now_;
@@ -362,16 +417,7 @@ void MegaDrive::runFrame() {
         updateIrq();
         runUntil(lineStart_ + kMasterPerLine);
     }
-    syncSound();
     vdp_.endFrame();
-    ++frames_;
-    loadedThumbnail_.clear();
-    // Hand this frame's sound to the mixer.
-    psgBuffer_.insert(psgBuffer_.end(), psg_.samples().begin(), psg_.samples().end());
-    psg_.clearSamples();
-    const size_t before = mixer_.samples().size() / 2;
-    mixer_.mix(ym_.samples(), psgBuffer_, addOnSamples());
-    if (roland_) roland_->endFrame(now_, mixer_.output(), before, mixer_.outputRate());
 }
 
 bool MegaDrive::runAhead(int frames) {
@@ -415,15 +461,7 @@ uint16_t MegaDrive::readVdp(uint32_t addr) {
 void MegaDrive::writeVdp(uint32_t addr, uint16_t value, bool byte) {
     const uint32_t port = addr & 0x1F;
     if (port >= 0x10 && port < 0x18) {
-        if (!byte || (addr & 1)) {
-            syncSound();
-            psg_.write(static_cast<uint8_t>(value));
-            if (vgm_) vgm_->psg(static_cast<uint8_t>(value), now_);
-            if (roland_) {
-                roland_->psgWrite(psg_, now_);
-                rolandChipChannels();
-            }
-        }
+        if (!byte || (addr & 1)) psgWrite(static_cast<uint8_t>(value));
         return;
     }
     // Byte writes reach the VDP with the byte on both halves of the bus.
@@ -590,10 +628,38 @@ void MegaDrive::write16(uint32_t addr, uint16_t value) {
     }
 }
 
+void MegaDrive::psgWrite(uint8_t value) {
+    syncSound();
+    psg_.write(value);
+    if (vgm_) vgm_->psg(value, now_);
+    if (roland_) {
+        roland_->psgWrite(psg_, now_);
+        rolandChipChannels();
+    }
+}
+
 // ---------------------------------------------------------------------------------
 // Z80 memory map
 
+uint8_t MegaDrive::in(uint16_t port) {
+    if (!sms_) return 0xFF;
+    const uint8_t value = sms_->in(static_cast<uint8_t>(port), lineClock() / 15);
+    z80_.setIrqLine(sms_->vdp().irq());  // reading the status clears the interrupt
+    return value;
+}
+
+void MegaDrive::out(uint16_t port, uint8_t value) {
+    if (!sms_) return;
+    if ((port & 0xC0) == 0x40) {
+        psgWrite(value);
+        return;
+    }
+    sms_->out(static_cast<uint8_t>(port), value);
+    z80_.setIrqLine(sms_->vdp().irq());  // an interrupt enable may have changed
+}
+
 uint8_t MegaDrive::read(uint16_t addr) {
+    if (sms_) return sms_->read(addr);
     if (addr < 0x4000) return zram_[addr & 0x1FFF];
     if (addr < 0x6000) {
         syncSound();
@@ -613,6 +679,10 @@ uint8_t MegaDrive::read(uint16_t addr) {
 }
 
 void MegaDrive::write(uint16_t addr, uint8_t value) {
+    if (sms_) {
+        sms_->write(addr, value);
+        return;
+    }
     if (addr < 0x4000) {
         if (watching_ && !watchWrite(0xA00000 | (addr & 0x1FFF), value, fromM68k_)) return;
         zram_[addr & 0x1FFF] = value;
@@ -629,15 +699,7 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
         // Bank register: nine bits shifted in one at a time, low bit first.
         z80Bank_ = static_cast<uint16_t>(((z80Bank_ >> 1) | ((value & 1) << 8)) & 0x1FF);
     } else if (addr >= 0x7F00 && addr < 0x7F20) {
-        if ((addr & 0x1F) >= 0x10) {
-            syncSound();
-            psg_.write(value);
-            if (vgm_) vgm_->psg(value, now_);
-            if (roland_) {
-                roland_->psgWrite(psg_, now_);
-                rolandChipChannels();
-            }
-        }
+        if ((addr & 0x1F) >= 0x10) psgWrite(value);
     } else if (addr >= 0x8000) {
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);
         if (a < 0xA00000 || a >= 0xA10000) write8(a, value);
@@ -731,6 +793,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         StateWriter w;
         mcd_->state(w);
         block("MCD ", w.data());
+    }
+    if (sms_) {
+        StateWriter w;
+        sms_->state(w);
+        block("SMS ", w.data());
     }
     if (quick) {
         // No thumbnail: nobody looks at a rewind snapshot.
@@ -841,6 +908,9 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         }
         else if (id == fourcc("MCD ")) {
             if (mcd_) mcd_->state(b);
+        }
+        else if (id == fourcc("SMS ")) {
+            if (sms_) sms_->state(b);
         }
         else if (id == fourcc("MIXA")) addOnState = data;
         else if (id == fourcc("MIX ")) {
