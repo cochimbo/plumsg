@@ -200,6 +200,7 @@ target_link_libraries(plumsg_imgui PUBLIC ${PLUMSG_SDL2_TARGET})
 
 add_executable(plumsg WIN32
   src/frontend/main.cpp
+  src/frontend/crash.cpp
   src/frontend/input.cpp
   src/frontend/audio.cpp
   src/frontend/settings.cpp
@@ -268,8 +269,20 @@ if(TARGET SDL2::SDL2main)
 endif()
 target_link_libraries(plumsg PRIVATE ${PLUMSG_SDL2_TARGET})
 if(WIN32)
-  target_link_libraries(plumsg PRIVATE comdlg32 wininet)
+  target_link_libraries(plumsg PRIVATE comdlg32 wininet dbghelp)
 endif()
+# The version the crash reports name: the tag and commit it was built from.
+find_package(Git QUIET)
+set(PLUMSG_VERSION "dev")
+if(GIT_FOUND)
+  execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                  OUTPUT_VARIABLE git_version OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  if(git_version)
+    set(PLUMSG_VERSION "${git_version}")
+  endif()
+endif()
+set_source_files_properties(src/frontend/crash.cpp PROPERTIES COMPILE_DEFINITIONS "PLUMSG_VERSION=\"${PLUMSG_VERSION}\"")
 
 # Copy SDL2.dll next to plumsg.exe so it runs straight from the build folder.
 if(WIN32 AND TARGET SDL2::SDL2)
@@ -300,7 +313,8 @@ if(PLUMSG_BUILD_TESTS)
 
   # plumsg-headless end to end: hashes, savestates, input scripts and checks.
   add_test(NAME headless COMMAND ${CMAKE_COMMAND} -DHEADLESS=$<TARGET_FILE:plumsg-headless>
-           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/headless_test -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_tests.cmake)
+           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/headless_test -DSTATES=${CMAKE_CURRENT_SOURCE_DIR}/tests/states
+           -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_tests.cmake)
 
   # Tom Harte's 68000 single-step tests: m68k_json_runner path/to/v1/*.json.gz
   add_executable(m68k_json_runner tests/m68k_json_runner.cpp)
@@ -313,7 +327,7 @@ if(PLUMSG_BUILD_TESTS)
   # The frontend's files (a game's own options and controls); needs SDL2 for the key names.
   if(PLUMSG_BUILD_FRONTEND)
     add_executable(frontend_tests tests/frontend_tests.cpp src/frontend/game_options.cpp src/frontend/input.cpp
-                   src/frontend/settings.cpp)
+                   src/frontend/settings.cpp src/frontend/crash.cpp)
     target_link_libraries(frontend_tests PRIVATE plumsg_core ${PLUMSG_SDL2_TARGET})
     add_test(NAME frontend_tests COMMAND frontend_tests)
   endif()

@@ -22,6 +22,7 @@
 #include "../net/udp.h"
 #include "achievements.h"
 #include "audio.h"
+#include "crash.h"
 #include "fps_counter.h"
 #include "game_options.h"
 #include "http.h"
@@ -224,6 +225,7 @@ struct App {
             return false;
         }
         romPath = path;
+        setCrashContext(path);
         hostsBattery = false;
         lastError.clear();
         achievementsHash = Achievements::gameHash(console);  // before cheats change the ROM
@@ -246,6 +248,7 @@ struct App {
         saveBattery();
         romLoaded = false;
         romPath.clear();
+        setCrashContext("");
         hostsBattery = false;
         cheats.clear();
         console.setCheats({});
@@ -469,6 +472,9 @@ CommandLine parse(int argc, char** argv) {
 int main(int argc, char** argv) {
     const CommandLine cmd = parse(argc, argv);
     const Paths paths = findPaths();
+    // Next to plumsg.ini: the reports of the runs that ended in a crash.
+    const std::string crashDir = paths.ini.substr(0, paths.ini.find_last_of("/\\") + 1) + "fallos/";
+    installCrashHandler(crashDir);
     Settings settings = Settings::load(paths.ini);
     // Until a language is picked in Opciones > Idioma, the system's.
     applyLanguage(settings.language.empty() ? systemLanguage() : settings.language);
@@ -558,6 +564,9 @@ int main(int argc, char** argv) {
 
     input->openAll();
     auto ui = std::make_unique<Ui>(window, context, settings, *input);
+    // The last run crashed: say where its report is, so that it can be sent.
+    if (const std::string report = takeCrashReport(crashDir); !report.empty() && !capturing)
+        ui->showError(trf("plumsg se cerró por un fallo la última vez.\nEl informe está en %s", report.c_str()));
     auto roland = std::make_unique<RolandSound>();  // before the console, which points at it
     auto app = std::make_unique<App>();
     app->statesDir = paths.states;

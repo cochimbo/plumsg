@@ -2884,6 +2884,13 @@ msgstr ""
 msgid "plumsg necesita una tarjeta gráfica con OpenGL 3.3 y sus drivers actualizados."
 msgstr "plumsg a besoin d'une carte graphique avec OpenGL 3.3 et des pilotes à jour."
 
+msgid ""
+"plumsg se cerró por un fallo la última vez.\n"
+"El informe está en %s"
+msgstr ""
+"plumsg s'est fermé à cause d'une erreur la dernière fois.\n"
+"Le rapport se trouve dans %s"
+
 msgid "plumsg, emulador de Sega Mega Drive / Genesis con efecto pseudo-3D."
 msgstr "plumsg, émulateur de Sega Mega Drive / Genesis avec effet pseudo-3D."
 

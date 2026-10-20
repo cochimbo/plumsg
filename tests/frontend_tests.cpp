@@ -6,7 +6,16 @@
 #include <sstream>
 #include <string>
 
+#include "frontend/crash.h"
 #include "frontend/game_options.h"
+
+#ifndef _WIN32
+#include <csignal>
+#include <fstream>
+#include <stdexcept>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 using namespace plumsg;
 
@@ -152,6 +161,43 @@ void testWidescreenOption() {
     check(again.wideLeft == 32 && again.wideRight == 56, "pantalla ancha: plumsg.ini lo guarda");
 }
 
+#ifndef _WIN32
+// A child process crashes, in each way the handler catches; the report it leaves says
+// what happened and with which game, and the next start is told about it once.
+void testCrashReport() {
+    const std::string dir = "frontend_tests_fallos/";
+    struct Case {
+        const char* name;
+        void (*crash)();
+        const char* says;
+    };
+    const Case cases[] = {
+        {"acceso a memoria", [] { *static_cast<volatile int*>(nullptr) = 1; }, "SIGSEGV"},
+        {"excepción sin capturar", [] { throw std::runtime_error("algo salió mal"); }, "algo salió mal"},
+        {"abort", [] { std::abort(); }, "SIGABRT"},
+    };
+    for (const Case& c : cases) {
+        const pid_t child = fork();
+        if (child == 0) {
+            installCrashHandler(dir);
+            setCrashContext("roms/juego.md");
+            c.crash();
+            _exit(0);
+        }
+        int status = 0;
+        waitpid(child, &status, 0);
+        check(WIFSIGNALED(status), (std::string("fallo: ") + c.name + " acaba el programa como sin el informe").c_str());
+        const std::string report = takeCrashReport(dir);
+        std::ifstream in(report);
+        std::stringstream text;
+        text << in.rdbuf();
+        check(!report.empty() && text.str().find(c.says) != std::string::npos &&
+                  text.str().find("roms/juego.md") != std::string::npos,
+              (std::string("fallo: ") + c.name + " deja un informe con lo que pasó y el juego").c_str());
+        check(takeCrashReport(dir).empty(), (std::string("fallo: ") + c.name + " se avisa una sola vez").c_str());
+    }
+}
+#endif
 
 }  // namespace
 
@@ -162,6 +208,9 @@ int main() {
     testWidescreenOption();
     testOverclockOption();
     testEqualizerOption();
+#ifndef _WIN32
+    testCrashReport();
+#endif
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

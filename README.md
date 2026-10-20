@@ -446,6 +446,14 @@ La pantalla completa y la región que se dan así valen solo para esa vez: `plum
 sigue como estaba. En LaunchBox, por ejemplo, se añade plumsg como emulador con la ruta
 de `plumsg.exe` y `--pantalla-completa` en los parámetros de la línea de comandos.
 
+### Si plumsg se cierra de golpe
+
+Si plumsg se cierra por un fallo, deja un informe en la carpeta `fallos` de la carpeta
+de ajustes (`%APPDATA%\plumsg\plumsg\fallos`, o junto al ejecutable en modo portátil):
+un `.txt` con lo que pasó, dónde y con qué juego, y en Windows un volcado `.dmp` del
+mismo nombre para abrir con un depurador. La próxima vez que se abre, plumsg avisa de
+dónde está. Para avisar del fallo, adjunta los dos archivos.
+
 ### Idioma
 
 plumsg está en español, inglés, francés y portugués. La primera vez usa el idioma del
