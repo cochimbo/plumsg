@@ -659,6 +659,15 @@ msgstr "Ctrl+R  record video;  Ctrl+G  record a GIF (again to stop)"
 msgid "Cuadrícula"
 msgstr "Grid"
 
+msgid ""
+"Cuando un instrumento FM lleva 8 notas, se toca a escondidas junto a cada instrumento de\n"
+"su familia en el SoundFont (bajos, pianos, metales...) y suena el más parecido.\n"
+"Los que elijas a mano en el Editor de instrumentos no cambian."
+msgstr ""
+"When an FM instrument has played 8 notes, it is played unheard next to each instrument of\n"
+"its family in the SoundFont (basses, pianos, brass...) and the closest one is heard.\n"
+"The ones you choose by hand in the Instrument editor do not change."
+
 msgid "Cuenta"
 msgstr "Account"
 
@@ -936,6 +945,9 @@ msgstr "Choose folder"
 
 msgid "Elegir carpeta..."
 msgstr "Choose folder..."
+
+msgid "Elegir instrumentos comparando el sonido"
+msgstr "Choose instruments by comparing the sound"
 
 msgid "Elegir otro (.sf2)..."
 msgstr "Choose another (.sf2)..."

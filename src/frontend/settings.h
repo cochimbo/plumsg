@@ -50,6 +50,7 @@ struct Settings {
     int chorus = 20;        // 0-100
     std::array<int, 5> equalizer{};  // the synthesizer's, dB per band (RolandSound::kEqBands), -12..12
     bool effectsOriginal = true;  // the game's sound effects keep the chips' sound
+    bool compareSound = true;     // the rules' instruments tuned by comparing sounds
     Region region = Region::Auto;
     std::array<PadType, 2> padType{PadType::SixButton, PadType::SixButton};
     bool smsFm = false;  // the Master System's FM sound unit on every console, not only Japanese ones

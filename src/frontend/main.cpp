@@ -628,6 +628,7 @@ int main(int argc, char** argv) {
         const bool on = settings.roland && !app->console.megaCd() && loadSoundfont();
         roland->setEffects(settings.reverb, settings.chorus);
         roland->setEqualizer(settings.equalizer);
+        roland->setTimbreMatching(settings.compareSound);
         app->console.setRoland(on ? roland.get() : nullptr, settings.chipMix);
     };
     applySound();

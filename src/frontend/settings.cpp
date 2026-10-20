@@ -118,6 +118,7 @@ void Settings::parse(std::istream& in, Settings& s) {
                     for (size_t i = 0; i < bands.size(); ++i) s.equalizer[i] = std::clamp(bands[i], -12, 12);
             }
             else if (key == "efectos") s.effectsOriginal = lower(value) == "original";
+            else if (key == "comparar_sonido") s.compareSound = yes(value);
         } else if (section == "consola") {
             if (key == "region") {
                 for (int i = 0; i < 4; ++i)
@@ -227,6 +228,9 @@ void Settings::write(std::ostream& out) const {
         << "# efectos: original (los efectos de sonido suenan como en la consola) o sintetizador. Hace falta\n"
         << "# haber usado Sacar canciones en el juego para saber cuáles son sus efectos.\n"
         << "efectos = " << (effectsOriginal ? "original" : "sintetizador") << "\n"
+        << "# comparar_sonido: el instrumento que dan las reglas se afina tocando a escondidas el sonido FM\n"
+        << "# y los de su familia del SoundFont, y quedándose con el más parecido.\n"
+        << "comparar_sonido = " << flag(compareSound) << "\n"
         << "\n[consola]\n"
         << "# region: auto (la de la ROM), japon, usa o europa. mando1/mando2: 3 o 6 botones.\n"
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"

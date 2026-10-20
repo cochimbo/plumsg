@@ -39,6 +39,7 @@
 #include "sms_test_rom.h"
 #include "music_rom.h"
 #include "song_extract.h"
+#include "timbre.h"
 
 using namespace plumsg;
 
@@ -1972,6 +1973,32 @@ void testRoland() {
         c[2 * 7] = 1;
         check(RolandSound::programFor(c, 0x00, 67) == 81, "Roland: una onda brillante sostenida es un lead");
         check(RolandSound::suggest(c, 0x00, pads).program == 90, "Roland: si toca acordes es un pad");
+    }
+    {
+        // Comparing sounds: an FM sine is closer to a sine than to a sawtooth.
+        const double rate = 44100, hz = 261.63;
+        std::vector<float> sine(static_cast<size_t>(rate / 2)), saw(sine.size());
+        for (size_t i = 0; i < sine.size(); ++i) {
+            const double t = static_cast<double>(i) * hz / rate;
+            sine[i] = static_cast<float>(0.5 * std::sin(2 * 3.14159265358979 * t));
+            saw[i] = static_cast<float>(0.5 * (2 * (t - std::floor(t)) - 1));
+        }
+        const auto sinePrint = TimbreMatcher::measure(sine, rate, hz), sawPrint = TimbreMatcher::measure(saw, rate, hz);
+        std::array<uint8_t, 28> pure{};
+        for (int op = 0; op < 4; ++op) {
+            pure[static_cast<size_t>(op * 7)] = 1;          // MUL 1
+            pure[static_cast<size_t>(op * 7 + 1)] = 127;    // modulators silent
+            pure[static_cast<size_t>(op * 7 + 2)] = 31;     // fastest attack
+        }
+        const auto fm = TimbreMatcher::fmPrint(pure, 0x00, 60);
+        check(!fm.silent && TimbreMatcher::distance(fm, sinePrint) < TimbreMatcher::distance(fm, sawPrint),
+              "Timbre: un FM sin modular se parece más a un seno que a un diente de sierra");
+        std::array<uint8_t, 28> bright = pure;
+        bright[2 * 7 + 1] = 10;  // operator 3 modulating hard
+        const auto fmBright = TimbreMatcher::fmPrint(bright, 0x00, 60);
+        check(TimbreMatcher::distance(fmBright, sawPrint) < TimbreMatcher::distance(fm, sawPrint),
+              "Timbre: modulado fuerte se acerca al diente de sierra");
+        check(TimbreMatcher::closest(nullptr, pure, 0x00, 60, -1) == -1, "Timbre: sin SoundFont no elige nada");
     }
 
     // Instruments chosen by hand: a drum, an octave up, the chip's own sound.

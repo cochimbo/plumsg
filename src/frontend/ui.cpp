@@ -874,6 +874,14 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
         ImGui::SetTooltip("%s", tr("Los efectos (anillos, saltos, golpes...) suenan como en la consola y solo la música\n"
                           "pasa por el SoundFont. Para saber cuáles son, usa antes Sacar canciones en el Editor\n"
                           "de instrumentos. Cada efecto se puede cambiar también a mano en el editor."));
+    if (ImGui::MenuItem(tr("Elegir instrumentos comparando el sonido"), nullptr, settings_.compareSound)) {
+        settings_.compareSound = !settings_.compareSound;
+        out.settingsChanged = out.soundChanged = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Cuando un instrumento FM lleva 8 notas, se toca a escondidas junto a cada instrumento de\n"
+                          "su familia en el SoundFont (bajos, pianos, metales...) y suena el más parecido.\n"
+                          "Los que elijas a mano en el Editor de instrumentos no cambian."));
     drawSoundfontMenu(out);
     ImGui::SetNextItemWidth(160);
     ImGui::SliderInt(tr("Sonido original"), &settings_.chipMix, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);

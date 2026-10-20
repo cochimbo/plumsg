@@ -266,7 +266,11 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   metales, órganos, cuerdas, pads, guitarras...) y cómo lo toca el juego: tras las primeras
   notas, un sonido corto que repite casi siempre la misma nota pasa a la batería (bombo,
   caja, toms o charles), el registro habitual dice si es un bajo, los acordes lo hacen un
-  pad y las notas muy cortas, cuerdas en pizzicato. Todo esto se puede cambiar solo para un juego desde sus opciones.
+  pad y las notas muy cortas, cuerdas en pizzicato. Con **Elegir instrumentos comparando el sonido** (en el menú
+  Sonido, encendido de serie), cuando un instrumento FM lleva 8 notas se toca a escondidas en
+  un YM2612 aparte junto a cada instrumento de su familia General MIDI en el SoundFont, se
+  comparan su espectro y su envolvente y suena el más parecido. Se hace en segundo plano y
+  llega unos cuadros después. Todo esto se puede cambiar solo para un juego desde sus opciones.
   En la Master System y la Game Gear también: el FM (YM2413) toca sus 15 instrumentos de
   serie como los General MIDI que imitan (violín, guitarra, piano...) y su batería con la
   del SoundFont, y el estéreo de la Game Gear lleva cada canal del PSG a su lado.
