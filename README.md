@@ -204,6 +204,16 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   las carátulas de nombre parecido (vale con parte del nombre, una errata o `2` por `II`);
   al pulsar una se ve, y **Usar esta carátula** la guarda como la del juego. Si
   hay carpetas elegidas, la biblioteca se abre al arrancar sin juego.
+  **Cuadrícula** y **Lista** cambian la vista (también Select en el mando o la tecla V):
+  la lista tiene columnas de título, consola, año, género, desarrolladora y jugadores, y
+  se ordena pulsando su cabecera o con el desplegable de orden, que vale para las dos.
+  Con **Detalles** marcado, un panel a la derecha muestra el juego elegido: su carátula,
+  un botón para jugar, desarrolladora, distribuidora, género, año y jugadores (de los
+  ficheros metadat de libretro-database, que se bajan una vez por consola; el Mega CD no
+  tiene), una captura del juego (de libretro-thumbnails) y la descripción de Wikipedia, en
+  el idioma de plumsg o, si no la hay, en inglés, con un enlace a la página. Todo se guarda
+  en `fichas\` junto a `caratulas\`; **Buscar otra vez** vuelve a buscar la descripción y
+  la captura del juego.
 - **Consola > BIOS del Mega CD** (o el botón de la biblioteca): el archivo de la BIOS de
   cada región (Japón, EE. UU. y Europa, 128 KB, como `bios_CD_U.bin`). plumsg dice si el
   archivo parece una BIOS y de qué región es, y **Buscar en las carpetas de la
@@ -396,6 +406,7 @@ plumsg.exe "C:\Juegos\Sonic CD.cue" --region eu --estado 1
 | `--region r` | `auto`, `jp`, `us` o `eu` |
 | `--estado N` | carga el estado guardado N (0-9) del juego al abrirlo |
 | `--biblioteca carpeta` | abre la biblioteca de esa carpeta |
+| `--lista` | con `--biblioteca`: la muestra como lista en vez de cuadrícula |
 | `--grabar f.avi` | graba la partida desde el principio, en vídeo (`.avi`) o GIF (`.gif`) |
 | `--alojar` | aloja una partida en red con el juego (en el puerto del menú Red) |
 | `--unirse direccion` | se une a la partida en red de ese anfitrión (`IP` o `IP:puerto`) |
@@ -545,5 +556,6 @@ miniz (MIT, en `third_party/miniz`), stb_image y stb_image_write (dominio públi
 ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
 `third_party/tsf`), rcheevos (MIT, para RetroAchievements). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
 propia licencia libre (`soundfonts\GeneralUser-GS-LICENSE.txt` en la instalación). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de
-[ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas son de libretro-thumbnails y las listas de trucos de libretro-database
-(CC BY-SA 4.0); se descargan al usarlas y no van en el repositorio.
+[ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas y capturas son de libretro-thumbnails, las listas de trucos y los datos de
+los juegos de libretro-database y las descripciones de Wikipedia (CC BY-SA 4.0); se
+descargan al usarlas y no van en el repositorio.

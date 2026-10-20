@@ -70,6 +70,10 @@ struct Settings {
     std::vector<std::string> libraryFolders;  // where the game library looks for games
     bool libraryAtStart = true;   // open the library when plumsg starts without a ROM
     int librarySystem = -1;       // the library's tab: -1 every console, else a ConsoleSystem
+    bool libraryList = false;     // the library as a list (title, console, year...) instead of a grid of covers
+    bool libraryDetails = true;   // the panel on the right with the chosen game's cover, data and description
+    static constexpr int kLibrarySorts = 5;
+    int librarySort = 0;          // what the games are sorted by: 0 title, 1 console, 2 year, 3 genre, 4 developer
     // The Mega CD's BIOS for each region (Japan, USA, Europe); plumsg does not include them.
     std::array<std::string, 3> cdBios;
     // Netplay: the UDP port to host on (and to join when the address has none), the

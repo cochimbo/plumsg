@@ -13,6 +13,7 @@
 #include "achievements_ui.h"
 #include "cheat_database.h"
 #include "file_dialog.h"
+#include "game_info.h"
 #include "input.h"
 #include "instrument_editor.h"
 #include "library.h"
@@ -149,6 +150,11 @@ public:
     }
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
+    GameInfo& gameInfo() { return gameInfo_; }
+    // The detail panel still looking for the chosen game's data (screenshots wait for it).
+    bool libraryInfoBusy() const {
+        return showLibrary_ && settings_.libraryDetails && (gameInfo_.sheet().busy || gameInfo_.detailsBusy());
+    }
     // The instrument editor's window, drawn with the rest (not owned).
     void setEditor(InstrumentEditor* editor) { editor_ = editor; }
     // RetroAchievements' menu, windows and notices (not owned).
@@ -197,6 +203,11 @@ private:
     void drawGameControls(const GameOptionsView& v, UiActions& out);
     void drawLibrary(UiActions& out);
     void drawLibraryFolders(UiActions& out);
+    void drawLibraryGrid(const std::vector<size_t>& visible);
+    void drawLibraryList(const std::vector<size_t>& visible);
+    void drawLibraryDetails(const std::vector<size_t>& visible);
+    void libraryItem(bool clicked, int n);
+    void setLibraryList(bool list);
     void drawCoverSearch();
     void startCoverSearch();
     void drawBios(UiActions& out);
@@ -220,6 +231,7 @@ private:
     Input& input_;
     FileBrowser browser_;
     Library library_;
+    GameInfo gameInfo_;
     CheatDatabase cheatDb_;
     InstrumentEditor* editor_ = nullptr;
     std::unique_ptr<AchievementsUi> achievements_;
@@ -286,6 +298,10 @@ private:
         bool openMenu = false;
         int menuAction = -1;   // item picked with the pad or the keys this frame
         char search[96] = "";
+        bool descending = false;  // the order, backwards
+        bool syncSort = true;     // show the order on the list's headers
+        unsigned order = 0;       // the order last drawn, to keep the chosen game when it changes
+        size_t selectedGame = 0;  // the chosen one, as an index into the library's games
     } libraryView_;
     // "Buscar carátula..." for one game of the library.
     bool showCoverSearch_ = false;

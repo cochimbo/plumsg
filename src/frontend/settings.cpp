@@ -35,6 +35,8 @@ constexpr const char* kScaleNames[] = {"entero", "ajustar", "estirar"};
 constexpr const char* kFilterNames[] = {"ninguno", "scanlines", "crt"};
 constexpr const char* kRegionNames[] = {"auto", "japon", "usa", "europa"};
 constexpr const char* kSystemKeys[] = {"megadrive", "32x", "megacd", "mastersystem", "gamegear"};
+constexpr const char* kLibrarySortKeys[] = {"titulo", "consola", "año", "genero", "desarrolladora"};
+static_assert(std::size(kLibrarySortKeys) == Settings::kLibrarySorts, "one key per order");
 static_assert(std::size(kSystemKeys) == kSystemCount, "one key per console");
 constexpr const char* kBiosKeys[] = {"megacd_japon", "megacd_usa", "megacd_europa"};
 
@@ -134,7 +136,13 @@ void Settings::parse(std::istream& in, Settings& s) {
                 if (!value.empty() && std::find(s.libraryFolders.begin(), s.libraryFolders.end(), value) == s.libraryFolders.end())
                     s.libraryFolders.push_back(value);
             } else if (key == "abrir_al_empezar") s.libraryAtStart = yes(value);
-            else if (key == "sistema") {
+            else if (key == "vista") s.libraryList = lower(value) == "lista";
+            else if (key == "detalles") s.libraryDetails = yes(value);
+            else if (key == "orden") {
+                s.librarySort = 0;
+                for (int i = 0; i < Settings::kLibrarySorts; ++i)
+                    if (lower(value) == kLibrarySortKeys[i]) s.librarySort = i;
+            } else if (key == "sistema") {
                 s.librarySystem = -1;
                 for (int i = 0; i < kSystemCount; ++i)
                     if (lower(value) == kSystemKeys[i]) s.librarySystem = i;
@@ -233,10 +241,15 @@ void Settings::write(std::ostream& out) const {
         << "ranura = " << stateSlot << "\n"
         << "\n[biblioteca]\n"
         << "# carpeta: donde están tus juegos (una línea por carpeta). abrir_al_empezar: mostrar la biblioteca\n"
-        << "# al abrir plumsg sin juego. sistema: pestaña elegida (todos, megadrive, 32x, megacd, mastersystem o gamegear).\n";
+        << "# al abrir plumsg sin juego. sistema: pestaña elegida (todos, megadrive, 32x, megacd, mastersystem o gamegear).\n"
+        << "# vista: cuadricula o lista. detalles: el panel de la derecha con los datos del juego elegido.\n"
+        << "# orden: titulo, consola, año, genero o desarrolladora.\n";
     for (const auto& f : libraryFolders) out << "carpeta = " << f << "\n";
     out << "abrir_al_empezar = " << flag(libraryAtStart) << "\n"
         << "sistema = " << (librarySystem >= 0 && librarySystem < kSystemCount ? kSystemKeys[librarySystem] : "todos") << "\n"
+        << "vista = " << (libraryList ? "lista" : "cuadricula") << "\n"
+        << "detalles = " << flag(libraryDetails) << "\n"
+        << "orden = " << kLibrarySortKeys[std::clamp(librarySort, 0, kLibrarySorts - 1)] << "\n"
         << "\n[bios]\n"
         << "# Las BIOS del Mega CD de cada región (no vienen con plumsg).\n";
     for (int i = 0; i < 3; ++i) out << kBiosKeys[i] << " = " << cdBios[static_cast<size_t>(i)] << "\n";
