@@ -659,6 +659,15 @@ msgstr "Ctrl+R  enregistrer une vidéo ;  Ctrl+G  enregistrer un GIF (à nouveau
 msgid "Cuadrícula"
 msgstr "Grille"
 
+msgid ""
+"Cuando un instrumento FM lleva 8 notas, se toca a escondidas junto a cada instrumento de\n"
+"su familia en el SoundFont (bajos, pianos, metales...) y suena el más parecido.\n"
+"Los que elijas a mano en el Editor de instrumentos no cambian."
+msgstr ""
+"Quand un instrument FM a joué 8 notes, il est joué en silence à côté de chaque instrument de\n"
+"sa famille dans la SoundFont (basses, pianos, cuivres...) et le plus proche est retenu.\n"
+"Ceux que vous choisissez à la main dans l'Éditeur d'instruments ne changent pas."
+
 msgid "Cuenta"
 msgstr "Compte"
 
@@ -936,6 +945,9 @@ msgstr "Choisir un dossier"
 
 msgid "Elegir carpeta..."
 msgstr "Choisir un dossier..."
+
+msgid "Elegir instrumentos comparando el sonido"
+msgstr "Choisir les instruments en comparant le son"
 
 msgid "Elegir otro (.sf2)..."
 msgstr "En choisir une autre (.sf2)..."

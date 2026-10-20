@@ -7,6 +7,7 @@
 
 #include "i18n.h"
 #include "psg.h"
+#include "timbre.h"
 #include "ym2413.h"
 #include "ym2612.h"
 
@@ -225,11 +226,13 @@ RolandSound::~RolandSound() = default;
 bool RolandSound::loadSoundfont(const std::vector<uint8_t>& data) {
     tsf* font = data.empty() ? nullptr : tsf_load_memory(data.data(), static_cast<int>(data.size()));
     if (!font) return false;
+    matcher_.reset();
     if (synth_->font) tsf_close(synth_->font);
     synth_->font = font;
     synth_->rate = 0;
     voices_ = {};
     channels_ = {};
+    setTimbreMatching(matching_);
     return true;
 }
 
@@ -237,15 +240,70 @@ bool RolandSound::shareSoundfont(const RolandSound& other) {
     if (!other.synth_->font) return false;
     tsf* font = tsf_copy(other.synth_->font);
     if (!font) return false;
+    matcher_.reset();
     if (synth_->font) tsf_close(synth_->font);
     synth_->font = font;
     synth_->rate = 0;
     voices_ = {};
     channels_ = {};
+    setTimbreMatching(matching_);
     return true;
 }
 
 bool RolandSound::ready() const { return synth_->font != nullptr; }
+
+void RolandSound::setTimbreMatching(bool on) {
+    matching_ = on;
+    if (!on || !synth_->font) {
+        matcher_.reset();
+        // Back to the rules alone.
+        for (auto& [fp, rule] : rules_) {
+            if (rule.asked < 0) continue;
+            rule.asked = rule.matched = -1;
+            settle(rule);
+            if (auto s = seen_.find(fp); s != seen_.end()) s->second.rules = rule.rules;
+        }
+        return;
+    }
+    if (matcher_) return;
+    if (tsf* copy = tsf_copy(synth_->font)) matcher_ = std::make_unique<TimbreMatcher>(copy);
+    // What was compared on another SoundFont is compared again on this one.
+    for (auto& [fp, rule] : rules_) {
+        rule.asked = rule.matched = -1;
+        settle(rule);
+        askTimbre(fp, rule);
+    }
+}
+
+void RolandSound::waitForTimbres() {
+    if (matcher_) matcher_->wait();
+}
+
+void RolandSound::settle(Rule& rule) const {
+    if (rule.fromYm2612) rule.rules = suggest(rule.ops, rule.algorithmFeedback, rule.heard);
+    if (rule.matched >= 0 && rule.rules.drum < 0 && rule.rules.program / 8 == rule.matched / 8)
+        rule.rules.program = rule.matched;
+}
+
+void RolandSound::askTimbre(uint32_t fingerprint, Rule& rule) {
+    if (!matcher_ || !rule.fromYm2612 || rule.heard.notes < 8 || rule.rules.drum >= 0 || rule.rules.program < 0) return;
+    const int family = rule.rules.program / 8;
+    if (family == rule.asked) return;
+    rule.asked = family;
+    rule.matched = -1;
+    matcher_->request(fingerprint, rule.ops, rule.algorithmFeedback, rule.heard.median(), family);
+}
+
+void RolandSound::takeTimbres() {
+    if (!matcher_) return;
+    for (const auto& [fp, program] : matcher_->results()) {
+        auto r = rules_.find(fp);
+        if (r == rules_.end() || program / 8 != r->second.asked) continue;
+        r->second.matched = program;
+        settle(r->second);
+        if (auto s = seen_.find(fp); s != seen_.end()) s->second.rules = r->second.rules;
+    }
+}
 
 void RolandSound::setEffects(int reverb, int chorus) { synth_->effects.setAmounts(reverb, chorus); }
 
@@ -656,7 +714,10 @@ void RolandSound::emit(uint64_t clock, Ev type, int channel, int value, int extr
     log_->push_back(line);
 }
 
-void RolandSound::beginFrame(uint64_t clock) { frameStart_ = clock; }
+void RolandSound::beginFrame(uint64_t clock) {
+    frameStart_ = clock;
+    takeTimbres();
+}
 
 void RolandSound::skipFrame(uint64_t clock) {
     // The channels' settings still go through, so the synth is ready when it is heard.
@@ -847,6 +908,9 @@ void RolandSound::fmKey(int ch, bool on, const Ym2612& ym, uint64_t clock) {
     if (legacy != fp) legacy_[fp].insert(legacy);
     const uint8_t algorithmFeedback = ym.reg(chReg(ch, 0xB0));
     Rule& rule = rules_[fp];
+    rule.ops = ops;
+    rule.algorithmFeedback = algorithmFeedback;
+    rule.fromYm2612 = true;
     Heard& heard = rule.heard;
     heard.add(static_cast<int>(std::lround(note)));
     // Two more channels on it make a chord; one is most often the melody doubled.
@@ -855,8 +919,10 @@ void RolandSound::fmKey(int ch, bool on, const Ym2612& ym, uint64_t clock) {
         others += o != ch && voices_[static_cast<size_t>(o)].on && voices_[static_cast<size_t>(o)].fingerprint == fp;
     if (others >= 2) ++heard.chords;
     // The first note gives a guess; what the game does with it settles it.
-    if (heard.notes == 1 || heard.notes == 4 || heard.notes == 8 || heard.notes == 32)
-        rule.rules = suggest(ops, algorithmFeedback, heard);
+    if (heard.notes == 1 || heard.notes == 4 || heard.notes == 8 || heard.notes == 32) {
+        settle(rule);
+        askTimbre(fp, rule);
+    }
     see(ch, fp, rule.rules, static_cast<int>(std::lround(note)), &ops, algorithmFeedback);
     const uint8_t panBits = ym.reg(chReg(ch, 0xB4)) >> 6;  // bit 1 left, bit 0 right
     const int pan = panBits == 2 ? 0 : panBits == 1 ? 127 : 64;

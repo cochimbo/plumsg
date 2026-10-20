@@ -865,6 +865,7 @@ int main(int argc, char** argv) {
             }
         }
         md.setPads(pads[0], pads[1]);
+        rolandSound.waitForTimbres();  // the same sound on every run
         md.runFrame();
         ++ran;
         const uint32_t picture = frameHash(md.frame());

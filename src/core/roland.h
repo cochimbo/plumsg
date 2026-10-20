@@ -13,6 +13,7 @@ namespace plumsg {
 class Ym2612;
 class Ym2413;
 class Psg;
+class TimbreMatcher;
 
 // The Roland sound: plays what the YM2612 (or a Master System's YM2413) and the PSG
 // are playing as General MIDI
@@ -101,6 +102,15 @@ public:
     static constexpr double kEqFrequencies[kEqBands] = {100, 400, 1200, 3500, 9000};
     void setEqualizer(const std::array<int, kEqBands>& gains);
     void setVolume(int percent) { volume_ = percent; }
+    // Whether the rules' instrument is tuned by comparing sounds: once an FM instrument
+    // has played 8 notes, it is played unheard, and so is each instrument of the
+    // SoundFont of the same General MIDI family (basses, pianos, brass...), and the
+    // closest sound is taken. In the background: it arrives some frames later.
+    void setTimbreMatching(bool on);
+    bool timbreMatching() const { return matching_; }
+    // Waits for the comparisons asked for so far, which the next frame takes (for the
+    // tests and the headless runs).
+    void waitForTimbres();
 
     // The instruments chosen by hand; the rest follow the rules. Takes effect from each
     // instrument's next note.
@@ -212,7 +222,16 @@ private:
     struct Rule {
         Assignment rules;
         Heard heard;
+        std::array<uint8_t, 28> ops{};
+        uint8_t algorithmFeedback = 0;
+        bool fromYm2612 = false;  // not a YM2413's: those have no operators to compare
+        int asked = -1;    // the General MIDI family whose closest sound was asked for
+        int matched = -1;  // and the program that sounds closest, once known
     };
+    // The rules' suggestion with the closest sound in its family, if known.
+    void settle(Rule& rule) const;
+    void askTimbre(uint32_t fingerprint, Rule& rule);
+    void takeTimbres();
     // What each MIDI channel was last set to.
     struct Channel {
         int program = -1;
@@ -252,6 +271,8 @@ private:
     uint8_t rhythmKeys_ = 0;            // the YM2413's rhythm keys, as last written (0x0E)
     double opllClock_ = 53693175.0 / 15.0;
     std::map<uint32_t, Rule> rules_;    // FM fingerprint -> what the rules give it
+    std::unique_ptr<TimbreMatcher> matcher_;
+    bool matching_ = true;
     Assignments assigned_;              // chosen by hand
     std::map<uint32_t, std::set<uint32_t>> legacy_;  // FM fingerprint -> its old ones heard
     std::set<uint32_t> effects_;        // the game's sound effects
