@@ -6,6 +6,7 @@
 #include "gl.h"
 #include "planes.h"
 #include "renderer.h"
+#include "upscale.h"
 
 namespace plumsg {
 
@@ -22,7 +23,7 @@ public:
 protected:
     // Fills `out` (frame.width x frame.height, 0xAARRGGBB) from the frame.
     virtual void compose(const VideoFrameMd& frame, uint32_t* out) = 0;
-    bool filterable_ = false;  // draws through the scanlines / CRT filter when one is chosen
+    bool filterable_ = false;  // draws through the scanlines / CRT filter or the upscaler when one is chosen
 
 private:
     gl::GLuint program_ = 0;
@@ -31,6 +32,7 @@ private:
     gl::GLuint texture_ = 0;
     int texWidth_ = 0, texHeight_ = 0;
     std::vector<uint32_t> pixels_;
+    Upscaler upscaler_;
 };
 
 // The real Mega Drive picture.

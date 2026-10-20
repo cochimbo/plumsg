@@ -40,6 +40,8 @@ const std::vector<GameOption>& gameOptions() {
         {"filtro", N_("Filtro 2D"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.filter = f.render.filter; }},
         {"intensidad_filtro", N_("Intensidad del filtro"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.filterStrength = f.render.filterStrength; }},
+        {"reescalado", N_("Reescalado (experimental)"), N_("Vídeo"),
+         [](const Settings& f, Settings& t) { t.render.upscale = f.render.upscale; }},
         {"pixeles_cuadrados", N_("Píxeles cuadrados"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.squarePixels = f.render.squarePixels; }},
         {"sin_limite_sprites", N_("Sin límite de sprites"), N_("Vídeo"),

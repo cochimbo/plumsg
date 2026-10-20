@@ -366,7 +366,10 @@ void GlTextureRenderer::draw(const VideoFrameMd& frame, const Viewport& area) {
         else
             h = static_cast<int>(static_cast<float>(area.width) * lines / pictureW);
     }
-    gl::Viewport(area.x + (area.width - w) / 2, area.y + (area.height - h) / 2, w, h);
+    const Viewport picture{area.x + (area.width - w) / 2, area.y + (area.height - h) / 2, w, h};
+    gl::Viewport(picture.x, picture.y, picture.width, picture.height);
+    if (filterable_ && options_.upscale != Upscale2D::None && upscaler_.draw(options_.upscale, texture_, fw, fh, picture))
+        return;
     const bool crt = filterable_ && options_.filter != Filter2D::None && crtProgram_;
     const gl::GLuint program = crt ? crtProgram_ : program_;
     gl::UseProgram(program);

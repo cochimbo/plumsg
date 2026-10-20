@@ -16,12 +16,18 @@ enum class Style3D { Layers, Voxels };
 // CRT (scanlines, a slightly curved screen, the phosphor mask and darker corners).
 enum class Filter2D { None, Scanlines, Crt };
 
+// Experimental: the 2D picture drawn bigger than the console made it, guessing the
+// detail. xBR rounds the stairs of the diagonals off; Anime4K is a small neural
+// network that doubles the picture once or twice. Either replaces the scanlines or CRT.
+enum class Upscale2D { None, Xbr, Anime4K };
+
 // Display options chosen in the video menu.
 struct RenderOptions {
     ScaleMode scale = ScaleMode::Integer;
     bool smooth = false;     // bilinear filtering instead of sharp pixels
     Filter2D filter = Filter2D::None;  // only the 2D view uses it
     float filterStrength = 0.6f;       // 0..1, how strong the scanlines and the rest are
+    Upscale2D upscale = Upscale2D::None;  // only the 2D view uses it; wins over the filter
     bool pseudo3d = false;   // toggled by the "efecto 3D" hotkey: draw with the pseudo-3D renderer
     // Pseudo-3D look, each 0..1 except the tilt.
     Style3D style = Style3D::Voxels;
