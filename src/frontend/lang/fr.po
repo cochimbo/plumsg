@@ -134,6 +134,18 @@ msgstr "Presque (défi en cours)"
 msgid "A: aplicar"
 msgstr "A : appliquer"
 
+msgid "A: continuar"
+msgstr "A : reprendre"
+
+msgid "A: pausar"
+msgstr "A : mettre en pause"
+
+msgid "A: reiniciar"
+msgstr "A : réinitialiser"
+
+msgid "A: salir del juego"
+msgstr "A : quitter le jeu"
+
 msgid "Abajo"
 msgstr "Bas"
 
@@ -262,6 +274,9 @@ msgstr "Glissez une ROM ici, utilisez Fichier > Ouvrir une ROM ou ouvrez la bibl
 
 msgid "Arriba"
 msgstr "Haut"
+
+msgid "Arriba / abajo: elegir   A / Intro: hacerlo"
+msgstr "Haut / bas : choisir   A / Entrée : valider"
 
 msgid "Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"
 msgstr "Haut / bas : choisir   Gauche / droite : changer   A / Entrée : activer"
@@ -948,6 +963,9 @@ msgstr "Cette piste ne joue aucune musique du YM2612 ni du PSG."
 
 msgid "En modo hardcore no se pueden cargar estados"
 msgstr "Impossible de charger des états en mode hardcore"
+
+msgid "En una partida en red no se puede pausar ni reiniciar."
+msgstr "Dans une partie en réseau, on ne peut ni mettre en pause ni réinitialiser."
 
 msgid "En una partida en red no se pueden cambiar."
 msgstr "Ils ne peuvent pas être modifiés pendant une partie en réseau."
@@ -2314,6 +2332,9 @@ msgstr "Synthétiseur (SoundFont)"
 
 msgid "Sintetizador: la música con un SoundFont"
 msgstr "Synthétiseur : la musique avec une SoundFont"
+
+msgid "Sistema"
+msgstr "Système"
 
 msgid "Sitar"
 msgstr "Sitar"

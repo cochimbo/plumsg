@@ -134,6 +134,18 @@ msgstr "Quase (desafio em andamento)"
 msgid "A: aplicar"
 msgstr "A: aplicar"
 
+msgid "A: continuar"
+msgstr "A: continuar"
+
+msgid "A: pausar"
+msgstr "A: pausar"
+
+msgid "A: reiniciar"
+msgstr "A: reiniciar"
+
+msgid "A: salir del juego"
+msgstr "A: sair do jogo"
+
 msgid "Abajo"
 msgstr "Baixo"
 
@@ -262,6 +274,9 @@ msgstr "Arraste uma ROM aqui, use Arquivo > Abrir ROM ou abra a biblioteca (F10)
 
 msgid "Arriba"
 msgstr "Cima"
+
+msgid "Arriba / abajo: elegir   A / Intro: hacerlo"
+msgstr "Cima / baixo: escolher   A / Enter: executar"
 
 msgid "Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"
 msgstr "Cima / baixo: escolher   Esquerda / direita: mudar   A / Enter: ativar"
@@ -948,6 +963,9 @@ msgstr "Nesta faixa não toca música do YM2612 nem do PSG."
 
 msgid "En modo hardcore no se pueden cargar estados"
 msgstr "No modo hardcore não dá para carregar estados"
+
+msgid "En una partida en red no se puede pausar ni reiniciar."
+msgstr "Numa partida em rede não se pode pausar nem reiniciar."
 
 msgid "En una partida en red no se pueden cambiar."
 msgstr "Não podem ser mudadas numa partida em rede."
@@ -2314,6 +2332,9 @@ msgstr "Sintetizador (SoundFont)"
 
 msgid "Sintetizador: la música con un SoundFont"
 msgstr "Sintetizador: a música com um SoundFont"
+
+msgid "Sistema"
+msgstr "Sistema"
 
 msgid "Sitar"
 msgstr "Cítara"

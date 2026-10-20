@@ -134,6 +134,18 @@ msgstr "Almost (challenge running)"
 msgid "A: aplicar"
 msgstr "A: apply"
 
+msgid "A: continuar"
+msgstr "A: resume"
+
+msgid "A: pausar"
+msgstr "A: pause"
+
+msgid "A: reiniciar"
+msgstr "A: reset"
+
+msgid "A: salir del juego"
+msgstr "A: quit the game"
+
 msgid "Abajo"
 msgstr "Down"
 
@@ -262,6 +274,9 @@ msgstr "Drag a ROM here, use File > Open ROM or open the library (F10)"
 
 msgid "Arriba"
 msgstr "Up"
+
+msgid "Arriba / abajo: elegir   A / Intro: hacerlo"
+msgstr "Up / down: choose   A / Enter: do it"
 
 msgid "Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"
 msgstr "Up / down: choose   Left / right: change   A / Enter: switch"
@@ -948,6 +963,9 @@ msgstr "This track plays no YM2612 or PSG music."
 
 msgid "En modo hardcore no se pueden cargar estados"
 msgstr "States cannot be loaded in hardcore mode"
+
+msgid "En una partida en red no se puede pausar ni reiniciar."
+msgstr "In a netplay game you cannot pause or reset."
 
 msgid "En una partida en red no se pueden cambiar."
 msgstr "They cannot be changed in a netplay game."
@@ -2314,6 +2332,9 @@ msgstr "Synthesizer (SoundFont)"
 
 msgid "Sintetizador: la música con un SoundFont"
 msgstr "Synthesizer: the music on a SoundFont"
+
+msgid "Sistema"
+msgstr "System"
 
 msgid "Sitar"
 msgstr "Sitar"
