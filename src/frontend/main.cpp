@@ -780,6 +780,7 @@ int main(int argc, char** argv) {
     bool paused = false;
     bool slowMotion = false;
     bool orbiting = false;  // dragging the pseudo-3D camera with the mouse
+    bool padMenuWasOpen = false;  // the states menu, the library or the file browser, last frame
     int framesRun = 0;
     RenderOptions& cam = settings.render;
     auto centreCamera = [&] {
@@ -1137,6 +1138,11 @@ int main(int argc, char** argv) {
         if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight(), settings);
         if (act.saveState >= 0) saveState(act.saveState);
         if (act.loadState >= 0 && !netBusy) loadState(act.loadState);
+        // A menu that owned the pad has closed (A loaded a state, Y saved one, B closed it):
+        // that button is still down, and the game must not take it as a press of its own.
+        const bool padMenuOpen = ui->stateMenuOpen() || ui->libraryOpen() || ui->browserOpen();
+        if (padMenuWasOpen && !padMenuOpen) input->ignoreHeld();
+        padMenuWasOpen = padMenuOpen;
         if (act.consoleChanged && !netBusy) {
             // A new region needs a fresh start, like switching a real console's region.
             applyConsole();
@@ -1235,7 +1241,8 @@ int main(int argc, char** argv) {
                 const bool keyboard = !ui->keyboardBusy();
                 if (!net->shouldWait()) {
                     app->console.setSampleRate(audio->rate());
-                    if (net->advance(app->console, input->poll(0, keyboard))) {
+                    // The menus that own the pad do not stop a netplay game, but their presses are not the game's.
+                    if (net->advance(app->console, padMenuOpen ? PadState{} : input->poll(0, keyboard))) {
                         achievements.doFrame();
                         ranFrame = true;
                         ++framesRun;

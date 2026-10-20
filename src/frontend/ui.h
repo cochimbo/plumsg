@@ -204,7 +204,10 @@ private:
     void rescanLibrary();
     bool handleLibrary(const SDL_Event& e);
     std::vector<size_t> visibleGames();
-    void drawStateMenu(const UiState& state);
+    void drawStateMenu(const UiState& state, UiActions& out);
+    void drawStateSlots(const UiState& state);
+    // The options of the states menu's tab `tab` (1 on): the ones that change while playing.
+    void drawStateOptions(int tab, const UiState& state, UiActions& out);
     bool handleStateMenu(const SDL_Event& e);
     void drawOverlays(const UiState& state);
     // Hides the mouse pointer while a game runs and the mouse has been still a while.
@@ -254,11 +257,19 @@ private:
     int menuHeight_ = 0;
     Capture capture_;
     struct StateMenu {
+        static constexpr int kTabs = 5;  // Estados, Imagen, 3D, Sonido, Velocidad
         bool open = false;
         int selected = 0;
         int slots = 0;
         bool scroll = false;  // bring the selected row into view on the next frame
         int load = -1, save = -1;  // chosen this frame, handed over by frame()
+        int tab = 0;               // 0 the slots, then the tabs of options (L1 / R1)
+        bool tabChanged = false;   // changed with the pad or the keyboard: select it in the tab bar
+        int option = 0;            // the option chosen on the tabs of options
+        int options = 0;           // how many the tab had, as last drawn
+        std::vector<int> changes;  // to the chosen option: -1 left, +1 right, 0 A; applied when drawn
+        int held = 0;              // the pad's left (-1) or right (+1) held down, to repeat it
+        Uint32 heldSince = 0, repeatAt = 0;
     } stateMenu_;
     struct LibraryView {
         int selected = 0;      // in the filtered list

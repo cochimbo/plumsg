@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cmath>
 #include <filesystem>
+#include <functional>
 #include <iterator>
 
 #include "imgui.h"
@@ -79,6 +81,24 @@ bool widescreenControls(int& left, int& right) {
     return changed;
 }
 
+// Back to the default look of the pseudo-3D (the effect itself stays on or off).
+void reset3D(RenderOptions& r) {
+    const RenderOptions defaults;
+    r.style = defaults.style;
+    r.depth = defaults.depth;
+    r.tilt = defaults.tilt;
+    r.yaw = defaults.yaw;
+    r.zoom = defaults.zoom;
+    r.extrusion = defaults.extrusion;
+    r.thickness = defaults.thickness;
+    r.shadows = defaults.shadows;
+    r.tiltCamera = defaults.tiltCamera;
+    r.lighting = defaults.lighting;
+    r.liveCamera = defaults.liveCamera;
+    r.highBInFront = defaults.highBInFront;
+    r.flatB = defaults.flatB;
+}
+
 bool comboTr(const char* label, int* current, const char* const items[], int count) {
     std::vector<const char*> shown(items, items + count);
     for (const char*& item : shown) item = tr(item);
@@ -108,6 +128,70 @@ bool overclockCombo(const char* label, int& percent) {
     if (!comboTr(label, &i, kOverclockNames, static_cast<int>(std::size(kOverclocks)))) return false;
     percent = kOverclocks[i];
     return true;
+}
+
+// The synthesizer equalizer's bands.
+constexpr const char* kEqBandNames[] = {N_("Graves"), N_("Medios graves"), N_("Medios"), N_("Medios agudos"), N_("Agudos")};
+static_assert(std::size(kEqBandNames) == RolandSound::kEqBands, "a name per band");
+
+// One line of the states menu's tabs of options: what it is, its value, and what left
+// (-1), right (+1) and A or a double click (0) do to it.
+struct MenuOption {
+    std::string label;
+    std::string value;
+    bool enabled = true;
+    std::function<void(int)> change;
+    int effects = 0;  // what a change asks main() for, MenuEffect bits
+};
+
+enum MenuEffect {
+    kSave = 1,          // write plumsg.ini
+    kSound = 2,         // the Roland sound was switched or retuned
+    kEqualizer = 4,
+    kRewind = 8,        // the rewind length changed
+    kFullscreen = 16,
+};
+
+const char* onOff(bool on) { return on ? tr("activado") : tr("desactivado"); }
+
+std::string formatted(const char* format, double value) {
+    char text[32];
+    std::snprintf(text, sizeof text, format, value);
+    return text;
+}
+
+MenuOption toggle(const char* label, bool& value, int effects = kSave, bool enabled = true) {
+    return {tr(label), onOff(value), enabled, [&value](int) { value = !value; }, effects};
+}
+
+// A number from `low` to `high` in steps of `step`, shown with the printf `format` (of a double).
+MenuOption number(const char* label, int& value, int low, int high, int step, const char* format, int effects = kSave,
+                  bool enabled = true) {
+    return {tr(label), formatted(format, value), enabled,
+            [&value, low, high, step](int dir) { value = std::clamp(value + (dir ? dir : 1) * step, low, high); },
+            effects};
+}
+
+// The same for a float, 0..1 shown as a percentage unless `scale` says otherwise.
+MenuOption amount(const char* label, float& value, float low, float high, float step, const char* format,
+                  float scale = 100.0f, int effects = kSave, bool enabled = true) {
+    return {tr(label), formatted(format, value * scale), enabled,
+            [&value, low, high, step](int dir) {
+                // Rounded to the step, so that the values shown stay round.
+                const float v = std::round(value / step) * step + static_cast<float>(dir ? dir : 1) * step;
+                value = std::clamp(v, low, high);
+            },
+            effects};
+}
+
+// One of `count` choices `names` (translated), going round: `current` is the one now,
+// and `set` takes the new one.
+MenuOption choice(const char* label, int current, const char* const names[], int count, std::function<void(int)> set,
+                  int effects = kSave, bool enabled = true) {
+    current = std::clamp(current, 0, count - 1);
+    return {tr(label), tr(names[current]), enabled,
+            [current, count, set = std::move(set)](int dir) { set((current + (dir < 0 ? count - 1 : 1)) % count); },
+            effects};
 }
 
 constexpr const char* kRegionNames[] = {N_("Automática (la de la ROM)"), N_("Japón (NTSC)"), N_("EE. UU. (NTSC)"),
@@ -223,38 +307,87 @@ void Ui::toggleStateMenu() {
     stateMenu_.open = !stateMenu_.open;
     stateMenu_.selected = settings_.stateSlot;
     stateMenu_.scroll = true;
+    stateMenu_.changes.clear();
+    stateMenu_.held = 0;
+    stateMenu_.tabChanged = true;  // it opens on the tab it was left on
 }
 
-// While the states menu is open it owns the pad and the keyboard: up and down pick a
-// slot, A (or Enter) loads it, Y (or Space) saves to it, B (or Esc) closes the menu.
+// While the states menu is open it owns the pad and the keyboard: L1 and R1 (or Q and E)
+// change tab. On the slots, up and down pick a slot, A (or Enter) loads it, Y (or Space)
+// saves to it; on the tabs of options, up and down pick an option, left and right change
+// it and A (or Enter) switches it. B (or Esc) closes the menu.
 bool Ui::handleStateMenu(const SDL_Event& e) {
     if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_KEYUP &&
         e.type != SDL_CONTROLLERBUTTONUP && e.type != SDL_TEXTINPUT)
         return false;
+    if (e.type == SDL_CONTROLLERBUTTONUP) {
+        if (e.cbutton.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT || e.cbutton.button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT)
+            stateMenu_.held = 0;
+        return true;
+    }
     if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN) return true;
     if (input_.hotkeyFor(e) == Hotkey::StateMenu) {
         stateMenu_.open = false;
         return true;
     }
-    enum { None, Up, Down, Load, Save, Close } action = None;
+    enum { None, Up, Down, Left, Right, Load, Save, Close, PrevTab, NextTab } action = None;
     if (e.type == SDL_KEYDOWN) {
         switch (e.key.keysym.scancode) {
             case SDL_SCANCODE_UP: action = Up; break;
             case SDL_SCANCODE_DOWN: action = Down; break;
+            case SDL_SCANCODE_LEFT: action = Left; break;
+            case SDL_SCANCODE_RIGHT: action = Right; break;
             case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: action = Load; break;
             case SDL_SCANCODE_SPACE: action = Save; break;
             case SDL_SCANCODE_ESCAPE: action = Close; break;
+            case SDL_SCANCODE_Q: case SDL_SCANCODE_PAGEUP: action = PrevTab; break;
+            case SDL_SCANCODE_E: case SDL_SCANCODE_PAGEDOWN: action = NextTab; break;
             default: break;
         }
     } else {
         switch (e.cbutton.button) {
             case SDL_CONTROLLER_BUTTON_DPAD_UP: action = Up; break;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN: action = Down; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT: action = Left; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: action = Right; break;
             case SDL_CONTROLLER_BUTTON_A: action = Load; break;
             case SDL_CONTROLLER_BUTTON_Y: action = Save; break;
             case SDL_CONTROLLER_BUTTON_B: action = Close; break;
+            case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: action = PrevTab; break;
+            case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: action = NextTab; break;
             default: break;
         }
+        // The pad does not repeat a held button as the keyboard does: drawStateMenu() does it.
+        if (action == Left || action == Right) {
+            stateMenu_.held = action == Left ? -1 : 1;
+            stateMenu_.heldSince = SDL_GetTicks();
+            stateMenu_.repeatAt = stateMenu_.heldSince + 400;
+        }
+    }
+    constexpr int kTabs = StateMenu::kTabs;
+    if (action == PrevTab || action == NextTab) {
+        stateMenu_.tab = (stateMenu_.tab + (action == PrevTab ? kTabs - 1 : 1)) % kTabs;
+        stateMenu_.tabChanged = true;
+        stateMenu_.option = 0;
+        stateMenu_.changes.clear();
+        stateMenu_.scroll = true;
+        return true;
+    }
+    if (action == Close) {
+        stateMenu_.open = false;
+        return true;
+    }
+    if (stateMenu_.tab != 0) {
+        const int count = std::max(1, stateMenu_.options);
+        switch (action) {
+            case Up: stateMenu_.option = (stateMenu_.option + count - 1) % count; stateMenu_.scroll = true; break;
+            case Down: stateMenu_.option = (stateMenu_.option + 1) % count; stateMenu_.scroll = true; break;
+            case Left: stateMenu_.changes.push_back(-1); break;
+            case Right: stateMenu_.changes.push_back(1); break;
+            case Load: stateMenu_.changes.push_back(0); break;
+            default: break;
+        }
+        return true;
     }
     const int count = std::max(1, stateMenu_.slots);
     switch (action) {
@@ -262,8 +395,7 @@ bool Ui::handleStateMenu(const SDL_Event& e) {
         case Down: stateMenu_.selected = (stateMenu_.selected + 1) % count; stateMenu_.scroll = true; break;
         case Load: stateMenu_.load = stateMenu_.selected; stateMenu_.open = false; break;
         case Save: stateMenu_.save = stateMenu_.selected; stateMenu_.open = false; break;
-        case Close: stateMenu_.open = false; break;
-        case None: break;
+        default: break;
     }
     if (action == Load || action == Save) {
         settings_.stateSlot = stateMenu_.selected;
@@ -365,7 +497,7 @@ UiActions Ui::frame(const UiState& state) {
     if (stateMenu_.load >= 0) out.loadState = stateMenu_.load;
     if (stateMenu_.save >= 0) out.saveState = stateMenu_.save;
     stateMenu_.load = stateMenu_.save = -1;
-    if (stateMenu_.open) drawStateMenu(state);
+    if (stateMenu_.open) drawStateMenu(state, out);
     if (!error_.empty()) drawError();
     std::string picked;
     if (browser_.draw(&picked)) {
@@ -677,8 +809,6 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
 // The synthesizer's equalizer, in the instrument editor: a slider per band, heard as it
 // moves and saved when let go.
 void Ui::drawEqualizer(UiActions& out) {
-    static const char* const kBands[RolandSound::kEqBands] = {N_("Graves"), N_("Medios graves"), N_("Medios"),
-                                                              N_("Medios agudos"), N_("Agudos")};
     const float height = ImGui::GetFrameHeight() * 4;
     for (int b = 0; b < RolandSound::kEqBands; ++b) {
         ImGui::PushID(b);
@@ -699,7 +829,7 @@ void Ui::drawEqualizer(UiActions& out) {
         if (hz >= 1000) std::snprintf(freq, sizeof freq, "%gk", hz / 1000);
         else std::snprintf(freq, sizeof freq, "%g", hz);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(tr("%s: %s Hz, %+d dB. Clic derecho: 0 dB."), tr(kBands[b]), freq, gain);
+            ImGui::SetTooltip(tr("%s: %s Hz, %+d dB. Clic derecho: 0 dB."), tr(kEqBandNames[b]), freq, gain);
         ImGui::TextDisabled("%s", freq);
         ImGui::EndGroup();
         ImGui::PopID();
@@ -1057,20 +1187,7 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Para juegos que pintan el cielo en el plano B: no lo levanta en 3D."));
     if (ImGui::Button(tr("Valores por defecto"))) {
-        const RenderOptions defaults;
-        r.style = defaults.style;
-        r.depth = defaults.depth;
-        r.tilt = defaults.tilt;
-        r.yaw = defaults.yaw;
-        r.zoom = defaults.zoom;
-        r.extrusion = defaults.extrusion;
-        r.thickness = defaults.thickness;
-        r.shadows = defaults.shadows;
-        r.tiltCamera = defaults.tiltCamera;
-        r.lighting = defaults.lighting;
-        r.liveCamera = defaults.liveCamera;
-        r.highBInFront = defaults.highBInFront;
-        r.flatB = defaults.flatB;
+        reset3D(r);
         changed = true;
     }
     ImGui::TextDisabled("%s", tr("Cámara: arrastra con el ratón o usa el stick derecho para girar,\n"
@@ -1081,11 +1198,12 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     ImGui::End();
 }
 
-void Ui::drawStateMenu(const UiState& state) {
+void Ui::drawStateMenu(const UiState& state, UiActions& out) {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Always,
                             ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(470, std::min(vp->Size.y - 40.0f, 520.0f)), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(std::min(vp->Size.x - 20.0f, 520.0f), std::min(vp->Size.y - 40.0f, 540.0f)),
+                             ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.92f);
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav;
@@ -1093,8 +1211,39 @@ void Ui::drawStateMenu(const UiState& state) {
         ImGui::End();
         return;
     }
+    // The pad's left or right held down repeats, faster than the keyboard's.
+    if (stateMenu_.held && stateMenu_.tab != 0 && SDL_GetTicks() >= stateMenu_.repeatAt) {
+        stateMenu_.changes.push_back(stateMenu_.held);
+        stateMenu_.repeatAt = SDL_GetTicks() + 70;
+    }
+    static const char* const kTabNames[StateMenu::kTabs] = {N_("Estados"), N_("Imagen"), "3D", N_("Sonido"),
+                                                            N_("Velocidad")};
+    if (ImGui::BeginTabBar("pestañas")) {
+        for (int t = 0; t < StateMenu::kTabs; ++t) {
+            const ImGuiTabItemFlags tabFlags =
+                stateMenu_.tabChanged && stateMenu_.tab == t ? ImGuiTabItemFlags_SetSelected : 0;
+            if (ImGui::BeginTabItem(tr(kTabNames[t]), nullptr, tabFlags)) {
+                // Clicked with the mouse.
+                if (!stateMenu_.tabChanged && stateMenu_.tab != t) {
+                    stateMenu_.tab = t;
+                    stateMenu_.option = 0;
+                    stateMenu_.changes.clear();
+                }
+                ImGui::EndTabItem();
+            }
+        }
+        ImGui::EndTabBar();
+    }
+    stateMenu_.tabChanged = false;
+    ImGui::TextDisabled("%s", tr("L1 / R1 (o Q / E): cambiar de pestaña   B / Esc: cerrar"));
+    if (stateMenu_.tab == 0) drawStateSlots(state);
+    else drawStateOptions(stateMenu_.tab, state, out);
+    ImGui::End();
+}
+
+void Ui::drawStateSlots(const UiState& state) {
     if (!state.romLoaded) ImGui::TextDisabled("%s", tr("Abre una ROM para guardar estados."));
-    ImGui::TextDisabled("%s", tr("A / Intro: cargar   Y / Espacio: guardar   B / Esc: cerrar"));
+    ImGui::TextDisabled("%s", tr("A / Intro: cargar   Y / Espacio: guardar"));
     ImGui::Separator();
     ImGui::BeginChild("ranuras");
     const float thumbH = 56.0f;
@@ -1130,7 +1279,185 @@ void Ui::drawStateMenu(const UiState& state) {
         ImGui::PopID();
     }
     ImGui::EndChild();
-    ImGui::End();
+}
+
+// The options that change while playing, as on the Vídeo window, the Sonido menu and the
+// Emulación menu, in lines that the pad can drive. They change the general settings, or
+// the game's own ones where it has them, as those windows do.
+void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
+    std::vector<MenuOption> options;
+    RenderOptions& r = settings_.render;
+    if (tab == 1) {
+        // The view: the views main() has, by name.
+        auto view = std::find_if(state.views.begin(), state.views.end(),
+                                 [&](const char* v) { return settings_.view == v; });
+        const int views = static_cast<int>(state.views.size());
+        options.push_back({tr("Vista"), settings_.view, views > 1,
+                           [this, &state, view, views](int dir) {
+                               const int i = view == state.views.end() ? 0 : static_cast<int>(view - state.views.begin());
+                               settings_.view = state.views[static_cast<size_t>((i + (dir < 0 ? views - 1 : 1)) % views)];
+                           }});
+        static const char* const kScales[] = {N_("Escala entera"), N_("Ajustar"), N_("Estirar")};
+        options.push_back(choice(N_("Escala"), static_cast<int>(r.scale), kScales, 3,
+                                 [&r](int v) { r.scale = static_cast<ScaleMode>(v); }));
+        options.push_back(toggle(N_("Suavizar píxeles"), r.smooth));
+        options.push_back(toggle(N_("Píxeles cuadrados (sin estirar a 4:3)"), r.squarePixels));
+        static const char* const kFilters[] = {N_("Ninguno"), N_("Scanlines"), N_("CRT")};
+        options.push_back(choice(N_("Filtro 2D"), static_cast<int>(r.filter), kFilters, 3,
+                                 [&r](int v) { r.filter = static_cast<Filter2D>(v); }));
+        options.push_back(amount(N_("Intensidad del filtro"), r.filterStrength, 0.0f, 1.0f, 0.05f, "%.0f %%", 100.0f,
+                                 kSave, r.filter != Filter2D::None));
+        options.push_back(toggle(N_("Sin límite de sprites (sin parpadeo)"), settings_.unlimitedSprites));
+        // The widescreen: the ready-made widths, then each side on its own.
+        int preset = -1;
+        for (int i = 0; i < kWidescreenCount; ++i)
+            if (settings_.wideLeft == kWidescreens[i].columns && settings_.wideRight == kWidescreens[i].columns) preset = i;
+        options.push_back({tr("Pantalla ancha"),
+                           preset >= 0 ? std::string(kWidescreens[preset].name)
+                                       : trf("%d / %d px", settings_.wideLeft, settings_.wideRight),
+                           true,
+                           [this, preset](int dir) {
+                               const int next = preset < 0 ? (dir < 0 ? kWidescreenCount - 1 : 0)
+                                                           : (preset + (dir < 0 ? kWidescreenCount - 1 : 1)) % kWidescreenCount;
+                               settings_.wideLeft = settings_.wideRight = kWidescreens[next].columns;
+                           },
+                           kSave});
+        options.push_back(number(N_("Izquierda##ancha"), settings_.wideLeft, 0, VideoFrameMd::kMaxWideSide, 4, "%.0f px"));
+        options.push_back(number(N_("Derecha##ancha"), settings_.wideRight, 0, VideoFrameMd::kMaxWideSide, 4, "%.0f px"));
+        options.push_back(toggle(N_("Pantalla completa (F11)"), settings_.fullscreen, kSave | kFullscreen));
+        options.push_back(toggle(N_("Mostrar la barra de menús (Esc)"), settings_.showMenu));
+    } else if (tab == 2) {
+        options.push_back(toggle(N_("Efecto 3D"), r.pseudo3d));
+        const bool on = r.pseudo3d;
+        static const char* const kStyles[] = {N_("Vóxeles"), N_("Capas")};
+        options.push_back(choice(N_("Estilo"), static_cast<int>(r.style), kStyles, 2,
+                                 [&r](int v) { r.style = static_cast<Style3D>(v); }, kSave, on));
+        options.push_back(amount(N_("Profundidad"), r.depth, 0.0f, 1.0f, 0.05f, "%.0f %%", 100.0f, kSave, on));
+        options.push_back(toggle(N_("Inclinar la cámara"), r.tiltCamera, kSave, on));
+        options.push_back(amount(N_("Inclinación"), r.tilt, kMinTilt, kMaxTilt, 5.0f, "%.0f°", 1.0f, kSave, on && r.tiltCamera));
+        options.push_back(amount(N_("Giro"), r.yaw, -kMaxYaw, kMaxYaw, 5.0f, "%.0f°", 1.0f, kSave, on && r.tiltCamera));
+        options.push_back(amount(N_("Zoom"), r.zoom, kMinZoom, kMaxZoom, 0.1f, "%.2fx", 1.0f, kSave, on));
+        options.push_back(amount(N_("Grosor"), r.thickness, 0.0f, 1.0f, 0.05f, "%.0f %%", 100.0f, kSave, on));
+        options.push_back(amount(N_("Extrusión"), r.extrusion, 0.0f, 1.0f, 0.05f, "%.0f %%", 100.0f, kSave,
+                                 on && r.style == Style3D::Voxels));
+        options.push_back(toggle(N_("Iluminación"), r.lighting, kSave, on));
+        options.push_back(toggle(N_("Cámara viva"), r.liveCamera, kSave, on));
+        options.push_back(toggle(N_("Sombra de los sprites"), r.shadows, kSave, on));
+        options.push_back(toggle(N_("Plano B con prioridad delante"), r.highBInFront, kSave, on));
+        options.push_back(toggle(N_("Plano B plano (como el cielo)"), r.flatB, kSave, on));
+        options.push_back({tr("Valores por defecto"), tr("A: aplicar"), on, [&r](int dir) {
+                               if (dir == 0) reset3D(r);
+                           }, kSave});
+    } else if (tab == 3) {
+        options.push_back(number(N_("Volumen"), settings_.volume, 0, 100, 5, "%.0f%%"));
+        options.push_back(toggle(N_("Silenciar"), settings_.mute));
+        static const char* const kMusic[] = {N_("Original (YM2612 y PSG)"), N_("Sintetizador: la música con un SoundFont")};
+        options.push_back(choice(N_("Música"), settings_.roland ? 1 : 0, kMusic, 2,
+                                 [this](int v) { settings_.roland = v == 1; }, kSave | kSound));
+        const bool synth = settings_.roland && !state.disc;
+        options.push_back(toggle(N_("Efectos de sonido originales"), settings_.effectsOriginal, kSave | kSound, synth));
+        options.push_back(number(N_("Sonido original"), settings_.chipMix, 0, 100, 5, "%.0f%%", kSave | kSound, synth));
+        options.push_back(number(N_("Reverb"), settings_.reverb, 0, 100, 5, "%.0f%%", kSave | kSound, synth));
+        options.push_back(number(N_("Chorus"), settings_.chorus, 0, 100, 5, "%.0f%%", kSave | kSound, synth));
+        for (int b = 0; b < RolandSound::kEqBands; ++b)
+            options.push_back(number(kEqBandNames[b], settings_.equalizer[static_cast<size_t>(b)], -RolandSound::kEqRange,
+                                     RolandSound::kEqRange, 1, "%+.0f dB", kSave | kEqualizer, synth));
+    } else {
+        const bool solo = !state.netSession;
+        const bool canChange = !state.netPlaying && !state.hardcore;
+        int overclock = 0;
+        for (int k = 0; k < static_cast<int>(std::size(kOverclocks)); ++k)
+            if (settings_.overclock >= kOverclocks[k]) overclock = k;
+        options.push_back(choice(N_("Overclock"), overclock, kOverclockNames, static_cast<int>(std::size(kOverclocks)),
+                                 [this](int v) { settings_.overclock = kOverclocks[v]; }, kSave, canChange));
+        options.push_back({tr("Run-ahead"),
+                           settings_.runAhead == 0   ? std::string(tr("desactivado"))
+                           : settings_.runAhead == 1 ? std::string(tr("1 fotograma"))
+                                                     : trf("%d fotogramas", settings_.runAhead),
+                           true,
+                           [this](int dir) {
+                               settings_.runAhead = std::clamp(settings_.runAhead + (dir ? dir : 1), 0, Settings::kMaxRunAhead);
+                           },
+                           kSave});
+        options.push_back({tr("Cámara lenta"), onOff(state.slowMotion), solo && !state.hardcore && state.romLoaded,
+                           [&out](int) { out.toggleSlowMotion = true; }, 0});
+        options.push_back(number(N_("Cámara lenta##velocidad"), settings_.slowMotion, 10, 90, 10, "%.0f%%"));
+        options.push_back(number(N_("Avance rápido"), settings_.fastForward, 2, 10, 1, "%.0fx"));
+        options.push_back({tr("Segundos de rebobinado"),
+                           settings_.rewindSeconds ? trf("%d s", settings_.rewindSeconds) : std::string(tr("desactivado")),
+                           true,
+                           [this](int dir) {
+                               settings_.rewindSeconds =
+                                   std::clamp(settings_.rewindSeconds + (dir ? dir : 1) * 5, 0, Settings::kMaxRewindSeconds);
+                           },
+                           kSave | kRewind});
+        if (state.hardcore) ImGui::TextDisabled("%s", tr("Modo hardcore: sin trucos, cámara lenta ni rebobinado"));
+    }
+
+    const int count = static_cast<int>(options.size());
+    stateMenu_.options = count;
+    stateMenu_.option = std::clamp(stateMenu_.option, 0, std::max(0, count - 1));
+    ImGui::TextDisabled("%s", tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
+    ImGui::Separator();
+
+    // The pad's and the keyboard's changes, and the mouse's below, all to one option.
+    auto apply = [&](int index, int dir) {
+        MenuOption& o = options[static_cast<size_t>(index)];
+        if (!o.enabled || !o.change) return;
+        o.change(dir);
+        if (o.effects & kSave) out.settingsChanged = true;
+        if (o.effects & kSound) out.soundChanged = true;
+        if (o.effects & kEqualizer) out.equalizerChanged = true;
+        if (o.effects & kRewind) out.rewindChanged = true;
+        if (o.effects & kFullscreen) out.fullscreenChanged = true;
+    };
+    // One change a frame, so that each option shows its new value before the next.
+    if (!stateMenu_.changes.empty() && count > 0) {
+        apply(stateMenu_.option, stateMenu_.changes.front());
+        stateMenu_.changes.erase(stateMenu_.changes.begin());
+    }
+
+    ImGui::BeginChild("opciones");
+    const float arrow = ImGui::GetFrameHeight();
+    const float valueX = ImGui::GetContentRegionAvail().x * 0.56f;
+    for (int i = 0; i < count; ++i) {
+        const MenuOption& o = options[static_cast<size_t>(i)];
+        ImGui::PushID(i);
+        const bool selected = i == stateMenu_.option;
+        const ImVec2 start = ImGui::GetCursorPos();
+        // A click chooses the option and a double click switches it; the arrows change it.
+        if (ImGui::Selectable("##opcion", selected, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_AllowOverlap,
+                              ImVec2(0, arrow))) {
+            stateMenu_.option = i;
+            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) apply(i, 0);
+        }
+        if (selected && stateMenu_.scroll) {
+            ImGui::SetScrollHereY(0.5f);
+            stateMenu_.scroll = false;
+        }
+        ImGui::BeginDisabled(!o.enabled);
+        ImGui::SetCursorPos(ImVec2(start.x + 4, start.y + ImGui::GetStyle().FramePadding.y));
+        ImGui::TextUnformatted(o.label.c_str());
+        ImGui::SetCursorPos(ImVec2(start.x + valueX, start.y));
+        if (ImGui::ArrowButton("##menos", ImGuiDir_Left)) {
+            stateMenu_.option = i;
+            apply(i, -1);
+        }
+        ImGui::SameLine();
+        const float textW = ImGui::GetContentRegionAvail().x - arrow - ImGui::GetStyle().ItemSpacing.x;
+        const ImVec2 at = ImGui::GetCursorPos();
+        const float w = ImGui::CalcTextSize(o.value.c_str()).x;
+        ImGui::SetCursorPos(ImVec2(at.x + std::max(0.0f, (textW - w) * 0.5f), at.y + ImGui::GetStyle().FramePadding.y));
+        ImGui::TextUnformatted(o.value.c_str());
+        ImGui::SetCursorPos(ImVec2(at.x + textW, at.y));
+        if (ImGui::ArrowButton("##mas", ImGuiDir_Right)) {
+            stateMenu_.option = i;
+            apply(i, 1);
+        }
+        ImGui::EndDisabled();
+        ImGui::PopID();
+    }
+    ImGui::EndChild();
 }
 
 void Ui::drawAbout() {
