@@ -18,6 +18,9 @@ msgstr " (%+d oct.)"
 msgid " (hardcore)"
 msgstr " (hardcore)"
 
+msgid "%d / %d px"
+msgstr "%d / %d px"
+
 msgid "%d carpetas"
 msgstr "%d dossiers"
 
@@ -38,6 +41,9 @@ msgstr "%d jeux. Recherche des jaquettes, encore %d..."
 
 msgid "%d parecidas. Pulsa una para verla."
 msgstr "%d ressemblantes. Cliquez sur l'une pour la voir."
+
+msgid "%d s"
+msgstr "%d s"
 
 msgid "%s no es un .wav que plumsg sepa leer"
 msgstr "%s n'est pas un .wav que plumsg sait lire"
@@ -113,14 +119,17 @@ msgstr "<< Rembobinage"
 msgid "A / Intro: abrir   B / Retroceso: subir   Esc: cerrar"
 msgstr "A / Entrée : ouvrir   B / Retour arrière : remonter   Échap : fermer"
 
-msgid "A / Intro: cargar   Y / Espacio: guardar   B / Esc: cerrar"
-msgstr "A / Entrée : charger   Y / Espace : sauvegarder   B / Échap : fermer"
+msgid "A / Intro: cargar   Y / Espacio: guardar"
+msgstr "A / Entrée : charger   Y / Espace : sauvegarder"
 
 msgid "A / Intro: entrar   B / Retroceso: subir   Esc: cerrar"
 msgstr "A / Entrée : entrer   B / Retour arrière : remonter   Échap : fermer"
 
 msgid "A punto (reto en marcha)"
 msgstr "Presque (défi en cours)"
+
+msgid "A: aplicar"
+msgstr "A : appliquer"
 
 msgid "Abajo"
 msgstr "Bas"
@@ -241,6 +250,9 @@ msgstr "Glissez une ROM ici, utilisez Fichier > Ouvrir une ROM ou ouvrez la bibl
 
 msgid "Arriba"
 msgstr "Haut"
+
+msgid "Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"
+msgstr "Haut / bas : choisir   Gauche / droite : changer   A / Entrée : activer"
 
 msgid "Atajos"
 msgstr "Raccourcis"
@@ -857,6 +869,9 @@ msgstr "Erreur du serveur : %s"
 msgid "Esc  mostrar u ocultar la barra de menús"
 msgstr "Échap  afficher ou masquer la barre de menus"
 
+msgid "Escala"
+msgstr "Échelle"
+
 msgid "Escala entera"
 msgstr "Échelle entière"
 
@@ -898,6 +913,9 @@ msgstr "Ce jeu n'a pas encore de codes."
 
 msgid "Este juego: %u de %u logros"
 msgstr "Ce jeu : %u succès sur %u"
+
+msgid "Estilo"
+msgstr "Style"
 
 msgid "Estilo:"
 msgstr "Style :"
@@ -1253,6 +1271,9 @@ msgstr "Kalimba"
 
 msgid "Koto"
 msgstr "Koto"
+
+msgid "L1 / R1 (o Q / E): cambiar de pestaña   B / Esc: cerrar"
+msgstr "L1 / R1 (ou Q / E) : changer d'onglet   B / Échap : fermer"
 
 msgid "La"
 msgstr "La"
@@ -2419,6 +2440,9 @@ msgstr "Zoom"
 
 msgid "a la pista %d le falta su INDEX 01"
 msgstr "il manque l'INDEX 01 de la piste %d"
+
+msgid "activado"
+msgstr "activé"
 
 msgid "agudo"
 msgstr "aigu"

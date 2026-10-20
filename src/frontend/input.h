@@ -70,6 +70,9 @@ public:
     void handleEvent(const SDL_Event& e);
     // `useKeyboard` = false ignores the keyboard (e.g. while a menu has focus).
     PadState poll(int player, bool useKeyboard = true) const;
+    // Leaves out of poll() the console buttons held right now, each until it is let go:
+    // the press that closed a menu (loading or saving a state) must not reach the game.
+    void ignoreHeld();
     // The hotkey this key or pad button press triggers, or Hotkey::Count if none.
     Hotkey hotkeyFor(const SDL_Event& e) const;
     // Whether a key or pad button bound to `h` is down right now.
@@ -88,12 +91,16 @@ public:
     std::vector<std::string> padNames() const;
 
 private:
+    std::array<bool, InputConfig::kButtons> buttonsDown(int player, bool useKeyboard) const;
+
     InputConfig config_;
     std::optional<InputConfig> gameButtons_;
     std::vector<SDL_GameController*> pads_;
     // Triggers held on each pad (by joystick id), to see a pull as a single press.
     std::vector<std::pair<SDL_JoystickID, int>> triggers_;  // bit 0 left, bit 1 right
     SDL_GameControllerButton pulled_ = SDL_CONTROLLER_BUTTON_INVALID;  // by the last event
+    // Per player, the buttons ignoreHeld() left out that have not been let go yet.
+    mutable std::array<std::array<bool, InputConfig::kButtons>, 2> ignored_{};
 };
 
 }  // namespace plumsg

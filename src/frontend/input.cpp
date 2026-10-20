@@ -346,7 +346,7 @@ void Input::rightStick(float* x, float* y) const {
     }
 }
 
-PadState Input::poll(int player, bool useKeyboard) const {
+std::array<bool, InputConfig::kButtons> Input::buttonsDown(int player, bool useKeyboard) const {
     std::array<bool, InputConfig::kButtons> down{};
     const Uint8* kb = SDL_GetKeyboardState(nullptr);
     const InputConfig& buttons = gameButtons_ ? *gameButtons_ : config_;
@@ -365,6 +365,25 @@ PadState Input::poll(int player, bool useKeyboard) const {
         down[static_cast<int>(MdButton::Right)] |= x > config_.stickDeadzone;
         down[static_cast<int>(MdButton::Up)] |= y < -config_.stickDeadzone;
         down[static_cast<int>(MdButton::Down)] |= y > config_.stickDeadzone;
+    }
+    return down;
+}
+
+void Input::ignoreHeld() {
+    for (int player = 0; player < 2; ++player) ignored_[static_cast<size_t>(player)] = buttonsDown(player, true);
+}
+
+PadState Input::poll(int player, bool useKeyboard) const {
+    std::array<bool, InputConfig::kButtons> down = buttonsDown(player, useKeyboard);
+    // A button ignored since a menu closed comes back once it is let go (on the keyboard
+    // too, even while the keyboard is not being read).
+    auto& ignored = ignored_[static_cast<size_t>(player & 1)];
+    if (std::find(ignored.begin(), ignored.end(), true) != ignored.end()) {
+        const std::array<bool, InputConfig::kButtons> held = useKeyboard ? down : buttonsDown(player, true);
+        for (int b = 0; b < InputConfig::kButtons; ++b) {
+            ignored[b] = ignored[b] && held[b];
+            down[b] = down[b] && !ignored[b];
+        }
     }
     auto is = [&](MdButton b) { return down[static_cast<int>(b)]; };
     PadState out;
