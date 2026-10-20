@@ -36,8 +36,8 @@ constexpr const char* kRowNames[kRows] = {N_("Arriba"), N_("Abajo"), N_("Izquier
                                           "X", "Y", "Z", "Mode", N_("Efecto 3D"), N_("Guardar estado"), N_("Cargar estado"),
                                           N_("Ranura anterior"), N_("Ranura siguiente"), N_("Menú de estados"),
                                           N_("Rebobinar (mantener)"), N_("Avance rápido (mantener)"), N_("Cámara lenta"),
-                                          N_("Biblioteca"), N_("Parar emulación")};
-static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 11, "update kRowNames");
+                                          N_("Biblioteca"), N_("Parar emulación"), N_("Contador de FPS")};
+static_assert(InputConfig::kButtons == 12 && InputConfig::kHotkeys == 12, "update kRowNames");
 
 std::vector<SDL_Scancode>& keysOf(InputConfig& c, int row, int player) {
     if (row >= InputConfig::kButtons) return c.hotkeyKeys[row - InputConfig::kButtons];
@@ -194,6 +194,10 @@ MenuOption choice(const char* label, int current, const char* const names[], int
             [current, count, set = std::move(set)](int dir) { set((current + (dir < 0 ? count - 1 : 1)) % count); },
             effects};
 }
+
+constexpr const char* kFpsCornerNames[] = {N_("Arriba a la izquierda"), N_("Arriba a la derecha"),
+                                           N_("Abajo a la izquierda"), N_("Abajo a la derecha")};
+static_assert(std::size(kFpsCornerNames) == Settings::kFpsCorners, "a name per corner");
 
 constexpr const char* kRegionNames[] = {N_("Automática (la de la ROM)"), N_("Japón (NTSC)"), N_("EE. UU. (NTSC)"),
                                         N_("Europa (PAL)")};
@@ -623,6 +627,21 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         ImGui::SetNextItemWidth(160);
         ImGui::SliderInt(tr("Cámara lenta##velocidad"), &settings_.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
         if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        if (ImGui::MenuItem(tr("Contador de FPS"), "F", settings_.fpsCounter)) {
+            settings_.fpsCounter = !settings_.fpsCounter;
+            out.settingsChanged = true;
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", tr("Los fotogramas por segundo del juego y lo que tarda cada uno en emularse,\n"
+                              "con una gráfica de los últimos 10 segundos."));
+        if (ImGui::BeginMenu(tr("Posición del contador"), settings_.fpsCounter)) {
+            for (int c = 0; c < Settings::kFpsCorners; ++c)
+                if (ImGui::MenuItem(tr(kFpsCornerNames[c]), nullptr, settings_.fpsCorner == c)) {
+                    settings_.fpsCorner = c;
+                    out.settingsChanged = true;
+                }
+            ImGui::EndMenu();
+        }
         ImGui::SeparatorText(tr("Latencia"));
         ImGui::SetNextItemWidth(160);
         runAheadSlider(tr("Run-ahead"), settings_.runAhead);
@@ -1394,6 +1413,9 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
                                    std::clamp(settings_.rewindSeconds + (dir ? dir : 1) * 5, 0, Settings::kMaxRewindSeconds);
                            },
                            kSave | kRewind});
+        options.push_back(toggle(N_("Contador de FPS (F)"), settings_.fpsCounter));
+        options.push_back(choice(N_("Posición del contador"), settings_.fpsCorner, kFpsCornerNames, Settings::kFpsCorners,
+                                 [this](int v) { settings_.fpsCorner = v; }, kSave, settings_.fpsCounter));
         if (state.hardcore) ImGui::TextDisabled("%s", tr("Modo hardcore: sin trucos, cámara lenta ni rebobinado"));
     }
 
@@ -1495,6 +1517,7 @@ void Ui::drawAbout() {
     ImGui::BulletText("%s", tr("F4 o clic del stick izquierdo  menú de estados, manejable con el mando"));
     ImGui::BulletText("%s", tr("Retroceso o gatillo izquierdo (mantener)  rebobinar"));
     ImGui::BulletText("%s", tr("Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta"));
+    ImGui::BulletText("%s", tr("F  contador de FPS con su gráfica"));
     ImGui::SeparatorText(tr("Mando (teclado)"));
     ImGui::BulletText("%s", tr("Flechas  cruceta;  A S D  botones A B C;  Q W E  botones X Y Z"));
     ImGui::BulletText("%s", tr("Intro  Start;  Mayús derecha  Mode"));
@@ -1578,6 +1601,7 @@ void Ui::drawOverlays(const UiState& state) {
         ImGui::TextUnformatted(badge);
         ImGui::End();
     }
+    if (state.romLoaded && settings_.fpsCounter && state.fps) drawFpsCounter(*state.fps, badge != nullptr);
     if (achievements_) achievements_->drawOverlay(top);
     if (!toast_.empty() && SDL_TICKS_PASSED(SDL_GetTicks(), toastUntil_)) toast_.clear();
     if (!toast_.empty()) {
@@ -1587,6 +1611,90 @@ void Ui::drawOverlays(const UiState& state) {
         ImGui::TextUnformatted(toast_.c_str());
         ImGui::End();
     }
+}
+
+void Ui::drawFpsCounter(const FpsCounter& fps, bool badge) {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const int corner = std::clamp(settings_.fpsCorner, 0, Settings::kFpsCorners - 1);
+    const bool right = corner & 1, bottom = corner & 2;
+    float y = bottom ? vp->Pos.y + vp->Size.y - 10 : vp->Pos.y + static_cast<float>(menuHeight_) + 10;
+    if (!bottom && right && badge) y += ImGui::GetFrameHeightWithSpacing() + 8;  // below the speed badge
+    if (bottom && !right && !toast_.empty()) y -= ImGui::GetFrameHeightWithSpacing() + 8;  // above the notices
+    ImGui::SetNextWindowPos(ImVec2(right ? vp->Pos.x + vp->Size.x - 10 : vp->Pos.x + 10, y), ImGuiCond_Always,
+                            ImVec2(right ? 1.0f : 0.0f, bottom ? 1.0f : 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.65f);
+    ImGui::Begin("##fps", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                                       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+                                       ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs);
+    const double target = std::max(1.0, fps.target());
+    const double budgetMs = 1000.0 / target;
+    // Green at full speed, yellow a little below, red well below.
+    auto speedColor = [&](double v) {
+        return v >= target * 0.95 ? ImVec4(0.4f, 0.9f, 0.4f, 1) : v >= target * 0.75 ? ImVec4(1.0f, 0.85f, 0.3f, 1)
+                                                                                     : ImVec4(1.0f, 0.4f, 0.35f, 1);
+    };
+    const ImVec4 emuColor(1.0f, 0.6f, 0.2f, 1), workColor(0.45f, 0.7f, 1.0f, 1);
+    ImGui::TextColored(speedColor(fps.fps()), "%.1f FPS", fps.fps());
+    ImGui::SameLine();
+    ImGui::TextDisabled("/ %.0f   %s %.0f", target, tr("pantalla"), fps.screenFps());
+    ImGui::TextColored(emuColor, "%s %.2f ms", tr("Emulación"), fps.emuMs());
+    ImGui::SameLine();
+    ImGui::TextDisabled("(%.0f %%)", fps.emuMs() / budgetMs * 100.0);
+    ImGui::SameLine();
+    ImGui::TextColored(workColor, "%s %.2f ms", tr("Total"), fps.workMs());
+
+    // A graph of the last seconds: time on X (now on the right), the value on Y, with a
+    // dashed line at the target (the console's rate, or the time one frame may take).
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float labelW = ImGui::CalcTextSize("0000").x + 4;
+    auto graph = [&](const char* id, double yMax, double line, auto value, std::initializer_list<ImVec4> colors,
+                     const char* unit) {
+        const ImVec2 size(ImGui::GetFontSize() * 15.0f, ImGui::GetFontSize() * 3.6f);
+        const ImVec2 at = ImGui::GetCursorScreenPos();
+        ImGui::Dummy(ImVec2(size.x + labelW, size.y));
+        ImGui::PushID(id);
+        const ImVec2 a(at.x + labelW, at.y), b(a.x + size.x, a.y + size.y);
+        draw->AddRectFilled(a, b, IM_COL32(0, 0, 0, 110));
+        const ImU32 axis = IM_COL32(200, 200, 200, 140);
+        draw->AddLine(a, ImVec2(a.x, b.y), axis);
+        draw->AddLine(ImVec2(a.x, b.y), b, axis);
+        auto yOf = [&](double v) { return b.y - static_cast<float>(std::clamp(v / yMax, 0.0, 1.0)) * size.y; };
+        char text[16];
+        std::snprintf(text, sizeof text, "%.0f", yMax);
+        draw->AddText(ImVec2(at.x, a.y - 2), axis, text);
+        draw->AddText(ImVec2(at.x, b.y - ImGui::GetFontSize() + 2), axis, "0");
+        draw->AddText(ImVec2(at.x, (a.y + b.y - ImGui::GetFontSize()) * 0.5f), axis, unit);
+        const float ly = yOf(line);
+        for (float x = a.x; x < b.x; x += 8) draw->AddLine(ImVec2(x, ly), ImVec2(std::min(x + 4, b.x), ly), IM_COL32(255, 255, 255, 120));
+        const int n = fps.count();
+        const float dx = size.x / static_cast<float>(FpsCounter::kPoints - 1);
+        int series = 0;
+        for (const ImVec4& c : colors) {
+            ImVec2 prev;
+            for (int i = 0; i < n; ++i) {
+                const ImVec2 p(b.x - static_cast<float>(n - 1 - i) * dx, yOf(value(fps.point(i), series)));
+                if (i) draw->AddLine(prev, p, ImGui::ColorConvertFloat4ToU32(c), 1.5f);
+                prev = p;
+            }
+            ++series;
+        }
+        ImGui::PopID();
+    };
+    // The scales grow with what was measured, but not so much that a single hiccup (a
+    // game being loaded) flattens the rest: what goes past the top is cut.
+    double fpsMax = target * 1.25, msMax = budgetMs * 1.5;
+    for (int i = 0; i < fps.count(); ++i) {
+        fpsMax = std::max(fpsMax, static_cast<double>(fps.point(i).fps) * 1.1);
+        msMax = std::max(msMax, static_cast<double>(std::max(fps.point(i).emuMs, fps.point(i).workMs)) * 1.1);
+    }
+    fpsMax = std::min(fpsMax, target * 4);
+    msMax = std::min(msMax, budgetMs * 4);
+    graph("fps", std::ceil(fpsMax / 10) * 10, target, [](const FpsCounter::Point& p, int) { return p.fps; },
+          {speedColor(fps.fps())}, "FPS");
+    graph("ms", std::ceil(msMax / 5) * 5, budgetMs,
+          [](const FpsCounter::Point& p, int s) { return s == 0 ? p.workMs : p.emuMs; }, {workColor, emuColor}, "ms");
+    ImGui::TextDisabled("%s", tr("-10 s  ·  ahora a la derecha"));
+    ImGui::End();
 }
 
 void Ui::toggleLibrary() {

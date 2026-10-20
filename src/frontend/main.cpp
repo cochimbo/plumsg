@@ -22,6 +22,7 @@
 #include "../net/udp.h"
 #include "achievements.h"
 #include "audio.h"
+#include "fps_counter.h"
 #include "game_options.h"
 #include "http.h"
 #include "languages.h"
@@ -348,6 +349,7 @@ struct CommandLine {
     bool stateMenu = false;  // --menu-estados: start with the states menu open
     std::vector<std::string> library;  // --biblioteca folder (repeatable): start with the library of those folders open
     int filter = -1;         // --filtro ninguno|scanlines|crt
+    bool fps = false;        // --fps: with the FPS counter on
     bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
     bool libraryList = false;     // --lista: with --biblioteca, show it as a list
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
@@ -376,6 +378,7 @@ const char* const kHelp = N_(
     "  --ventana              abrir en ventana (o --windowed)\n"
     "  --3d / --2d            con o sin la vista pseudo-3D\n"
     "  --filtro f             ninguno, scanlines o crt\n"
+    "  --fps                  mostrar el contador de FPS con su gráfica\n"
     "  --region r             auto, jp, us o eu\n"
     "  --estado N             cargar el estado guardado N (0-9) del juego\n"
     "  --alojar               alojar una partida en red con el juego (puerto del menú Red)\n"
@@ -408,6 +411,7 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--inclinacion") c.tilt = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--giro") c.yaw = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--menu-estados") c.stateMenu = true;
+        else if (a == "--fps") c.fps = true;
         else if (a == "--biblioteca") c.library.push_back(next());
         else if (a == "--descargar-caratulas") c.downloadCovers = true;
         else if (a == "--lista") c.libraryList = true;
@@ -486,6 +490,7 @@ int main(int argc, char** argv) {
         if (cmd.tilt > -1000) settings.render.tilt = cmd.tilt;
         if (cmd.yaw > -1000) settings.render.yaw = cmd.yaw;
         if (cmd.filter >= 0) settings.render.filter = static_cast<Filter2D>(cmd.filter);
+        if (cmd.fps) settings.fpsCounter = true;
     };
     applyCommandLine();
     // Fullscreen and region from the command line are for this session only.
@@ -788,6 +793,18 @@ int main(int argc, char** argv) {
     bool orbiting = false;  // dragging the pseudo-3D camera with the mouse
     bool padMenuWasOpen = false;  // the states menu, the library or the file browser, last frame
     int framesRun = 0;
+    // The FPS counter's measures: the frames run in this turn of the loop and the time
+    // spent running them, and when the last turn ended.
+    FpsCounter fpsCounter;
+    int turnFrames = 0;
+    Uint64 turnEmu = 0;
+    double turnTarget = 0;
+    Uint64 lastTurnEnd = next;
+    auto timed = [&](auto&& run) {
+        const Uint64 start = SDL_GetPerformanceCounter();
+        run();
+        turnEmu += SDL_GetPerformanceCounter() - start;
+    };
     RenderOptions& cam = settings.render;
     auto centreCamera = [&] {
         const RenderOptions defaults;
@@ -943,6 +960,10 @@ int main(int argc, char** argv) {
         ui->openNetplay();  // shows how the connection goes
     }
     while (running) {
+        const Uint64 turnStart = SDL_GetPerformanceCounter();
+        turnFrames = 0;
+        turnEmu = 0;
+        turnTarget = 0;
         // Only the picture changes with them, so they can follow the menus at any frame.
         app->console.vdp().setUnlimitedSprites(settings.unlimitedSprites);
         if (MasterSystem* sms = app->console.masterSystem()) sms->vdp().setUnlimitedSprites(settings.unlimitedSprites);
@@ -991,6 +1012,11 @@ int main(int argc, char** argv) {
                 case Hotkey::Stop: stop(); break;
                 case Hotkey::SlowMotion:
                     if (app->romLoaded && !netPlaying() && !hardcore()) toggleSlowMotion();
+                    break;
+                case Hotkey::FpsCounter:
+                    settings.fpsCounter = !settings.fpsCounter;
+                    ui->notify(settings.fpsCounter ? tr("Contador de FPS activado") : tr("Contador de FPS desactivado"));
+                    save();
                     break;
                 default: break;  // rewind and fast forward work while held, below
             }
@@ -1068,6 +1094,7 @@ int main(int argc, char** argv) {
         uiState.romPath = app->romPath;
         uiState.paused = paused;
         uiState.slowMotion = slowMotion;
+        uiState.fps = &fpsCounter;
         uiState.hasProfile = game.has("perfil_3d");
         uiState.hasWideProfile = game.has("pantalla_ancha");
         uiState.gameName = app->romLoaded ? fileName(app->romPath) : std::string();
@@ -1248,9 +1275,13 @@ int main(int argc, char** argv) {
                 if (!net->shouldWait()) {
                     app->console.setSampleRate(audio->rate());
                     // The menus that own the pad do not stop a netplay game, but their presses are not the game's.
-                    if (net->advance(app->console, padMenuOpen ? PadState{} : input->poll(0, keyboard))) {
+                    bool advanced = false;
+                    timed([&] { advanced = net->advance(app->console, padMenuOpen ? PadState{} : input->poll(0, keyboard)); });
+                    turnTarget = app->console.refreshRate();
+                    if (advanced) {
                         achievements.doFrame();
                         ranFrame = true;
+                        ++turnFrames;
                         ++framesRun;
                         audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
                         video.addAudio(app->console.audio().samples().data(), app->console.audio().samples().size());
@@ -1303,6 +1334,7 @@ int main(int argc, char** argv) {
                 // same pads, whose picture is shown, and the console goes back. Not in fast
                 // forward, where a frame or two less of lag is not felt.
                 const int ahead = fast || runAheadFailed ? 0 : settings.runAhead;
+                turnTarget = app->console.refreshRate() * speed;
                 for (int n = pacer.framesForTick(speed); n > 0; --n) {
                     if (canRewind) {
                         std::vector<uint8_t> snapshot;
@@ -1312,14 +1344,17 @@ int main(int argc, char** argv) {
                     app->console.setSampleRate(audio->rate() / speed);
                     // The picture shown is run-ahead's, so these need not be drawn.
                     app->console.setDrawing(ahead == 0);
-                    app->console.runFrame();
+                    timed([&] { app->console.runFrame(); });
                     achievements.doFrame();
                     ranFrame = true;
                     ++framesRun;
+                    ++turnFrames;
                     audio->push(app->console.audio().samples(), settings.volume, settings.mute || capturing);
                     video.addAudio(app->console.audio().samples().data(), app->console.audio().samples().size());
                     app->console.audio().clearSamples();
-                    if (ahead > 0 && n == 1 && !app->console.runAhead(ahead)) {
+                    bool aheadFailed = false;
+                    if (ahead > 0 && n == 1) timed([&] { aheadFailed = !app->console.runAhead(ahead); });
+                    if (aheadFailed) {
                         runAheadFailed = true;
                         ui->notify(tr("Run-ahead desactivado: no se pudo volver al fotograma actual."));
                     }
@@ -1391,6 +1426,13 @@ int main(int argc, char** argv) {
             running = false;
         }
         SDL_GL_SwapWindow(window);
+        {
+            const Uint64 end = SDL_GetPerformanceCounter();
+            fpsCounter.tick(static_cast<double>(end - lastTurnEnd) / freq, turnFrames, static_cast<double>(turnEmu) / freq,
+                            static_cast<double>(end - turnStart) / freq,
+                            turnTarget > 0 ? turnTarget : app->console.refreshRate());
+            lastTurnEnd = end;
+        }
         if (capturing) continue;  // as fast as possible
 
         // Pace to the console's refresh rate; resync if we fell far behind.

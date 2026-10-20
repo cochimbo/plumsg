@@ -87,6 +87,9 @@ msgstr "(suggéré)"
 msgid ", %d sin encontrar"
 msgstr ", %d introuvables"
 
+msgid "-10 s  ·  ahora a la derecha"
+msgstr "-10 s  ·  maintenant à droite"
+
 msgid ". Modo hardcore"
 msgstr ". Mode hardcore"
 
@@ -133,6 +136,12 @@ msgstr "A : appliquer"
 
 msgid "Abajo"
 msgstr "Bas"
+
+msgid "Abajo a la derecha"
+msgstr "En bas à droite"
+
+msgid "Abajo a la izquierda"
+msgstr "En bas à gauche"
 
 msgid "Abre el juego; luego pulsa Grabar del juego aquí."
 msgstr "Ouvre le jeu ; appuyez ensuite ici sur Enregistrer depuis le jeu."
@@ -256,6 +265,12 @@ msgstr "Haut"
 
 msgid "Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"
 msgstr "Haut / bas : choisir   Gauche / droite : changer   A / Entrée : activer"
+
+msgid "Arriba a la derecha"
+msgstr "En haut à droite"
+
+msgid "Arriba a la izquierda"
+msgstr "En haut à gauche"
 
 msgid "Atajos"
 msgstr "Raccourcis"
@@ -584,6 +599,18 @@ msgstr "Obtenus, pas encore envoyés"
 msgid "Consola"
 msgstr "Console"
 
+msgid "Contador de FPS"
+msgstr "Compteur d'IPS"
+
+msgid "Contador de FPS (F)"
+msgstr "Compteur d'IPS (F)"
+
+msgid "Contador de FPS activado"
+msgstr "Compteur d'IPS activé"
+
+msgid "Contador de FPS desactivado"
+msgstr "Compteur d'IPS désactivé"
+
 msgid "Contrabajo"
 msgstr "Contrebasse"
 
@@ -892,6 +919,9 @@ msgstr "Choisissez le dossier où se trouvent vos jeux Mega Drive, 32X ou Mega C
 msgid "Elige un juego para ver sus datos."
 msgstr "Choisissez un jeu pour voir ses informations."
 
+msgid "Emulación"
+msgstr "Émulation"
+
 msgid "Emulación parada"
 msgstr "Émulation arrêtée"
 
@@ -998,6 +1028,9 @@ msgstr "Europe (PAL)"
 msgid "Extrusión"
 msgstr "Extrusion"
 
+msgid "F  contador de FPS con su gráfica"
+msgstr "F  compteur d'IPS avec son graphique"
+
 msgid "F1  reiniciar;  F12  parar la emulación y volver al inicio"
 msgstr "F1  réinitialiser ;  F12  arrêter l'émulation et revenir à l'accueil"
 
@@ -1067,7 +1100,8 @@ msgstr "Flèches  croix;  A S D  boutons A B C ;  Q W E  boutons X Y Z"
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
 "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"
-msgstr "Flèches ou croix : choisir   A ou Entrée : jouer   X, bouton droit ou touche menu : codes, options et instruments\n"
+msgstr ""
+"Flèches ou croix : choisir   A ou Entrée : jouer   X, bouton droit ou touche menu : codes, options et instruments\n"
 "B ou Échap : fermer   L / R ou Page préc. / Page suiv. : console   Select ou V : grille ou liste"
 
 msgid "Fondo arco"
@@ -1493,6 +1527,13 @@ msgstr ""
 "Les effets (anneaux, sauts, coups...) sonnent comme sur la console et seule la musique\n"
 "passe par la SoundFont. Pour savoir lesquels c'est, utilisez d'abord Extraire les morceaux\n"
 "dans l'Éditeur d'instruments. Chaque effet peut aussi être changé à la main dans l'éditeur."
+
+msgid ""
+"Los fotogramas por segundo del juego y lo que tarda cada uno en emularse,\n"
+"con una gráfica de los últimos 10 segundos."
+msgstr ""
+"Les images par seconde du jeu et le temps d'émulation de chacune,\n"
+"avec un graphique des 10 dernières secondes."
 
 msgid ""
 "Los lados de arriba se guardan para %s y se recuperan al abrirlo.\n"
@@ -1941,6 +1982,9 @@ msgstr "Par internet : ouvrez (redirigez) le port UDP %d de votre box vers cet o
 
 msgid "Por título"
 msgstr "Par titre"
+
+msgid "Posición del contador"
+msgstr "Position du compteur"
 
 msgid "Preguntas"
 msgstr "Quiz"
@@ -2409,6 +2453,9 @@ msgstr "Tom médium grave"
 msgid "Tom melódico"
 msgstr "Tom mélodique"
 
+msgid "Total"
+msgstr "Total"
+
 msgid "Traste de guitarra"
 msgstr "Bruit de frette"
 
@@ -2720,6 +2767,9 @@ msgstr "notes"
 msgid "palabra"
 msgstr "mot"
 
+msgid "pantalla"
+msgstr "écran"
+
 msgid ""
 "plumsg [juego] [opciones]\n"
 "\n"
@@ -2728,6 +2778,7 @@ msgid ""
 "  --ventana              abrir en ventana (o --windowed)\n"
 "  --3d / --2d            con o sin la vista pseudo-3D\n"
 "  --filtro f             ninguno, scanlines o crt\n"
+"  --fps                  mostrar el contador de FPS con su gráfica\n"
 "  --region r             auto, jp, us o eu\n"
 "  --estado N             cargar el estado guardado N (0-9) del juego\n"
 "  --alojar               alojar una partida en red con el juego (puerto del menú Red)\n"
@@ -2754,6 +2805,7 @@ msgstr ""
 "  --ventana              ouvrir dans une fenêtre (ou --windowed)\n"
 "  --3d / --2d            avec ou sans la vue pseudo-3D\n"
 "  --filtro f             ninguno (aucun), scanlines ou crt\n"
+"  --fps                  afficher le compteur d'IPS avec son graphique\n"
 "  --region r             auto, jp, us ou eu\n"
 "  --estado N             charger l'état sauvegardé N (0-9) du jeu\n"
 "  --alojar               héberger une partie en réseau avec le jeu (port du menu Réseau)\n"

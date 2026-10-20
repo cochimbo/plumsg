@@ -13,6 +13,7 @@
 #include "achievements_ui.h"
 #include "cheat_database.h"
 #include "file_dialog.h"
+#include "fps_counter.h"
 #include "game_info.h"
 #include "input.h"
 #include "instrument_editor.h"
@@ -102,6 +103,7 @@ struct UiState {
     bool hardcore = false;
     int recording = 0;         // being recorded: 1 a GIF, 2 a video
     int recordingSeconds = 0;  // and for how long
+    const FpsCounter* fps = nullptr;  // drawn over the game while settings.fpsCounter is on
     EditorView editor;
 };
 
@@ -221,6 +223,9 @@ private:
     void drawStateOptions(int tab, const UiState& state, UiActions& out);
     bool handleStateMenu(const SDL_Event& e);
     void drawOverlays(const UiState& state);
+    // The FPS counter and its graph, in settings_.fpsCorner; `badge` says the speed badge
+    // takes the top right corner.
+    void drawFpsCounter(const FpsCounter& fps, bool badge);
     // Hides the mouse pointer while a game runs and the mouse has been still a while.
     void hideIdleCursor(const UiState& state);
     void finishCapture(int keyOrButton);

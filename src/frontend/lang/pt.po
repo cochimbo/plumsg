@@ -87,6 +87,9 @@ msgstr "(sugerido)"
 msgid ", %d sin encontrar"
 msgstr ", %d não encontradas"
 
+msgid "-10 s  ·  ahora a la derecha"
+msgstr "-10 s  ·  agora à direita"
+
 msgid ". Modo hardcore"
 msgstr ". Modo hardcore"
 
@@ -133,6 +136,12 @@ msgstr "A: aplicar"
 
 msgid "Abajo"
 msgstr "Baixo"
+
+msgid "Abajo a la derecha"
+msgstr "Em baixo à direita"
+
+msgid "Abajo a la izquierda"
+msgstr "Em baixo à esquerda"
 
 msgid "Abre el juego; luego pulsa Grabar del juego aquí."
 msgstr "Abre o jogo; depois clique aqui em Gravar do jogo."
@@ -256,6 +265,12 @@ msgstr "Cima"
 
 msgid "Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"
 msgstr "Cima / baixo: escolher   Esquerda / direita: mudar   A / Enter: ativar"
+
+msgid "Arriba a la derecha"
+msgstr "Em cima à direita"
+
+msgid "Arriba a la izquierda"
+msgstr "Em cima à esquerda"
 
 msgid "Atajos"
 msgstr "Atalhos"
@@ -584,6 +599,18 @@ msgstr "Conquistadas, ainda não enviadas"
 msgid "Consola"
 msgstr "Console"
 
+msgid "Contador de FPS"
+msgstr "Contador de FPS"
+
+msgid "Contador de FPS (F)"
+msgstr "Contador de FPS (F)"
+
+msgid "Contador de FPS activado"
+msgstr "Contador de FPS ativado"
+
+msgid "Contador de FPS desactivado"
+msgstr "Contador de FPS desativado"
+
 msgid "Contrabajo"
 msgstr "Contrabaixo"
 
@@ -892,6 +919,9 @@ msgstr "Escolha a pasta onde estão seus jogos de Mega Drive, 32X ou Mega CD."
 msgid "Elige un juego para ver sus datos."
 msgstr "Escolha um jogo para ver seus dados."
 
+msgid "Emulación"
+msgstr "Emulação"
+
 msgid "Emulación parada"
 msgstr "Emulação parada"
 
@@ -998,6 +1028,9 @@ msgstr "Europa (PAL)"
 msgid "Extrusión"
 msgstr "Extrusão"
 
+msgid "F  contador de FPS con su gráfica"
+msgstr "F  contador de FPS com o seu gráfico"
+
 msgid "F1  reiniciar;  F12  parar la emulación y volver al inicio"
 msgstr "F1  reiniciar;  F12  parar a emulação e voltar ao início"
 
@@ -1067,7 +1100,8 @@ msgstr "Setas  direcional;  A S D  botões A B C;  Q W E  botões X Y Z"
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
 "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"
-msgstr "Setas ou direcional: escolher   A ou Enter: jogar   X, botão direito ou tecla de menu: truques, opções e instrumentos\n"
+msgstr ""
+"Setas ou direcional: escolher   A ou Enter: jogar   X, botão direito ou tecla de menu: truques, opções e instrumentos\n"
 "B ou Esc: fechar   L / R ou Page Up / Page Down: console   Select ou V: grade ou lista"
 
 msgid "Fondo arco"
@@ -1493,6 +1527,13 @@ msgstr ""
 "Os efeitos (anéis, pulos, golpes...) soam como no console e só a música\n"
 "passa pelo SoundFont. Para saber quais são, use antes Tirar músicas no Editor\n"
 "de instrumentos. Cada efeito também pode ser mudado à mão no editor."
+
+msgid ""
+"Los fotogramas por segundo del juego y lo que tarda cada uno en emularse,\n"
+"con una gráfica de los últimos 10 segundos."
+msgstr ""
+"Os fotogramas por segundo do jogo e quanto demora cada um a emular,\n"
+"com um gráfico dos últimos 10 segundos."
 
 msgid ""
 "Los lados de arriba se guardan para %s y se recuperan al abrirlo.\n"
@@ -1941,6 +1982,9 @@ msgstr "Pela internet: abra (redirecione) a porta UDP %d do seu roteador para es
 
 msgid "Por título"
 msgstr "Por título"
+
+msgid "Posición del contador"
+msgstr "Posição do contador"
 
 msgid "Preguntas"
 msgstr "Quiz"
@@ -2409,6 +2453,9 @@ msgstr "Tom médio grave"
 msgid "Tom melódico"
 msgstr "Tom melódico"
 
+msgid "Total"
+msgstr "Total"
+
 msgid "Traste de guitarra"
 msgstr "Ruído de traste"
 
@@ -2720,6 +2767,9 @@ msgstr "notas"
 msgid "palabra"
 msgstr "palavra"
 
+msgid "pantalla"
+msgstr "ecrã"
+
 msgid ""
 "plumsg [juego] [opciones]\n"
 "\n"
@@ -2728,6 +2778,7 @@ msgid ""
 "  --ventana              abrir en ventana (o --windowed)\n"
 "  --3d / --2d            con o sin la vista pseudo-3D\n"
 "  --filtro f             ninguno, scanlines o crt\n"
+"  --fps                  mostrar el contador de FPS con su gráfica\n"
 "  --region r             auto, jp, us o eu\n"
 "  --estado N             cargar el estado guardado N (0-9) del juego\n"
 "  --alojar               alojar una partida en red con el juego (puerto del menú Red)\n"
@@ -2754,6 +2805,7 @@ msgstr ""
 "  --ventana              abrir em janela (ou --windowed)\n"
 "  --3d / --2d            com ou sem a visão pseudo-3D\n"
 "  --filtro f             ninguno (nenhum), scanlines ou crt\n"
+"  --fps                  mostrar o contador de FPS com o seu gráfico\n"
 "  --region r             auto, jp, us ou eu\n"
 "  --estado N             carregar o estado salvo N (0-9) do jogo\n"
 "  --alojar               hospedar uma partida em rede com o jogo (porta do menu Rede)\n"

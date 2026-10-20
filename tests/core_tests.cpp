@@ -14,6 +14,7 @@
 #include <random>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <filesystem>
@@ -850,6 +851,26 @@ void testMarsProgram() {
     check(slaveOk == 16, "32X: la SH-2 esclava también");
     check(result(32) >= 3, "32X: interrupciones de VBlank con su manejador y RTE");
     check(md.mars()->comm()[7] == 0xD0, "32X: el programa termina");
+
+    // What only changes the timing (the caches, a CPU parked in a spin loop) goes into
+    // the savestate too: the frames after a round trip are the same, to the clock.
+    for (int at : {1, 2, 3}) {
+        MegaDrive copy;
+        copy.setSampleRate(44100);
+        copy.loadRomData(marsRom(kMarsProgram, sizeof(kMarsProgram), 0x06000200, 0x06000220));
+        for (int i = 0; i < at; ++i) copy.runFrame();
+        std::vector<uint8_t> state;
+        copy.saveState(state);
+        auto run = [&] {
+            for (int i = 0; i < 4; ++i) copy.runFrame();
+            return std::make_tuple(frameHash(copy.frame()), copy.mars()->sdram(), copy.mars()->master().pc(),
+                                   copy.mars()->slave().pc(), copy.mars()->master().reg(0), copy.mars()->slave().reg(0));
+        };
+        const auto first = run();
+        std::string error;
+        check(copy.loadState(state, &error) && run() == first,
+              ("32X: el estado guarda la caché y los bucles de espera (tras " + std::to_string(at) + " fotogramas)").c_str());
+    }
 
     md.runFrame();
     md.runFrame();

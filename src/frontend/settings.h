@@ -65,6 +65,11 @@ struct Settings {
     // ahead (0 off, up to kMaxRunAhead).
     static constexpr int kMaxRunAhead = 4;
     int runAhead = 0;
+    // The frames-per-second counter over the game, with its graph, and the corner it is
+    // in: 0 top left, 1 top right, 2 bottom left, 3 bottom right.
+    static constexpr int kFpsCorners = 4;
+    bool fpsCounter = false;
+    int fpsCorner = 3;
     std::vector<std::string> recent;  // most recent first
     std::string lastFolder;
     std::vector<std::string> libraryFolders;  // where the game library looks for games
