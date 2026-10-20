@@ -28,6 +28,7 @@
 #include "rewind.h"
 #include "test_rom.h"
 #include "frontend/achievements.h"
+#include "frontend/game_info_data.h"
 #include "frontend/library_names.h"
 #include "mars/mars_program.h"
 #include "megacd/megacd_program.h"
@@ -1402,6 +1403,49 @@ void testCheats() {
           "cheats: a joined code survives the cheat file");
 }
 
+// The detail panel's data: libretro-database's metadat files and Wikipedia's answers.
+void testGameInfo() {
+    const std::string genres = "clrmamepro (\n\tname \"Sega - Mega Drive - Genesis\"\n)\n\n"
+                               "game (\n\tcomment \"Sonic The Hedgehog 2 (World)\"\n\tgenre \"Platform\"\n"
+                               "\trom ( crc 24AB4C3A )\n)\n\n"
+                               "game (\n\tcomment \"Sonic The Hedgehog 2 (World) (Rev A)\"\n\tgenre \"Platform\"\n)\n\n"
+                               "game (\n\tcomment \"Columns (World)\"\n\trom ( crc 03163D7A )\n)\n";
+    const auto entries = parseMetadat(genres, "genre");
+    check(entries.size() == 2 && entries[0].first == "Sonic The Hedgehog 2 (World)" && entries[0].second == "Platform",
+          "game info: metadat entries with the field, the others left out");
+    const std::string users = "game (\n\tcomment \"Streets of Rage 2 (USA)\"\n\tusers 2\n\trom ( crc E01FA526 )\n)\n";
+    check(parseMetadat(users, "users").size() == 1 && parseMetadat(users, "users")[0].second == "2",
+          "game info: unquoted values");
+    DetailsTable table;
+    table.add("genre", genres);
+    table.add("maxusers", users);
+    table.add("developer", "game (\n\tcomment \"Sonic The Hedgehog 2 (World)\"\n\tdeveloper \"SEGA\"\n)\n");
+    const GameDetails* d = table.find("Sonic The Hedgehog 2 (World)");
+    check(d && d->genre == "Platform" && d->developer == "SEGA", "game info: the fields of one game together");
+    d = table.find("Sonic The Hedgehog 2 (Europe) [!]");
+    check(d && d->developer == "SEGA", "game info: another region of the same title");
+    d = table.find("streets of rage 2 (usa)");
+    check(d && d->players == "2", "game info: names without case");
+    check(!table.find("Ecco the Dolphin (Europe)"), "game info: a game it does not know");
+
+    const std::string answer =
+        "{\"batchcomplete\":true,\"query\":{\"pages\":[{\"pageid\":2,\"ns\":0,\"title\":\"Sonic the Hedgehog\","
+        "\"index\":2,\"extract\":\"Otro.\"},{\"pageid\":1,\"ns\":0,\"title\":\"Sonic the Hedgehog 2\",\"index\":1,"
+        "\"extract\":\"Sonic the Hedgehog 2 es un videojuego de plataformas \\u00e9\\n\\\"Sega\\\".\"}]}}";
+    const auto pages = parseWikiSearch(answer);
+    check(pages.size() == 2 && pages[0].title == "Sonic the Hedgehog 2" && pages[0].index == 1,
+          "game info: Wikipedia's pages in search order");
+    check(!pages.empty() && pages[0].extract == "Sonic the Hedgehog 2 es un videojuego de plataformas \xc3\xa9\n\"Sega\".",
+          "game info: Wikipedia's escapes");
+    check(wikiTitleDistance("Sonic The Hedgehog 2", "Sonic the Hedgehog 2") == 0, "game info: the same title");
+    check(wikiTitleDistance("Sonic The Hedgehog 2", "Sonic the Hedgehog") < 0, "game info: not the first game for the second");
+    check(wikiTitleDistance("Golden Axe II", "Golden Axe 2 (videojuego)") == 0, "game info: roman numerals and notes");
+    check(wikiTitleDistance("Phantasy Star IV", "Phantasy Star IV: The End of the Millennium") > 0,
+          "game info: a longer title of the same game");
+    check(wikiTitleDistance("Sonic 3D Blast", "Sonic") < 0, "game info: too little in common");
+    check(wikiTitleDistance("Columns", "Ecco the Dolphin") < 0, "game info: nothing in common");
+}
+
 void testLibraryNames() {
     check(gameTitle("Lion King, The (World)") == "The Lion King", "library: trailing ', The' moves to the front");
     check(gameTitle("Adventures of Batman & Robin, The (USA)") == "The Adventures of Batman & Robin",
@@ -2424,6 +2468,7 @@ int main() {
     testPal();
     testCheats();
     testLibraryNames();
+    testGameInfo();
     testSystems();
     testMasterSystem();
     testSmsMapper();

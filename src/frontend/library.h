@@ -22,6 +22,14 @@ namespace plumsg {
 // ones into OpenGL textures on the main thread.
 class Library {
 public:
+    // For the detail panel's screenshots: a cover's decoding (shrunk to the covers'
+    // height), its upload as a texture (into `texture` if not 0; returns it), and the
+    // URL of a libretro-thumbnails folder of the console ("Named_Snaps"), on libretro's
+    // server or in its GitHub copy, ending in '/'.
+    static bool decodeImage(const std::vector<uint8_t>& data, std::vector<uint32_t>& pixels, int* width, int* height);
+    static unsigned int uploadTexture(unsigned int texture, const std::vector<uint32_t>& pixels, int width, int height);
+    static std::string thumbnailsUrl(ConsoleSystem s, const std::string& kind, bool github);
+
     enum class Cover { Unknown, Pending, Missing, Ready };
     struct Game {
         std::string path;   // the ROM

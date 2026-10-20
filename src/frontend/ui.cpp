@@ -9,6 +9,7 @@
 #include <iterator>
 
 #include "imgui.h"
+#include "imgui_internal.h"  // ImGui::TableSetColumnSortDirection
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 #include "game_options.h"
@@ -237,6 +238,7 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
 
 Ui::~Ui() {
     library_.clearTextures();
+    gameInfo_.clearTextures();
     if (logoTexture_) gl::DeleteTextures(1, &logoTexture_);
     if (iconTexture_) gl::DeleteTextures(1, &iconTexture_);
     ImGui_ImplOpenGL3_Shutdown();
@@ -476,6 +478,7 @@ UiActions Ui::frame(const UiState& state) {
     if (showCheats_) drawCheats(state, out);
     if (showGameOptions_) drawGameOptions(state, out);
     library_.update();
+    gameInfo_.update();
     if (showLibrary_) drawLibrary(out);
     if (showCoverSearch_) drawCoverSearch();
     if (showBios_) drawBios(out);
@@ -1607,7 +1610,43 @@ std::vector<size_t> Ui::visibleGames() {
         if (settings_.librarySystem >= 0 && static_cast<int>(games[i].system) != settings_.librarySystem) continue;
         if (filter.empty() || games[i].key.find(filter) != std::string::npos) out.push_back(i);
     }
+    // The library is in title order; the other orders keep it among equals, and games
+    // with nothing to sort by go last.
+    const int sort = settings_.librarySort;
+    const bool descending = libraryView_.descending;
+    if (sort == 0) {
+        if (descending) std::reverse(out.begin(), out.end());
+        return out;
+    }
+    std::vector<std::pair<std::string, size_t>> keys;
+    keys.reserve(out.size());
+    for (size_t i : out) {
+        const Library::Game& g = games[i];
+        std::string key;
+        if (sort == 1) {
+            key = systemName(g.system);
+        } else if (const GameDetails* d = gameInfo_.details(g.system, g.stem)) {
+            if (sort == 2) key = d->year;
+            else if (sort == 3) key = d->genre.empty() ? std::string() : searchKey(genreName(d->genre) ? tr(genreName(d->genre)) : d->genre);
+            else key = searchKey(d->developer);
+        }
+        keys.emplace_back(std::move(key), i);
+    }
+    std::stable_sort(keys.begin(), keys.end(), [descending](const auto& a, const auto& b) {
+        if (a.first.empty() != b.first.empty()) return b.first.empty();
+        if (a.first != b.first) return descending ? a.first > b.first : a.first < b.first;
+        return a.second < b.second;
+    });
+    for (size_t n = 0; n < keys.size(); ++n) out[n] = keys[n].second;
     return out;
+}
+
+void Ui::setLibraryList(bool list) {
+    if (settings_.libraryList == list) return;
+    settings_.libraryList = list;
+    libraryView_.syncSort = true;
+    libraryView_.scroll = true;
+    pendingSave_ = true;
 }
 
 // While the library is open it owns the pad and the keyboard (except while typing in
@@ -1635,7 +1674,7 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         showLibrary_ = false;
         return true;
     }
-    enum { None, Up, Down, Left, Right, Play, Close, Search, PrevTab, NextTab, Menu } action = None;
+    enum { None, Up, Down, Left, Right, Play, Close, Search, PrevTab, NextTab, Menu, View } action = None;
     if (e.type == SDL_KEYDOWN) {
         const bool ctrl = (e.key.keysym.mod & KMOD_CTRL) != 0;
         const bool shift = (e.key.keysym.mod & KMOD_SHIFT) != 0;
@@ -1654,6 +1693,7 @@ bool Ui::handleLibrary(const SDL_Event& e) {
             case SDL_SCANCODE_PAGEUP: action = PrevTab; break;
             case SDL_SCANCODE_PAGEDOWN: action = NextTab; break;
             case SDL_SCANCODE_F: if (ctrl) action = Search; break;
+            case SDL_SCANCODE_V: if (!ctrl) action = View; else return false; break;
             default: return false;  // let ImGui have the rest (clicks on buttons, Tab...)
         }
     } else {
@@ -1668,6 +1708,7 @@ bool Ui::handleLibrary(const SDL_Event& e) {
             case SDL_CONTROLLER_BUTTON_X: action = Menu; break;
             case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: action = PrevTab; break;
             case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: action = NextTab; break;
+            case SDL_CONTROLLER_BUTTON_BACK: action = View; break;
             default: break;
         }
     }
@@ -1693,14 +1734,20 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         pendingSave_ = true;
         return true;
     }
+    if (action == View) {
+        setLibraryList(!settings_.libraryList);
+        return true;
+    }
     const int count = static_cast<int>(visibleGames().size());
     const int cols = std::max(1, libraryView_.columns);
+    // In the list, left and right go a page up or down.
+    const int side = settings_.libraryList ? 10 : 1;
     int& sel = libraryView_.selected;
     switch (action) {
         case Up: if (sel - cols >= 0) sel -= cols; break;
         case Down: sel = std::min(count - 1, sel + cols); break;
-        case Left: sel = std::max(0, sel - 1); break;
-        case Right: sel = std::min(count - 1, sel + 1); break;
+        case Left: sel = std::max(0, sel - side); break;
+        case Right: sel = std::min(count - 1, sel + side); break;
         case Play: if (count > 0) libraryView_.load = sel; break;
         case Close: showLibrary_ = false; break;
         case Search: libraryView_.focusSearch = true; break;
@@ -1826,88 +1873,68 @@ void Ui::drawLibrary(UiActions& out) {
     ImGui::SetNextItemWidth(260);
     if (ImGui::InputTextWithHint("##buscar", tr("Buscar (Ctrl+F o Y)"), libraryView_.search, sizeof libraryView_.search))
         libraryView_.selected = 0;
+    // How the games are shown: a grid or a list, in what order, and with the panel or not.
     ImGui::SameLine();
+    if (ImGui::RadioButton(tr("Cuadrícula"), !settings_.libraryList)) setLibraryList(false);
+    ImGui::SameLine();
+    if (ImGui::RadioButton(tr("Lista"), settings_.libraryList)) setLibraryList(true);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("Cambia de vista con V o con Select en el mando."));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(170);
+    static const char* const sorts[Settings::kLibrarySorts] = {N_("Por título"), N_("Por consola"), N_("Por año"),
+                                                               N_("Por género"), N_("Por desarrolladora")};
+    if (ImGui::BeginCombo("##orden", tr(sorts[std::clamp(settings_.librarySort, 0, Settings::kLibrarySorts - 1)]))) {
+        for (int i = 0; i < Settings::kLibrarySorts; ++i)
+            if (ImGui::Selectable(tr(sorts[i]), settings_.librarySort == i)) {
+                settings_.librarySort = i;
+                libraryView_.descending = i == 2;  // the newest first
+                libraryView_.syncSort = true;
+                out.settingsChanged = true;
+            }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    if (ImGui::Checkbox(tr("Detalles"), &settings_.libraryDetails)) out.settingsChanged = true;
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Un panel a la derecha con la carátula, los datos y la descripción del juego elegido."));
     const std::vector<size_t> visible = visibleGames();
+    // A new order (or the data to sort by arriving) keeps the same game chosen.
+    const unsigned order = static_cast<unsigned>(settings_.librarySort) * 2 + libraryView_.descending +
+                           (settings_.librarySort ? gameInfo_.detailsVersion() * 16 : 0);
+    if (order != libraryView_.order) {
+        libraryView_.order = order;
+        const auto it = std::find(visible.begin(), visible.end(), libraryView_.selectedGame);
+        if (it != visible.end()) {
+            libraryView_.selected = static_cast<int>(it - visible.begin());
+            libraryView_.scroll = true;
+        }
+    }
+    if (libraryView_.selected >= 0 && libraryView_.selected < static_cast<int>(visible.size()))
+        libraryView_.selectedGame = visible[static_cast<size_t>(libraryView_.selected)];
     if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text(tr("%d juegos. %s"), static_cast<int>(visible.size()), library_.downloadStatus().c_str());
     ImGui::TextDisabled("%s", tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-                        "B o Esc: cerrar   L / R o RePág / AvPág: consola"));
+                        "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"));
     ImGui::Separator();
 
     if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd, .iso) en estas carpetas."));
     else if (visible.empty() && libraryView_.search[0]) ImGui::TextDisabled("%s", tr("Ningún juego coincide con la búsqueda."));
     else if (visible.empty()) ImGui::TextDisabled("%s", tr("No hay juegos de esta consola en tus carpetas."));
 
-    const float coverW = 150.0f, coverH = 210.0f;
+    // The games on the left (a grid of covers or a list), the chosen one's data on the right.
     const ImGuiStyle& style = ImGui::GetStyle();
-    const float textH = ImGui::GetTextLineHeight() * 2 + 4;
-    const ImVec2 card(coverW + 12, coverH + textH + 12);
-    ImGui::BeginChild("juegos");
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const int cols = std::max(1, static_cast<int>((avail + style.ItemSpacing.x) / (card.x + style.ItemSpacing.x)));
-    libraryView_.columns = cols;
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    for (int n = 0; n < static_cast<int>(visible.size()); ++n) {
-        Library::Game& g = games[visible[static_cast<size_t>(n)]];
-        if (n % cols) ImGui::SameLine();
-        ImGui::PushID(n);
-        const ImVec2 pos = ImGui::GetCursorScreenPos();
-        const bool selected = n == libraryView_.selected;
-        if (ImGui::Selectable("##juego", selected, ImGuiSelectableFlags_AllowDoubleClick, card)) {
-            libraryView_.selected = n;
-            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) libraryView_.load = n;
-        }
-        // On release, like ImGui's own context menus: the press closes open popups.
-        if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
-            libraryView_.selected = n;
-            libraryView_.menuGame = n;
-            libraryView_.menuItem = 0;
-            libraryView_.openMenu = true;
-        }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s\n%s", systemName(g.system), g.path.c_str());
-        if (selected && libraryView_.scroll) {
-            ImGui::SetScrollHereY(0.5f);
-            libraryView_.scroll = false;
-        }
-        // The cover, fitted into its box; a plain box with the console's name if there is none.
-        const ImVec2 box(pos.x + 6, pos.y + 6);
-        if (g.texture && g.height > 0) {
-            float w = coverW, h = coverW * static_cast<float>(g.height) / static_cast<float>(g.width);
-            if (h > coverH) {
-                h = coverH;
-                w = coverH * static_cast<float>(g.width) / static_cast<float>(g.height);
-            }
-            const ImVec2 a(box.x + (coverW - w) * 0.5f, box.y + (coverH - h));
-            draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h));
-        } else {
-            draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(40, 44, 56, 255), 4.0f);
-            const char* label = g.cover == Library::Cover::Pending ? "..." : systemName(g.system);
-            const ImVec2 size = ImGui::CalcTextSize(label);
-            draw->AddText(ImVec2(box.x + (coverW - size.x) * 0.5f, box.y + (coverH - size.y) * 0.5f),
-                          IM_COL32(140, 146, 160, 255), label);
-        }
-        // On the "Todos" tab, a badge on 32X and Mega CD covers says which console.
-        if (settings_.librarySystem < 0 && g.system != ConsoleSystem::MegaDrive) {
-            const char* badge = systemName(g.system);
-            const ImVec2 size = ImGui::CalcTextSize(badge);
-            const ImVec2 b0(box.x + coverW - size.x - 10, box.y + 4);
-            const ImU32 colour = g.system == ConsoleSystem::Mega32X        ? IM_COL32(200, 60, 50, 230)
-                                 : g.system == ConsoleSystem::MasterSystem ? IM_COL32(40, 140, 80, 230)
-                                 : g.system == ConsoleSystem::GameGear     ? IM_COL32(120, 70, 170, 230)
-                                                                          : IM_COL32(40, 110, 200, 230);
-            draw->AddRectFilled(b0, ImVec2(b0.x + size.x + 8, b0.y + size.y + 4), colour, 3.0f);
-            draw->AddText(ImVec2(b0.x + 4, b0.y + 2), IM_COL32(255, 255, 255, 255), badge);
-        }
-        if (selected)
-            draw->AddRect(ImVec2(pos.x + 2, pos.y + 2), ImVec2(pos.x + card.x - 2, pos.y + card.y - 2),
-                          ImGui::GetColorU32(ImGuiCol_NavCursor), 6.0f, 0, 3.0f);
-        // Two lines of title, cut to the card's width; the tags in grey after it.
-        const ImVec4 clip(pos.x + 4, pos.y, pos.x + card.x - 4, pos.y + card.y);
-        draw->AddText(nullptr, 0.0f, ImVec2(pos.x + 6, box.y + coverH + 4), ImGui::GetColorU32(ImGuiCol_Text),
-                      g.title.c_str(), nullptr, coverW, &clip);
-        ImGui::PopID();
-    }
+    const float full = ImGui::GetContentRegionAvail().x;
+    const float panelW = settings_.libraryDetails ? std::clamp(full * 0.3f, 280.0f, 460.0f) : 0.0f;
+    ImGui::BeginChild("juegos", ImVec2(panelW > 0 ? full - panelW - style.ItemSpacing.x : 0.0f, 0.0f));
+    if (settings_.libraryList) drawLibraryList(visible);
+    else drawLibraryGrid(visible);
     ImGui::EndChild();
+    if (panelW > 0) {
+        ImGui::SameLine();
+        ImGui::BeginChild("detalles", ImVec2(panelW, 0.0f), ImGuiChildFlags_Borders);
+        drawLibraryDetails(visible);
+        ImGui::EndChild();
+    }
 
     // The game's menu, opened with the right button, X on the pad or the menu key.
     if (libraryView_.openMenu) {
@@ -1956,6 +1983,263 @@ void Ui::drawLibrary(UiActions& out) {
     }
     libraryView_.load = -1;
     ImGui::End();
+}
+
+// What clicking a game does, in the grid and in the list: a click picks it, a double
+// click plays it, and the right button opens its menu.
+void Ui::libraryItem(bool clicked, int n) {
+    if (clicked) {
+        libraryView_.selected = n;
+        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) libraryView_.load = n;
+    }
+    // On release, like ImGui's own context menus: the press closes open popups.
+    if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+        libraryView_.selected = n;
+        libraryView_.menuGame = n;
+        libraryView_.menuItem = 0;
+        libraryView_.openMenu = true;
+    }
+}
+
+void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
+    const auto& games = library_.games();
+    const float coverW = 150.0f, coverH = 210.0f;
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float textH = ImGui::GetTextLineHeight() * 2 + 4;
+    const ImVec2 card(coverW + 12, coverH + textH + 12);
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const int cols = std::max(1, static_cast<int>((avail + style.ItemSpacing.x) / (card.x + style.ItemSpacing.x)));
+    libraryView_.columns = cols;
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    for (int n = 0; n < static_cast<int>(visible.size()); ++n) {
+        const Library::Game& g = games[visible[static_cast<size_t>(n)]];
+        if (n % cols) ImGui::SameLine();
+        ImGui::PushID(n);
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        const bool selected = n == libraryView_.selected;
+        libraryItem(ImGui::Selectable("##juego", selected, ImGuiSelectableFlags_AllowDoubleClick, card), n);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s\n%s", systemName(g.system), g.path.c_str());
+        if (selected && libraryView_.scroll) {
+            ImGui::SetScrollHereY(0.5f);
+            libraryView_.scroll = false;
+        }
+        // The cover, fitted into its box; a plain box with the console's name if there is none.
+        const ImVec2 box(pos.x + 6, pos.y + 6);
+        if (g.texture && g.height > 0) {
+            float w = coverW, h = coverW * static_cast<float>(g.height) / static_cast<float>(g.width);
+            if (h > coverH) {
+                h = coverH;
+                w = coverH * static_cast<float>(g.width) / static_cast<float>(g.height);
+            }
+            const ImVec2 a(box.x + (coverW - w) * 0.5f, box.y + (coverH - h));
+            draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h));
+        } else {
+            draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(40, 44, 56, 255), 4.0f);
+            const char* label = g.cover == Library::Cover::Pending ? "..." : systemName(g.system);
+            const ImVec2 size = ImGui::CalcTextSize(label);
+            draw->AddText(ImVec2(box.x + (coverW - size.x) * 0.5f, box.y + (coverH - size.y) * 0.5f),
+                          IM_COL32(140, 146, 160, 255), label);
+        }
+        // On the "Todos" tab, a badge on 32X and Mega CD covers says which console.
+        if (settings_.librarySystem < 0 && g.system != ConsoleSystem::MegaDrive) {
+            const char* badge = systemName(g.system);
+            const ImVec2 size = ImGui::CalcTextSize(badge);
+            const ImVec2 b0(box.x + coverW - size.x - 10, box.y + 4);
+            const ImU32 colour = g.system == ConsoleSystem::Mega32X        ? IM_COL32(200, 60, 50, 230)
+                                 : g.system == ConsoleSystem::MasterSystem ? IM_COL32(40, 140, 80, 230)
+                                 : g.system == ConsoleSystem::GameGear     ? IM_COL32(120, 70, 170, 230)
+                                                                          : IM_COL32(40, 110, 200, 230);
+            draw->AddRectFilled(b0, ImVec2(b0.x + size.x + 8, b0.y + size.y + 4), colour, 3.0f);
+            draw->AddText(ImVec2(b0.x + 4, b0.y + 2), IM_COL32(255, 255, 255, 255), badge);
+        }
+        if (selected)
+            draw->AddRect(ImVec2(pos.x + 2, pos.y + 2), ImVec2(pos.x + card.x - 2, pos.y + card.y - 2),
+                          ImGui::GetColorU32(ImGuiCol_NavCursor), 6.0f, 0, 3.0f);
+        // Two lines of title, cut to the card's width; the tags in grey after it.
+        const ImVec4 clip(pos.x + 4, pos.y, pos.x + card.x - 4, pos.y + card.y);
+        draw->AddText(nullptr, 0.0f, ImVec2(pos.x + 6, box.y + coverH + 4), ImGui::GetColorU32(ImGuiCol_Text),
+                      g.title.c_str(), nullptr, coverW, &clip);
+        ImGui::PopID();
+    }
+}
+
+// The games as a table: title, console, year, genre, developer and players, sorted by
+// clicking a column's header (or with "Ordenar por").
+void Ui::drawLibraryList(const std::vector<size_t>& visible) {
+    const auto& games = library_.games();
+    libraryView_.columns = 1;
+    const ImGuiTableFlags flags = ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+                                  ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp;
+    if (!ImGui::BeginTable("lista", 6, flags)) return;
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableSetupColumn(tr("Título"), ImGuiTableColumnFlags_DefaultSort, 3.0f, 0);
+    ImGui::TableSetupColumn(tr("Consola"), 0, 1.0f, 1);
+    ImGui::TableSetupColumn(tr("Año"), ImGuiTableColumnFlags_PreferSortDescending, 0.5f, 2);
+    ImGui::TableSetupColumn(tr("Género"), 0, 1.1f, 3);
+    ImGui::TableSetupColumn(tr("Desarrolladora"), 0, 1.4f, 4);
+    ImGui::TableSetupColumn(tr("Jugadores"), ImGuiTableColumnFlags_NoSort, 0.6f, 5);
+    // The order chosen elsewhere (the settings, "Ordenar por") shown on the headers;
+    // the columns are in the same order as the sorts.
+    if (libraryView_.syncSort) {
+        ImGui::TableSetColumnSortDirection(settings_.librarySort,
+                                           libraryView_.descending ? ImGuiSortDirection_Descending : ImGuiSortDirection_Ascending,
+                                           false);
+        libraryView_.syncSort = false;
+    }
+    if (ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs(); specs && specs->SpecsDirty) {
+        if (specs->SpecsCount > 0) {
+            const int sort = static_cast<int>(specs->Specs[0].ColumnUserID);
+            const bool descending = specs->Specs[0].SortDirection == ImGuiSortDirection_Descending;
+            if (sort != settings_.librarySort || descending != libraryView_.descending) {
+                settings_.librarySort = sort;
+                libraryView_.descending = descending;
+                pendingSave_ = true;
+            }
+        }
+        specs->SpecsDirty = false;
+    }
+    ImGui::TableHeadersRow();
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(visible.size()));
+    if (libraryView_.scroll && libraryView_.selected < static_cast<int>(visible.size()))
+        clipper.IncludeItemByIndex(libraryView_.selected);
+    while (clipper.Step()) {
+        for (int n = clipper.DisplayStart; n < clipper.DisplayEnd; ++n) {
+            const Library::Game& g = games[visible[static_cast<size_t>(n)]];
+            const GameDetails* d = gameInfo_.details(g.system, g.stem);
+            const bool selected = n == libraryView_.selected;
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::PushID(n);
+            libraryItem(ImGui::Selectable(g.title.c_str(), selected,
+                                          ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick),
+                        n);
+            if (ImGui::IsItemHovered() && !g.tags.empty()) ImGui::SetTooltip("%s\n%s", g.tags.c_str(), g.path.c_str());
+            if (selected && libraryView_.scroll) {
+                ImGui::SetScrollHereY(0.5f);
+                libraryView_.scroll = false;
+            }
+            ImGui::PopID();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(systemName(g.system));
+            if (d) {
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(d->year.c_str());
+                ImGui::TableNextColumn();
+                const char* genre = genreName(d->genre);
+                ImGui::TextUnformatted(genre ? tr(genre) : d->genre.c_str());
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(d->developer.c_str());
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(d->players.c_str());
+            }
+        }
+    }
+    ImGui::EndTable();
+}
+
+// The chosen game: its cover, a button to play it, libretro-database's data, a
+// screenshot and Wikipedia's description.
+void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
+    const int n = libraryView_.selected;
+    if (n < 0 || n >= static_cast<int>(visible.size())) {
+        gameInfo_.show({}, {}, {}, ConsoleSystem::MegaDrive);
+        ImGui::TextDisabled("%s", tr("Elige un juego para ver sus datos."));
+        return;
+    }
+    const Library::Game& g = library_.games()[visible[static_cast<size_t>(n)]];
+    gameInfo_.show(g.path, g.stem, g.title, g.system);
+    const GameInfo::Sheet& sheet = gameInfo_.sheet();
+    const float width = ImGui::GetContentRegionAvail().x;
+    // The cover takes at most 40% of the panel's height, so the data shows below it.
+    const float coverMax = std::clamp(ImGui::GetContentRegionAvail().y * 0.4f, 140.0f, 320.0f);
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+
+    ImGui::SetWindowFontScale(1.25f);
+    ImGui::TextWrapped("%s", g.title.c_str());
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::TextDisabled("%s%s%s", systemName(g.system), g.tags.empty() ? "" : " · ", g.tags.c_str());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g.path.c_str());
+
+    // An image fitted into the panel's width and at most `maxH` tall, centred.
+    auto image = [&](unsigned int texture, int w, int h, float maxH) {
+        float iw = width, ih = width * static_cast<float>(h) / static_cast<float>(w);
+        if (ih > maxH) {
+            ih = maxH;
+            iw = maxH * static_cast<float>(w) / static_cast<float>(h);
+        }
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - iw) * 0.5f);
+        ImGui::Image(static_cast<ImTextureID>(texture), ImVec2(iw, ih));
+    };
+    ImGui::Spacing();
+    if (g.texture && g.width > 0 && g.height > 0) {
+        image(g.texture, g.width, g.height, coverMax);
+    } else {
+        const ImVec2 a = ImGui::GetCursorScreenPos();
+        const float h = std::min(width * 1.4f, coverMax);
+        draw->AddRectFilled(a, ImVec2(a.x + width, a.y + h), IM_COL32(40, 44, 56, 255), 4.0f);
+        const char* label = g.cover == Library::Cover::Pending ? "..." : tr("Sin carátula");
+        const ImVec2 size = ImGui::CalcTextSize(label);
+        draw->AddText(ImVec2(a.x + (width - size.x) * 0.5f, a.y + (h - size.y) * 0.5f), IM_COL32(140, 146, 160, 255), label);
+        ImGui::Dummy(ImVec2(width, h));
+    }
+    ImGui::Spacing();
+    if (ImGui::Button(tr("Jugar"), ImVec2(-1.0f, 0.0f))) libraryView_.load = n;
+
+    // libretro-database's data, the lines it has.
+    ImGui::Spacing();
+    if (const GameDetails* d = gameInfo_.details(g.system, g.stem)) {
+        const char* genre = genreName(d->genre);
+        const std::pair<const char*, std::string> rows[] = {
+            {N_("Desarrolladora"), d->developer},
+            {N_("Distribuidora"), d->publisher},
+            {N_("Género"), genre ? tr(genre) : d->genre},
+            {N_("Año"), d->year},
+            {N_("Jugadores"), d->players},
+        };
+        if (ImGui::BeginTable("datos", 2, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("##campo", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("##valor", ImGuiTableColumnFlags_WidthStretch);
+            for (const auto& [label, value] : rows) {
+                if (value.empty()) continue;
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextDisabled("%s", tr(label));
+                ImGui::TableNextColumn();
+                ImGui::TextWrapped("%s", value.c_str());
+            }
+            ImGui::EndTable();
+        }
+    } else if (gameInfo_.detailsBusy()) {
+        ImGui::TextDisabled("%s", tr("Descargando los datos de los juegos..."));
+    }
+
+    if (sheet.snap && sheet.width > 0 && sheet.height > 0) {
+        ImGui::Spacing();
+        image(sheet.snap, sheet.width, sheet.height, coverMax);
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText(tr("Descripción"));
+    if (sheet.busy) {
+        ImGui::TextDisabled("%s", tr("Buscando en Wikipedia..."));
+        return;
+    }
+    if (!sheet.description.empty()) {
+        ImGui::TextWrapped("%s", sheet.description.c_str());
+        ImGui::Spacing();
+        ImGui::TextDisabled("%s", trf("Fuente: Wikipedia, «%s»", sheet.sourceTitle.c_str()).c_str());
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", sheet.source.c_str());
+        if (!sheet.source.empty()) {
+            if (ImGui::SmallButton(tr("Abrir en Wikipedia"))) SDL_OpenURL(sheet.source.c_str());
+            ImGui::SameLine();
+        }
+    } else {
+        ImGui::TextDisabled("%s", sheet.status.c_str());
+    }
+    if (ImGui::SmallButton(tr("Buscar otra vez"))) gameInfo_.refresh();
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Vuelve a buscar la descripción y la captura de este juego en internet."));
 }
 
 void Ui::openCoverSearch(size_t game) {

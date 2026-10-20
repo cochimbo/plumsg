@@ -164,6 +164,9 @@ msgstr "Abrir .vgm..."
 msgid "Abrir ROM..."
 msgstr "Abrir ROM..."
 
+msgid "Abrir en Wikipedia"
+msgstr "Abrir na Wikipédia"
+
 msgid "Abrir juego"
 msgstr "Abrir jogo"
 
@@ -269,6 +272,9 @@ msgstr "Avanço rápido (segurar)"
 msgid "Avance rápido: mantén Tab (o el gatillo derecho)"
 msgstr "Avanço rápido: segure Tab (ou o gatilho direito)"
 
+msgid "Aventura"
+msgstr "Aventura"
+
 msgid "Ayuda"
 msgstr "Ajuda"
 
@@ -283,6 +289,9 @@ msgstr "Adicionar"
 
 msgid "Añadir carpeta..."
 msgstr "Adicionar pasta..."
+
+msgid "Año"
+msgstr "Ano"
 
 msgid "BIOS del Mega CD"
 msgstr "BIOS do Mega CD"
@@ -334,6 +343,9 @@ msgstr "Bateria"
 
 msgid "Batería: %s"
 msgstr "Bateria: %s"
+
+msgid "Beat'em up"
+msgstr "Beat'em up"
 
 msgid "Biblioteca"
 msgstr "Biblioteca"
@@ -394,6 +406,9 @@ msgstr ""
 msgid "Buscando dónde pide el juego la música"
 msgstr "Procurando onde o jogo pede a música"
 
+msgid "Buscando en Wikipedia..."
+msgstr "Procurando na Wikipédia..."
+
 msgid "Buscando en la base de trucos de libretro%s"
 msgstr "Procurando na base de truques do libretro%s"
 
@@ -418,6 +433,9 @@ msgstr "Procurar capa..."
 msgid "Buscar en las carpetas de la biblioteca"
 msgstr "Procurar nas pastas da biblioteca"
 
+msgid "Buscar otra vez"
+msgstr "Procurar de novo"
+
 msgid "CRT"
 msgstr "CRT"
 
@@ -441,6 +459,9 @@ msgstr "Caixa de música"
 
 msgid "Caja eléctrica"
 msgstr "Caixa elétrica"
+
+msgid "Cambia de vista con V o con Select en el mando."
+msgstr "Troque de visualização com V ou com Select no controle."
 
 msgid "Campana del ride"
 msgstr "Sino do ride"
@@ -478,8 +499,17 @@ msgstr "Pasta"
 msgid "Carpeta: %s"
 msgstr "Pasta: %s"
 
+msgid "Carreras"
+msgstr "Corrida"
+
 msgid "Casi"
 msgstr "Quase lá"
+
+msgid "Casual"
+msgstr "Casual"
+
+msgid "Caza y pesca"
+msgstr "Caça e pesca"
 
 msgid "Celesta"
 msgstr "Celesta"
@@ -584,6 +614,9 @@ msgstr "Ctrl+O  abrir ROM;  F10  biblioteca de jogos"
 msgid "Ctrl+R  grabar vídeo;  Ctrl+G  grabar GIF (otra vez para parar)"
 msgstr "Ctrl+R  gravar vídeo;  Ctrl+G  gravar GIF (outra vez para parar)"
 
+msgid "Cuadrícula"
+msgstr "Grade"
+
 msgid "Cuenta"
 msgstr "Conta"
 
@@ -667,6 +700,12 @@ msgstr ""
 "Coloque seus .sf2 na pasta de SoundFonts\n"
 "e eles aparecerão aqui."
 
+msgid "Deportes"
+msgstr "Esportes"
+
+msgid "Deportes con animales"
+msgstr "Esportes com animais"
+
 msgid "Derecha"
 msgstr "Direita"
 
@@ -676,11 +715,29 @@ msgstr "Desativado (velocidade real)"
 msgid "Desactivados"
 msgstr "Desativadas"
 
+msgid "Desarrolladora"
+msgstr "Desenvolvedora"
+
+msgid "Descargando los datos de los juegos..."
+msgstr "Baixando os dados dos jogos..."
+
 msgid "Descargar carátulas que faltan"
 msgstr "Baixar capas que faltam"
 
+msgid "Descripción"
+msgstr "Descrição"
+
+msgid "Detalles"
+msgstr "Detalhes"
+
 msgid "Disparo"
 msgstr "Tiro"
+
+msgid "Disparos"
+msgstr "Tiro"
+
+msgid "Distribuidora"
+msgstr "Distribuidora"
 
 msgid "Do"
 msgstr "Dó"
@@ -708,6 +765,9 @@ msgstr "Editor de instrumentos"
 
 msgid "Editor de instrumentos..."
 msgstr "Editor de instrumentos..."
+
+msgid "Educativo"
+msgstr "Educativo"
 
 msgid "Efecto 3D"
 msgstr "Efeito 3D"
@@ -829,6 +889,9 @@ msgstr "Escolher..."
 msgid "Elige la carpeta donde tienes tus juegos de Mega Drive, 32X o Mega CD."
 msgstr "Escolha a pasta onde estão seus jogos de Mega Drive, 32X ou Mega CD."
 
+msgid "Elige un juego para ver sus datos."
+msgstr "Escolha um jogo para ver seus dados."
+
 msgid "Emulación parada"
 msgstr "Emulação parada"
 
@@ -923,6 +986,9 @@ msgstr "Estilo:"
 msgid "Estirar"
 msgstr "Esticar"
 
+msgid "Estrategia"
+msgstr "Estratégia"
+
 msgid "Europa (Mega-CD)"
 msgstr "Europa (Mega-CD)"
 
@@ -1000,10 +1066,9 @@ msgstr "Setas  direcional;  A S D  botões A B C;  Q W E  botões X Y Z"
 
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-"B o Esc: cerrar   L / R o RePág / AvPág: consola"
-msgstr ""
-"Setas ou direcional: escolher   A ou Enter: jogar   X, botão direito ou tecla de menu: truques, opções e instrumentos\n"
-"B ou Esc: fechar   L / R ou Page Up / Page Down: console"
+"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"
+msgstr "Setas ou direcional: escolher   A ou Enter: jogar   X, botão direito ou tecla de menu: truques, opções e instrumentos\n"
+"B ou Esc: fechar   L / R ou Page Up / Page Down: console   Select ou V: grade ou lista"
 
 msgid "Fondo arco"
 msgstr "Fundo arco"
@@ -1031,6 +1096,9 @@ msgstr "Fundo polissintetizador"
 
 msgid "Fondos sintetizados"
 msgstr "Fundos sintetizados"
+
+msgid "Fuente: Wikipedia, «%s»"
+msgstr "Fonte: Wikipédia, “%s”"
 
 msgid "GIF guardado en %s"
 msgstr "GIF guardado em %s"
@@ -1149,6 +1217,9 @@ msgstr "Guitarra saturada"
 msgid "Guitarras"
 msgstr "Guitarras"
 
+msgid "Género"
+msgstr "Gênero"
+
 msgid "Güiro corto"
 msgstr "Reco-reco curto"
 
@@ -1243,6 +1314,12 @@ msgstr "Jogo: %s"
 
 msgid "Juegos"
 msgstr "Jogos"
+
+msgid "Juegos de azar"
+msgstr "Jogos de azar"
+
+msgid "Jugadores"
+msgstr "Jogadores"
 
 msgid ""
 "Jugando en red como jugador %d.\n"
@@ -1434,6 +1511,9 @@ msgstr ""
 msgid "Los tiles del plano B con prioridad alta se ponen delante, con los del plano A."
 msgstr "Os tiles do plano B com prioridade alta vão para a frente, com os do plano A."
 
+msgid "Lucha"
+msgstr "Luta"
+
 msgid ""
 "Luz lateral sobre los bloques y sombras suaves de cada plano sobre los de detrás.\n"
 "Hace que el relieve se vea también con la cámara de frente."
@@ -1467,6 +1547,9 @@ msgstr "Pontuação enviada: %s"
 
 msgid "Marimba"
 msgstr "Marimba"
+
+msgid "Matamarcianos"
+msgstr "Shoot'em up"
 
 msgid "Medios"
 msgstr "Médios"
@@ -1509,6 +1592,9 @@ msgstr "Música"
 
 msgid "Música en CD (MSU-MD)"
 msgstr "Música em CD (MSU-MD)"
+
+msgid "Música y baile"
+msgstr "Música e dança"
 
 msgid "Ninguna carátula se parece a ese nombre."
 msgstr "Nenhuma capa se parece com esse nome."
@@ -1555,6 +1641,9 @@ msgstr "Não parece uma BIOS: %s"
 msgid "No se encuentra \"%s\"."
 msgstr "Não foi possível encontrar \"%s\"."
 
+msgid "No se ha encontrado este juego en Wikipedia."
+msgstr "Este jogo não foi encontrado na Wikipédia."
+
 msgid "No se ha encontrado ninguna BIOS del Mega CD en esas carpetas."
 msgstr "Nenhuma BIOS do Mega CD foi encontrada nessas pastas."
 
@@ -1591,6 +1680,9 @@ msgstr "Não foi possível carregar o estado: %s"
 
 msgid "No se pudo cargar la partida del anfitrión: %s"
 msgstr "Não foi possível carregar a partida do anfitrião: %s"
+
+msgid "No se pudo conectar con Wikipedia."
+msgstr "Não foi possível conectar à Wikipédia."
 
 msgid "No se pudo conectar con el servidor de carátulas."
 msgstr "Não foi possível conectar ao servidor de capas."
@@ -1784,8 +1876,14 @@ msgstr "Pianos"
 msgid "Pieza del kit"
 msgstr "Peça do kit"
 
+msgid "Pinball"
+msgstr "Pinball"
+
 msgid "Pista"
 msgstr "Faixa"
+
+msgid "Pistola de luz"
+msgstr "Pistola de luz"
 
 msgid "Plano"
 msgstr "Plano"
@@ -1795,6 +1893,9 @@ msgstr "Plano B com prioridade na frente"
 
 msgid "Plano B plano (como el cielo)"
 msgstr "Plano B achatado (como o céu)"
+
+msgid "Plataformas"
+msgstr "Plataforma"
 
 msgid "Platillo"
 msgstr "Prato"
@@ -1820,11 +1921,29 @@ msgstr "Prato de condução 2"
 msgid "Platillo splash"
 msgstr "Prato splash"
 
+msgid "Por año"
+msgstr "Por ano"
+
 msgid "Por conseguir"
 msgstr "A conquistar"
 
+msgid "Por consola"
+msgstr "Por console"
+
+msgid "Por desarrolladora"
+msgstr "Por desenvolvedora"
+
+msgid "Por género"
+msgstr "Por gênero"
+
 msgid "Por internet: abre (redirige) el puerto UDP %d de tu router hacia este ordenador y dale tu IP pública; o usad los dos una red privada como Tailscale o ZeroTier y no hace falta abrir nada."
 msgstr "Pela internet: abra (redirecione) a porta UDP %d do seu roteador para este computador e passe seu IP público; ou usem os dois uma rede privada como Tailscale ou ZeroTier e não é preciso abrir nada."
+
+msgid "Por título"
+msgstr "Por título"
+
+msgid "Preguntas"
+msgstr "Quiz"
 
 msgid "Probando %d de %d: %d canciones"
 msgstr "Testando %d de %d: %d músicas"
@@ -1855,6 +1974,9 @@ msgstr "Clique numa casa e depois na tecla ou no botão do controle. \"+\" adici
 
 msgid "Pulsa una tecla..."
 msgstr "Aperte uma tecla..."
+
+msgid "Puzle"
+msgstr "Quebra-cabeça"
 
 msgid "Pájaros"
 msgstr "Pássaros"
@@ -1926,6 +2048,9 @@ msgstr "Recentes"
 msgid "Recién conseguidos"
 msgstr "Conquistadas há pouco"
 
+msgid "Recopilatorio"
+msgstr "Coletânea"
+
 msgid "Red"
 msgstr "Rede"
 
@@ -1976,6 +2101,9 @@ msgstr "Backspace ou gatilho esquerdo (segurar)  voltar"
 
 msgid "Reverb"
 msgstr "Reverb"
+
+msgid "Rol (RPG)"
+msgstr "RPG"
 
 msgid "Ruido"
 msgstr "Ruído"
@@ -2081,6 +2209,12 @@ msgstr "Silenciar"
 
 msgid "Silencio"
 msgstr "Mudo"
+
+msgid "Simulación"
+msgstr "Simulação"
+
+msgid "Sin carátula"
+msgstr "Sem capa"
 
 msgid "Sin conexión: los logros se enviarán cuando vuelva."
 msgstr "Sem conexão: as conquistas serão enviadas quando ela voltar."
@@ -2196,6 +2330,9 @@ msgstr "Sim, tudo para as sugestões"
 
 msgid "Tab o gatillo derecho (mantener)  avance rápido;  F9  cámara lenta"
 msgstr "Tab ou gatilho direito (segurar)  avanço rápido;  F9  câmera lenta"
+
+msgid "Tablero"
+msgstr "Tabuleiro"
 
 msgid "Taiko"
 msgstr "Taiko"
@@ -2314,6 +2451,9 @@ msgstr "Sua posição: %u de %u"
 msgid "Tuba"
 msgstr "Tuba"
 
+msgid "Título"
+msgstr "Título"
+
 msgid ""
 "Un .vgm o .vgz, o el .zip con todas las canciones del juego de vgmrips.net.\n"
 "Se guarda con las pistas del juego, para tenerlo la próxima vez."
@@ -2332,6 +2472,9 @@ msgstr "Um código Game Genie tem 8 letras (ABCD-EFGH) e um Action Replay é com
 
 msgid "Un código de 4 cifras necesita una dirección par."
 msgstr "Um código de 4 dígitos precisa de um endereço par."
+
+msgid "Un panel a la derecha con la carátula, los datos y la descripción del juego elegido."
+msgstr "Um painel à direita com a capa, os dados e a descrição do jogo escolhido."
 
 msgid "Unidades"
 msgstr "Unidades"
@@ -2365,6 +2508,9 @@ msgstr "Usuário ou senha incorretos."
 
 msgid "Valores por defecto"
 msgstr "Valores padrão"
+
+msgid "Varios"
+msgstr "Vários"
 
 msgid "Velocidad"
 msgstr "Velocidade"
@@ -2416,6 +2562,9 @@ msgstr "Voz \"ooh\""
 
 msgid "Voz sintetizada"
 msgstr "Voz sintetizada"
+
+msgid "Vuelve a buscar la descripción y la captura de este juego en internet."
+msgstr "Procura de novo a descrição e a captura deste jogo na internet."
 
 msgid "Vídeo"
 msgstr "Vídeo"
@@ -2586,6 +2735,7 @@ msgid ""
 "  --biblioteca carpeta   abrir la biblioteca de esa carpeta (se puede repetir)\n"
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
 "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
+"  --lista                con --biblioteca: verla como lista en vez de cuadrícula\n"
 "  --trucos               abrir los trucos del juego, con sus listas de internet\n"
 "  --logros               abrir la ventana de RetroAchievements\n"
 "  --opciones-juego       abrir las opciones propias del juego\n"
@@ -2611,6 +2761,7 @@ msgstr ""
 "  --biblioteca pasta     abrir a biblioteca dessa pasta (pode ser repetido)\n"
 "  --bios                 abrir a janela das BIOS do Mega CD\n"
 "  --buscar-caratula      com --biblioteca: procurar a capa do primeiro jogo\n"
+"  --lista                com --biblioteca: vê-la como lista em vez de grade\n"
 "  --trucos               abrir os truques do jogo, com suas listas da internet\n"
 "  --logros               abrir a janela do RetroAchievements\n"
 "  --opciones-juego       abrir as opções próprias do jogo\n"

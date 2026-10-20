@@ -75,6 +75,7 @@ struct Paths {
     std::string profiles;  // folder for the games' 3D profiles, ending in a separator
     std::string cheats;    // folder for the games' cheat lists
     std::string covers;    // folder for the library's downloaded covers
+    std::string info;      // folder for the library's game data, descriptions and screenshots
     std::string soundfont; // the SoundFont that comes with plumsg, next to the executable
     std::string sound;     // the instrument editor's folder: assignments and recordings
     std::string videos;    // folder for the games' video and GIF recordings
@@ -90,18 +91,18 @@ Paths findPaths() {
         const std::string portable = base + "plumsg.ini";
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
-            return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont,
-                    base + "sonido/", base + "grabaciones/"};
+            return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + "fichas/",
+                    base + kSoundfont, base + "sonido/", base + "grabaciones/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
-        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/", base + kSoundfont,
-                dir + "sonido/", dir + "grabaciones/"};
+        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/", dir + "fichas/",
+                base + kSoundfont, dir + "sonido/", dir + "grabaciones/"};
     }
-    return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + kSoundfont,
-            base + "sonido/", base + "grabaciones/"};
+    return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + "fichas/",
+            base + kSoundfont, base + "sonido/", base + "grabaciones/"};
 }
 
 struct App {
@@ -348,6 +349,7 @@ struct CommandLine {
     std::vector<std::string> library;  // --biblioteca folder (repeatable): start with the library of those folders open
     int filter = -1;         // --filtro ninguno|scanlines|crt
     bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
+    bool libraryList = false;     // --lista: with --biblioteca, show it as a list
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
     bool coverSearch = false;     // --buscar-caratula: with --biblioteca, look for the first game's cover
     bool cheats = false;          // --trucos: start with the game's Trucos window open
@@ -381,6 +383,7 @@ const char* const kHelp = N_(
     "  --biblioteca carpeta   abrir la biblioteca de esa carpeta (se puede repetir)\n"
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
     "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
+    "  --lista                con --biblioteca: verla como lista en vez de cuadrícula\n"
     "  --trucos               abrir los trucos del juego, con sus listas de internet\n"
     "  --logros               abrir la ventana de RetroAchievements\n"
     "  --opciones-juego       abrir las opciones propias del juego\n"
@@ -407,6 +410,7 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--menu-estados") c.stateMenu = true;
         else if (a == "--biblioteca") c.library.push_back(next());
         else if (a == "--descargar-caratulas") c.downloadCovers = true;
+        else if (a == "--lista") c.libraryList = true;
         else if (a == "--bios") c.bios = true;
         else if (a == "--buscar-caratula") c.coverSearch = true;
         else if (a == "--trucos") c.cheats = true;
@@ -548,6 +552,7 @@ int main(int argc, char** argv) {
     app->profilesDir = paths.profiles;
     app->cheatsDir = paths.cheats;
     ui->library().setCoversFolder(paths.covers);
+    ui->gameInfo().setFolder(paths.info);
     auto audio = std::make_unique<Audio>();
     // RetroAchievements: a screenshot run shows its windows but never logs in.
     Achievements achievements([](const std::string& url, const std::string& post, const std::string& agent,
@@ -759,6 +764,7 @@ int main(int argc, char** argv) {
     }
     bool openStateMenu = cmd.stateMenu;
     if (!cmd.library.empty()) settings.libraryFolders = cmd.library;
+    if (cmd.libraryList) settings.libraryList = true;
     if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolders.empty()))
         ui->toggleLibrary();
     if (cmd.bios) ui->openBios();
@@ -1376,7 +1382,7 @@ int main(int argc, char** argv) {
         // library one for its covers.
         const bool libraryReady =
             loops > 3 && (!ui->libraryOpen() || (!downloadCovers && !coverSearch && ui->library().pending() == 0 && loops > 20)) &&
-            !ui->coverSearchBusy() && !ui->cheatsBusy();
+            !ui->coverSearchBusy() && !ui->cheatsBusy() && !ui->libraryInfoBusy();
         if (capturing && libraryReady &&
             (framesRun >= cmd.frames || !app->romLoaded || ui->libraryOpen() ||
              (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {

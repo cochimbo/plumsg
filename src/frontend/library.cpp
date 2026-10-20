@@ -203,6 +203,27 @@ void Library::scan(const std::vector<std::string>& folders) {
     }
 }
 
+bool Library::decodeImage(const std::vector<uint8_t>& data, std::vector<uint32_t>& pixels, int* width, int* height) {
+    return isImage(data) && decode(data, pixels, width, height);
+}
+
+unsigned int Library::uploadTexture(unsigned int texture, const std::vector<uint32_t>& pixels, int width, int height) {
+    if (!texture) gl::GenTextures(1, &texture);
+    gl::BindTexture(gl::TEXTURE_2D, texture);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
+    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8, width, height, 0, gl::RGBA, gl::UNSIGNED_BYTE, pixels.data());
+    return texture;
+}
+
+std::string Library::thumbnailsUrl(ConsoleSystem s, const std::string& kind, bool github) {
+    std::string url = github ? coverSet(s).github : coverSet(s).libretro;
+    const size_t at = url.rfind("Named_Boxarts/");
+    return url.substr(0, at) + kind + "/";
+}
+
 std::string Library::systemCovers(ConsoleSystem s) const {
     const char* sub = coverSet(s).subfolder;
     if (coversFolder_.empty() || !*sub) return coversFolder_;
