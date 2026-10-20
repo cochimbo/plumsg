@@ -17,7 +17,7 @@ constexpr const char* kButtonNames[InputConfig::kButtons] = {"arriba", "abajo", 
                                                              "c", "start", "x", "y", "z", "mode"};
 constexpr const char* kHotkeyNames[InputConfig::kHotkeys] = {
     "efecto_3d", "guardar_estado", "cargar_estado", "ranura_anterior", "ranura_siguiente",
-    "menu_estados", "rebobinar", "avance_rapido", "camara_lenta", "biblioteca", "parar"};
+    "menu_estados", "rebobinar", "avance_rapido", "camara_lenta", "biblioteca", "parar", "contador_fps"};
 
 constexpr int kTriggerThreshold = 16000;  // of 32767: a trigger counts as pressed past halfway
 
@@ -117,6 +117,7 @@ InputConfig InputConfig::defaults() {
     c.hotkeyKeys[static_cast<int>(Hotkey::SlowMotion)] = {SDL_SCANCODE_F9};
     c.hotkeyKeys[static_cast<int>(Hotkey::Library)] = {SDL_SCANCODE_F10};
     c.hotkeyKeys[static_cast<int>(Hotkey::Stop)] = {SDL_SCANCODE_F12};
+    c.hotkeyKeys[static_cast<int>(Hotkey::FpsCounter)] = {SDL_SCANCODE_F};
     return c;
 }
 

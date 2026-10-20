@@ -129,6 +129,8 @@ void Settings::parse(std::istream& in, Settings& s) {
             else if (key == "avance_rapido") s.fastForward = std::clamp(std::atoi(value.c_str()), 2, 10);
             else if (key == "camara_lenta") s.slowMotion = std::clamp(std::atoi(value.c_str()), 10, 90);
             else if (key == "run_ahead") s.runAhead = std::clamp(std::atoi(value.c_str()), 0, kMaxRunAhead);
+            else if (key == "contador_fps") s.fpsCounter = yes(value);
+            else if (key == "contador_fps_esquina") s.fpsCorner = std::clamp(std::atoi(value.c_str()), 0, kFpsCorners - 1);
         } else if (section == "estados") {
             if (key == "ranura") s.stateSlot = std::clamp(std::atoi(value.c_str()), 0, 9);
         } else if (section == "biblioteca") {
@@ -236,6 +238,11 @@ void Settings::write(std::ostream& out) const {
         << "avance_rapido = " << fastForward << "\n"
         << "camara_lenta = " << slowMotion << "\n"
         << "run_ahead = " << runAhead << "\n"
+        << "# contador_fps: el contador de fotogramas por segundo con su gráfica (tecla F).\n"
+        << "# contador_fps_esquina: 0 arriba a la izquierda, 1 arriba a la derecha, 2 abajo a la izquierda,\n"
+        << "# 3 abajo a la derecha.\n"
+        << "contador_fps = " << flag(fpsCounter) << "\n"
+        << "contador_fps_esquina = " << fpsCorner << "\n"
         << "\n[estados]\n"
         << "# ranura: la ranura de estado activa, de 0 a 9.\n"
         << "ranura = " << stateSlot << "\n"
