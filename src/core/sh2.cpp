@@ -24,15 +24,28 @@ uint32_t Sh2::read(uint32_t addr, int size) {
         if (size == 4) return static_cast<uint32_t>(p[0]) << 24 | static_cast<uint32_t>(p[1]) << 16 | p[2] << 8 | p[3];
         return p[0];
     }
+    const int words = size == 4 ? 2 : 1;
+    if (rom_ && addr < 0x40000000 && (addr & 0x1E000000) == 0x02000000) {
+        const uint32_t a = addr & 0x3FFFFF & ~static_cast<uint32_t>(size - 1);
+        if (a + static_cast<uint32_t>(size) <= romLimit_) {
+            const uint8_t* p = rom_->data() + a;
+            const uint32_t v = size == 4   ? static_cast<uint32_t>(p[0]) << 24 | static_cast<uint32_t>(p[1]) << 16 | p[2] << 8 | p[3]
+                               : size == 2 ? static_cast<uint32_t>(p[0] << 8 | p[1])
+                                           : p[0];
+            if (addr >= 0x20000000 || !(ccr_ & 1)) extra_ += romWait_ * words;
+            else if (((addr & 0x1FFFFFFF) >> 4) != lastLine_ && !cacheRead(addr)) extra_ += romWait_ * 8;  // the line, 8 words
+            return v;
+        }
+    }
     switch (addr >> 29) {
         case 0:
             if (ccr_ & 1) {
                 // Through the cache: a hit waits for nothing, a miss fills the whole line
-                // (16 bytes), as many accesses of this size as it takes.
+                // (16 bytes, 8 words).
                 const int before = extra_;
                 const uint32_t v = bus_.sh2Read(*this, addr & ~static_cast<uint32_t>(size - 1), size);
                 if (cacheRead(addr)) extra_ = before;
-                else extra_ += (extra_ - before) * (16 / size - 1);
+                else extra_ = before + (extra_ - before) * 8 / words;
                 return v;
             }
             [[fallthrough]];
@@ -84,6 +97,7 @@ void Sh2::write(uint32_t addr, uint32_t value, int size) {
         case 3: {  // the address array: what is written there is not kept, the entry goes
             const uint32_t way = (ccr_ >> 6) & 3;
             cache_.tags[((addr >> 4) & 63) * 4 + way] = 0;
+            lastLine_ = ~0u;
             return;
         }
         default: return;
@@ -91,6 +105,12 @@ void Sh2::write(uint32_t addr, uint32_t value, int size) {
 }
 
 uint32_t Sh2::fetch(uint32_t addr) {
+    // The common case first: the cartridge, through the cache, in the line just read.
+    if (((addr & 0x1FFFFFFF) >> 4) == lastLine_ && addr < 0x20000000 && rom_ && (ccr_ & 1) &&
+        (addr & 0x1E000000) == 0x02000000) {
+        const uint32_t a = addr & 0x3FFFFE;
+        if (a + 2 <= romLimit_) return static_cast<uint32_t>((*rom_)[a] << 8 | (*rom_)[a + 1]);
+    }
     fetching_ = true;
     const uint32_t op = read(addr, 2);
     fetching_ = false;
@@ -98,22 +118,28 @@ uint32_t Sh2::fetch(uint32_t addr) {
 }
 
 bool Sh2::cacheRead(uint32_t addr) {
+    if ((addr & 0x1FFFFFFF) >> 4 == lastLine_) return true;  // instructions come in a row (callers check it first too)
     const uint32_t set = (addr >> 4) & 63, tag = (addr & 0x1FFFFC00) | 1;
     // With two ways the other two are the data array's RAM.
     const uint32_t ways = (ccr_ & 0x08) ? 2 : 4;
     uint32_t* line = &cache_.tags[set * 4];
     for (uint32_t w = 0; w < ways; ++w)
-        if (line[w] == tag) return true;
+        if (line[w] == tag) {
+            lastLine_ = (addr & 0x1FFFFFFF) >> 4;
+            return true;
+        }
     // ID and OD keep instructions or data out of the cache.
     if (ccr_ & (fetching_ ? 0x02 : 0x04)) return false;
     uint8_t& next = cache_.next[set];
     if (next >= ways) next = 0;
     line[next] = tag;
     next = static_cast<uint8_t>((next + 1) % ways);
+    lastLine_ = (addr & 0x1FFFFFFF) >> 4;
     return false;
 }
 
 void Sh2::cachePurge(uint32_t addr) {
+    lastLine_ = ~0u;
     const uint32_t set = (addr >> 4) & 63, tag = (addr & 0x1FFFFC00) | 1;
     for (uint32_t w = 0; w < 4; ++w)
         if (cache_.tags[set * 4 + w] == tag) cache_.tags[set * 4 + w] = 0;
@@ -139,6 +165,7 @@ void Sh2::reset() {
     bsc_.fill(0);
     pendingTimer_ = timerDue_ = 0;
     cache_ = Cache{};
+    lastLine_ = ~0u;
     unpark();
     onChipIrqs_ = false;
     pc_ = read(0, 4);
@@ -226,7 +253,7 @@ bool Sh2::idle(int cycles) {
 int Sh2::step() {
     extra_ = 0;
     int cycles = 1;
-    if (runDma()) return 1 + extra_;
+    if ((dmac_.dmaor & 1) && runDma()) return 1 + extra_;
     // takeInterrupt() only when something could interrupt: the external level is above
     // the mask, or an on-chip module has its interrupt enabled.
     if (!noIrqNext_ && (irl_ > imask() || onChipIrqs_) && takeInterrupt()) {
@@ -669,13 +696,18 @@ void Sh2::execute(uint16_t op) {
             break;
         }
         case 0xA: {  // BRA
-            if (op == 0xAFFE && !inSlot_ && fetch(pc_ + 2) == 0x0009) {
-                // bra to itself with a nop: only an interrupt gets out, so wait for one
-                // as SLEEP does (returning here).
-                sleeping_ = true;
-                return;
-            }
             const int32_t d = static_cast<int32_t>(static_cast<uint32_t>(op & 0xFFF) << 20) >> 19;
+            if (d <= -4 && d >= -20 && !inSlot_ && fetch(pc_ + 2) == 0x0009) {
+                // bra back over nothing but nops (to itself, or a few nops before), with a
+                // nop in its slot: only an interrupt gets out, so wait for one as SLEEP
+                // does (returning here).
+                bool nops = true;
+                for (uint32_t a = pc_ + 4 + static_cast<uint32_t>(d); a != pc_ && nops; a += 2) nops = fetch(a) == 0x0009;
+                if (nops) {
+                    sleeping_ = true;
+                    return;
+                }
+            }
             delaySlot(pc_ + 4 + static_cast<uint32_t>(d));
             extra_ += 1;
             return;
@@ -775,24 +807,11 @@ void Sh2::flushTimers() {
     static constexpr uint32_t kFrtDiv[4] = {8, 32, 128, 0};
     static constexpr uint32_t kWdtDiv[8] = {2, 64, 128, 256, 512, 1024, 4096, 8192};
     const uint32_t div = kFrtDiv[frt_.tcr & 3];
-    // When the timers have to be run through next: the cycles until the counter moves
-    // past a compare value or overflows (the FRT), or overflows (the WDT).
-    uint32_t due = 0;
-    auto plan = [&] {
-        due = 1u << 30;
-        if (div) {
-            const uint32_t frc = frt_.frc;
-            uint32_t ticks = 0x10000 - frc;  // to the overflow
-            ticks = std::min(ticks, ((frt_.ocra - frc) & 0xFFFF) + 1);
-            ticks = std::min(ticks, ((frt_.ocrb - frc) & 0xFFFF) + 1);
-            due = ticks * div - frt_.counter;
-        }
-        if (wdt_.wtcsr & 0x20) due = std::min(due, (256u - wdt_.wtcnt) * kWdtDiv[wdt_.wtcsr & 7] - wdt_.counter);
-    };
     if (div) {
         frt_.counter += cycles;
-        while (frt_.counter >= div) {
-            frt_.counter -= div;
+        uint32_t n = frt_.counter / div;  // counts to make
+        frt_.counter %= div;
+        auto count = [&] {
             const uint16_t before = frt_.frc;
             frt_.frc = static_cast<uint16_t>(frt_.frc + 1);
             if (frt_.frc == 0) frt_.ftcsr |= 0x02;  // OVF
@@ -801,17 +820,50 @@ void Sh2::flushTimers() {
                 if (frt_.ftcsr & 0x01) frt_.frc = 0;  // CCLRA
             }
             if (before == frt_.ocrb) frt_.ftcsr |= 0x04;  // OCFB
+        };
+        if (!(frt_.ftcsr & 0x01)) {
+            // Counting round 0-0xFFFF: the flags of the values it goes through, at once.
+            auto passes = [&](uint32_t value) { return n > ((value - frt_.frc) & 0xFFFF) || n > 0xFFFF; };
+            if (passes(0xFFFF)) frt_.ftcsr |= 0x02;
+            if (passes(frt_.ocra)) frt_.ftcsr |= 0x08;
+            if (passes(frt_.ocrb)) frt_.ftcsr |= 0x04;
+            frt_.frc = static_cast<uint16_t>(frt_.frc + n);
+        } else {
+            // Cleared at compare match A: once it is back at 0, every period of OCRA + 1
+            // counts is alike, so only the first one and what is left over are counted.
+            while (n && frt_.frc != 0) {
+                count();
+                --n;
+            }
+            const uint32_t period = static_cast<uint32_t>(frt_.ocra) + 1;
+            if (n > period) {
+                for (uint32_t i = 0; i < period; ++i) count();
+                n = (n - period) % period;
+            }
+            while (n--) count();
         }
     }
     if (wdt_.wtcsr & 0x20) {  // TME
         const uint32_t d = kWdtDiv[wdt_.wtcsr & 7];
         wdt_.counter += cycles;
-        while (wdt_.counter >= d) {
-            wdt_.counter -= d;
-            if (++wdt_.wtcnt == 0) wdt_.wtcsr |= 0x80;  // OVF (interval timer mode)
-        }
+        const uint32_t n = wdt_.counter / d;
+        wdt_.counter %= d;
+        if (n >= 256u - wdt_.wtcnt) wdt_.wtcsr |= 0x80;  // OVF (interval timer mode)
+        wdt_.wtcnt = static_cast<uint8_t>(wdt_.wtcnt + n);
     }
-    plan();
+    // When they have to be counted next: when a flag not yet raised would be (a flag
+    // already up stays up whatever the counters do, and they are read through here).
+    uint32_t due = 1u << 30;
+    if (div) {
+        const uint32_t frc = frt_.frc;
+        uint32_t counts = 0x10000;
+        if (!(frt_.ftcsr & 0x02)) counts = std::min(counts, 0x10000 - frc);
+        if (!(frt_.ftcsr & 0x08)) counts = std::min(counts, ((frt_.ocra - frc) & 0xFFFF) + 1);
+        if (!(frt_.ftcsr & 0x04)) counts = std::min(counts, ((frt_.ocrb - frc) & 0xFFFF) + 1);
+        if (counts < 0x10000) due = counts * div - frt_.counter;
+    }
+    if ((wdt_.wtcsr & 0x20) && !(wdt_.wtcsr & 0x80))
+        due = std::min(due, (256u - wdt_.wtcnt) * kWdtDiv[wdt_.wtcsr & 7] - wdt_.counter);
     timerDue_ = std::max<uint32_t>(due, 1);
 }
 
@@ -1005,6 +1057,7 @@ void Sh2::writeIo(uint32_t a, uint8_t v) {
         case 0x092:
             ccr_ = v & ~0x10;
             if (v & 0x10) cache_ = Cache{};  // CP: purge the whole cache
+            lastLine_ = ~0u;
             break;
         case 0x0E0: setHigh(intc_.icr, v); break;
         case 0x0E1: setLow(intc_.icr, v); break;

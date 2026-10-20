@@ -63,6 +63,10 @@ public:
         master_.timingState(ar);
         slave_.timingState(ar);
     }
+    // Turns on the SH-2s' caches, as the boot ROMs do, where they are off (a state from
+    // a version that did not).
+    void bootCache();
+    void setRomView();
     void clearTiming() {
         master_.clearTiming();
         slave_.clearTiming();

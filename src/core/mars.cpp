@@ -131,6 +131,7 @@ void Mars::powerOn() {
 }
 
 void Mars::reset() {
+    setRomView();
     const uint32_t vector4 = io_.vectorLevel4;
     io_ = Io{};
     io_.vectorLevel4 = vector4;
@@ -175,8 +176,24 @@ void Mars::bootSh2s() {
     }
     master_.setVbr(rd(0x3E8, 4));
     slave_.setVbr(rd(0x3EC, 4));
+    bootCache();
+    setRomView();
     comm_[4] = static_cast<uint16_t>(rd(0x18E, 2));  // the checksum, as the BIOS leaves it
     updateIrls();
+}
+
+// The SH-2s read the cartridge straight from the ROM, up to where SRAM or banks could
+// start, with the wait the bus would add (6 cycles a word).
+void Mars::setRomView() {
+    const uint32_t limit = cart_.plainRomBytes();
+    for (Sh2* cpu : {&master_, &slave_}) cpu->setRom(&cart_.rom(), limit, 6);
+}
+
+// The boot ROMs leave the cache on (purged, four ways): many games never touch it, and
+// run from the cartridge as fast as the cache lets them.
+void Mars::bootCache() {
+    for (Sh2* cpu : {&master_, &slave_})
+        if (cpu->read(0xFFFFFE92, 1) == 0) cpu->write(0xFFFFFE92, 0x11, 1);
 }
 
 void Mars::updateIrl(int c) {
@@ -216,10 +233,12 @@ void Mars::runUntil(uint64_t masterClock) {
         if (cpu.parked() || cpu.sleeping()) {
             // Its clock goes on without running it, up to whatever could change what it is
             // waiting for: the PWM's next period, the end of a fill, the other CPU.
+            if (pwm_.nextTick <= ticks) runPwm(ticks);
             uint64_t to = std::min(until, pwm_.nextTick);
             if (vdp_.fillEnd > ticks) to = std::min(to, vdp_.fillEnd);
             to = std::min(to, ticks + static_cast<uint64_t>(cpu.idleLimit()) * kTicksPerSh2Cycle);
-            const uint64_t cycles = std::max<uint64_t>(1, (to - ticks + kTicksPerSh2Cycle - 1) / kTicksPerSh2Cycle);
+            const uint64_t cycles =
+                to > ticks ? (to - ticks + kTicksPerSh2Cycle - 1) / kTicksPerSh2Cycle : 1;
             if (cpu.idle(static_cast<int>(cycles))) {
                 ticks += cycles * kTicksPerSh2Cycle;
                 if (pwm_.nextTick <= ticks) runPwm(ticks);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <string>
@@ -30,6 +31,13 @@ public:
     bool loaded() const { return !rom_.empty(); }
     size_t romSize() const { return rom_.size(); }
     const std::vector<uint8_t>& rom() const { return rom_; }
+    // How much of the ROM, from its start, reads as itself whatever the game does: up to
+    // where SRAM could be mapped, none at all with banks.
+    uint32_t plainRomBytes() const {
+        if (mapper_) return 0;
+        const size_t end = sramPresent_ ? std::min<size_t>(rom_.size(), sramStart_) : rom_.size();
+        return static_cast<uint32_t>(end & ~size_t{1});
+    }
     const std::string& path() const { return path_; }
     const RomHeader& header() const { return header_; }
     uint32_t crc32() const { return crc_; }
