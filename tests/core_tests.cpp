@@ -1838,8 +1838,49 @@ void testRoland() {
     check(has("6 off 69"), "Roland: silenciarlo apaga la nota");
 
     std::array<uint8_t, 28> ops{};
-    check(RolandSound::programFor(ops, 0x07, 40) == 38, "Roland: una nota grave sostenida es un bajo sintetizado");
+    check(RolandSound::programFor(ops, 0x07, 40) == 39, "Roland: una nota grave sostenida y sin modular es un bajo sintetizado");
     check(RolandSound::programFor(ops, 0x07, 72) == 16, "Roland: el algoritmo 7 es un órgano");
+    {
+        // Algorithm 0 (operator 4 the carrier), a carrier that dies away fast.
+        std::array<uint8_t, 28> p{};
+        for (int op = 0; op < 4; ++op) p[static_cast<size_t>(op * 7 + 2)] = 31;  // fastest attack
+        p[3 * 7 + 3] = 24;    // D1R
+        p[3 * 7 + 5] = 0xF0;  // sustain level: silence
+        for (int op = 0; op < 3; ++op) p[static_cast<size_t>(op * 7 + 1)] = 80;  // modulators hardly heard
+        check(RolandSound::programFor(p, 0x00, 72) == 13, "Roland: un sonido seco y suave es un xilófono");
+        RolandSound::Heard kick;
+        for (int i = 0; i < 6; ++i) kick.add(40);
+        kick.held = 6;
+        kick.heldSeconds = 0.3;
+        check(RolandSound::suggest(p, 0x00, kick).drum == 36, "Roland: una nota grave repetida y corta es un bombo");
+        RolandSound::Heard snare = kick;
+        check(RolandSound::suggest(p, 0x38, snare).drum == 38, "Roland: con mucho feedback es una caja");
+        RolandSound::Heard line;
+        for (int n : {40, 43, 45, 47, 40, 43}) line.add(n);
+        line.held = 6;
+        line.heldSeconds = 0.3;
+        check(RolandSound::suggest(p, 0x00, line).program == 33, "Roland: una línea grave que muere es un bajo");
+        // A modulator at 7 times the carrier: a bell.
+        p[0] = 7;
+        p[1] = 20;
+        check(RolandSound::programFor(p, 0x00, 88) == 9, "Roland: un modulador lejano y un sonido que muere es un carillón");
+        // Held, a modulator at twice the carrier: only odd harmonics.
+        std::array<uint8_t, 28> c{};
+        for (int op = 0; op < 4; ++op) c[static_cast<size_t>(op * 7 + 2)] = 31;
+        for (int op = 0; op < 3; ++op) c[static_cast<size_t>(op * 7 + 1)] = 127;
+        c[2 * 7 + 1] = 40;
+        c[2 * 7] = 2;
+        c[3 * 7] = 1;
+        check(RolandSound::programFor(c, 0x00, 67) == 71, "Roland: armónicos impares y suaves es un clarinete");
+        check(RolandSound::programFor(c, 0x30, 67) == 80, "Roland: con feedback el clarinete se vuelve onda cuadrada");
+        RolandSound::Heard pads;
+        for (int i = 0; i < 8; ++i) pads.add(60 + i);
+        pads.chords = 6;
+        c[2 * 7 + 1] = 0;  // bright: a lead
+        c[2 * 7] = 1;
+        check(RolandSound::programFor(c, 0x00, 67) == 81, "Roland: una onda brillante sostenida es un lead");
+        check(RolandSound::suggest(c, 0x00, pads).program == 90, "Roland: si toca acordes es un pad");
+    }
 
     // Instruments chosen by hand: a drum, an octave up, the chip's own sound.
     const auto seenFm = roland.seen();

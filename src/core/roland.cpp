@@ -18,6 +18,9 @@ namespace plumsg {
 
 namespace {
 
+// The console's master clock, which the writes are timed in (PAL's is 1% slower: near
+// enough for how long a note is held).
+constexpr double kMasterClock = 53693175.0;
 constexpr int kBendRange = 12;  // semitones either way, so slides stay one note
 constexpr int kPsgDefault = 80;  // Lead 1 (square): what a PSG tone sounds like
 // A square lead on a GM module is far louder than the PSG next to the FM, and games
@@ -381,7 +384,8 @@ RolandSound::Assignment RolandSound::assignmentFor(uint32_t fingerprint) const {
                 break;
             }
             auto r = rules_.find(fingerprint);
-            rules.program = r != rules_.end() ? r->second : 81;
+            if (r != rules_.end()) return r->second.rules;
+            rules.program = 81;
             break;
         }
     }
@@ -505,29 +509,142 @@ double RolandSound::psgNote(int period, double psgClock) {
     return 69.0 + 12.0 * std::log2(hz / 440.0);
 }
 
-// The rules, until an instrument is assigned by hand: low notes are a bass, every
-// operator heard at once is an organ, a slow attack is strings, a sound that dies away
-// is a piano or a bell, two or three carriers held is brass, and the rest a lead.
-int RolandSound::programFor(const std::array<uint8_t, 28>& ops, uint8_t algorithmFeedback, int note) {
+void RolandSound::Heard::add(int note) {
+    ++notes;
+    ++pitches[static_cast<size_t>(std::clamp(note, 0, 127))];
+}
+
+int RolandSound::Heard::median() const {
+    int count = 0;
+    for (int n = 0; n < 128; ++n)
+        if ((count += pitches[static_cast<size_t>(n)]) * 2 >= notes) return n;
+    return 60;
+}
+
+int RolandSound::Heard::low() const {
+    for (int n = 0; n < 128; ++n)
+        if (pitches[static_cast<size_t>(n)]) return n;
+    return 60;
+}
+
+int RolandSound::Heard::high() const {
+    for (int n = 127; n >= 0; --n)
+        if (pitches[static_cast<size_t>(n)]) return n;
+    return 60;
+}
+
+int RolandSound::Heard::distinct() const {
+    int count = 0;
+    for (uint16_t p : pitches) count += p != 0;
+    return count;
+}
+
+namespace {
+
+// A MUL setting in half steps of the note: 0 is half the note, 1-15 that many times.
+int halves(uint8_t detuneMul) { return (detuneMul & 15) ? 2 * (detuneMul & 15) : 1; }
+
+}  // namespace
+
+// The rules, until an instrument is assigned by hand. First the registers: how the
+// carriers' envelope goes (a slow attack, a sound that dies away, or fast), how bright
+// the modulators make it (their total level and the feedback), and the ratio of their
+// frequency to the carrier's (far and not an octave is a bell; twice it, only odd
+// harmonics, a clarinet or a square). Then how the game plays it: a few pitches, short
+// or falling, of a sound that dies away is a drum; the usual note says whether it is a
+// bass; and once enough notes are heard, chords make it an accompaniment and short
+// notes a pizzicato.
+RolandSound::Assignment RolandSound::suggest(const std::array<uint8_t, 28>& ops, uint8_t algorithmFeedback,
+                                             const Heard& heard) {
     const int algorithm = algorithmFeedback & 7;
     const int feedback = (algorithmFeedback >> 3) & 7;
     // ops: for each operator 1-4, its bytes at 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90.
     int attack = 31, decay = 0, sustainLevel = 0, carriers = 0;
+    bool diesAway = false, fast = false;
     for (int op = 0; op < 4; ++op) {
         if (!(kCarriers[algorithm] & (1 << op))) continue;
         const uint8_t* o = &ops[static_cast<size_t>(op) * 7];
+        const int d1 = o[3] & 0x1F, d2 = o[4] & 0x1F, sl = o[5] >> 4;
         attack = std::min(attack, o[2] & 0x1F);
-        decay = std::max(decay, std::max(o[3] & 0x1F, o[4] & 0x1F));
-        sustainLevel = std::max(sustainLevel, o[5] >> 4);
+        decay = std::max(decay, std::max(d1, d2));
+        sustainLevel = std::max(sustainLevel, sl);
+        // The second decay goes all the way down, whatever the sustain level.
+        diesAway = diesAway || d2 >= 14 || (d1 >= 14 && sl >= 6);
+        fast = fast || d2 >= 20 || (d1 >= 20 && sl >= 8);
         ++carriers;
     }
-    const bool diesAway = decay >= 14 && sustainLevel >= 6;
-    if (note < 48) return diesAway ? 34 : 38;  // Electric Bass (pick), Synth Bass 1
-    if (algorithm == 7) return 16;              // Drawbar Organ
-    if (attack < 18) return 48;                 // String Ensemble 1
-    if (diesAway) return note >= 84 ? 9 : 4;    // Glockenspiel, Electric Piano 1
-    if (carriers >= 2) return 62;               // Synth Brass 1: Brass Section starts too softly to lead
-    return feedback >= 6 ? 30 : 81;             // Distortion Guitar, Lead 2 (sawtooth)
+    // Operator 4 is always a carrier: the modulators are measured against it.
+    const int carrierMul = halves(ops[3 * 7]);
+    double brightness = feedback >= 5 ? 0.5 + 0.15 * (feedback - 5) : 0.0;
+    bool metallic = false, odd = false;
+    for (int op = 0; op < 4; ++op) {
+        if (kCarriers[algorithm] & (1 << op)) continue;
+        const uint8_t* o = &ops[static_cast<size_t>(op) * 7];
+        const double depth = std::clamp((64.0 - (o[1] & 0x7F)) / 64.0, 0.0, 1.0);
+        brightness = std::max(brightness, depth);
+        if (depth < 0.25) continue;
+        const int m = halves(o[0]);
+        const double ratio = static_cast<double>(m) / carrierMul;
+        const bool octaves = m % carrierMul == 0 && ((m / carrierMul) & (m / carrierMul - 1)) == 0;
+        if ((ratio >= 5 && !octaves) || (ratio > 2 && m % carrierMul)) metallic = true;
+        if (m == 2 * carrierMul) odd = true;
+    }
+    const bool bright = brightness >= 0.5, mellow = brightness <= 0.2;
+    const double hold = heard.held ? heard.heldSeconds / heard.held : 0.0;
+
+    Assignment a;
+    const int note = heard.median();
+    if (heard.notes >= 4 && diesAway && heard.distinct() <= 3 && heard.high() - heard.low() <= 5) {
+        const bool swept = heard.held && heard.swept * 2 >= heard.held;
+        const bool noisy = feedback >= 6 || (metallic && brightness >= 0.9);
+        if (hold < 0.15 || swept || noisy) {
+            if (noisy) a.drum = note >= 72 ? 42 : 38;  // Closed Hi-Hat, Acoustic Snare
+            else if (swept ? note < 60 : note < 48) a.drum = 36;  // Bass Drum 1
+            else if (note < 55) a.drum = 45;  // Low Tom
+            else if (note < 62) a.drum = 47;  // Low-Mid Tom
+            else if (note < 74) a.drum = 50;  // High Tom
+            else a.drum = 76;                 // Hi Wood Block
+            return a;
+        }
+    }
+
+    int& p = a.program;
+    if (note < 48 && heard.high() < 60) {
+        if (diesAway) p = fast && bright && feedback >= 4 ? 36 : bright ? 34 : 33;  // Slap, Pick, Finger Bass
+        else p = mellow ? 39 : 38;  // Synth Bass 2, 1
+    } else if (algorithm == 7) {
+        p = feedback >= 5 ? 18 : sustainLevel > 0 && decay > 0 ? 17 : 16;  // Rock, Percussive, Drawbar Organ
+    } else if (attack < 18) {
+        p = attack < 10 ? 89 : mellow ? 52 : 48;  // Pad 2 (warm), Choir Aahs, String Ensemble 1
+    } else if (diesAway) {
+        if (metallic) p = note >= 84 ? 9 : note >= 67 ? 11 : 14;  // Glockenspiel, Vibraphone, Tubular Bells
+        else if (fast && bright) p = feedback >= 5 ? 7 : 25;     // Clavinet, Acoustic Guitar (steel)
+        else if (fast && mellow) p = note >= 72 ? 13 : 12;       // Xylophone, Marimba
+        else p = bright ? 5 : 4;                                 // Electric Piano 2 (the FM one), 1
+    } else if (brightness <= 0.15) {
+        p = 73;  // Flute: hardly modulated, near a sine
+    } else if (odd && !bright) {
+        p = 71;  // Clarinet
+    } else if (carriers >= 2) {
+        p = attack < 24 ? 61 : 62;  // Brass Section; Synth Brass 1, as Brass Section starts too softly to lead
+    } else if (odd) {
+        p = 80;  // Lead 1 (square)
+    } else {
+        p = feedback >= 6 ? (bright ? 30 : 29) : 81;  // Distortion, Overdriven Guitar, Lead 2 (sawtooth)
+    }
+
+    if (heard.notes >= 8) {
+        // It plays chords: an accompaniment, not a lead.
+        if (heard.chords * 3 >= heard.notes && (p == 80 || p == 81)) p = 90;  // Pad 3 (polysynth)
+        if (heard.held >= 4 && hold > 0 && hold < 0.12 && (p == 48 || p == 52 || p == 89)) p = 45;  // Pizzicato Strings
+    }
+    return a;
+}
+
+int RolandSound::programFor(const std::array<uint8_t, 28>& ops, uint8_t algorithmFeedback, int note) {
+    Heard heard;
+    heard.add(note);
+    return suggest(ops, algorithmFeedback, heard).program;
 }
 
 void RolandSound::emit(uint64_t clock, Ev type, int channel, int value, int extra) {
@@ -594,6 +711,8 @@ void RolandSound::noteOn(int voice, uint32_t fingerprint, const Assignment& a, d
     Voice& v = voices_[static_cast<size_t>(voice)];
     v.on = true;
     v.amplitude = amplitude;
+    v.start = clock;
+    v.startNote = v.lowest = note;
     if (v.fingerprint != fingerprint) {
         v.fingerprint = fingerprint;
         updateChipChannels();
@@ -630,6 +749,15 @@ void RolandSound::noteOn(int voice, uint32_t fingerprint, const Assignment& a, d
 
 void RolandSound::noteOff(int voice, uint64_t clock) {
     Voice& v = voices_[static_cast<size_t>(voice)];
+    if (v.on && voice < kFmChannels) {
+        // How long the instrument was held, and whether it fell: for the rules.
+        if (auto r = rules_.find(v.fingerprint); r != rules_.end()) {
+            Heard& h = r->second.heard;
+            ++h.held;
+            if (clock > v.start) h.heldSeconds += static_cast<double>(clock - v.start) / kMasterClock;
+            if (v.startNote - v.lowest >= 3) ++h.swept;
+        }
+    }
     // Drums ring out by themselves, as on a GM module.
     if (v.on && v.midi && !v.drum) emit(clock, Ev::NoteOff, voice, v.note);
     v.on = v.midi = false;
@@ -647,6 +775,7 @@ void RolandSound::expression(int voice, double amplitude, uint64_t clock) {
 
 void RolandSound::pitchTo(int voice, double note, uint64_t clock) {
     Voice& v = voices_[static_cast<size_t>(voice)];
+    if (note > 0) v.lowest = std::min(v.lowest, note);
     if (!v.midi || v.drum || note <= 0) return;
     note += v.octave;
     Channel& c = channels_[static_cast<size_t>(voice)];
@@ -717,11 +846,18 @@ void RolandSound::fmKey(int ch, bool on, const Ym2612& ym, uint64_t clock) {
     const uint32_t fp = fmFingerprint(ch, ym, &ops, &legacy);
     if (legacy != fp) legacy_[fp].insert(legacy);
     const uint8_t algorithmFeedback = ym.reg(chReg(ch, 0xB0));
-    auto r = rules_.find(fp);
-    if (r == rules_.end()) r = rules_.emplace(fp, programFor(ops, algorithmFeedback, static_cast<int>(note))).first;
-    Assignment rules;
-    rules.program = r->second;
-    see(ch, fp, rules, static_cast<int>(std::lround(note)), &ops, algorithmFeedback);
+    Rule& rule = rules_[fp];
+    Heard& heard = rule.heard;
+    heard.add(static_cast<int>(std::lround(note)));
+    // Two more channels on it make a chord; one is most often the melody doubled.
+    int others = 0;
+    for (int o = 0; o < kFmChannels; ++o)
+        others += o != ch && voices_[static_cast<size_t>(o)].on && voices_[static_cast<size_t>(o)].fingerprint == fp;
+    if (others >= 2) ++heard.chords;
+    // The first note gives a guess; what the game does with it settles it.
+    if (heard.notes == 1 || heard.notes == 4 || heard.notes == 8 || heard.notes == 32)
+        rule.rules = suggest(ops, algorithmFeedback, heard);
+    see(ch, fp, rule.rules, static_cast<int>(std::lround(note)), &ops, algorithmFeedback);
     const uint8_t panBits = ym.reg(chReg(ch, 0xB4)) >> 6;  // bit 1 left, bit 0 right
     const int pan = panBits == 2 ? 0 : panBits == 1 ? 127 : 64;
     noteOn(ch, fp, assignmentFor(fp), note, fmAmplitude(ch, ym), pan, clock);
@@ -838,10 +974,10 @@ void RolandSound::opllKey(int ch, const Ym2413& opll, uint64_t clock) {
         }
         if (kindOf(hash) != Kind::Fm || opllInstrument(hash) || hash == 0) hash ^= 0x80000001u;
         fp = hash;
-        if (!rules_.count(fp)) rules_.emplace(fp, note < 48 ? 38 : 81);
+        if (!rules_.count(fp)) rules_[fp].rules.program = note < 48 ? 38 : 81;
     }
     Assignment rules;
-    rules.program = instrument ? kOpllPrograms[instrument - 1] : rules_[fp];
+    rules.program = instrument ? kOpllPrograms[instrument - 1] : rules_[fp].rules.program;
     see(voice, fp, rules, static_cast<int>(std::lround(note)), instrument == 0 ? &ops : nullptr, 0);
     const double amplitude = std::pow(10.0, -3.0 * (opll.reg(0x30 + ch) & 0x0F) / 20.0);  // 3 dB a step
     noteOn(voice, fp, assignmentFor(fp), note, amplitude, 64, clock);

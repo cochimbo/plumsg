@@ -157,9 +157,26 @@ public:
     // The YM2612 was reset mid-frame: its notes stop there.
     void keysOff(uint64_t clock);
 
-    // Picks a General MIDI program (0-127) for an FM instrument from its registers
-    // (the 30 operator bytes and the algorithm/feedback byte) and the first note it
-    // played. Public for the tests.
+    // How the game has played an FM instrument so far: what the rules go by besides
+    // its registers.
+    struct Heard {
+        int notes = 0;
+        std::array<uint16_t, 128> pitches{};  // notes started, by MIDI note
+        int held = 0;                         // notes let go
+        double heldSeconds = 0;               // how long those were held, in all
+        int swept = 0;     // of those, whose pitch fell 3 semitones or more (a kick drum)
+        int chords = 0;    // notes started while two other channels played it too
+        void add(int note);
+        int median() const;
+        int low() const;
+        int high() const;
+        int distinct() const;
+    };
+    // What the rules give an FM instrument (YM2612) from its registers (the 28
+    // operator bytes and the algorithm/feedback byte) and what was heard of it: a
+    // General MIDI program, or a drum. Public for the tests.
+    static Assignment suggest(const std::array<uint8_t, 4 * 7>& ops, uint8_t algorithmFeedback, const Heard& heard);
+    // The program suggest() gives after a single note.
     static int programFor(const std::array<uint8_t, 4 * 7>& ops, uint8_t algorithmFeedback, int note);
     // MIDI note (69 = A 440 Hz, fractional) of a YM2612 frequency setting.
     static double fmNote(int fnum, int block, double chipClock);
@@ -188,6 +205,13 @@ private:
         int volume = 100;
         uint32_t fingerprint = 0;
         double amplitude = 1.0;  // at note on, for the expression after it
+        uint64_t start = 0;      // the clock of the note on
+        double startNote = 0, lowest = 0;  // the chip's pitch then, and its lowest since
+    };
+    // An FM instrument's suggestion and what it comes from.
+    struct Rule {
+        Assignment rules;
+        Heard heard;
     };
     // What each MIDI channel was last set to.
     struct Channel {
@@ -227,7 +251,7 @@ private:
     uint8_t opllAddress_ = 0;
     uint8_t rhythmKeys_ = 0;            // the YM2413's rhythm keys, as last written (0x0E)
     double opllClock_ = 53693175.0 / 15.0;
-    std::map<uint32_t, int> rules_;     // FM fingerprint -> program the rules gave it
+    std::map<uint32_t, Rule> rules_;    // FM fingerprint -> what the rules give it
     Assignments assigned_;              // chosen by hand
     std::map<uint32_t, std::set<uint32_t>> legacy_;  // FM fingerprint -> its old ones heard
     std::set<uint32_t> effects_;        // the game's sound effects
