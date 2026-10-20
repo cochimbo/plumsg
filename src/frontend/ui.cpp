@@ -143,6 +143,7 @@ struct MenuOption {
     bool enabled = true;
     std::function<void(int)> change;
     int effects = 0;  // what a change asks main() for, MenuEffect bits
+    bool arrows = true;  // false for the ones that only do something with A, and have no value
 };
 
 enum MenuEffect {
@@ -1260,7 +1261,7 @@ void Ui::drawStateMenu(const UiState& state, UiActions& out) {
         stateMenu_.repeatAt = SDL_GetTicks() + 70;
     }
     static const char* const kTabNames[StateMenu::kTabs] = {N_("Estados"), N_("Imagen"), "3D", N_("Sonido"),
-                                                            N_("Velocidad")};
+                                                            N_("Velocidad"), N_("Sistema")};
     if (ImGui::BeginTabBar("pestañas")) {
         for (int t = 0; t < StateMenu::kTabs; ++t) {
             const ImGuiTabItemFlags tabFlags =
@@ -1394,7 +1395,7 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
         options.push_back(toggle(N_("Plano B plano (como el cielo)"), r.flatB, kSave, on));
         options.push_back({tr("Valores por defecto"), tr("A: aplicar"), on, [&r](int dir) {
                                if (dir == 0) reset3D(r);
-                           }, kSave});
+                           }, kSave, false});
     } else if (tab == 3) {
         options.push_back(number(N_("Volumen"), settings_.volume, 0, 100, 5, "%.0f%%"));
         options.push_back(toggle(N_("Silenciar"), settings_.mute));
@@ -1409,7 +1410,7 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
         for (int b = 0; b < RolandSound::kEqBands; ++b)
             options.push_back(number(kEqBandNames[b], settings_.equalizer[static_cast<size_t>(b)], -RolandSound::kEqRange,
                                      RolandSound::kEqRange, 1, "%+.0f dB", kSave | kEqualizer, synth));
-    } else {
+    } else if (tab == 4) {
         const bool solo = !state.netSession;
         const bool canChange = !state.netPlaying && !state.hardcore;
         int overclock = 0;
@@ -1442,12 +1443,35 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
         options.push_back(choice(N_("Posición del contador"), settings_.fpsCorner, kFpsCornerNames, Settings::kFpsCorners,
                                  [this](int v) { settings_.fpsCorner = v; }, kSave, settings_.fpsCounter));
         if (state.hardcore) ImGui::TextDisabled("%s", tr("Modo hardcore: sin trucos, cámara lenta ni rebobinado"));
+    } else {
+        // What the Juego menu does, with A only: each closes the menu, and the press that
+        // closed it does not reach the game (main() ignores the buttons still held).
+        const bool solo = state.romLoaded && !state.netPlaying;  // as on the Juego menu
+        options.push_back({tr("Pausa"), state.paused ? tr("A: continuar") : tr("A: pausar"), solo,
+                           [this, &out](int dir) {
+                               if (dir != 0) return;
+                               out.togglePause = true;
+                               stateMenu_.open = false;
+                           }, 0, false});
+        options.push_back({tr("Reiniciar"), tr("A: reiniciar"), solo, [this, &out](int dir) {
+                               if (dir != 0) return;
+                               out.reset = true;
+                               stateMenu_.open = false;
+                           }, 0, false});
+        options.push_back({tr("Parar emulación"), tr("A: salir del juego"), state.romLoaded, [this, &out](int dir) {
+                               if (dir != 0) return;
+                               out.stop = true;
+                               stateMenu_.open = false;
+                           }, 0, false});
+        if (state.romLoaded && state.netPlaying)
+            ImGui::TextDisabled("%s", tr("En una partida en red no se puede pausar ni reiniciar."));
     }
 
     const int count = static_cast<int>(options.size());
     stateMenu_.options = count;
     stateMenu_.option = std::clamp(stateMenu_.option, 0, std::max(0, count - 1));
-    ImGui::TextDisabled("%s", tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
+    ImGui::TextDisabled("%s", tab == StateMenu::kTabs - 1 ? tr("Arriba / abajo: elegir   A / Intro: hacerlo")
+                                                          : tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
     ImGui::Separator();
 
     // The pad's and the keyboard's changes, and the mouse's below, all to one option.
@@ -1487,22 +1511,33 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
         }
         ImGui::BeginDisabled(!o.enabled);
         ImGui::SetCursorPos(ImVec2(start.x + 4, start.y + ImGui::GetStyle().FramePadding.y));
-        ImGui::TextUnformatted(o.label.c_str());
+        // Without what makes the label unique ("Cámara lenta##velocidad").
+        ImGui::TextUnformatted(o.label.c_str(), o.label.c_str() + std::min(o.label.size(), o.label.find("##")));
         ImGui::SetCursorPos(ImVec2(start.x + valueX, start.y));
-        if (ImGui::ArrowButton("##menos", ImGuiDir_Left)) {
+        if (!o.arrows) {
+            ImGui::Dummy(ImVec2(arrow, arrow));
+        } else if (ImGui::ArrowButton("##menos", ImGuiDir_Left)) {
             stateMenu_.option = i;
             apply(i, -1);
         }
         ImGui::SameLine();
         const float textW = ImGui::GetContentRegionAvail().x - arrow - ImGui::GetStyle().ItemSpacing.x;
         const ImVec2 at = ImGui::GetCursorPos();
-        const float w = ImGui::CalcTextSize(o.value.c_str()).x;
-        ImGui::SetCursorPos(ImVec2(at.x + std::max(0.0f, (textW - w) * 0.5f), at.y + ImGui::GetStyle().FramePadding.y));
-        ImGui::TextUnformatted(o.value.c_str());
-        ImGui::SetCursorPos(ImVec2(at.x + textW, at.y));
-        if (ImGui::ArrowButton("##mas", ImGuiDir_Right)) {
-            stateMenu_.option = i;
-            apply(i, 1);
+        if (!o.arrows) {
+            // Nothing to change, only to do: a button with the mouse.
+            if (ImGui::Button(o.value.c_str(), ImVec2(-FLT_MIN, 0))) {
+                stateMenu_.option = i;
+                apply(i, 0);
+            }
+        } else {
+            const float w = ImGui::CalcTextSize(o.value.c_str()).x;
+            ImGui::SetCursorPos(ImVec2(at.x + std::max(0.0f, (textW - w) * 0.5f), at.y + ImGui::GetStyle().FramePadding.y));
+            ImGui::TextUnformatted(o.value.c_str());
+            ImGui::SetCursorPos(ImVec2(at.x + textW, at.y));
+            if (ImGui::ArrowButton("##mas", ImGuiDir_Right)) {
+                stateMenu_.option = i;
+                apply(i, 1);
+            }
         }
         ImGui::EndDisabled();
         ImGui::PopID();

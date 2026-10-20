@@ -274,7 +274,7 @@ private:
     int menuHeight_ = 0;
     Capture capture_;
     struct StateMenu {
-        static constexpr int kTabs = 5;  // Estados, Imagen, 3D, Sonido, Velocidad
+        static constexpr int kTabs = 6;  // Estados, Imagen, 3D, Sonido, Velocidad, Sistema
         bool open = false;
         int selected = 0;
         int slots = 0;
