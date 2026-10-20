@@ -137,8 +137,8 @@ inline std::vector<uint8_t> build() {
 
     // Table: VDP registers, then data blocks, then YM2612 writes.
     e.label("table");
-    for (uint16_t r : {0x8004, 0x8164, 0x8230, 0x832C, 0x8407, 0x8578, 0x8700, 0x8AFF, 0x8B00, 0x8C81, 0x8D3F,
-                       0x8F02, 0x9001, 0x9100, 0x9200})
+    for (uint16_t r : std::initializer_list<uint16_t>{0x8004, 0x8164, 0x8230, 0x832C, 0x8407, 0x8578, 0x8700, 0x8AFF,
+                                                      0x8B00, 0x8C81, 0x8D3F, 0x8F02, 0x9001, 0x9100, 0x9200})
         e.w16(r);
     e.w16(0);
     auto block = [&](uint32_t command, const std::vector<uint16_t>& words) {
@@ -227,7 +227,7 @@ inline std::vector<uint8_t> build() {
 
     // YM2612: one channel, algorithm 7 with only operator 4 audible, 440 Hz, key on.
     std::vector<std::array<uint8_t, 3>> ym = {{0, 0x22, 0}, {0, 0x27, 0}, {0, 0x28, 0}, {0, 0x2B, 0}};
-    for (uint8_t op : {0x00, 0x04, 0x08, 0x0C}) {
+    for (uint8_t op : std::initializer_list<uint8_t>{0x00, 0x04, 0x08, 0x0C}) {
         ym.push_back({0, static_cast<uint8_t>(0x30 + op), 0x01});
         ym.push_back({0, static_cast<uint8_t>(0x40 + op), static_cast<uint8_t>(op == 0x0C ? 0x08 : 0x7F)});
         ym.push_back({0, static_cast<uint8_t>(0x50 + op), 0x1F});

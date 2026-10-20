@@ -2963,8 +2963,8 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             if (ImGui::InputTextWithHint(tr(opt.label), tr("el incluido"), path, sizeof path)) s.soundfont = path;
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "mezcla_chip" || key == "reverb" || key == "chorus") {
-            int& v = key == "mezcla_chip" ? s.chipMix : key == "reverb" ? s.reverb : s.chorus;
-            ImGui::SliderInt(tr(opt.label), &v, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            int& amount = key == "mezcla_chip" ? s.chipMix : key == "reverb" ? s.reverb : s.chorus;
+            ImGui::SliderInt(tr(opt.label), &amount, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "efectos") {
             edited |= ImGui::Checkbox(tr("Efectos de sonido originales"), &s.effectsOriginal);

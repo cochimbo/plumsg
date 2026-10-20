@@ -1384,20 +1384,22 @@ int main(int argc, char** argv) {
         gl::ClearColor(0, 0, 0, 1);
         gl::Clear(gl::COLOR_BUFFER_BIT);
         // The game fills the window below the menu bar; OpenGL counts rows from the bottom.
-        const Viewport game{0, 0, w, std::max(1, h - ui->menuHeight())};
+        const Viewport gameArea{0, 0, w, std::max(1, h - ui->menuHeight())};
         Renderer& view = settings.render.pseudo3d ? *pseudo3d : *renderers[viewIndex()];
         view.setOptions(settings.render);
-        if (app->romLoaded) view.draw(app->console.frame(), game);  // stopped: the start screen
+        if (app->romLoaded) view.draw(app->console.frame(), gameArea);  // stopped: the start screen
         // A recording takes the game's picture before the menus are drawn over it.
         if (video.active() && app->romLoaded) {
             if (recordsConsole()) {
                 const VideoFrameMd& f = app->console.frame();
                 video.addFrame(f.rgba.data(), f.width, f.height, VideoFrameMd::kMaxWidth);
             } else {
-                screen.resize(static_cast<size_t>(game.width) * game.height);
-                gl::ReadPixels(0, 0, game.width, game.height, gl::BGRA, gl::UNSIGNED_INT_8_8_8_8_REV, screen.data());
-                video.addFrame(screen.data() + static_cast<size_t>(game.height - 1) * game.width, game.width, game.height,
-                               -static_cast<ptrdiff_t>(game.width));  // OpenGL's rows go bottom up
+                screen.resize(static_cast<size_t>(gameArea.width) * gameArea.height);
+                gl::ReadPixels(0, 0, gameArea.width, gameArea.height, gl::BGRA, gl::UNSIGNED_INT_8_8_8_8_REV,
+                               screen.data());
+                video.addFrame(screen.data() + static_cast<size_t>(gameArea.height - 1) * gameArea.width,
+                               gameArea.width, gameArea.height,
+                               -static_cast<ptrdiff_t>(gameArea.width));  // OpenGL's rows go bottom up
             }
             if (video.failed()) stopVideo();
         }

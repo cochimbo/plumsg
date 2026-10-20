@@ -8,8 +8,15 @@
 #include <filesystem>
 #include <sstream>
 
+// libchdr's headers trip MSVC's /W4; they are third-party code, so their warnings are muted.
+#ifdef _MSC_VER
+#pragma warning(push, 0)
+#endif
 #include <libchdr/cdrom.h>
 #include <libchdr/chd.h>
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #include "miniz.h"
 
@@ -27,6 +34,12 @@ std::FILE* openFileUtf8(const std::string& path, const char* mode) {
 }
 
 namespace {
+
+// libchdr's CDROM_TRACK_METADATA*_FORMAT, with every %s bounded to the 64-byte buffers it fills, so a
+// damaged or crafted .chd cannot overflow them.
+constexpr const char* kTrackMetadataFormat = "TRACK:%d TYPE:%63s SUBTYPE:%63s FRAMES:%d";
+constexpr const char* kTrackMetadata2Format =
+    "TRACK:%d TYPE:%63s SUBTYPE:%63s FRAMES:%d PREGAP:%d PGTYPE:%63s PGSUB:%63s POSTGAP:%d";
 
 bool seekFile(std::FILE* f, uint64_t offset) {
 #ifdef _WIN32
@@ -381,12 +394,12 @@ bool CdImage::openChd(const std::string& path, std::string* error) {
         uint32_t len = 0;
         if (chd_get_metadata(chd_->file, CDROM_TRACK_METADATA2_TAG, i, meta, sizeof meta - 1, &len, nullptr, nullptr) ==
             CHDERR_NONE) {
-            if (std::sscanf(meta, CDROM_TRACK_METADATA2_FORMAT, &number, type, subtype, &frames, &pregap, pgtype, pgsub,
+            if (std::sscanf(meta, kTrackMetadata2Format, &number, type, subtype, &frames, &pregap, pgtype, pgsub,
                             &postgap) != 8)
                 return fail(tr("el .chd tiene una pista que plumsg no entiende"));
         } else if (chd_get_metadata(chd_->file, CDROM_TRACK_METADATA_TAG, i, meta, sizeof meta - 1, &len, nullptr,
                                     nullptr) == CHDERR_NONE) {
-            if (std::sscanf(meta, CDROM_TRACK_METADATA_FORMAT, &number, type, subtype, &frames) != 4)
+            if (std::sscanf(meta, kTrackMetadataFormat, &number, type, subtype, &frames) != 4)
                 return fail(tr("el .chd tiene una pista que plumsg no entiende"));
         } else {
             break;

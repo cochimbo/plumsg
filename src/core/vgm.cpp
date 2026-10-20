@@ -246,7 +246,7 @@ void VgmWriter::ggStereo(uint8_t value, uint64_t clock) {
 void VgmWriter::fmReset(uint64_t clock) {
     if (!recording_) return;
     wait(clock);
-    for (uint8_t ch : {0, 1, 2, 4, 5, 6}) ymWrite(0, 0x28, ch);
+    for (uint8_t ch : std::initializer_list<uint8_t>{0, 1, 2, 4, 5, 6}) ymWrite(0, 0x28, ch);
 }
 
 std::vector<uint8_t> VgmWriter::finish(uint64_t clock, const std::string& game, bool compress) {

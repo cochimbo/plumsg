@@ -109,7 +109,8 @@ bool writeZip(const std::string& path, const std::vector<std::pair<std::string, 
     mz_zip_archive zip{};
     if (!mz_zip_writer_init_heap(&zip, 0, 0)) return false;
     for (const auto& [name, data] : entries) {
-        mz_zip_writer_add_mem(&zip, name.c_str(), data.data(), data.size(), MZ_DEFAULT_COMPRESSION);
+        mz_zip_writer_add_mem(&zip, name.c_str(), data.data(), data.size(),
+                              static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
     }
     void* buf = nullptr;
     size_t size = 0;

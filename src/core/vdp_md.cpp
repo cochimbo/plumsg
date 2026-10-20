@@ -455,20 +455,20 @@ void VdpMd::drawSprites(int line, int left, int right, LineCells& out, std::arra
             for (int px = 0; px < 8; ++px) {
                 const int x = s.x - 128 + cx * 8 + px;
                 if (x < -left || x >= width + right) continue;
-                const int i = x + left;
+                const int at = x + left;
                 const int tx = hflip ? 7 - px : px;
                 const uint8_t byte = vram_[(pattern + static_cast<uint32_t>(ty * 4 + tx / 2)) & 0xFFFF];
                 const int index = (tx & 1) ? (byte & 15) : (byte >> 4);
                 if (!index) continue;
-                if (out[i].color & 15) {
+                if (out[at].color & 15) {
                     // The console only sees collisions in its own picture.
                     if (!beyond && x >= 0 && x < width) spriteCollision_ = true;
                     continue;
                 }
-                out[i].color = static_cast<uint8_t>(((s.attr >> 13) & 3) * 16 + index);
-                out[i].priority = (s.attr & 0x8000) != 0;
-                out[i].tile = static_cast<uint16_t>(tile);
-                number[i] = static_cast<uint8_t>(s.index);
+                out[at].color = static_cast<uint8_t>(((s.attr >> 13) & 3) * 16 + index);
+                out[at].priority = (s.attr & 0x8000) != 0;
+                out[at].tile = static_cast<uint16_t>(tile);
+                number[at] = static_cast<uint8_t>(s.index);
             }
         }
     }

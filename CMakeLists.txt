@@ -11,6 +11,9 @@ option(PLUMSG_BUILD_FRONTEND "Build the emulator with its window (needs SDL2 and
 
 if(MSVC)
   add_compile_options(/W4 /utf-8)
+  # The CRT's "use the _s variant" deprecation notices (sscanf, fopen, localtime); the calls are bounded
+  # and single-threaded, and the _s variants do not exist outside MSVC.
+  add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 else()
   add_compile_options(-Wall -Wextra)
 endif()

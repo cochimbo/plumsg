@@ -293,7 +293,8 @@ uint16_t MegaCd::readIo(uint32_t addr, bool upper, bool lower) {
         case 0xFF8002: {
             const bool b0 = !io_.wramMode ? !io_.wramSwitch : io_.wramSelect;
             const bool b1 = !io_.wramMode ? io_.wramSwitch : io_.wramSwitchRequest;
-            return static_cast<uint16_t>(b0 | b1 << 1 | io_.wramMode << 2 | io_.wramPriority << 3 | io_.prgProtect << 8);
+            return static_cast<uint16_t>(int{b0} | b1 << 1 | io_.wramMode << 2 | io_.wramPriority << 3 |
+                                         io_.prgProtect << 8);
         }
         case 0xFF8004:
             return static_cast<uint16_t>(cdc_.address | cdc_.transfer.destination << 8 | cdc_.transfer.ready << 14 |
@@ -311,7 +312,8 @@ uint16_t MegaCd::readIo(uint32_t addr, bool upper, bool lower) {
         case 0xFF8036: return static_cast<uint16_t>(cdd_.hostClockEnable << 2 | trackData(cdd_.track) << 8);
         case 0xFF804C: return static_cast<uint16_t>(gpu_.fontBackground | gpu_.fontForeground << 4);
         case 0xFF804E: return gpu_.fontData;
-        case 0xFF8058: return static_cast<uint16_t>(gpu_.repeat | gpu_.tileSize << 1 | gpu_.mapSize << 2 | gpu_.active << 15);
+        case 0xFF8058:
+            return static_cast<uint16_t>(int{gpu_.repeat} | gpu_.tileSize << 1 | gpu_.mapSize << 2 | gpu_.active << 15);
         case 0xFF805A: return static_cast<uint16_t>(((gpu_.mapBase >> 9) & 0x1FF) << 7);
         case 0xFF805C: return gpu_.imageVcells;
         case 0xFF805E: return static_cast<uint16_t>(((gpu_.imageBase >> 5) & 0x1FFF) << 3);
@@ -536,11 +538,13 @@ void MegaCd::writeExternal(uint32_t addr, uint16_t value, bool upper, bool lower
 uint16_t MegaCd::readExternalIo(uint32_t addr) {
     switch (addr) {
         case 0xA12000:
-            return static_cast<uint16_t>(io_.run | io_.request << 1 | external_.pending << 8 | external_.enable << 15);
+            return static_cast<uint16_t>(int{io_.run} | io_.request << 1 | external_.pending << 8 |
+                                         external_.enable << 15);
         case 0xA12002: {
             const bool b0 = !io_.wramMode ? !io_.wramSwitch : io_.wramSelect;
             const bool b1 = !io_.wramMode ? io_.wramSwitch : io_.wramSwitchRequest;
-            return static_cast<uint16_t>(b0 | b1 << 1 | io_.wramMode << 2 | io_.prgBank << 6 | io_.prgProtect << 8);
+            return static_cast<uint16_t>(int{b0} | b1 << 1 | io_.wramMode << 2 | io_.prgBank << 6 |
+                                         io_.prgProtect << 8);
         }
         case 0xA12004:
             return static_cast<uint16_t>(cdc_.transfer.destination << 8 | cdc_.transfer.ready << 14 |

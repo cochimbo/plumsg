@@ -1028,9 +1028,9 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
                     break;
                 }
                 if (f % kFps == 0) {
-                    const auto [start, end] = findLoop(tracker.notes, f, kShortestLoop);
-                    if (start >= 0 && end <= f) {
-                        loopStart = start;
+                    const auto [loopFrom, end] = findLoop(tracker.notes, f, kShortestLoop);
+                    if (loopFrom >= 0 && end <= f) {
+                        loopStart = loopFrom;
                         loopEnd = end;
                         break;
                     }
@@ -1121,10 +1121,10 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             md->cpu().holdMain(hold);
             ask(c, !c.call && !c.ring ? own : firstSong ? firstSong : own);
             for (int f = 0; f < kFps; ++f) frame();
-            std::vector<uint8_t> playing;
-            md->saveState(playing, true);
+            std::vector<uint8_t> snapshot;
+            md->saveState(snapshot, true);
             auto over = [&](uint32_t number) {
-                md->loadState(playing, nullptr);
+                md->loadState(snapshot, nullptr);
                 lock(c, lockFrom, lockTo);
                 md->cpu().holdMain(hold);
                 if (number) ask(c, number);
