@@ -108,9 +108,10 @@ void Settings::parse(std::istream& in, Settings& s) {
             else if (key == "reverb") s.reverb = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "chorus") s.chorus = std::clamp(std::atoi(value.c_str()), 0, 100);
             else if (key == "ecualizador") {
-                std::array<int, 5> eq{};
-                if (std::sscanf(value.c_str(), "%d , %d , %d , %d , %d", &eq[0], &eq[1], &eq[2], &eq[3], &eq[4]) == 5)
-                    for (size_t i = 0; i < eq.size(); ++i) s.equalizer[i] = std::clamp(eq[i], -12, 12);
+                std::array<int, 5> bands{};
+                if (std::sscanf(value.c_str(), "%d , %d , %d , %d , %d", &bands[0], &bands[1], &bands[2], &bands[3],
+                                &bands[4]) == 5)
+                    for (size_t i = 0; i < bands.size(); ++i) s.equalizer[i] = std::clamp(bands[i], -12, 12);
             }
             else if (key == "efectos") s.effectsOriginal = lower(value) == "original";
         } else if (section == "consola") {

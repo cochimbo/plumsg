@@ -80,7 +80,7 @@ inline std::vector<uint8_t> buildMusic(Asking asking = Asking::byQueue) {
     e.w16(0x33FC); e.w16(0x0100); e.w32(0xA11200);     // move.w #$100,$A11200
     e.w16(0x33FC); e.w16(0x8004); e.w32(0xC00004);     // VDP: mode 1
     e.w16(0x33FC); e.w16(0x8164); e.w32(0xC00004);     // VDP: display and VBlank on
-    for (uint8_t op : {0x00, 0x04, 0x08, 0x0C}) {
+    for (uint8_t op : std::initializer_list<uint8_t>{0x00, 0x04, 0x08, 0x0C}) {
         ym(static_cast<uint8_t>(0x30 + op), 0x01);
         ym(static_cast<uint8_t>(0x40 + op), op == 0x0C ? 0x08 : 0x7F);
         ym(static_cast<uint8_t>(0x50 + op), 0x1F);

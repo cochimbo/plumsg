@@ -344,7 +344,7 @@ void Sh2::execute(uint16_t op) {
                     const bool oldQ = (sr_ >> 8) & 1;
                     const bool M = (sr_ >> 9) & 1;
                     bool Q = Rn >> 31;
-                    const uint32_t before = (Rn << 1) | t();
+                    const uint32_t before = (Rn << 1) | uint32_t{t()};
                     uint32_t after;
                     bool carry;
                     if (oldQ == M) {
@@ -449,7 +449,7 @@ void Sh2::execute(uint16_t op) {
                 case 0x23: Rn -= 4; writeL(Rn, vbr_); noIrqNext_ = true; break;
                 case 0x24: {  // ROTCL
                     const bool c = Rn >> 31;
-                    Rn = (Rn << 1) | t();
+                    Rn = (Rn << 1) | uint32_t{t()};
                     setT(c);
                     break;
                 }
