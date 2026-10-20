@@ -946,6 +946,7 @@ int main(int argc, char** argv) {
                     lastHash);
         std::printf("audio hash: %08x\npc: %06x\n", audioHash, md.isMasterSystem() ? md.z80().pc : md.cpu().pc);
         if (md.isMegaCd()) std::printf("sub pc: %06x\n", md.megaCd()->sub().pc);
+        if (md.is32x()) std::printf("sh-2 pc: %08x %08x\n", md.mars()->master().pc(), md.mars()->slave().pc());
         std::printf("speed: %.0f fps (%.1fx)\n", fps, fps / md.refreshRate());
         if (netplay) std::printf("netplay: %ld frames run again, ping %d ms\n", rollbacks, ping);
         for (const std::string& s : failures) std::printf("FAILED: %s\n", s.c_str());
@@ -957,6 +958,9 @@ int main(int argc, char** argv) {
           << ",\n  \"width\": " << f.width << ",\n  \"height\": " << f.height << ",\n  \"hash\": \"" << hex8(lastHash)
           << "\",\n  \"audio_hash\": \"" << hex8(audioHash) << "\",\n  \"pc\": \"" << hex8(md.isMasterSystem() ? md.z80().pc : md.cpu().pc) << "\"";
         if (md.isMegaCd()) j << ",\n  \"sub_pc\": \"" << hex8(md.megaCd()->sub().pc) << "\"";
+        if (md.is32x())
+            j << ",\n  \"master_pc\": \"" << hex8(md.mars()->master().pc()) << "\",\n  \"slave_pc\": \""
+              << hex8(md.mars()->slave().pc()) << "\"";
         j << ",\n  \"fps\": " << static_cast<long>(fps) << ",\n  \"divergence\": " << divergence;
         if (netplay) j << ",\n  \"netplay_rollback_frames\": " << rollbacks << ",\n  \"netplay_ping_ms\": " << ping;
         j << ",\n  \"failures\": [";

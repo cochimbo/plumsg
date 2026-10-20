@@ -196,7 +196,10 @@ void MegaDrive::configureFor(Region r) {
         mixer_.setFmRate(opll_->sampleRate());
         mixer_.setGains(100, 100);
     }
-    if (mars_) mars_->setSampleRate(mixer_.outputRate(), master);
+    if (mars_) {
+        mars_->setSampleRate(mixer_.outputRate(), master);
+        mars_->setPal(isPal);
+    }
     if (mcd_) {
         mcd_->setMasterClock(master);
         mcd_->setSampleRate(mixer_.outputRate());

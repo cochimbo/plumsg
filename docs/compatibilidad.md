@@ -5,7 +5,8 @@ Primera pasada, hecha el 20-10-2026 con la versión 0.0.31-alpha (`main` en 33e7
 7 de Mega CD, 23 de Master System y 10 de Game Gear (un juego en dos regiones cuenta dos
 veces).
 
-**Resultado: 127 de 129 arrancan. No arrancan 2, los dos de 32X (Darxide y Tempo).**
+**Resultado: arrancan los 129.** Darxide y Tempo (32X) no arrancaban en la 0.0.31; ya
+están arreglados (ver abajo).
 
 ## Cómo se ha probado
 
@@ -27,7 +28,7 @@ Para eso hace falta jugar.
 - **Juego**: llega a jugar (o a la demo del juego).
 - **Menús**: llega al título, la introducción o los menús, y responde al mando; el guion
   no pasó de ahí, pero no se vio ningún fallo.
-- **No arranca**: pantalla negra desde el principio.
+- **No arranca**: pantalla negra desde el principio (ahora ninguno).
 
 ## Mega Drive
 
@@ -114,15 +115,15 @@ Para eso hace falta jugar.
 | After Burner Complete | Juego | |
 | Blackthorne | Juego | |
 | Knuckles' Chaotix | Juego | |
-| **Darxide** | **No arranca** | Negro desde el primer fotograma, sin logo de SEGA |
+| Darxide | Juego | Arreglado: antes negro desde el principio (ver abajo) |
 | Doom | Juego | |
 | Kolibri | Menús | |
 | Mortal Kombat II | Juego | |
-| NBA Jam: Tournament Edition | Menús | Guarda en EEPROM. Sin tocar el mando, tras el título se queda en negro (¿la demo?) |
+| NBA Jam: Tournament Edition | Menús | Guarda en EEPROM. Sin tocar el mando, la demo acaba en negro al rato |
 | Pitfall: The Mayan Adventure | Juego | |
 | Space Harrier | Juego | |
 | Star Wars Arcade | Juego | |
-| **Tempo** | **No arranca** | Negro desde el primer fotograma, sin logo de SEGA |
+| Tempo | Juego | Arreglado: antes negro desde el principio (ver abajo) |
 | Virtua Fighter | Juego | |
 | Virtua Racing Deluxe | Juego | |
 
@@ -181,10 +182,22 @@ Para eso hace falta jugar.
 | Sonic The Hedgehog: Triple Trouble | Juego | |
 | Tails Adventures | Juego | |
 
+## Darxide y Tempo
+
+Los dos se quedaban en negro porque el código de arranque del cartucho (el mismo en
+todos los juegos de 32X) daba error, y el juego se paraba:
+
+- **Darxide** solo salió en Europa, así que va en PAL. La 32X decía en su registro de
+  modo que era NTSC, y el código de arranque comprueba que coincida con la Mega Drive.
+  Ahora la 32X dice PAL cuando la consola es PAL.
+- **Tempo** pone a trabajar las SH-2 enseguida, y la segunda escribía en los registros
+  de comunicación antes de que el 68000 leyera allí la suma de comprobación. Ahora las
+  dos SH-2 esperan a que el 68000 la lea y la borre antes de saltar al juego, como con
+  la BIOS de verdad, que tarda en calcularla.
+
 ## Pendiente
 
-- Arreglar Darxide y Tempo (32X).
-- Mirar si NBA Jam TE (32X) debe quedarse en negro tras el título sin tocar el mando.
+- Mirar si NBA Jam TE (32X) debe acabar la demo en negro sin tocar el mando.
 - Jugar a mano los que se quedan en **Menús** y la lista de la sección 9.5 del plan
   (sonido, efectos raster, guardados, 3D).
 - Probar más juegos: esta colección no tiene juegos PAL a 50 Hz ni de 6 botones

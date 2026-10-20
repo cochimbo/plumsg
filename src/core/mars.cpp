@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace plumsg {
 
@@ -32,8 +33,10 @@ Mars::Mars(Cartridge& cart) : cart_(cart) {
 
     // The SH-2 boot ROMs. Every exception vector leads to a loop at 0x200; reset starts
     // at 0x204. The master waits a little (the 68000 is still clearing memory), says
-    // "M_OK" in the first communication words and jumps to the game's master entry; the
-    // slave waits for that, answers "S_OK" and jumps to the slave entry. Copying the
+    // "M_OK" in the first communication words; the slave waits for that and answers
+    // "S_OK". Then both wait for the 68000 to clear the checksum bootSh2s() left in words
+    // 4-5 (the cartridge's start-up code does once it has checked it: a game that starts
+    // sooner can overwrite it first) and jump to the game's entry points. Copying the
     // game's initial program and setting VBR and GBR is done by bootSh2s().
     for (int c = 0; c < 2; ++c) {
         auto& rom = bootRom_[c];
@@ -60,10 +63,13 @@ Mars::Mars(Cartridge& cart) : cart_(cart) {
             0x89FC,  // 20a bt 0x206
             0xD00D,  // 20c mov.l @(0x244),r0      "M_OK"
             0xC208,  // 20e mov.l r0,@(0x20,gbr)
-            0xD20D,  // 210 mov.l @(0x248),r2      where the entry point is
-            0x6822,  // 212 mov.l @r2,r8
-            0x482B,  // 214 jmp @r8
-            0x0009,  // 216 nop
+            0xC60A,  // 210 mov.l @(0x28,gbr),r0   the checksum, until the 68000 clears it
+            0x8800,  // 212 cmp/eq #0,r0
+            0x8BFC,  // 214 bf 0x210
+            0xD20C,  // 216 mov.l @(0x248),r2      where the entry point is
+            0x6822,  // 218 mov.l @r2,r8
+            0x482B,  // 21a jmp @r8
+            0x0009,  // 21c nop
         };
         static constexpr uint16_t kSlave[] = {
             0xD10E,  // 204 mov.l @(0x240),r1      "M_OK"
@@ -72,13 +78,17 @@ Mars::Mars(Cartridge& cart) : cart_(cart) {
             0x8BFC,  // 20a bf 0x206
             0xD00D,  // 20c mov.l @(0x244),r0      "S_OK"
             0xC209,  // 20e mov.l r0,@(0x24,gbr)
-            0xD20D,  // 210 mov.l @(0x248),r2
-            0x6822,  // 212 mov.l @r2,r8
-            0x482B,  // 214 jmp @r8
-            0x0009,  // 216 nop
+            0xC60A,  // 210 mov.l @(0x28,gbr),r0   the same wait as the master's
+            0x8800,  // 212 cmp/eq #0,r0
+            0x8BFC,  // 214 bf 0x210
+            0xD20C,  // 216 mov.l @(0x248),r2
+            0x6822,  // 218 mov.l @r2,r8
+            0x482B,  // 21a jmp @r8
+            0x0009,  // 21c nop
         };
+        static_assert(std::size(kMaster) == std::size(kSlave));
         const uint16_t* code = c == 0 ? kMaster : kSlave;
-        for (uint32_t i = 0; i < 10; ++i) put16(0x204 + i * 2, code[i]);
+        for (uint32_t i = 0; i < std::size(kMaster); ++i) put16(0x204 + i * 2, code[i]);
         if (c == 0) {
             put32(0x240, 0x10000);
             put32(0x244, 0x4D5F4F4B);  // "M_OK"
@@ -495,7 +505,7 @@ bool Mars::readShared(uint32_t reg, uint16_t& v) {
                                       ((pwm_.lcount == 3 || pwm_.rcount == 3) ? 0x8000 : 0));
             return true;
         case 0x100:
-            v = static_cast<uint16_t>(vdp_.mode | (vdp_.lines ? 0x40 : 0) | (vdp_.priority ? 0x80 : 0) | 0x8000);
+            v = static_cast<uint16_t>(vdp_.mode | (vdp_.lines ? 0x40 : 0) | (vdp_.priority ? 0x80 : 0) | (pal_ ? 0 : 0x8000));
             return true;
         case 0x102: v = vdp_.dotshift ? 1 : 0; return true;
         case 0x104: v = vdp_.autofillLength; return true;
