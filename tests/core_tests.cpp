@@ -143,6 +143,98 @@ void testSram() {
     check(cart.read8(0x200001) == 0x5A && cart.hasSaveData(), "SRAM at 0x200000 for small ROMs");
 }
 
+// Talks to a cartridge's serial EEPROM as the games do: bit by bit on its SCL and SDA lines.
+struct I2cMaster {
+    Cartridge& cart;
+    uint32_t sclAddr, sdaAddr;
+    int sclBit, sdaBit;
+    bool scl = true, sda = true;
+    void set(bool c, bool d) {
+        scl = c;
+        sda = d;
+        if (sclAddr == sdaAddr) {
+            cart.write8(sclAddr, static_cast<uint8_t>((c ? 1 << sclBit : 0) | (d ? 1 << sdaBit : 0)));
+        } else {
+            cart.write8(sclAddr, static_cast<uint8_t>(c ? 1 << sclBit : 0));
+            cart.write8(sdaAddr, static_cast<uint8_t>(d ? 1 << sdaBit : 0));
+        }
+    }
+    bool line() const { return (cart.read8(sdaAddr) >> sdaBit) & 1; }
+    void start() { set(true, true); set(true, false); set(false, false); }
+    void stop() { set(false, false); set(true, false); set(true, true); }
+    bool sendByte(uint8_t b) {
+        for (int i = 7; i >= 0; --i) {
+            set(false, (b >> i) & 1);
+            set(true, (b >> i) & 1);
+        }
+        set(false, true);
+        set(true, true);
+        const bool ack = !line();
+        set(false, true);
+        return ack;
+    }
+    uint8_t readByte(bool ack) {
+        uint8_t b = 0;
+        for (int i = 0; i < 8; ++i) {
+            set(false, true);
+            set(true, true);
+            b = static_cast<uint8_t>(b << 1 | (line() ? 1 : 0));
+        }
+        set(false, !ack);
+        set(true, !ack);
+        set(false, true);
+        return b;
+    }
+};
+
+void testEeprom() {
+    // NBA Jam TE (Acclaim, 24C02): SCL on bit 0 of 0x200000, SDA on bit 0 of 0x200001.
+    std::vector<uint8_t> rom = testrom::build();
+    rom.resize(0x300000, 0xFF);
+    const char serial[] = "GM T-81406 -00";
+    std::copy(serial, serial + 14, rom.begin() + 0x180);
+    Cartridge cart;
+    cart.loadData(rom);
+    check(cart.hasEeprom() && cart.saveRam().size() == 256 && !cart.header().hasSram, "EEPROM: found by serial, 256 bytes");
+    I2cMaster m{cart, 0x200000, 0x200001, 0, 0};
+    // The games' first check: SDA reads back what they put on it while the chip is idle.
+    m.set(false, true);
+    const bool high = m.line();
+    m.set(false, false);
+    check(high && !m.line(), "EEPROM: idle SDA follows the 68000");
+    m.start();
+    bool acks = m.sendByte(0xA0) && m.sendByte(0x10);
+    for (uint8_t b : {0x53, 0x6E, 0x61}) acks = acks && m.sendByte(b);
+    m.stop();
+    check(acks && cart.saveRam()[0x10] == 0x53 && cart.saveRam()[0x12] == 0x61 && cart.hasSaveData(),
+          "EEPROM: a page write lands at its word address");
+    m.start();
+    acks = m.sendByte(0xA0) && m.sendByte(0x11);
+    m.start();  // repeated start, then read
+    acks = acks && m.sendByte(0xA1);
+    const uint8_t r1 = m.readByte(true), r2 = m.readByte(false);
+    m.stop();
+    check(acks && r1 == 0x6E && r2 == 0x61, "EEPROM: random read, then the next byte");
+    // Word writes move both lines at once, as the game's start-up code does.
+    cart.write16(0x200000, 0x0101);
+    check(m.line(), "EEPROM: word write reaches both lines");
+
+    // Sega's X24C01 (Wonder Boy in Monster World): both lines on 0x200001, 7-bit address.
+    const char sega[] = "GM G-4060 -00";
+    std::copy(sega, sega + 13, rom.begin() + 0x180);
+    Cartridge ww;
+    ww.loadData(rom);
+    I2cMaster s{ww, 0x200001, 0x200001, 1, 0};
+    s.start();
+    acks = s.sendByte(0x05 << 1) && s.sendByte(0xC3);
+    s.stop();
+    s.start();
+    acks = acks && s.sendByte(0x05 << 1 | 1);
+    const uint8_t r = s.readByte(false);
+    s.stop();
+    check(ww.hasEeprom() && ww.saveRam().size() == 128 && acks && r == 0xC3, "EEPROM: X24C01 write and read");
+}
+
 void testPads() {
     Io io;
     io.reset();
@@ -2469,6 +2561,7 @@ int main() {
     testSmd();
     testZipRom();
     testSram();
+    testEeprom();
     testPads();
     testPsg();
     testVdpPorts();

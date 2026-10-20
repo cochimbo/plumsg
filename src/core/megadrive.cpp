@@ -852,6 +852,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         cart_.state(w);
         block("CART", w.data());
     }
+    if (cart_.hasEeprom()) {
+        StateWriter w;
+        cart_.eepromState(w);
+        block("EEPR", w.data());
+    }
     {
         StateWriter w;
         mixer_.state(w);
@@ -991,6 +996,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("BUS ")) busState(b);
         else if (id == fourcc("IO  ")) io_.state(b);
         else if (id == fourcc("CART")) cart_.state(b);
+        else if (id == fourcc("EEPR")) cart_.eepromState(b);
         else if (id == fourcc("THMB")) thumbnail = data;
         else if (id == fourcc("OVCK")) b(overclock);
         else if (id == fourcc("32X ")) {
