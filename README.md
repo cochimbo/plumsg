@@ -261,7 +261,12 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   siguen sonando como en la consola. El control **Sonido original** deja oír también el FM y el PSG
   por debajo, y **Reverb** y **Chorus** añaden ambiente. Cada instrumento del juego recibe
   un instrumento General MIDI con unas reglas automáticas, que se cambian a mano en el
-  **Editor de instrumentos**. Todo esto se puede cambiar solo para un juego desde sus opciones.
+  **Editor de instrumentos**. Las reglas miran el sonido (su envolvente, lo brillante que es y
+  la relación entre sus operadores: bajos, pianos, campanas, marimbas, flautas, clarinetes,
+  metales, órganos, cuerdas, pads, guitarras...) y cómo lo toca el juego: tras las primeras
+  notas, un sonido corto que repite casi siempre la misma nota pasa a la batería (bombo,
+  caja, toms o charles), el registro habitual dice si es un bajo, los acordes lo hacen un
+  pad y las notas muy cortas, cuerdas en pizzicato. Todo esto se puede cambiar solo para un juego desde sus opciones.
   En la Master System y la Game Gear también: el FM (YM2413) toca sus 15 instrumentos de
   serie como los General MIDI que imitan (violín, guitarra, piano...) y su batería con la
   del SoundFont, y el estéreo de la Game Gear lleva cada canal del PSG a su lado.
