@@ -106,6 +106,57 @@ uint32_t be32(const std::vector<uint8_t>& r, size_t at) {
     return static_cast<uint32_t>(r[at] << 24 | r[at + 1] << 16 | r[at + 2] << 8 | r[at + 3]);
 }
 
+// The cartridges known to save to an EEPROM, by the serial in their header, and how
+// their lines are wired (the same table as Genesis Plus GX's and PicoDrive's).
+struct EepromGame {
+    const char* serial;
+    EepromConfig config;
+};
+
+// Sega's: an X24C01 with SDA on bit 0 and SCL on bit 1 of 0x200001.
+constexpr EepromConfig kSegaEeprom{7, 0x7F, 0x03, 0x200001, 0x200001, 0x200001, 0, 0, 1};
+// Acclaim's first boards: SDA in on bit 0 of 0x200000, SCL and SDA out on bit 1.
+constexpr EepromConfig kAcclaimOld{8, 0xFF, 0xFF, 0x200000, 0x200000, 0x200000, 0, 1, 1};
+// Acclaim's later ones: SCL on bit 0 of 0x200000, SDA on bit 0 of 0x200001.
+constexpr EepromConfig kAcclaim24C02{8, 0xFF, 0xFF, 0x200001, 0x200001, 0x200000, 0, 0, 0};
+constexpr EepromConfig kAcclaim24C16{8, 0x7FF, 0x7FF, 0x200001, 0x200001, 0x200000, 0, 0, 0};
+constexpr EepromConfig kAcclaim24C65{16, 0x1FFF, 0x1FFF, 0x200001, 0x200001, 0x200000, 0, 0, 0};
+
+constexpr EepromGame kEepromGames[] = {
+    {"T-50176", kSegaEeprom},       // Rings of Power
+    {"T-50396", kSegaEeprom},       // NHLPA Hockey '93
+    {"T-50446", kSegaEeprom},       // John Madden Football '93
+    {"T-50516", kSegaEeprom},       // John Madden Football '93 Championship Edition
+    {"T-50606", kSegaEeprom},       // Bill Walsh College Football
+    {"T-12046", kSegaEeprom},       // Mega Man: The Wily Wars
+    {"G-4060", kSegaEeprom},        // Wonder Boy in Monster World
+    {"00001211", kSegaEeprom},      // Sports Talk Baseball
+    {"00004076", kSegaEeprom},      // Honoo no Toukyuuji Dodge Danpei
+    {"G-4524", kSegaEeprom},        // Ninja Burai Densetsu
+    {"00054503", kSegaEeprom},      // Game Toshokan
+    {"T-081326", kAcclaimOld},      // NBA Jam
+    {"T-81033", kAcclaimOld},       // NBA Jam (Japan)
+    {"T-81406", kAcclaim24C02},     // NBA Jam Tournament Edition
+    {"T-8104B", kAcclaim24C02},     // NBA Jam Tournament Edition (32X)
+    {"T-081276", kAcclaim24C02},    // NFL Quarterback Club
+    {"T-81576", kAcclaim24C16},     // NFL Quarterback Club '96
+    {"T-81476", kAcclaim24C65},     // Frank Thomas Big Hurt Baseball
+    {"T-81586", kAcclaim24C65},     // College Slam
+};
+
+const EepromConfig* eepromFor(const std::string& serial) {
+    for (const EepromGame& g : kEepromGames) {
+        const std::string s(g.serial);
+        const size_t at = serial.find(s);
+        // A whole word of the serial ("GM T-50176 -00"), not part of a longer one.
+        if (at == std::string::npos) continue;
+        const size_t end = at + s.size();
+        if ((at == 0 || serial[at - 1] == ' ') && (end == serial.size() || serial[end] == ' ' || serial[end] == '-'))
+            return &g.config;
+    }
+    return nullptr;
+}
+
 }  // namespace
 
 bool Cartridge::loadFile(const std::string& path, std::string* error) {
@@ -157,9 +208,13 @@ void Cartridge::loadData(std::vector<uint8_t> rom) {
     }
 
     // Battery RAM: "RA" at 0x1B0 with its address range, else 64 KB at 0x200000 for ROMs
-    // that leave that space free.
+    // that leave that space free. A game known to have an EEPROM has no RAM.
     sramPresent_ = false;
-    if (rom_.size() >= 0x1BC && rom_[0x1B0] == 'R' && rom_[0x1B1] == 'A') {
+    const EepromConfig* eeprom = eepromFor(header_.serial);
+    eepromPresent_ = eeprom != nullptr;
+    if (eeprom) {
+        eeprom_.configure(*eeprom);
+    } else if (rom_.size() >= 0x1BC && rom_[0x1B0] == 'R' && rom_[0x1B1] == 'A') {
         uint32_t start = be32(rom_, 0x1B4), end = be32(rom_, 0x1B8);
         if (start <= end && end - start < 0x100000 && start >= 0x200000 && start < 0x400000) {
             sramStart_ = start & ~1u;
@@ -167,7 +222,7 @@ void Cartridge::loadData(std::vector<uint8_t> rom) {
             sramPresent_ = true;
         }
     }
-    if (!sramPresent_ && rom_.size() <= 0x200000) {
+    if (!sramPresent_ && !eepromPresent_ && rom_.size() <= 0x200000) {
         sramStart_ = 0x200000;
         sramEnd_ = 0x20FFFF;
         sramPresent_ = true;
@@ -175,8 +230,9 @@ void Cartridge::loadData(std::vector<uint8_t> rom) {
     header_.hasSram = sramPresent_;
     header_.sramStart = sramStart_;
     header_.sramEnd = sramEnd_;
-    sram_.assign(sramPresent_ ? sramEnd_ - sramStart_ + 1 : 0, 0xFF);
+    sram_.assign(eepromPresent_ ? eeprom->sizeMask + 1u : sramPresent_ ? sramEnd_ - sramStart_ + 1 : 0, 0xFF);
     sramUsed_ = false;
+
     mapper_ = rom_.size() > 0x400000;
     reset();
 }
@@ -201,6 +257,7 @@ void Cartridge::reset() {
     sramMapped_ = rom_.size() <= sramStart_ || !sramPresent_;
     sramWritable_ = true;
     for (int i = 0; i < 8; ++i) banks_[i] = static_cast<uint8_t>(i);
+    eeprom_.reset();
 }
 
 bool Cartridge::patchRom(uint32_t offset, uint8_t value, uint8_t* previous) {
@@ -214,24 +271,46 @@ bool Cartridge::sramAt(uint32_t addr) const {
     return sramPresent_ && sramMapped_ && addr >= sramStart_ && addr <= sramEnd_;
 }
 
-uint8_t Cartridge::read8(uint32_t addr) const {
-    addr &= 0x3FFFFF;
-    if (sramAt(addr)) return sram_[addr - sramStart_];
+uint8_t Cartridge::romByte(uint32_t addr) const {
     uint32_t offset = addr;
     if (mapper_) offset = (static_cast<uint32_t>(banks_[addr >> 19]) << 19) | (addr & 0x7FFFF);
     return offset < rom_.size() ? rom_[offset] : 0xFF;
 }
 
+uint8_t Cartridge::read8(uint32_t addr) const {
+    addr &= 0x3FFFFF;
+    if (sramAt(addr)) return sram_[addr - sramStart_];
+    if (eepromPresent_ && addr == eeprom_.config().sdaOutAddr) {
+        // Only the SDA bit comes from the chip; the rest of the byte is the ROM under it.
+        const uint8_t bit = static_cast<uint8_t>(1u << eeprom_.config().sdaOutBit);
+        return static_cast<uint8_t>((romByte(addr) & ~bit) | (eeprom_.sdaLine() ? bit : 0));
+    }
+    return romByte(addr);
+}
+
 uint16_t Cartridge::read16(uint32_t addr) const {
     addr &= 0x3FFFFE;
     if (sramAt(addr)) return static_cast<uint16_t>(sram_[addr - sramStart_] << 8 | sram_[addr + 1 - sramStart_]);
+    if (eepromAt(addr)) return static_cast<uint16_t>(read8(addr) << 8 | read8(addr + 1));
     uint32_t offset = addr;
     if (mapper_) offset = (static_cast<uint32_t>(banks_[addr >> 19]) << 19) | (addr & 0x7FFFF);
     return offset + 1 < rom_.size() ? static_cast<uint16_t>(rom_[offset] << 8 | rom_[offset + 1]) : 0xFFFF;
 }
 
+void Cartridge::eepromLatch(uint32_t addr, uint8_t value, bool& scl, bool& sda) const {
+    const EepromConfig& c = eeprom_.config();
+    if (addr == c.sclAddr) scl = (value >> c.sclBit) & 1;
+    if (addr == c.sdaInAddr) sda = (value >> c.sdaInBit) & 1;
+}
+
 void Cartridge::write8(uint32_t addr, uint8_t value) {
     addr &= 0x3FFFFF;
+    if (eepromAt(addr)) {
+        bool scl = eeprom_.scl(), sda = eeprom_.sda();
+        eepromLatch(addr, value, scl, sda);
+        eeprom_.setLines(scl, sda, sram_, sramUsed_);
+        return;
+    }
     if (!sramAt(addr) || !sramWritable_) return;
     uint8_t& b = sram_[addr - sramStart_];
     if (b != value) sramUsed_ = true;
@@ -239,6 +318,14 @@ void Cartridge::write8(uint32_t addr, uint8_t value) {
 }
 
 void Cartridge::write16(uint32_t addr, uint16_t value) {
+    addr &= 0x3FFFFE;
+    if (eepromAt(addr)) {  // both bytes reach the chip together
+        bool scl = eeprom_.scl(), sda = eeprom_.sda();
+        eepromLatch(addr, static_cast<uint8_t>(value >> 8), scl, sda);
+        eepromLatch(addr | 1, static_cast<uint8_t>(value), scl, sda);
+        eeprom_.setLines(scl, sda, sram_, sramUsed_);
+        return;
+    }
     write8(addr & ~1u, static_cast<uint8_t>(value >> 8));
     write8(addr | 1, static_cast<uint8_t>(value));
 }
@@ -268,6 +355,114 @@ bool Cartridge::writeSave(const std::string& path) const {
     if (!out) return false;
     out.write(reinterpret_cast<const char*>(sram_.data()), static_cast<std::streamsize>(sram_.size()));
     return static_cast<bool>(out);
+}
+
+// ---------------------------------------------------------------------------------
+// I2C EEPROM
+
+void I2cEeprom::reset() {
+    scl_ = sda_ = out_ = true;
+    phase_ = Standby;
+    cycle_ = shift_ = byte_ = 0;
+    sending_ = masterAck_ = false;
+}
+
+void I2cEeprom::setLines(bool scl, bool sda, std::vector<uint8_t>& memory, bool& written) {
+    if (scl_ && scl && sda_ != sda) {
+        // SDA moving while SCL is high: start (falling) or stop (rising) condition.
+        phase_ = sda ? Standby : Device;
+        cycle_ = 0;
+        shift_ = 0;
+        sending_ = false;
+        out_ = true;
+    } else if (!scl_ && scl) {
+        sda_ = sda;
+        clockRise();
+    } else if (scl_ && !scl) {
+        clockFall(memory, written);
+    }
+    scl_ = scl;
+    sda_ = sda;
+}
+
+// The receiver samples SDA while SCL goes high.
+void I2cEeprom::clockRise() {
+    if (phase_ == Standby || phase_ == WaitStop) return;
+    if (cycle_ < 8) {
+        if (!sending_) shift_ = static_cast<uint8_t>(shift_ << 1 | (sda_ ? 1 : 0));
+    } else if (sending_) {
+        masterAck_ = !sda_;
+    }
+    ++cycle_;
+}
+
+// The sender changes SDA while SCL is low.
+void I2cEeprom::clockFall(std::vector<uint8_t>& memory, bool& written) {
+    if (phase_ == Standby || phase_ == WaitStop) return;
+    if (cycle_ == 8) {
+        // A whole byte: the chip acknowledges what it got, or lets the master do it.
+        if (sending_) {
+            out_ = true;
+        } else {
+            received(shift_, memory, written);
+            out_ = phase_ == WaitStop;  // pulls SDA low unless it gave up
+        }
+    } else if (cycle_ == 9) {
+        cycle_ = 0;
+        shift_ = 0;
+        out_ = true;
+        if (sending_) {
+            address_ = static_cast<uint16_t>((address_ + 1) & cfg_.sizeMask);
+            if (!masterAck_) {
+                phase_ = WaitStop;  // the master wants no more
+                sending_ = false;
+                return;
+            }
+        }
+        sending_ = phase_ == Read;
+        if (sending_) {
+            byte_ = address_ < memory.size() ? memory[address_] : 0xFF;
+            out_ = (byte_ >> 7) & 1;
+        }
+    } else if (sending_) {
+        out_ = (byte_ >> (7 - cycle_)) & 1;
+    }
+}
+
+void I2cEeprom::received(uint8_t b, std::vector<uint8_t>& memory, bool& written) {
+    switch (phase_) {
+        case Device:
+            if (cfg_.addressBits == 7) {
+                // X24C01: the word address and the direction, no device byte.
+                address_ = static_cast<uint16_t>((b >> 1) & cfg_.sizeMask);
+                phase_ = (b & 1) ? Read : Write;
+            } else {
+                // 1010 + A10-A8 (or chip select) + direction; the high address bits of the
+                // bigger 24Cxx come in here.
+                if (cfg_.addressBits == 8)
+                    address_ = static_cast<uint16_t>(((b & 0x0E) << 7 | (address_ & 0xFF)) & cfg_.sizeMask);
+                phase_ = (b & 1) ? Read : cfg_.addressBits == 16 ? WordHigh : WordLow;
+            }
+            break;
+        case WordHigh:
+            address_ = static_cast<uint16_t>((b << 8) & cfg_.sizeMask);
+            phase_ = WordLow;
+            break;
+        case WordLow:
+            address_ = static_cast<uint16_t>(((address_ & 0xFF00) | b) & cfg_.sizeMask);
+            phase_ = Write;
+            break;
+        case Write:
+            if (address_ < memory.size()) {
+                uint8_t& m = memory[address_];
+                if (m != b) written = true;
+                m = b;
+            }
+            address_ = static_cast<uint16_t>((address_ & ~cfg_.pageMask) | ((address_ + 1) & cfg_.pageMask));
+            break;
+        default:
+            break;
+    }
 }
 
 }  // namespace plumsg

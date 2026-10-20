@@ -604,8 +604,9 @@ bool Mars::read68k(uint32_t addr, uint16_t& v) {
         }
         // RV gives the 68000 the cartridge where it always is. The first 64 KB stay
         // visible anyway: the games' start-up code turns the adapter on while running
-        // there, which works on the real thing thanks to the 68000's prefetch.
-        if (dreq_.vram || addr < 0x10000) return false;
+        // there, which works on the real thing thanks to the 68000's prefetch. A save
+        // EEPROM's lines are wired to the cartridge's own pins and answer as well.
+        if (dreq_.vram || addr < 0x10000 || cart_.eepromAt(addr)) return false;
         v = 0;
         return true;
     }
@@ -686,7 +687,7 @@ bool Mars::write68k(uint32_t addr, uint16_t v, bool upper, bool lower) {
             }
             return true;
         }
-        return !dreq_.vram && addr >= 0x10000;
+        return !dreq_.vram && addr >= 0x10000 && !cart_.eepromAt(addr);
     }
     if (addr >= 0x800000 && addr < 0xA00000) {
         if (!io_.adapterEnable || vdp_.access || addr < 0x840000 || addr >= 0x880000) return true;

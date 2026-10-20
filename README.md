@@ -27,7 +27,10 @@ Primera versión. Lo que hay:
 - **Sonido**: YM2612 (con [ymfm](https://github.com/aaronsgiles/ymfm)) y PSG, mezclados y
   remuestreados a la salida.
 - **Cartuchos** `.bin`, `.md`, `.gen`, `.smd` (entrelazado) y dentro de `.zip`; SRAM a
-  `.sav` junto a la ROM; mapper de Super Street Fighter II.
+  `.sav` junto a la ROM; la EEPROM serie (I2C) con la que guardan los juegos de Acclaim
+  (NBA Jam, NBA Jam TE también en 32X, NFL Quarterback Club...) y algunos de Sega y EA
+  (Wonder Boy in Monster World, Mega Man: The Wily Wars, John Madden '93...), también a
+  `.sav`; mapper de Super Street Fighter II.
 - **32X** (`.32x`, o un `.bin` con su cabecera): las dos CPU SH-2 con sus módulos
   (división, DMA, temporizadores, puerto serie entre ellas), el VDP de la 32X (los modos de
   píxeles empaquetados, color directo y por tramos, con su paleta y la prioridad frente a
