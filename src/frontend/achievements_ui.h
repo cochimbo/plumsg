@@ -29,8 +29,10 @@ public:
     bool drawMenu(bool romLoaded);
     // The account and list windows; the same return as drawMenu().
     bool drawWindows();
-    // Over the game, below the menu bar (`top` pixels down).
-    void drawOverlay(float top);
+    // Over the game, below the menu bar (`top` pixels down). `gameHidden` while a window
+    // covers the paused game (the library, the states, the file browser): its indicators
+    // belong to the game and wait for it, the notices are still shown.
+    void drawOverlay(float top, bool gameHidden);
     void openAccount() { showAccount_ = true; }
     bool windowOpen() const { return showAccount_ || showList_; }
 

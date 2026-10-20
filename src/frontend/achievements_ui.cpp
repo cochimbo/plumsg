@@ -246,7 +246,7 @@ void AchievementsUi::drawList() {
     ImGui::End();
 }
 
-void AchievementsUi::drawOverlay(float top) {
+void AchievementsUi::drawOverlay(float top, bool gameHidden) {
     receiveBadges();
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
@@ -259,7 +259,7 @@ void AchievementsUi::drawOverlay(float top) {
     const auto& challenges = ra_.challenges();
     const Achievements::Indicator* progress = ra_.progress();
     const auto& trackers = ra_.trackers();
-    if (!challenges.empty() || progress || !trackers.empty()) {
+    if (!gameHidden && (!challenges.empty() || progress || !trackers.empty())) {
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + 10, top + 10), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(0.6f);
         ImGui::Begin("##logros_indicadores", nullptr, flags);

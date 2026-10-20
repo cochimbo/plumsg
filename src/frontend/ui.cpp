@@ -1627,7 +1627,7 @@ void Ui::drawOverlays(const UiState& state) {
         ImGui::End();
     }
     if (state.romLoaded && settings_.fpsCounter && state.fps) drawFpsCounter(*state.fps, badge != nullptr);
-    if (achievements_) achievements_->drawOverlay(top);
+    if (achievements_) achievements_->drawOverlay(top, showLibrary_ || stateMenu_.open || browser_.isOpen());
     if (!toast_.empty() && SDL_TICKS_PASSED(SDL_GetTicks(), toastUntil_)) toast_.clear();
     if (!toast_.empty()) {
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + 10, vp->Pos.y + vp->Size.y - 10), ImGuiCond_Always, ImVec2(0, 1));
