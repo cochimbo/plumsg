@@ -217,6 +217,76 @@ std::string describePatches(const std::vector<CheatPatch>& patches) {
 
 }  // namespace
 
+namespace {
+
+bool fileExists(const char* path) {
+    SDL_RWops* f = SDL_RWFromFile(path, "rb");
+    if (f) SDL_RWclose(f);
+    return f != nullptr;
+}
+
+}  // namespace
+
+// The interface's font: Segoe UI on Windows (it reads better than the built-in bitmap
+// font and covers the accents of every language plumsg speaks: Latin-1 and Latin
+// Extended-A, ç, ã, œ...), with the characters of other scripts that the texts shown
+// have needed (a Japanese name in a game's description, say) taken from the system's
+// fonts for them. Only those characters go in the atlas, so it stays small.
+void Ui::buildFonts() {
+    fontsDirty_ = false;
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->Clear();
+    ImFontGlyphRangesBuilder builder;
+    static const ImWchar base[] = {0x0020, 0x017F, 0x2010, 0x2026, 0};
+    builder.AddRanges(base);
+    for (ImWchar c : fontExtra_) builder.AddChar(c);
+    fontRanges_.clear();
+    builder.BuildRanges(&fontRanges_);
+#ifdef _WIN32
+    const char* const mainFont = "C:\\Windows\\Fonts\\segoeui.ttf";
+    // Japanese, Chinese, Korean and symbols, in that order: the first one with a character gives it.
+    const char* const fallbacks[] = {"C:\\Windows\\Fonts\\YuGothM.ttc", "C:\\Windows\\Fonts\\meiryo.ttc",
+                                     "C:\\Windows\\Fonts\\msgothic.ttc", "C:\\Windows\\Fonts\\msyh.ttc",
+                                     "C:\\Windows\\Fonts\\malgun.ttf", "C:\\Windows\\Fonts\\seguisym.ttf"};
+#else
+    const char* const mainFont = nullptr;  // the built-in font
+    const char* const fallbacks[] = {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                                     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                                     "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                                     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"};
+#endif
+    float size = 13.0f;
+    if (mainFont && fileExists(mainFont)) {
+        size = 18.0f;
+        io.Fonts->AddFontFromFileTTF(mainFont, size, nullptr, fontRanges_.Data);
+    } else {
+        io.Fonts->AddFontDefault();
+    }
+    if (fontExtra_.empty()) return;
+    ImFontConfig merge;
+    merge.MergeMode = true;
+    for (const char* path : fallbacks)
+        if (fileExists(path)) io.Fonts->AddFontFromFileTTF(path, size, &merge, fontRanges_.Data);
+}
+
+// Asks for the characters of `text` (UTF-8) that the font does not have yet; the atlas
+// is made again with them before the next frame.
+void Ui::needGlyphs(const std::string& text) {
+    for (size_t i = 0; i < text.size();) {
+        const unsigned char c = static_cast<unsigned char>(text[i]);
+        unsigned code = c;
+        int extra = 0;
+        if (c >= 0xF0) { code = c & 0x07; extra = 3; }
+        else if (c >= 0xE0) { code = c & 0x0F; extra = 2; }
+        else if (c >= 0xC0) { code = c & 0x1F; extra = 1; }
+        ++i;
+        for (; extra > 0 && i < text.size(); --extra, ++i) code = (code << 6) | (static_cast<unsigned char>(text[i]) & 0x3F);
+        // Beyond the base ranges and within what ImWchar holds.
+        if (code <= 0x17F || (code >= 0x2010 && code <= 0x2026) || code > 0xFFFF) continue;
+        if (fontExtra_.insert(static_cast<ImWchar>(code)).second) fontsDirty_ = true;
+    }
+}
+
 Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& input)
     : window_(window), settings_(settings), input_(input) {
     IMGUI_CHECKVERSION();
@@ -225,16 +295,7 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
     io.IniFilename = nullptr;  // window layout is not worth a second settings file
     ImGui::StyleColorsDark();
     ImGui::GetStyle().WindowRounding = 4.0f;
-#ifdef _WIN32
-    // Segoe UI reads better than the built-in bitmap font; it covers the accents of every
-    // language plumsg speaks (Latin-1 and Latin Extended-A: ç, ã, œ...).
-    const char* font = "C:\\Windows\\Fonts\\segoeui.ttf";
-    if (SDL_RWops* f = SDL_RWFromFile(font, "rb")) {
-        SDL_RWclose(f);
-        static const ImWchar ranges[] = {0x0020, 0x017F, 0x2010, 0x2026, 0};
-        io.Fonts->AddFontFromFileTTF(font, 18.0f, nullptr, ranges);
-    }
-#endif
+    buildFonts();
     ImGui_ImplSDL2_InitForOpenGL(window_, context);
     ImGui_ImplOpenGL3_Init("#version 330 core");
     loadLogo();
@@ -471,6 +532,12 @@ UiActions Ui::frame(const UiState& state) {
         }
     }
 
+    if (fontsDirty_) {
+        // Characters that came in a game's description: the atlas is made again with them.
+        buildFonts();
+        ImGui_ImplOpenGL3_DestroyFontsTexture();
+        ImGui_ImplOpenGL3_CreateFontsTexture();
+    }
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
@@ -2288,6 +2355,7 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     const float coverMax = std::clamp(ImGui::GetContentRegionAvail().y * 0.4f, 140.0f, 320.0f);
     ImDrawList* draw = ImGui::GetWindowDrawList();
 
+    needGlyphs(g.title);
     ImGui::SetWindowFontScale(1.25f);
     ImGui::TextWrapped("%s", g.title.c_str());
     ImGui::SetWindowFontScale(1.0f);
@@ -2359,6 +2427,8 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
         return;
     }
     if (!sheet.description.empty()) {
+        needGlyphs(sheet.description);
+        needGlyphs(sheet.sourceTitle);
         ImGui::TextWrapped("%s", sheet.description.c_str());
         ImGui::Spacing();
         ImGui::TextDisabled("%s", trf("Fuente: Wikipedia, «%s»", sheet.sourceTitle.c_str()).c_str());
