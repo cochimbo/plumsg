@@ -667,11 +667,15 @@ void InstrumentEditor::drawExtraction(EditorRequests& out) {
     SongExtractor::Progress p;
     int saved = 0;
     std::string error;
+    bool done = false;
     {
+        // Done is read with the count: the songs all come at the end, quickly, and one
+        // read before them would be taken for all there are.
         std::lock_guard<std::mutex> lock(extraction_->mutex);
         p = extraction_->progress;
         saved = extraction_->saved;
         error = extraction_->error;
+        done = extraction_->done;
     }
     if (saved != extractionSeen_) {  // new songs: into the list, and the first one open
         extractionSeen_ = saved;
@@ -679,7 +683,7 @@ void InstrumentEditor::drawExtraction(EditorRequests& out) {
         if (!player_.loaded() || track_.path.empty())
             if (!tracks_.empty()) loadTrack(tracks_.front());
     }
-    if (extraction_->done) {
+    if (done) {
         if (extraction_->effects) out.assignmentsChanged = true;  // the game's effects are known now
         if (!extraction_->stop) {
             if (!error.empty())
