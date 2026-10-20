@@ -56,6 +56,18 @@ public:
     const std::array<uint16_t, 8>& comm() const { return comm_; }
     const std::array<uint8_t, 0x40000>& sdram() const { return sdram_; }
 
+    // What only changes how long things take (the SH-2s' caches, their spin loops), a
+    // block of its own in the savestate.
+    template <class Ar>
+    void timingState(Ar& ar) {
+        master_.timingState(ar);
+        slave_.timingState(ar);
+    }
+    void clearTiming() {
+        master_.clearTiming();
+        slave_.clearTiming();
+    }
+
     template <class Ar>
     void state(Ar& ar) {
         master_.state(ar);
@@ -81,6 +93,7 @@ private:
     uint16_t sh2Read16(Sh2& cpu, uint32_t addr);
     void sh2Write16(Sh2& cpu, uint32_t addr, uint16_t value, bool upper, bool lower);
     uint16_t readSysReg(Sh2& cpu, uint32_t addr);
+    uint16_t readSysRegValue(Sh2& cpu, uint32_t reg);
     void writeSysReg(Sh2& cpu, uint32_t addr, uint16_t value, bool upper, bool lower);
     // Registers both sides see the same way: PWM, VDP and palette.
     bool readShared(uint32_t reg, uint16_t& value);
@@ -178,6 +191,8 @@ private:
         double dcInL = 0, dcInR = 0, dcOutL = 0, dcOutR = 0;
     } out_;
     std::vector<int16_t> pwmOut_;
+    uint64_t levelKey_ = ~uint64_t{0};  // what pwmOutput() last worked its levels out from
+    double levelL_ = 0, levelR_ = 0;
 };
 
 }  // namespace plumsg

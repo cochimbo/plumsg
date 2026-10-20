@@ -10,10 +10,17 @@ namespace {
 // Where the IRQ sources sit on the SH-2s' interrupt levels.
 constexpr int kLevels[] = {14, 12, 10, 8, 6};  // VRES, VINT, HINT, CMD, PWM
 
-uint32_t colorOf(uint16_t c) {
+// The 32X's colours (5 bits each of red, green and blue) as RGBA, looked up: there is
+// one for each pixel drawn.
+const std::array<uint32_t, 0x8000> kColors = [] {
+    std::array<uint32_t, 0x8000> t{};
     auto expand = [](uint32_t v) { return (v << 3) | (v >> 2); };
-    return 0xFF000000u | expand(c & 31) << 16 | expand((c >> 5) & 31) << 8 | expand((c >> 10) & 31);
-}
+    for (uint32_t c = 0; c < 0x8000; ++c)
+        t[c] = 0xFF000000u | expand(c & 31) << 16 | expand((c >> 5) & 31) << 8 | expand((c >> 10) & 31);
+    return t;
+}();
+
+uint32_t colorOf(uint16_t c) { return kColors[c & 0x7FFF]; }
 
 }  // namespace
 
@@ -176,7 +183,9 @@ void Mars::updateIrl(int c) {
     int level = 0;
     for (int s = 0; s < kSources; ++s)
         if (irq_[c].enable[s] && irq_[c].active[s]) level = std::max(level, kLevels[s]);
-    (c ? slave_ : master_).setIrl(level);
+    Sh2& cpu = c ? slave_ : master_;
+    cpu.setIrl(level);
+    cpu.unpark();  // the line and the frame move on with these: what it polls may have changed
 }
 
 // ---------------------------------------------------------------------------------
@@ -199,14 +208,33 @@ void Mars::runUntil(uint64_t masterClock) {
         const int c = sh2Ticks_[0] <= sh2Ticks_[1] ? 0 : 1;
         uint64_t& ticks = sh2Ticks_[c];
         if (ticks >= target) break;
-        const uint64_t until = std::min(target, sh2Ticks_[c ^ 1] + kQuantum);
         Sh2& cpu = c ? slave_ : master_;
+        Sh2& other = c ? master_ : slave_;
+        // A CPU parked in a spin loop, or asleep, does not need to keep pace with the other.
+        const bool waiting = other.waiting();
+        const uint64_t until = std::min(target, waiting ? target : sh2Ticks_[c ^ 1] + kQuantum);
+        if (cpu.parked() || cpu.sleeping()) {
+            // Its clock goes on without running it, up to whatever could change what it is
+            // waiting for: the PWM's next period, the end of a fill, the other CPU.
+            uint64_t to = std::min(until, pwm_.nextTick);
+            if (vdp_.fillEnd > ticks) to = std::min(to, vdp_.fillEnd);
+            to = std::min(to, ticks + static_cast<uint64_t>(cpu.idleLimit()) * kTicksPerSh2Cycle);
+            const uint64_t cycles = std::max<uint64_t>(1, (to - ticks + kTicksPerSh2Cycle - 1) / kTicksPerSh2Cycle);
+            if (cpu.idle(static_cast<int>(cycles))) {
+                ticks += cycles * kTicksPerSh2Cycle;
+                if (pwm_.nextTick <= ticks) runPwm(ticks);
+                if (vdp_.fillEnd > 0 && vdp_.fillEnd <= ticks && ticks - cycles * kTicksPerSh2Cycle < vdp_.fillEnd)
+                    cpu.unpark();
+                continue;
+            }
+        }
         do {
             now_ = ticks;
             if (pwm_.nextTick <= now_) runPwm(now_);
             ticks += static_cast<uint64_t>(cpu.step()) * kTicksPerSh2Cycle;
             cpu.setDreq(1, false);  // the PWM's request is a pulse
-        } while (ticks < until);
+            // Woken by what this one did: they take turns again.
+        } while (ticks < until && (!waiting || other.waiting()));
     }
     runPwm(target);
 }
@@ -233,6 +261,8 @@ void Mars::runPwm(uint64_t ticks) {
             };
             pop(pwm_.lfifo, pwm_.lcount, pwm_.lsample);
             pop(pwm_.rfifo, pwm_.rcount, pwm_.rsample);
+            master_.unpark();  // the FIFOs' state, which they may be polling, changed
+            slave_.unpark();
             if (pwm_.periods++ == ((pwm_.timer - 1u) & 15)) {
                 pwm_.periods = 0;
                 for (int c = 0; c < 2; ++c) irq_[c].active[kPwm] = true;
@@ -256,16 +286,31 @@ void Mars::pwmOutput(uint64_t ticks) {
     double dt = static_cast<double>(ticks - pwmTicks_);
     pwmTicks_ = ticks;
     if (out_.ticksPerSample <= 0) return;
-    const double clocks = static_cast<double>(std::max<uint32_t>((pwm_.cycle - 1u) & 0xFFF, 1));
-    auto level = [&](uint8_t mode) -> double {
-        if (mode == 1) return (pwm_.lsample & 0xFFF) / clocks;
-        if (mode == 2) return (pwm_.rsample & 0xFFF) / clocks;
-        return 0;
-    };
-    const double l = level(pwm_.lmode);
-    const double r = pwm_.rmode == 1 ? (pwm_.rsample & 0xFFF) / clocks
-                     : pwm_.rmode == 2 ? (pwm_.lsample & 0xFFF) / clocks
-                                       : 0;
+    // The levels are worked out again only when what they come from changed: this runs
+    // after every slice of time the SH-2s run.
+    const uint64_t key = static_cast<uint64_t>(pwm_.lsample) | static_cast<uint64_t>(pwm_.rsample) << 16 |
+                         static_cast<uint64_t>(pwm_.cycle) << 32 | static_cast<uint64_t>(pwm_.lmode) << 48 |
+                         static_cast<uint64_t>(pwm_.rmode) << 56;
+    if (key != levelKey_) {
+        levelKey_ = key;
+        const double clocks = static_cast<double>(std::max<uint32_t>((pwm_.cycle - 1u) & 0xFFF, 1));
+        auto level = [&](uint8_t mode) -> double {
+            if (mode == 1) return (pwm_.lsample & 0xFFF) / clocks;
+            if (mode == 2) return (pwm_.rsample & 0xFFF) / clocks;
+            return 0;
+        };
+        levelL_ = level(pwm_.lmode);
+        levelR_ = pwm_.rmode == 1 ? (pwm_.rsample & 0xFFF) / clocks
+                  : pwm_.rmode == 2 ? (pwm_.lsample & 0xFFF) / clocks
+                                    : 0;
+    }
+    const double l = levelL_, r = levelR_;
+    if (out_.time + dt < out_.ticksPerSample) {  // the common case: no output sample ends here
+        out_.acc[0] += l * dt;
+        out_.acc[1] += r * dt;
+        out_.time += dt;
+        return;
+    }
     while (dt > 0) {
         const double take = std::min(dt, out_.ticksPerSample - out_.time);
         out_.acc[0] += l * take;
@@ -295,6 +340,8 @@ void Mars::raiseDreq0() {
 }
 
 void Mars::pushFifo(uint16_t value) {
+    master_.unpark();
+    slave_.unpark();
     if (!dreq_.active || dreq_.count >= dreq_.fifo.size()) return;  // lost, as on the real thing
     dreq_.fifo[dreq_.count++] = value;
     if (--dreq_.length == 0) dreq_.active = false;
@@ -302,6 +349,8 @@ void Mars::pushFifo(uint16_t value) {
 }
 
 uint16_t Mars::popFifo() {
+    master_.unpark();
+    slave_.unpark();
     if (!dreq_.count) return 0;
     const uint16_t v = dreq_.fifo[0];
     std::copy(dreq_.fifo.begin() + 1, dreq_.fifo.end(), dreq_.fifo.begin());
@@ -602,6 +651,9 @@ bool Mars::read68k(uint32_t addr, uint16_t& v) {
 bool Mars::write68k(uint32_t addr, uint16_t v, bool upper, bool lower) {
     addr &= 0xFFFFFE;
     now_ = masterTicks_;
+    // Whatever the 68000 writes may be what an SH-2 is waiting for.
+    master_.unpark();
+    slave_.unpark();
     if (addr < 0x400000) {
         if (!io_.adapterEnable) return false;
         if (addr < 0x100) {
@@ -797,6 +849,14 @@ void Mars::sh2Write16(Sh2& cpu, uint32_t addr, uint16_t v, bool upper, bool lowe
 
 uint16_t Mars::readSysReg(Sh2& cpu, uint32_t addr) {
     const uint32_t reg = addr & 0x3FE;
+    const uint16_t v = readSysRegValue(cpu, reg);
+    // Every register but the FIFO's changes only when written or at the moments that
+    // unpark the CPUs (lines, PWM periods, fills): reading one over and over is waiting.
+    if (reg != 0x12) cpu.pollRead(reg, v);
+    return v;
+}
+
+uint16_t Mars::readSysRegValue(Sh2& cpu, uint32_t reg) {
     const Irq& q = irq_[cpu.id()];
     switch (reg) {
         case 0x00:

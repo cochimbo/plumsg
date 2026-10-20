@@ -33,7 +33,10 @@ Primera versión. Lo que hay:
   píxeles empaquetados, color directo y por tramos, con su paleta y la prioridad frente a
   la Mega Drive), el sonido PWM, los registros de comunicación y la FIFO del 68000. No
   hace falta BIOS: plumsg hace lo que hacen las ROM de arranque. En el 3D, la imagen de la
-  32X va plana al fondo y el efecto sigue en los planos de la Mega Drive.
+  32X va plana al fondo y el efecto sigue en los planos de la Mega Drive. La caché de las
+  SH-2 cuenta para el tiempo (leer de la ROM lo que ya está en caché no espera, como en la
+  consola), y una SH-2 que solo espera a que cambie un registro no se emula instrucción a
+  instrucción: su reloj avanza hasta que algo puede cambiarlo.
 - **Master System** (`.sms`, o un `.bin` con su cabecera `TMR SEGA`), como la ejecuta la
   propia Mega Drive: el Z80 y el PSG de la consola con el VDP de la Master System (modo 4:
   fondo con scroll por línea y bloqueos de scroll, tiles delante de los sprites, columna
@@ -109,6 +112,7 @@ Arrastra una ROM o un disco a la ventana, usa **Archivo > Abrir ROM** o abre la 
 | Retroceso (mando: gatillo izquierdo), mantener | Rebobinar |
 | Tab (mando: gatillo derecho), mantener | Avance rápido |
 | F9 | Cámara lenta (activar / desactivar) |
+| F | Contador de FPS con su gráfica (activar / desactivar) |
 | F1 | Reiniciar |
 | F12 | Parar la emulación: cierra el juego y vuelve a la pantalla de inicio (o a la biblioteca) |
 | F2 | Cambiar de vista (2D / capas de depuración) |
@@ -140,6 +144,12 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   lenta (50 %). El sonido acompaña: más agudo al acelerar y más grave a cámara lenta. Al
   rebobinar el juego va hacia atrás fotograma a fotograma, en silencio, y al soltar sigue
   desde ahí.
+- **Juego > Velocidad > Contador de FPS** (F, o en la pestaña Velocidad del menú de
+  estados): los fotogramas por segundo del juego frente a los que debería dar (60 o 50),
+  los cuadros que llegan a la ventana, los milisegundos que tarda en emularse cada
+  fotograma (y qué parte del tiempo de un fotograma son) y los del bucle entero, con dos
+  gráficas de los últimos 10 segundos (FPS y milisegundos, con la línea del objetivo
+  discontinua). **Posición del contador** elige la esquina.
 - **Juego > Latencia > Run-ahead** (desactivado por defecto, de 1 a 4 fotogramas): en cada
   fotograma el juego corre por delante ese número de fotogramas, sin sonido, se ve su
   imagen y vuelve atrás, así lo que pulsas se ve antes. Con 1 suele bastar; cada fotograma

@@ -1,5 +1,6 @@
 #include "sh2.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace plumsg {
@@ -24,7 +25,18 @@ uint32_t Sh2::read(uint32_t addr, int size) {
         return p[0];
     }
     switch (addr >> 29) {
-        case 0: case 1: case 4: case 5:
+        case 0:
+            if (ccr_ & 1) {
+                // Through the cache: a hit waits for nothing, a miss fills the whole line
+                // (16 bytes), as many accesses of this size as it takes.
+                const int before = extra_;
+                const uint32_t v = bus_.sh2Read(*this, addr & ~static_cast<uint32_t>(size - 1), size);
+                if (cacheRead(addr)) extra_ = before;
+                else extra_ += (extra_ - before) * (16 / size - 1);
+                return v;
+            }
+            [[fallthrough]];
+        case 1: case 4: case 5:
             return bus_.sh2Read(*this, addr & 0x1FFFFFFF & ~static_cast<uint32_t>(size - 1), size);
         case 6: {  // the cache's data array, as RAM
             uint32_t v = 0;
@@ -44,6 +56,7 @@ uint32_t Sh2::read(uint32_t addr, int size) {
 }
 
 void Sh2::write(uint32_t addr, uint32_t value, int size) {
+    if (peer_ && peer_->parked_) peer_->unpark();  // it may be waiting for this
     if (fast(addr)) {
         uint8_t* p = fastMemory_ + (addr & fastMask_ & ~static_cast<uint32_t>(size - 1));
         for (int i = 0; i < size; ++i) p[i] = static_cast<uint8_t>(value >> (8 * (size - 1 - i)));
@@ -64,13 +77,47 @@ void Sh2::write(uint32_t addr, uint32_t value, int size) {
             const uint32_t a = addr & ~static_cast<uint32_t>(size - 1);
             for (int i = 0; i < size; ++i) writeIo(a + static_cast<uint32_t>(i), static_cast<uint8_t>(value >> (8 * (size - 1 - i))));
             updateOnChipIrqs();
+            timerDue_ = 0;  // a timer may have been set otherwise: plan them again
             return;
         }
-        default: return;  // purges and the address array: the cache is not simulated
+        case 2: cachePurge(addr); return;  // associative purge of the line
+        case 3: {  // the address array: what is written there is not kept, the entry goes
+            const uint32_t way = (ccr_ >> 6) & 3;
+            cache_.tags[((addr >> 4) & 63) * 4 + way] = 0;
+            return;
+        }
+        default: return;
     }
 }
 
-uint32_t Sh2::fetch(uint32_t addr) { return read(addr, 2); }
+uint32_t Sh2::fetch(uint32_t addr) {
+    fetching_ = true;
+    const uint32_t op = read(addr, 2);
+    fetching_ = false;
+    return op;
+}
+
+bool Sh2::cacheRead(uint32_t addr) {
+    const uint32_t set = (addr >> 4) & 63, tag = (addr & 0x1FFFFC00) | 1;
+    // With two ways the other two are the data array's RAM.
+    const uint32_t ways = (ccr_ & 0x08) ? 2 : 4;
+    uint32_t* line = &cache_.tags[set * 4];
+    for (uint32_t w = 0; w < ways; ++w)
+        if (line[w] == tag) return true;
+    // ID and OD keep instructions or data out of the cache.
+    if (ccr_ & (fetching_ ? 0x02 : 0x04)) return false;
+    uint8_t& next = cache_.next[set];
+    if (next >= ways) next = 0;
+    line[next] = tag;
+    next = static_cast<uint8_t>((next + 1) % ways);
+    return false;
+}
+
+void Sh2::cachePurge(uint32_t addr) {
+    const uint32_t set = (addr >> 4) & 63, tag = (addr & 0x1FFFFC00) | 1;
+    for (uint32_t w = 0; w < 4; ++w)
+        if (cache_.tags[set * 4 + w] == tag) cache_.tags[set * 4 + w] = 0;
+}
 
 // ---------------------------------------------------------------------------------
 // Reset, interrupts and the main step
@@ -90,6 +137,9 @@ void Sh2::reset() {
     intc_ = Intc{};
     ccr_ = sbycr_ = 0;
     bsc_.fill(0);
+    pendingTimer_ = timerDue_ = 0;
+    cache_ = Cache{};
+    unpark();
     onChipIrqs_ = false;
     pc_ = read(0, 4);
     r_[15] = read(4, 4);
@@ -107,8 +157,18 @@ void Sh2::exception(uint32_t vector, uint32_t returnPc) {
 // at the same level go in the order of the manual: IRL, DIVU, DMAC 0 and 1, WDT, SCI,
 // FRT.
 bool Sh2::takeInterrupt() {
-    int level = 0;
     uint32_t vector = 0;
+    const int level = pendingInterrupt(vector);
+    if (level <= imask()) return false;
+    sleeping_ = false;
+    unpark();
+    exception(vector, pc_);
+    sr_ = (sr_ & ~0xF0u) | static_cast<uint32_t>(level) << 4;
+    return true;
+}
+
+int Sh2::pendingInterrupt(uint32_t& vector) const {
+    int level = 0;
     auto offer = [&](int l, uint32_t v) {
         if (l > level) {
             level = l;
@@ -132,10 +192,34 @@ bool Sh2::takeInterrupt() {
             offer(l, intc_.vcrc & 0x7F);  // output compare
         if ((frt_.tier & 0x02) && (frt_.ftcsr & 0x02)) offer(l, (intc_.vcrd >> 8) & 0x7F);  // overflow
     }
-    if (level <= imask()) return false;
-    sleeping_ = false;
-    exception(vector, pc_);
-    sr_ = (sr_ & ~0xF0u) | static_cast<uint32_t>(level) << 4;
+    return level;
+}
+
+void Sh2::pollRead(uint32_t addr, uint32_t value) {
+    if (inSlot_) return;
+    const std::array<uint32_t, 22> cpu = {r_[0], r_[1], r_[2],  r_[3],  r_[4],  r_[5],  r_[6], r_[7],
+                                          r_[8], r_[9], r_[10], r_[11], r_[12], r_[13], r_[14], r_[15],
+                                          pc_,   sr_,   pr_,    gbr_,   mach_,  macl_};
+    if (addr == poll_.addr && value == poll_.value && cpu == poll_.cpu) {
+        parked_ = true;
+        return;
+    }
+    poll_.addr = addr;
+    poll_.value = value;
+    poll_.cpu = cpu;
+}
+
+bool Sh2::idle(int cycles) {
+    runTimers(cycles);
+    if (!(sci_.ssr & 0x80)) sciTransfer();
+    bool dma = false;
+    if ((dmac_.dmaor & 1) && !(dmac_.dmaor & 6))
+        for (int c = 0; c < 2; ++c) dma |= (dmac_.chcr[c] & 3) == 1;
+    uint32_t vector = 0;
+    if (dma || ((irl_ > imask() || onChipIrqs_) && pendingInterrupt(vector) > imask())) {
+        unpark();
+        return false;
+    }
     return true;
 }
 
@@ -685,11 +769,28 @@ bool Sh2::runDma() {
 // ---------------------------------------------------------------------------------
 // Timers and the serial port
 
-void Sh2::runTimers(int cycles) {
+void Sh2::flushTimers() {
+    const uint32_t cycles = pendingTimer_;
+    pendingTimer_ = 0;
     static constexpr uint32_t kFrtDiv[4] = {8, 32, 128, 0};
+    static constexpr uint32_t kWdtDiv[8] = {2, 64, 128, 256, 512, 1024, 4096, 8192};
     const uint32_t div = kFrtDiv[frt_.tcr & 3];
+    // When the timers have to be run through next: the cycles until the counter moves
+    // past a compare value or overflows (the FRT), or overflows (the WDT).
+    uint32_t due = 0;
+    auto plan = [&] {
+        due = 1u << 30;
+        if (div) {
+            const uint32_t frc = frt_.frc;
+            uint32_t ticks = 0x10000 - frc;  // to the overflow
+            ticks = std::min(ticks, ((frt_.ocra - frc) & 0xFFFF) + 1);
+            ticks = std::min(ticks, ((frt_.ocrb - frc) & 0xFFFF) + 1);
+            due = ticks * div - frt_.counter;
+        }
+        if (wdt_.wtcsr & 0x20) due = std::min(due, (256u - wdt_.wtcnt) * kWdtDiv[wdt_.wtcsr & 7] - wdt_.counter);
+    };
     if (div) {
-        frt_.counter += static_cast<uint32_t>(cycles);
+        frt_.counter += cycles;
         while (frt_.counter >= div) {
             frt_.counter -= div;
             const uint16_t before = frt_.frc;
@@ -703,14 +804,15 @@ void Sh2::runTimers(int cycles) {
         }
     }
     if (wdt_.wtcsr & 0x20) {  // TME
-        static constexpr uint32_t kWdtDiv[8] = {2, 64, 128, 256, 512, 1024, 4096, 8192};
         const uint32_t d = kWdtDiv[wdt_.wtcsr & 7];
-        wdt_.counter += static_cast<uint32_t>(cycles);
+        wdt_.counter += cycles;
         while (wdt_.counter >= d) {
             wdt_.counter -= d;
             if (++wdt_.wtcnt == 0) wdt_.wtcsr |= 0x80;  // OVF (interval timer mode)
         }
     }
+    plan();
+    timerDue_ = std::max<uint32_t>(due, 1);
 }
 
 // The serial ports of the two SH-2s are wired to each other on the 32X; a byte written
@@ -728,6 +830,7 @@ void Sh2::sciTransfer() {
 // On-chip registers (0xFFFFFE00-0xFFFFFFFF), byte by byte
 
 uint8_t Sh2::readIo(uint32_t a) {
+    flushTimers();
     auto byteOf = [](uint32_t v, uint32_t addr) { return static_cast<uint8_t>(v >> (8 * (3 - (addr & 3)))); };
     if (a >= 0xFFFFFF00) {
         const uint32_t r = a & 0xFF;
@@ -796,6 +899,7 @@ uint8_t Sh2::readIo(uint32_t a) {
 }
 
 void Sh2::writeIo(uint32_t a, uint8_t v) {
+    flushTimers();
     auto setByte = [](uint32_t& reg, uint32_t addr, uint8_t value) {
         const int shift = 8 * (3 - static_cast<int>(addr & 3));
         reg = (reg & ~(0xFFu << shift)) | static_cast<uint32_t>(value) << shift;
@@ -898,7 +1002,10 @@ void Sh2::writeIo(uint32_t a, uint8_t v) {
             wdt_.rstcsr = 0x1F;
             break;
         case 0x091: sbycr_ = v; break;
-        case 0x092: ccr_ = v & ~0x10; break;
+        case 0x092:
+            ccr_ = v & ~0x10;
+            if (v & 0x10) cache_ = Cache{};  // CP: purge the whole cache
+            break;
         case 0x0E0: setHigh(intc_.icr, v); break;
         case 0x0E1: setLow(intc_.icr, v); break;
         case 0x0E2: setHigh(intc_.ipra, v); break;

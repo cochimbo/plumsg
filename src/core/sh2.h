@@ -22,8 +22,9 @@ public:
 // modules games use: the division unit, the two-channel DMA controller (with the DREQ
 // lines the 32X wires to its FIFO and PWM), the free-running and watchdog timers, the
 // serial port (linked to the other SH-2), the interrupt controller and the cache's
-// data array, which games use as 4 KB of fast RAM. The cache itself is not simulated:
-// memory always reads its current contents.
+// data array, which games use as 4 KB of fast RAM. Of the cache itself only its address
+// array is kept, for the time accesses take: a read of a line it holds costs no wait
+// states, as on the real thing, but memory always reads its current contents.
 class Sh2 {
 public:
     Sh2(Sh2Bus& bus, int id) : bus_(bus), id_(id) {}
@@ -52,6 +53,8 @@ public:
     // A wait state from a slow device during the current access.
     void addCycles(int n) { extra_ += n; }
     bool sleeping() const { return sleeping_; }
+    // Waiting (asleep or parked) with nothing yet to wake it from outside.
+    bool waiting() const { return (sleeping_ || parked_) && irl_ <= imask(); }
 
     uint32_t pc() const { return pc_; }
     uint32_t reg(int n) const { return r_[n]; }
@@ -75,6 +78,7 @@ public:
 
     template <class Ar>
     void state(Ar& ar) {
+        flushTimers();
         ar(r_, pc_, pr_, gbr_, vbr_, mach_, macl_, sr_, sleeping_, noIrqNext_, irl_, dreq_, dataArray_);
         ar(frt_.tier, frt_.ftcsr, frt_.frc, frt_.ocra, frt_.ocrb, frt_.tcr, frt_.tocr, frt_.ficr, frt_.counter,
            frt_.latch);
@@ -85,7 +89,36 @@ public:
         ar(intc_.ipra, intc_.iprb, intc_.vcra, intc_.vcrb, intc_.vcrc, intc_.vcrd, intc_.vcrwdt, intc_.icr);
         ar(ccr_, sbycr_, bsc_);
         updateOnChipIrqs();
+        timerDue_ = 0;  // worked out again at the next step
     }
+    // What only changes how long things take: the cache's address array and the spin
+    // loop the CPU is parked in. Saved apart, since older states have none (the cache
+    // then starts empty and the CPU running).
+    template <class Ar>
+    void timingState(Ar& ar) {
+        ar(cache_.tags, cache_.next, parked_, poll_.addr, poll_.value, poll_.cpu);
+    }
+    void clearTiming() {
+        cache_ = Cache{};
+        unpark();
+    }
+
+    // Spin loops. The bus reports each read of a register whose value it knows will
+    // only change when something writes it (or at times it keeps track of). Two such
+    // reads in a row of the same value, with the CPU in the very same state, mean a loop
+    // that does nothing but wait: the CPU is parked, and the bus moves its clock on
+    // without running it (idle()) until something could change what it reads.
+    void pollRead(uint32_t addr, uint32_t value);
+    bool parked() const { return parked_; }
+    void unpark() {
+        parked_ = false;
+        poll_.addr = ~0u;
+    }
+    // Lets `cycles` go by without running the CPU: the timers count. False if an
+    // interrupt or a DMA transfer needs it (and then it is no longer parked).
+    bool idle(int cycles);
+    // How many cycles it may stay idle before its timers must be looked at.
+    uint32_t idleLimit() const { return timerDue_ > pendingTimer_ ? timerDue_ - pendingTimer_ : 1; }
 
 private:
     uint32_t fetch(uint32_t addr);
@@ -93,9 +126,19 @@ private:
     void delaySlot(uint32_t target);  // runs the instruction after a delayed branch, then jumps
     uint32_t pcRelative() const { return inSlot_ ? slotTarget_ + 2 : pc_ + 4; }
     bool takeInterrupt();
+    int pendingInterrupt(uint32_t& vector) const;  // the level of the one to take (0 none)
     void exception(uint32_t vector, uint32_t returnPc);
     bool runDma();
-    void runTimers(int cycles);
+    // The timers count lazily: cycles are added up and only run through when the next
+    // thing a timer does is due (a compare match, an overflow), or a register is touched.
+    void runTimers(int cycles) {
+        pendingTimer_ += static_cast<uint32_t>(cycles);
+        if (pendingTimer_ >= timerDue_) flushTimers();
+    }
+    void flushTimers();
+    // A read through the cache: whether it holds the line (and if not, it does now).
+    bool cacheRead(uint32_t addr);
+    void cachePurge(uint32_t addr);
     uint8_t readIo(uint32_t addr);
     void writeIo(uint32_t addr, uint8_t value);
     void divide32();
@@ -156,7 +199,22 @@ private:
         uint16_t ipra = 0, iprb = 0, vcra = 0, vcrb = 0, vcrc = 0, vcrd = 0, vcrwdt = 0, icr = 0;
     } intc_;
     uint8_t ccr_ = 0, sbycr_ = 0;
-    std::array<uint8_t, 32> bsc_{};  // bus state controller registers, kept but not acted on
+    std::array<uint8_t, 32> bsc_{};
+    uint32_t pendingTimer_ = 0;  // cycles not yet run through the timers
+    uint32_t timerDue_ = 0;      // pending cycles at which they must be
+    bool fetching_ = false;      // the read is an instruction fetch
+    bool parked_ = false;
+    // The last register read reported, and the CPU's state as it was read.
+    struct Poll {
+        uint32_t addr = ~0u, value = 0;
+        std::array<uint32_t, 22> cpu{};
+    } poll_;
+    // 64 sets of 4 lines of 16 bytes: the address of each line held (bit 0 valid), and
+    // the way the next miss of each set replaces.
+    struct Cache {
+        std::array<uint32_t, 64 * 4> tags{};
+        std::array<uint8_t, 64> next{};
+    } cache_;  // bus state controller registers, kept but not acted on
 };
 
 }  // namespace plumsg

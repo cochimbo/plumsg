@@ -866,6 +866,9 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         StateWriter w;
         mars_->state(w);
         block("32X ", w.data());
+        StateWriter c;
+        mars_->timingState(c);
+        block("32XC", c.data());
     }
     if (mcd_) {
         StateWriter w;
@@ -990,7 +993,13 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("THMB")) thumbnail = data;
         else if (id == fourcc("OVCK")) b(overclock);
         else if (id == fourcc("32X ")) {
-            if (mars_) mars_->state(b);
+            if (mars_) {
+                mars_->state(b);
+                mars_->clearTiming();  // a state without it (older) starts with empty caches
+            }
+        }
+        else if (id == fourcc("32XC")) {
+            if (mars_) mars_->timingState(b);
         }
         else if (id == fourcc("MCD ")) {
             if (mcd_) mcd_->state(b);
