@@ -33,6 +33,7 @@ bool yes(const std::string& v) {
 
 constexpr const char* kScaleNames[] = {"entero", "ajustar", "estirar"};
 constexpr const char* kFilterNames[] = {"ninguno", "scanlines", "crt"};
+constexpr const char* kUpscaleNames[] = {"ninguno", "xbr", "anime4k"};
 constexpr const char* kRegionNames[] = {"auto", "japon", "usa", "europa"};
 constexpr const char* kSystemKeys[] = {"megadrive", "32x", "megacd", "mastersystem", "gamegear"};
 constexpr const char* kLibrarySortKeys[] = {"titulo", "consola", "año", "genero", "desarrolladora"};
@@ -87,7 +88,10 @@ void Settings::parse(std::istream& in, Settings& s) {
                 for (int i = 0; i < 3; ++i)
                     if (lower(value) == kFilterNames[i]) s.render.filter = static_cast<Filter2D>(i);
             } else if (key == "intensidad_filtro") s.render.filterStrength = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
-            else if (read3DKey(key, value, s.render)) continue;
+            else if (key == "reescalado") {
+                for (int i = 0; i < 3; ++i)
+                    if (lower(value) == kUpscaleNames[i]) s.render.upscale = static_cast<Upscale2D>(i);
+            } else if (read3DKey(key, value, s.render)) continue;
             else if (key == "pixeles_cuadrados") s.render.squarePixels = yes(value);
             else if (key == "sin_limite_sprites") s.unlimitedSprites = yes(value);
             else if (key == "pantalla_ancha") {  // as the first version wrote it: no, 16:10 or 16:9
@@ -189,7 +193,9 @@ void Settings::write(std::ostream& out) const {
         << "suavizado = " << flag(render.smooth) << "\n"
         << "# filtro de la vista 2D: ninguno, scanlines o crt. intensidad_filtro: de 0 a 100.\n"
         << "filtro = " << kFilterNames[static_cast<int>(render.filter)] << "\n"
-        << "intensidad_filtro = " << static_cast<int>(render.filterStrength * 100.0f + 0.5f) << "\n";
+        << "intensidad_filtro = " << static_cast<int>(render.filterStrength * 100.0f + 0.5f) << "\n"
+        << "# reescalado (experimental) de la vista 2D: ninguno, xbr o anime4k. Sustituye al filtro.\n"
+        << "reescalado = " << kUpscaleNames[static_cast<int>(render.upscale)] << "\n";
     write3D(out, render);
     out << "# pixeles_cuadrados: no estirar la imagen a 4:3 como la tele.\n"
         << "pixeles_cuadrados = " << flag(render.squarePixels) << "\n"

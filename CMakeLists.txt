@@ -216,6 +216,7 @@ add_executable(plumsg WIN32
   src/frontend/achievements_ui.cpp
   src/render/gl.cpp
   src/render/gl_renderers.cpp
+  src/render/upscale.cpp
 )
 # The plum icon of plumsg.exe (Explorer, taskbar, shortcuts).
 if(WIN32)

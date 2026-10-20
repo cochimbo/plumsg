@@ -349,6 +349,7 @@ struct CommandLine {
     bool stateMenu = false;  // --menu-estados: start with the states menu open
     std::vector<std::string> library;  // --biblioteca folder (repeatable): start with the library of those folders open
     int filter = -1;         // --filtro ninguno|scanlines|crt
+    int upscale = -1;        // --reescalado ninguno|xbr|anime4k
     bool fps = false;        // --fps: with the FPS counter on
     bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
     bool libraryList = false;     // --lista: with --biblioteca, show it as a list
@@ -378,6 +379,7 @@ const char* const kHelp = N_(
     "  --ventana              abrir en ventana (o --windowed)\n"
     "  --3d / --2d            con o sin la vista pseudo-3D\n"
     "  --filtro f             ninguno, scanlines o crt\n"
+    "  --reescalado r         ninguno, xbr o anime4k (experimental)\n"
     "  --fps                  mostrar el contador de FPS con su gráfica\n"
     "  --region r             auto, jp, us o eu\n"
     "  --estado N             cargar el estado guardado N (0-9) del juego\n"
@@ -431,6 +433,10 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--filtro") {
             const std::string f = next();
             c.filter = f == "crt" ? 2 : f == "scanlines" ? 1 : 0;
+        }
+        else if (a == "--reescalado") {
+            const std::string r = next();
+            c.upscale = r == "anime4k" ? 2 : r == "xbr" ? 1 : 0;
         }
         else if (a == "--pantalla-completa" || a == "--fullscreen") c.fullscreen = 1;
         else if (a == "--ventana" || a == "--windowed") c.fullscreen = 0;
@@ -490,6 +496,7 @@ int main(int argc, char** argv) {
         if (cmd.tilt > -1000) settings.render.tilt = cmd.tilt;
         if (cmd.yaw > -1000) settings.render.yaw = cmd.yaw;
         if (cmd.filter >= 0) settings.render.filter = static_cast<Filter2D>(cmd.filter);
+        if (cmd.upscale >= 0) settings.render.upscale = static_cast<Upscale2D>(cmd.upscale);
         if (cmd.fps) settings.fpsCounter = true;
     };
     applyCommandLine();

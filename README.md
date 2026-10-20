@@ -78,6 +78,7 @@ Primera versión. Lo que hay:
   allá de los bordes de la pantalla.
 - **Overclock**: el procesador de la consola va más rápido, para los juegos que se ralentizan.
 - **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
+- **Reescalado experimental** de la vista 2D en la tarjeta gráfica: xBR o la red neuronal Anime4K.
 - **Trucos** Game Genie y Action Replay, guardados por juego, con las listas de trucos de
   cada juego de libretro-database para elegirlos de un menú.
 - **Biblioteca de juegos** con carátulas, que se descargan solas de libretro-thumbnails,
@@ -245,6 +246,12 @@ generales (los atajos como guardar estado o rebobinar siguen siendo los generale
   tele, más finas donde la imagen es brillante) o **CRT** (además, la pantalla un poco
   curva, la máscara de colores y las esquinas oscuras), con su intensidad. Se notan más
   cuanto más grande es la ventana, mejor a pantalla completa.
+- **Opciones > Vídeo > Reescalado (experimental)**: dibuja la imagen 2D más grande de lo
+  que la hace la consola, adivinando el detalle. **xBR** redondea los bordes en escalera de
+  las diagonales (un solo paso, sirve cualquier gráfica). **Anime4K** es una red neuronal
+  pequeña que dobla la imagen una vez, o dos a partir de unas 540 líneas, y queda más suave.
+  Mientras está puesto sustituye al filtro 2D; la vista 3D y las grabaciones no lo usan. También
+  está en la pestaña de opciones del menú de estados y en las opciones propias de cada juego.
 - **Sonido**: volumen, silenciar y el modo de la música. **Original** es el sonido de los
   chips. **Sintetizador** toca la música del FM y del PSG como notas General MIDI sobre un
   SoundFont, como sonaría en un módulo como el Roland SC-55; las voces y la batería digitalizada (el DAC)
@@ -413,6 +420,7 @@ plumsg.exe "C:\Juegos\Sonic CD.cue" --region eu --estado 1
 | `--pantalla-completa` / `--ventana` | a pantalla completa o en ventana (también `--fullscreen` / `--windowed`) |
 | `--3d` / `--2d` | con o sin la vista pseudo-3D |
 | `--filtro f` | `ninguno`, `scanlines` o `crt` |
+| `--reescalado r` | `ninguno`, `xbr` o `anime4k` (experimental) |
 | `--region r` | `auto`, `jp`, `us` o `eu` |
 | `--estado N` | carga el estado guardado N (0-9) del juego al abrirlo |
 | `--biblioteca carpeta` | abre la biblioteca de esa carpeta |
@@ -563,7 +571,9 @@ sus capturas, sonido y hashes como artefacto.
 
 Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
 miniz (MIT, en `third_party/miniz`), stb_image y stb_image_write (dominio público o MIT, en `third_party/stb`),
-ymfm (BSD-3-Clause), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
+ymfm (BSD-3-Clause), los pesos de la red Anime4K (MIT, de bloc97, en
+`src/render/anime4k_shaders.h`, generado con `tools/anime4k.py`), el shader xBR escrito siguiendo el
+xbr-lv2 de Hyllian (MIT), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
 `third_party/tsf`), rcheevos (MIT, para RetroAchievements). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
 propia licencia libre (`soundfonts\GeneralUser-GS-LICENSE.txt` en la instalación). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de
 [ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas y capturas son de libretro-thumbnails, las listas de trucos y los datos de

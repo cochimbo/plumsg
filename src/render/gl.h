@@ -40,6 +40,7 @@ constexpr GLenum SCISSOR_TEST = 0x0C11;
 constexpr GLenum TEXTURE_2D = 0x0DE1;
 constexpr GLenum UNSIGNED_BYTE = 0x1401;
 constexpr GLenum FLOAT = 0x1406;
+constexpr GLenum HALF_FLOAT = 0x140B;
 constexpr GLenum RGBA = 0x1908;
 constexpr GLenum VERSION = 0x1F02;
 constexpr GLenum NEAREST = 0x2600;
@@ -53,27 +54,34 @@ constexpr GLenum BGRA = 0x80E1;
 constexpr GLenum CLAMP_TO_EDGE = 0x812F;
 constexpr GLenum UNSIGNED_INT_8_8_8_8_REV = 0x8367;
 constexpr GLenum TEXTURE0 = 0x84C0;
+constexpr GLenum RGBA16F = 0x881A;
 constexpr GLenum ARRAY_BUFFER = 0x8892;
 constexpr GLenum STATIC_DRAW = 0x88E4;
 constexpr GLenum FRAGMENT_SHADER = 0x8B30;
 constexpr GLenum VERTEX_SHADER = 0x8B31;
 constexpr GLenum COMPILE_STATUS = 0x8B81;
 constexpr GLenum LINK_STATUS = 0x8B82;
+constexpr GLenum FRAMEBUFFER_COMPLETE = 0x8CD5;
+constexpr GLenum COLOR_ATTACHMENT0 = 0x8CE0;
+constexpr GLenum FRAMEBUFFER = 0x8D40;
 
 #define PLUMSG_GL_FUNCTIONS(X)                                                                         \
     X(void, ActiveTexture, (GLenum))                                                                   \
     X(void, AttachShader, (GLuint, GLuint))                                                            \
     X(void, BindBuffer, (GLenum, GLuint))                                                              \
+    X(void, BindFramebuffer, (GLenum, GLuint))                                                         \
     X(void, BindTexture, (GLenum, GLuint))                                                             \
     X(void, BindVertexArray, (GLuint))                                                                 \
     X(void, BlendFunc, (GLenum, GLenum))                                                               \
     X(void, BufferData, (GLenum, GLsizeiptr, const void*, GLenum))                                     \
+    X(GLenum, CheckFramebufferStatus, (GLenum))                                                        \
     X(void, Clear, (GLbitfield))                                                                       \
     X(void, ClearColor, (GLfloat, GLfloat, GLfloat, GLfloat))                                          \
     X(void, CompileShader, (GLuint))                                                                   \
     X(GLuint, CreateProgram, ())                                                                       \
     X(GLuint, CreateShader, (GLenum))                                                                  \
     X(void, DeleteBuffers, (GLsizei, const GLuint*))                                                   \
+    X(void, DeleteFramebuffers, (GLsizei, const GLuint*))                                              \
     X(void, DeleteProgram, (GLuint))                                                                   \
     X(void, DeleteShader, (GLuint))                                                                    \
     X(void, DeleteTextures, (GLsizei, const GLuint*))                                                  \
@@ -85,7 +93,9 @@ constexpr GLenum LINK_STATUS = 0x8B82;
     X(void, DrawArraysInstanced, (GLenum, GLint, GLsizei, GLsizei))                                    \
     X(void, Enable, (GLenum))                                                                          \
     X(void, EnableVertexAttribArray, (GLuint))                                                         \
+    X(void, FramebufferTexture2D, (GLenum, GLenum, GLenum, GLuint, GLint))                             \
     X(void, GenBuffers, (GLsizei, GLuint*))                                                            \
+    X(void, GenFramebuffers, (GLsizei, GLuint*))                                                       \
     X(void, GenTextures, (GLsizei, GLuint*))                                                           \
     X(void, GenVertexArrays, (GLsizei, GLuint*))                                                       \
     X(void, GetProgramInfoLog, (GLuint, GLsizei, GLsizei*, GLchar*))                                   \

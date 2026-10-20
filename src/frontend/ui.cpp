@@ -1104,6 +1104,8 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
                                                       state.gameName.c_str()).c_str()
                                                 : tr("Abre una ROM para guardarle su propia pantalla ancha."));
     ImGui::Separator();
+    const bool upscaled = settings_.render.upscale != Upscale2D::None;
+    ImGui::BeginDisabled(upscaled);
     int filter = static_cast<int>(settings_.render.filter);
     ImGui::TextUnformatted(tr("Filtro 2D:"));
     ImGui::SameLine();
@@ -1123,6 +1125,25 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
         settings_.render.filterStrength = strength / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     ImGui::EndDisabled();
+    ImGui::EndDisabled();
+    ImGui::PushID("reescalado");
+    int upscale = static_cast<int>(settings_.render.upscale);
+    ImGui::TextUnformatted(tr("Reescalado (experimental):"));
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Dibuja la imagen 2D más grande de lo que la hace la consola, adivinando el detalle,\n"
+                          "en la tarjeta gráfica y a 60 fps. Sustituye al filtro 2D mientras está puesto.\n"
+                          "xBR: redondea los bordes en escalera de las diagonales; el pixel art se ve\n"
+                          "como dibujado a mano.\n"
+                          "Anime4K: una red neuronal pequeña que dobla la imagen una o dos veces según\n"
+                          "el tamaño de la ventana. Más suave; pensada para dibujos animados."));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton(tr("Ninguno"), &upscale, static_cast<int>(Upscale2D::None));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("xBR", &upscale, static_cast<int>(Upscale2D::Xbr));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Anime4K", &upscale, static_cast<int>(Upscale2D::Anime4K));
+    settings_.render.upscale = static_cast<Upscale2D>(upscale);
+    ImGui::PopID();
 
     ImGui::SeparatorText(tr("Ventana"));
     ImGui::BeginDisabled(settings_.fullscreen);
@@ -1326,9 +1347,13 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
         options.push_back(toggle(N_("Píxeles cuadrados (sin estirar a 4:3)"), r.squarePixels));
         static const char* const kFilters[] = {N_("Ninguno"), N_("Scanlines"), N_("CRT")};
         options.push_back(choice(N_("Filtro 2D"), static_cast<int>(r.filter), kFilters, 3,
-                                 [&r](int v) { r.filter = static_cast<Filter2D>(v); }));
+                                 [&r](int v) { r.filter = static_cast<Filter2D>(v); }, kSave,
+                                 r.upscale == Upscale2D::None));
         options.push_back(amount(N_("Intensidad del filtro"), r.filterStrength, 0.0f, 1.0f, 0.05f, "%.0f %%", 100.0f,
-                                 kSave, r.filter != Filter2D::None));
+                                 kSave, r.filter != Filter2D::None && r.upscale == Upscale2D::None));
+        static const char* const kUpscales[] = {N_("Ninguno"), "xBR", "Anime4K"};
+        options.push_back(choice(N_("Reescalado (experimental)"), static_cast<int>(r.upscale), kUpscales, 3,
+                                 [&r](int v) { r.upscale = static_cast<Upscale2D>(v); }));
         options.push_back(toggle(N_("Sin límite de sprites (sin parpadeo)"), settings_.unlimitedSprites));
         // The widescreen: the ready-made widths, then each side on its own.
         int preset = -1;
@@ -2928,6 +2953,13 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             int i = static_cast<int>(s.render.filter);
             if (comboTr(tr(opt.label), &i, names, 3)) {
                 s.render.filter = static_cast<Filter2D>(i);
+                edited = true;
+            }
+        } else if (key == "reescalado") {
+            static const char* names[] = {N_("Ninguno"), "xBR", "Anime4K"};
+            int i = static_cast<int>(s.render.upscale);
+            if (comboTr(tr(opt.label), &i, names, 3)) {
+                s.render.upscale = static_cast<Upscale2D>(i);
                 edited = true;
             }
         } else if (key == "intensidad_filtro") {
