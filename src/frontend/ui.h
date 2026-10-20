@@ -15,6 +15,7 @@
 #include "file_dialog.h"
 #include "fps_counter.h"
 #include "game_info.h"
+#include "imgui.h"
 #include "input.h"
 #include "instrument_editor.h"
 #include "library.h"
@@ -153,9 +154,10 @@ public:
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
     GameInfo& gameInfo() { return gameInfo_; }
-    // The detail panel still looking for the chosen game's data (screenshots wait for it).
+    // The detail panel still looking for the chosen game's data, or the font still to be made
+    // again with characters it lacks (screenshots wait for both).
     bool libraryInfoBusy() const {
-        return showLibrary_ && settings_.libraryDetails && (gameInfo_.sheet().busy || gameInfo_.detailsBusy());
+        return fontsDirty_ || (showLibrary_ && settings_.libraryDetails && (gameInfo_.sheet().busy || gameInfo_.detailsBusy()));
     }
     // The instrument editor's window, drawn with the rest (not owned).
     void setEditor(InstrumentEditor* editor) { editor_ = editor; }
@@ -210,6 +212,8 @@ private:
     void drawLibraryDetails(const std::vector<size_t>& visible);
     void libraryItem(bool clicked, int n);
     void setLibraryList(bool list);
+    void buildFonts();
+    void needGlyphs(const std::string& text);
     void drawCoverSearch();
     void startCoverSearch();
     void drawBios(UiActions& out);
@@ -237,6 +241,9 @@ private:
     FileBrowser browser_;
     Library library_;
     GameInfo gameInfo_;
+    std::set<ImWchar> fontExtra_;  // characters beyond the base ranges that texts have needed
+    ImVector<ImWchar> fontRanges_;  // the atlas's ranges, alive until it is built
+    bool fontsDirty_ = false;
     CheatDatabase cheatDb_;
     InstrumentEditor* editor_ = nullptr;
     std::unique_ptr<AchievementsUi> achievements_;
