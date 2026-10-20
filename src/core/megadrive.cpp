@@ -868,7 +868,7 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         block("32X ", w.data());
         StateWriter c;
         mars_->timingState(c);
-        block("32XC", c.data());
+        block("32X2", c.data());  // "32XC" in 0.0.27, before the boot ROMs turned the cache on
     }
     if (mcd_) {
         StateWriter w;
@@ -966,6 +966,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
 
     bool ok = true;
     bool hasMixer = false;
+    bool cacheFromBoot = false;  // the state comes from a version whose boot turns the 32X's cache on
     uint16_t overclock = 100;  // states without the block are from a console at its speed
     std::vector<uint8_t> thumbnail, addOnState;
     while (ok && !r.atEnd()) {
@@ -998,8 +999,9 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
                 mars_->clearTiming();  // a state without it (older) starts with empty caches
             }
         }
-        else if (id == fourcc("32XC")) {
+        else if (id == fourcc("32XC") || id == fourcc("32X2")) {
             if (mars_) mars_->timingState(b);
+            cacheFromBoot = id == fourcc("32X2");
         }
         else if (id == fourcc("MCD ")) {
             if (mcd_) mcd_->state(b);
@@ -1030,6 +1032,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         // Unknown blocks (from newer versions) are skipped.
         if (!b.ok()) ok = false;
     }
+    if (ok && mars_ && !cacheFromBoot) mars_->bootCache();  // older states left it off
     if (!ok) {
         std::string ignored;
         std::vector<uint8_t> restore;

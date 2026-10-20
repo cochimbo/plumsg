@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace plumsg {
 
@@ -72,6 +73,15 @@ public:
         fastMemory_ = memory;
     }
 
+    // The cartridge ROM, read directly instead of through the bus at 0x02000000: its
+    // first `limit` bytes (none of them SRAM or banked), each word costing `wait` cycles
+    // unless the cache has it. The vector is looked at on every read, so it may change.
+    void setRom(const std::vector<uint8_t>* rom, uint32_t limit, int wait) {
+        rom_ = rom;
+        romLimit_ = limit;
+        romWait_ = wait;
+    }
+
     // Memory through the CPU's eyes (cache-through bits, on-chip registers, data array).
     uint32_t read(uint32_t addr, int size);
     void write(uint32_t addr, uint32_t value, int size);
@@ -97,9 +107,11 @@ public:
     template <class Ar>
     void timingState(Ar& ar) {
         ar(cache_.tags, cache_.next, parked_, poll_.addr, poll_.value, poll_.cpu);
+        lastLine_ = ~0u;
     }
     void clearTiming() {
         cache_ = Cache{};
+        lastLine_ = ~0u;
         unpark();
     }
 
@@ -158,6 +170,9 @@ private:
     Sh2Bus& bus_;
     int id_;
     uint8_t* fastMemory_ = nullptr;
+    const std::vector<uint8_t>* rom_ = nullptr;
+    uint32_t romLimit_ = 0;
+    int romWait_ = 0;
     uint32_t fastBase_ = 0, fastMask_ = 0;
     Sh2* peer_ = nullptr;
 
@@ -214,7 +229,8 @@ private:
     struct Cache {
         std::array<uint32_t, 64 * 4> tags{};
         std::array<uint8_t, 64> next{};
-    } cache_;  // bus state controller registers, kept but not acted on
+    } cache_;
+    uint32_t lastLine_ = ~0u;  // the line of the last read through the cache (addr >> 4), held  // bus state controller registers, kept but not acted on
 };
 
 }  // namespace plumsg
