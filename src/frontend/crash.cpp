@@ -14,6 +14,9 @@
 #include <windows.h>
 // dbghelp.h needs windows.h first.
 #include <dbghelp.h>
+#ifdef _MSC_VER
+#pragma comment(lib, "dbghelp.lib")  // for whatever links this file, frontend_tests too
+#endif
 #else
 #include <fcntl.h>
 #include <sys/stat.h>
