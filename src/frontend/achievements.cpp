@@ -241,8 +241,9 @@ void Achievements::loadProgress(const std::vector<uint8_t>& data) {
     if (!gameLoaded()) return;
     if (data.empty()) rc_client_deserialize_progress_sized(client_, nullptr, 0);
     else rc_client_deserialize_progress_sized(client_, data.data(), data.size());
-    challenges_.clear();
-    progressShown_ = false;
+    // The challenges are not cleared here: rcheevos hides the ones the state does not
+    // have and keeps the ones it has without showing them again, so clearing them would
+    // lose those.
 }
 
 // Identifying the game and reading its memory.
