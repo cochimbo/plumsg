@@ -2083,7 +2083,7 @@ void Ui::drawLibrary(UiActions& out) {
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         ImGui::SetTooltip("%s", tr("Busca las carátulas en libretro-thumbnails (internet) por el nombre de cada juego\n"
-                          "y las guarda en la carpeta caratulas de plumsg. También puedes poner tus\n"
+                          "y las guarda en la carpeta covers de plumsg. También puedes poner tus\n"
                           "propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado."));
     ImGui::SameLine();
     if (ImGui::Button(tr("BIOS del Mega CD..."))) showBios_ = true;
@@ -3088,10 +3088,10 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             edited |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &s.render.squarePixels);
         } else if (key == "sin_limite_sprites") {
             edited |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &s.unlimitedSprites);
-        } else if (key == "pantalla_ancha") {
+        } else if (key == "widescreen") {
             ImGui::TextUnformatted(tr(opt.label));
             edited |= widescreenControls(s.wideLeft, s.wideRight);
-        } else if (key == "perfil_3d") {
+        } else if (key == "profile_3d") {
             ImGui::TextUnformatted(tr(opt.label));
             ImGui::SameLine();
             ImGui::TextDisabled("%s", v.loaded ? tr("(se ajustan en Opciones > Vídeo)") : tr("(se ajustan en Vídeo con el juego abierto)"));
@@ -3124,7 +3124,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
                 s.region = static_cast<Region>(i);
                 edited = true;
             }
-        } else if (key == "mandos") {
+        } else if (key == "pads") {
             static const char* names[] = {N_("3 botones"), N_("6 botones")};
             for (size_t port = 0; port < 2; ++port) {
                 if (port) ImGui::SameLine();
@@ -3156,7 +3156,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
         ImGui::PopID();
         if (!edited) continue;
         out.gameOptionsChanged = true;
-        if (v.loaded && (key == "region" || key == "mandos")) out.consoleChanged = true;
+        if (v.loaded && (key == "region" || key == "pads")) out.consoleChanged = true;
         if (v.loaded && key == "rebobinado_segundos") out.rewindChanged = true;
         if (v.loaded && std::string(opt.group) == "Sonido") out.soundChanged = true;
     }

@@ -1,6 +1,7 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -93,18 +94,48 @@ Paths findPaths() {
         const std::string portable = base + "plumsg.ini";
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
-            return {portable, base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + "fichas/",
-                    base + kSoundfont, base + "sonido/", base + "grabaciones/"};
+            return {portable, base + "states/", base + "profiles/", base + "cheats/", base + "covers/", base + "game-info/",
+                    base + kSoundfont, base + "sound/", base + "recordings/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
-        return {dir + "plumsg.ini", dir + "states/", dir + "perfiles/", dir + "trucos/", dir + "caratulas/", dir + "fichas/",
-                base + kSoundfont, dir + "sonido/", dir + "grabaciones/"};
+        return {dir + "plumsg.ini", dir + "states/", dir + "profiles/", dir + "cheats/", dir + "covers/", dir + "game-info/",
+                base + kSoundfont, dir + "sound/", dir + "recordings/"};
     }
-    return {base + "plumsg.ini", base + "states/", base + "perfiles/", base + "trucos/", base + "caratulas/", base + "fichas/",
-            base + kSoundfont, base + "sonido/", base + "grabaciones/"};
+    return {base + "plumsg.ini", base + "states/", base + "profiles/", base + "cheats/", base + "covers/", base + "game-info/",
+            base + kSoundfont, base + "sound/", base + "recordings/"};
+}
+
+// Up to 0.0.31 the folders and some files next to plumsg.ini had Spanish names. Renames
+// them once to the English ones; a folder whose new name already exists is left alone.
+void migrateSpanishNames(const std::string& dir) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path base = fs::u8path(dir);
+    static const std::pair<const char*, const char*> kFolders[] = {
+        {"perfiles", "profiles"}, {"trucos", "cheats"}, {"caratulas", "covers"}, {"fichas", "game-info"},
+        {"sonido", "sound"}, {"grabaciones", "recordings"}, {"fallos", "crash-reports"}, {"sound/pistas", "sound/tracks"}};
+    for (const auto& [es, en] : kFolders) {
+        const fs::path from = base / fs::u8path(es), to = base / fs::u8path(en);
+        if (fs::is_directory(from, ec) && !fs::exists(to, ec)) fs::rename(from, to, ec);
+    }
+    // Files that only change their extension.
+    static const std::array<std::array<const char*, 3>, 3> kFiles = {{{"states", ".logros", ".achievements"},
+                                                                       {"sound", ".efectos", ".effects"},
+                                                                       {"crash-reports", "ultimo-fallo.txt", "last-crash.txt"}}};
+    for (const auto& [folder, es, en] : kFiles) {
+        for (fs::directory_iterator it(base / folder, ec), end; !ec && it != end; it.increment(ec)) {
+            const std::string name = it->path().filename().u8string();
+            const std::string old = es;
+            if (name.size() < old.size() || name.compare(name.size() - old.size(), old.size(), old) != 0) continue;
+            const fs::path to = it->path().parent_path() / fs::u8path(name.substr(0, name.size() - old.size()) + en);
+            std::error_code e;
+            if (!fs::exists(to, e)) fs::rename(it->path(), to, e);
+        }
+        ec.clear();
+    }
 }
 
 struct App {
@@ -314,7 +345,7 @@ struct App {
         return trf("Estado cargado de la ranura %d", slot);
     }
     // The achievements' progress when the state in `slot` was saved, next to it.
-    std::string progressPath(int slot) const { return statePath(slot) + ".logros"; }
+    std::string progressPath(int slot) const { return statePath(slot) + ".achievements"; }
 };
 
 // Saves what is on screen (the whole window) as a PNG, for screenshots taken from the
@@ -345,123 +376,141 @@ void applyWindowScale(SDL_Window* window, int scale, int menuHeight, const Setti
 
 struct CommandLine {
     std::string rom;
-    std::string capture;  // --captura file.png: take a screenshot and quit
-    int frames = 120;     // --cuadros N: frames to run before the screenshot
+    std::string capture;  // --screenshot file.png: take a screenshot and quit
+    int frames = 120;     // --frames N: frames to run before the screenshot
     int pseudo3d = -1;    // --3d / --2d override the setting
-    std::string view;     // --vista name
+    std::string view;     // --view name
     float tilt = -1000, yaw = -1000;
-    bool stateMenu = false;  // --menu-estados: start with the states menu open
-    std::vector<std::string> library;  // --biblioteca folder (repeatable): start with the library of those folders open
-    int filter = -1;         // --filtro ninguno|scanlines|crt
-    int upscale = -1;        // --reescalado ninguno|xbr|anime4k
+    bool stateMenu = false;  // --states-menu: start with the states menu open
+    std::vector<std::string> library;  // --library folder (repeatable): start with the library of those folders open
+    int filter = -1;         // --filter none|scanlines|crt
+    int upscale = -1;        // --upscaling none|xbr|anime4k
     bool fps = false;        // --fps: with the FPS counter on
-    bool downloadCovers = false;  // --descargar-caratulas: fetch the library's missing covers
-    bool libraryList = false;     // --lista: with --biblioteca, show it as a list
+    bool downloadCovers = false;  // --download-covers: fetch the library's missing covers
+    bool libraryList = false;     // --list: with --library, show it as a list
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
-    bool coverSearch = false;     // --buscar-caratula: with --biblioteca, look for the first game's cover
-    bool cheats = false;          // --trucos: start with the game's Trucos window open
-    bool achievements = false;    // --logros: start with the RetroAchievements window open
-    int gameOptions = 0;          // --opciones-juego [controles]: start with its Opciones de este juego window open (2 on Controles)
-    bool editor = false;          // --instrumentos: start with the instrument editor open
-    std::string track;            // --pista f.vgm: and this track in it
+    bool coverSearch = false;     // --find-cover: with --library, look for the first game's cover
+    bool cheats = false;          // --cheats: start with the game's Cheats window open
+    bool achievements = false;    // --achievements: start with the RetroAchievements window open
+    int gameOptions = 0;          // --game-options [controls]: start with its Options for this game window open (2 on Controls)
+    bool editor = false;          // --instruments: start with the instrument editor open
+    std::string track;            // --track f.vgm: and this track in it
     // For launchers (LaunchBox, Playnite, frontends of arcade cabinets). These last only
     // for this session: the settings file keeps what it had.
-    int fullscreen = -1;          // --pantalla-completa / --ventana
+    int fullscreen = -1;          // --fullscreen / --windowed
     int region = -1;              // --region auto|jp|us|eu (a Region)
-    int slot = -1;                // --estado N: load the game's state N once it is open
-    bool netHost = false;         // --alojar: host a netplay game with the open game
-    std::string netJoin;          // --unirse address: join that host
-    std::string record;           // --grabar file.avi|file.gif: record the game from the start
-    bool help = false;            // --ayuda
+    int slot = -1;                // --load-state N: load the game's state N once it is open
+    bool netHost = false;         // --host: host a netplay game with the open game
+    std::string netJoin;          // --join address: join that host
+    std::string record;           // --record file.avi|file.gif: record the game from the start
+    bool help = false;            // --help
     std::vector<std::string> unknown;  // options plumsg does not know
 };
 
 const char* const kHelp = N_(
     "plumsg [juego] [opciones]\n\n"
     "  juego                  cartucho (.md .gen .bin .smd .32x .sms .gg .zip) o disco (.cue .chd .iso)\n"
-    "  --pantalla-completa    abrir a pantalla completa (o --fullscreen)\n"
-    "  --ventana              abrir en ventana (o --windowed)\n"
+    "  --fullscreen           abrir a pantalla completa\n"
+    "  --windowed             abrir en ventana\n"
     "  --3d / --2d            con o sin la vista pseudo-3D\n"
-    "  --filtro f             ninguno, scanlines o crt\n"
-    "  --reescalado r         ninguno, xbr o anime4k (experimental)\n"
+    "  --filter f             none, scanlines o crt\n"
+    "  --upscaling u          none, xbr o anime4k (experimental)\n"
     "  --fps                  mostrar el contador de FPS con su gráfica\n"
     "  --region r             auto, jp, us o eu\n"
-    "  --estado N             cargar el estado guardado N (0-9) del juego\n"
-    "  --alojar               alojar una partida en red con el juego (puerto del menú Red)\n"
-    "  --unirse direccion     unirse a la partida en red de ese anfitrión (IP:puerto)\n"
-    "  --biblioteca carpeta   abrir la biblioteca de esa carpeta (se puede repetir)\n"
+    "  --load-state N         cargar el estado guardado N (0-9) del juego\n"
+    "  --host                 alojar una partida en red con el juego (puerto del menú Red)\n"
+    "  --join direccion       unirse a la partida en red de ese anfitrión (IP:puerto)\n"
+    "  --library carpeta      abrir la biblioteca de esa carpeta (se puede repetir)\n"
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
-    "  --buscar-caratula      con --biblioteca: buscar la carátula del primer juego\n"
-    "  --lista                con --biblioteca: verla como lista en vez de cuadrícula\n"
-    "  --trucos               abrir los trucos del juego, con sus listas de internet\n"
-    "  --logros               abrir la ventana de RetroAchievements\n"
-    "  --opciones-juego       abrir las opciones propias del juego\n"
-    "  --opciones-juego controles   ...en la pestaña de sus controles\n"
-    "  --instrumentos         abrir el editor de instrumentos (del juego, si se da)\n"
-    "  --pista f.vgm          con --instrumentos: abrir esa música (.vgm o .vgz)\n"
-    "  --grabar f.avi        grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
-    "  --captura f.png        guardar una captura tras --cuadros N fotogramas y salir\n\n"
-    "La pantalla completa y la región dadas aquí valen solo para esta vez.");
+    "  --find-cover           con --library: buscar la carátula del primer juego\n"
+    "  --list                 con --library: verla como lista en vez de cuadrícula\n"
+    "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
+    "  --achievements         abrir la ventana de RetroAchievements\n"
+    "  --game-options         abrir las opciones propias del juego\n"
+    "  --game-options controls   ...en la pestaña de sus controles\n"
+    "  --instruments          abrir el editor de instrumentos (del juego, si se da)\n"
+    "  --track f.vgm          con --instruments: abrir esa música (.vgm o .vgz)\n"
+    "  --record f.avi         grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
+    "  --screenshot f.png     guardar una captura tras --frames N fotogramas y salir\n\n"
+    "La pantalla completa y la región dadas aquí valen solo para esta vez. Las opciones\n"
+    "en español de las versiones anteriores (--pantalla-completa, --biblioteca...) siguen valiendo.");
+
+// The Spanish names options had up to 0.0.31, still accepted so launchers set up with them
+// keep working.
+std::string optionName(const std::string& a) {
+    static const std::pair<const char*, const char*> kSpanish[] = {
+        {"--captura", "--screenshot"}, {"--grabar", "--record"}, {"--cuadros", "--frames"}, {"--vista", "--view"},
+        {"--inclinacion", "--tilt"}, {"--giro", "--yaw"}, {"--menu-estados", "--states-menu"},
+        {"--biblioteca", "--library"}, {"--descargar-caratulas", "--download-covers"}, {"--lista", "--list"},
+        {"--buscar-caratula", "--find-cover"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
+        {"--opciones-juego", "--game-options"}, {"--instrumentos", "--instruments"}, {"--pista", "--track"},
+        {"--filtro", "--filter"}, {"--reescalado", "--upscaling"}, {"--pantalla-completa", "--fullscreen"},
+        {"--ventana", "--windowed"}, {"--estado", "--load-state"}, {"--alojar", "--host"}, {"--unirse", "--join"},
+        {"--ayuda", "--help"}};
+    for (const auto& [es, en] : kSpanish)
+        if (a == es) return en;
+    return a;
+}
 
 CommandLine parse(int argc, char** argv) {
     CommandLine c;
     for (int i = 1; i < argc; ++i) {
-        const std::string a = argv[i];
+        const std::string a = optionName(argv[i]);
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
-        if (a == "--captura") c.capture = next();
-        else if (a == "--grabar") c.record = next();
-        else if (a == "--cuadros") c.frames = std::max(1, std::atoi(next().c_str()));
+        if (a == "--screenshot") c.capture = next();
+        else if (a == "--record") c.record = next();
+        else if (a == "--frames") c.frames = std::max(1, std::atoi(next().c_str()));
         else if (a == "--3d") c.pseudo3d = 1;
         else if (a == "--2d") c.pseudo3d = 0;
-        else if (a == "--vista") c.view = next();
-        else if (a == "--inclinacion") c.tilt = static_cast<float>(std::atof(next().c_str()));
-        else if (a == "--giro") c.yaw = static_cast<float>(std::atof(next().c_str()));
-        else if (a == "--menu-estados") c.stateMenu = true;
+        else if (a == "--view") c.view = next();
+        else if (a == "--tilt") c.tilt = static_cast<float>(std::atof(next().c_str()));
+        else if (a == "--yaw") c.yaw = static_cast<float>(std::atof(next().c_str()));
+        else if (a == "--states-menu") c.stateMenu = true;
         else if (a == "--fps") c.fps = true;
-        else if (a == "--biblioteca") c.library.push_back(next());
-        else if (a == "--descargar-caratulas") c.downloadCovers = true;
-        else if (a == "--lista") c.libraryList = true;
+        else if (a == "--library") c.library.push_back(next());
+        else if (a == "--download-covers") c.downloadCovers = true;
+        else if (a == "--list") c.libraryList = true;
         else if (a == "--bios") c.bios = true;
-        else if (a == "--buscar-caratula") c.coverSearch = true;
-        else if (a == "--trucos") c.cheats = true;
-        else if (a == "--logros") c.achievements = true;
-        else if (a == "--opciones-juego") {
+        else if (a == "--find-cover") c.coverSearch = true;
+        else if (a == "--cheats") c.cheats = true;
+        else if (a == "--achievements") c.achievements = true;
+        else if (a == "--game-options") {
             c.gameOptions = 1;
-            if (i + 1 < argc && std::string(argv[i + 1]) == "controles") {
+            if (i + 1 < argc && (std::string(argv[i + 1]) == "controls" || std::string(argv[i + 1]) == "controles")) {
                 c.gameOptions = 2;
                 ++i;
             }
         }
-        else if (a == "--instrumentos") c.editor = true;
-        else if (a == "--pista") c.track = next();
-        else if (a == "--filtro") {
+        else if (a == "--instruments") c.editor = true;
+        else if (a == "--track") c.track = next();
+        else if (a == "--filter") {
             const std::string f = next();
             c.filter = f == "crt" ? 2 : f == "scanlines" ? 1 : 0;
         }
-        else if (a == "--reescalado") {
+        else if (a == "--upscaling") {
             const std::string r = next();
             c.upscale = r == "anime4k" ? 2 : r == "xbr" ? 1 : 0;
         }
-        else if (a == "--pantalla-completa" || a == "--fullscreen") c.fullscreen = 1;
-        else if (a == "--ventana" || a == "--windowed") c.fullscreen = 0;
+        else if (a == "--fullscreen") c.fullscreen = 1;
+        else if (a == "--windowed") c.fullscreen = 0;
         else if (a == "--region") {
             const std::string r = next();
             if (r == "auto") c.region = static_cast<int>(Region::Auto);
-            else if (r == "jp" || r == "japon") c.region = static_cast<int>(Region::JapanNtsc);
+            else if (r == "jp" || r == "japan" || r == "japon") c.region = static_cast<int>(Region::JapanNtsc);
             else if (r == "us" || r == "usa") c.region = static_cast<int>(Region::UsaNtsc);
-            else if (r == "eu" || r == "europa" || r == "pal") c.region = static_cast<int>(Region::EuropePal);
+            else if (r == "eu" || r == "europe" || r == "europa" || r == "pal") c.region = static_cast<int>(Region::EuropePal);
             else c.unknown.push_back(a + " " + r);
-        } else if (a == "--estado" || a == "--load-state") {
+        } else if (a == "--load-state") {
             const std::string n = next();
             char* end = nullptr;
             const long slot = std::strtol(n.c_str(), &end, 10);
             if (!n.empty() && *end == 0 && slot >= 0 && slot < kSlots) c.slot = static_cast<int>(slot);
             else c.unknown.push_back(a + " " + n);
-        } else if (a == "--alojar" || a == "--host") c.netHost = true;
-        else if (a == "--unirse" || a == "--join") {
+        } else if (a == "--host") c.netHost = true;
+        else if (a == "--join") {
             c.netJoin = next();
             if (c.netJoin.empty()) c.unknown.push_back(a);
-        } else if (a == "--ayuda" || a == "--help" || a == "-h" || a == "/?") c.help = true;
+        } else if (a == "--help" || a == "-h" || a == "/?") c.help = true;
         else if (a.size() > 1 && a[0] == '-') c.unknown.push_back(a);
         else c.rom = a;
     }
@@ -473,8 +522,10 @@ CommandLine parse(int argc, char** argv) {
 int main(int argc, char** argv) {
     const CommandLine cmd = parse(argc, argv);
     const Paths paths = findPaths();
+    const std::string settingsDir = paths.ini.substr(0, paths.ini.find_last_of("/\\") + 1);
+    migrateSpanishNames(settingsDir);
     // Next to plumsg.ini: the reports of the runs that ended in a crash.
-    const std::string crashDir = paths.ini.substr(0, paths.ini.find_last_of("/\\") + 1) + "fallos/";
+    const std::string crashDir = settingsDir + "crash-reports/";
     installCrashHandler(crashDir);
     Settings settings = Settings::load(paths.ini);
     // Until a language is picked in Opciones > Idioma, the system's.
@@ -684,7 +735,7 @@ int main(int argc, char** argv) {
         editor.saveRecording(recorder.finish(app->console.masterClocks(), withoutExtension(fileName(app->romPath))),
                              app->romPath);
     };
-    // Grabar vídeo / Grabar GIF: the game as it is played, in the grabaciones folder.
+    // Grabar vídeo / Grabar GIF: the game as it is played, in the recordings folder.
     GameRecording video;
     std::vector<uint32_t> screen;  // the game's part of the window, read back for it
     // The 2D view records the console's own picture, sharp and without the filter; the
@@ -698,7 +749,7 @@ int main(int argc, char** argv) {
         else if (gif) ui->notify(trf("GIF guardado en %s", video.path().c_str()));
         else ui->notify(trf("Vídeo guardado en %s", video.path().c_str()));
     };
-    // Into `path`, or a new file in the grabaciones folder.
+    // Into `path`, or a new file in the recordings folder.
     auto startVideo = [&](GameRecording::Format format, std::string path = {}) {
         if (!app->romLoaded) return;
         const bool gif = format == GameRecording::Format::Gif;
@@ -868,25 +919,25 @@ int main(int argc, char** argv) {
         ui->notify(slowMotion ? trf("Cámara lenta (%d%%)", settings.slowMotion) : std::string(tr("Velocidad normal")));
     };
     auto setProfile = [&](bool on) {
-        if (!app->romLoaded || on == game.has("perfil_3d")) return;
+        if (!app->romLoaded || on == game.has("profile_3d")) return;
         if (on) {
-            game.own.insert("perfil_3d");
+            game.own.insert("profile_3d");
             ui->notify(trf("El 3D se guarda ahora solo para %s", fileName(app->romPath).c_str()));
         } else {
-            game.own.erase("perfil_3d");
+            game.own.erase("profile_3d");
             copy3D(general.render, settings.render);
             ui->notify(tr("El juego vuelve a usar el 3D general"));
         }
         save();
     };
     auto setWideProfile = [&](bool on) {
-        if (!app->romLoaded || on == game.has("pantalla_ancha")) return;
+        if (!app->romLoaded || on == game.has("widescreen")) return;
         if (on) {
-            game.own.insert("pantalla_ancha");
+            game.own.insert("widescreen");
             ui->notify(trf("La pantalla ancha se guarda ahora solo para %s", fileName(app->romPath).c_str()));
         } else {
-            game.own.erase("pantalla_ancha");
-            findGameOption("pantalla_ancha")->copy(general, settings);
+            game.own.erase("widescreen");
+            findGameOption("widescreen")->copy(general, settings);
             ui->notify(tr("El juego vuelve a usar la pantalla ancha general"));
         }
         save();
@@ -1120,8 +1171,8 @@ int main(int argc, char** argv) {
         uiState.paused = paused;
         uiState.slowMotion = slowMotion;
         uiState.fps = &fpsCounter;
-        uiState.hasProfile = game.has("perfil_3d");
-        uiState.hasWideProfile = game.has("pantalla_ancha");
+        uiState.hasProfile = game.has("profile_3d");
+        uiState.hasWideProfile = game.has("widescreen");
         uiState.gameName = app->romLoaded ? fileName(app->romPath) : std::string();
         uiState.slots = app->slots;
         const bool cheatsLoaded = app->romLoaded && cheatsGame == app->romPath;

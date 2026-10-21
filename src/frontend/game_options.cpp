@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "../core/i18n.h"
+#include "../core/ini_names.h"
 #include "../render/profile3d.h"
 
 namespace plumsg {
@@ -24,9 +25,11 @@ std::string lower(std::string s) {
 
 // The option a key of the file belongs to: both pads are one option, and so are both
 // sides of the widescreen.
-std::string optionFor(const std::string& key) {
-    if (key == "mando1" || key == "mando2") return "mandos";
-    if (key == "pantalla_ancha_izquierda" || key == "pantalla_ancha_derecha") return "pantalla_ancha";
+// The option a key of the file belongs to (keys are English, or Spanish from before 0.0.32).
+std::string optionFor(const std::string& name) {
+    const std::string& key = iniName(name);
+    if (key == "pad1" || key == "pad2") return "pads";
+    if (key == "widescreen_left" || key == "widescreen_right") return "widescreen";
     return key;
 }
 
@@ -34,39 +37,39 @@ std::string optionFor(const std::string& key) {
 
 const std::vector<GameOption>& gameOptions() {
     static const std::vector<GameOption> options = {
-        {"vista", N_("Vista"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.view = f.view; }},
-        {"escalado", N_("Escalado"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.scale = f.render.scale; }},
-        {"suavizado", N_("Suavizado"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.smooth = f.render.smooth; }},
-        {"filtro", N_("Filtro 2D"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.filter = f.render.filter; }},
-        {"intensidad_filtro", N_("Intensidad del filtro"), N_("Vídeo"),
+        {"view", N_("Vista"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.view = f.view; }},
+        {"scale", N_("Escalado"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.scale = f.render.scale; }},
+        {"smooth", N_("Suavizado"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.smooth = f.render.smooth; }},
+        {"filter", N_("Filtro 2D"), N_("Vídeo"), [](const Settings& f, Settings& t) { t.render.filter = f.render.filter; }},
+        {"filter_strength", N_("Intensidad del filtro"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.filterStrength = f.render.filterStrength; }},
-        {"reescalado", N_("Reescalado (experimental)"), N_("Vídeo"),
+        {"upscaling", N_("Reescalado (experimental)"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.upscale = f.render.upscale; }},
-        {"pixeles_cuadrados", N_("Píxeles cuadrados"), N_("Vídeo"),
+        {"square_pixels", N_("Píxeles cuadrados"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.render.squarePixels = f.render.squarePixels; }},
-        {"sin_limite_sprites", N_("Sin límite de sprites"), N_("Vídeo"),
+        {"no_sprite_limit", N_("Sin límite de sprites"), N_("Vídeo"),
          [](const Settings& f, Settings& t) { t.unlimitedSprites = f.unlimitedSprites; }},
-        {"pantalla_ancha", N_("Pantalla ancha"), N_("Vídeo"), [](const Settings& f, Settings& t) {
+        {"widescreen", N_("Pantalla ancha"), N_("Vídeo"), [](const Settings& f, Settings& t) {
              t.wideLeft = f.wideLeft;
              t.wideRight = f.wideRight;
          }},
-        {"perfil_3d", N_("Todos los ajustes del 3D"), "3D", [](const Settings& f, Settings& t) { copy3D(f.render, t.render); }},
-        {"volumen", N_("Volumen"), N_("Sonido"), [](const Settings& f, Settings& t) { t.volume = f.volume; }},
-        {"silencio", N_("Silencio"), N_("Sonido"), [](const Settings& f, Settings& t) { t.mute = f.mute; }},
-        {"modo", N_("Sintetizador"), N_("Sonido"), [](const Settings& f, Settings& t) { t.roland = f.roland; }},
+        {"profile_3d", N_("Todos los ajustes del 3D"), "3D", [](const Settings& f, Settings& t) { copy3D(f.render, t.render); }},
+        {"volume", N_("Volumen"), N_("Sonido"), [](const Settings& f, Settings& t) { t.volume = f.volume; }},
+        {"mute", N_("Silencio"), N_("Sonido"), [](const Settings& f, Settings& t) { t.mute = f.mute; }},
+        {"mode", N_("Sintetizador"), N_("Sonido"), [](const Settings& f, Settings& t) { t.roland = f.roland; }},
         {"soundfont", N_("SoundFont"), N_("Sonido"), [](const Settings& f, Settings& t) { t.soundfont = f.soundfont; }},
-        {"mezcla_chip", N_("Sonido original mezclado"), N_("Sonido"), [](const Settings& f, Settings& t) { t.chipMix = f.chipMix; }},
+        {"chip_mix", N_("Sonido original mezclado"), N_("Sonido"), [](const Settings& f, Settings& t) { t.chipMix = f.chipMix; }},
         {"reverb", N_("Reverb"), N_("Sonido"), [](const Settings& f, Settings& t) { t.reverb = f.reverb; }},
         {"chorus", N_("Chorus"), N_("Sonido"), [](const Settings& f, Settings& t) { t.chorus = f.chorus; }},
-        {"efectos", N_("Efectos de sonido originales"), N_("Sonido"),
+        {"effects", N_("Efectos de sonido originales"), N_("Sonido"),
          [](const Settings& f, Settings& t) { t.effectsOriginal = f.effectsOriginal; }},
         {"region", N_("Región"), N_("Consola"), [](const Settings& f, Settings& t) { t.region = f.region; }},
-        {"mandos", N_("Tipo de mando"), N_("Consola"), [](const Settings& f, Settings& t) { t.padType = f.padType; }},
+        {"pads", N_("Tipo de mando"), N_("Consola"), [](const Settings& f, Settings& t) { t.padType = f.padType; }},
         {"overclock", N_("Overclock"), N_("Consola"), [](const Settings& f, Settings& t) { t.overclock = f.overclock; }},
-        {"rebobinado_segundos", N_("Segundos de rebobinado"), N_("Velocidad"),
+        {"rewind_seconds", N_("Segundos de rebobinado"), N_("Velocidad"),
          [](const Settings& f, Settings& t) { t.rewindSeconds = f.rewindSeconds; }},
-        {"avance_rapido", N_("Avance rápido"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.fastForward = f.fastForward; }},
-        {"camara_lenta", N_("Cámara lenta"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.slowMotion = f.slowMotion; }},
+        {"fast_forward", N_("Avance rápido"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.fastForward = f.fastForward; }},
+        {"slow_motion", N_("Cámara lenta"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.slowMotion = f.slowMotion; }},
         {"run_ahead", N_("Run-ahead (menos latencia)"), N_("Velocidad"), [](const Settings& f, Settings& t) { t.runAhead = f.runAhead; }},
     };
     return options;
@@ -94,7 +97,7 @@ GameOverrides parseGameOverrides(const std::string& text, const Settings& genera
     o.controls = generalInput;
     std::istringstream controls(text);
     if (InputConfig::parse(controls, o.controls)) o.own.insert(kGameControls);
-    if (parseProfile(text, o.values.render)) o.own.insert("perfil_3d");
+    if (parseProfile(text, o.values.render)) o.own.insert("profile_3d");
     // Settings::parse reads the values; which options the file has comes from its keys.
     std::istringstream keys(text);
     std::string line, section;
@@ -102,32 +105,32 @@ GameOverrides parseGameOverrides(const std::string& text, const Settings& genera
         line = trim(line);
         if (line.empty() || line[0] == '#' || line[0] == ';') continue;
         if (line.front() == '[') {
-            section = lower(trim(line.substr(1, line.size() - 2)));
+            section = iniName(lower(trim(line.substr(1, line.size() - 2))));
             continue;
         }
         const size_t eq = line.find('=');
-        // The controls' sections share key names (avance_rapido...) with the options.
-        if (eq == std::string::npos || section == "perfil_3d" || section == "teclado" || section == "teclado2" ||
-            section == "mando")
+        // The controls' sections share key names (fast_forward...) with the options.
+        if (eq == std::string::npos || section == "profile_3d" || section == "keyboard" || section == "keyboard2" ||
+            section == "gamepad")
             continue;
         const std::string key = optionFor(lower(trim(line.substr(0, eq))));
-        if (key != "perfil_3d" && findGameOption(key)) o.own.insert(key);
+        if (key != "profile_3d" && findGameOption(key)) o.own.insert(key);
     }
     Settings read = o.values;
     std::istringstream in(text);
     Settings::parse(in, read);
     for (const GameOption& opt : gameOptions())
-        if (o.has(opt.key) && std::string(opt.key) != "perfil_3d") opt.copy(read, o.values);
+        if (o.has(opt.key) && std::string(opt.key) != "profile_3d") opt.copy(read, o.values);
     return o;
 }
 
 std::string formatGameOverrides(const GameOverrides& o, const std::string& game) {
     if (o.own.empty()) return {};
     std::ostringstream out;
-    out << "# Opciones propias de " << game << " para plumsg. Mientras este juego está cargado,\n"
-        << "# estos ajustes sustituyen a los de plumsg.ini.\n";
-    if (o.has("perfil_3d")) {
-        out << "\n[perfil_3d]\n";
+    out << "# plumsg options of " << game << ". While this game is loaded, these settings\n"
+        << "# replace those in plumsg.ini.\n";
+    if (o.has("profile_3d")) {
+        out << "\n[profile_3d]\n";
         write3D(out, o.values.render);
     }
     if (o.has(kGameControls)) {
@@ -149,7 +152,7 @@ std::string formatGameOverrides(const GameOverrides& o, const std::string& game)
         const size_t eq = t.find('=');
         if (eq == std::string::npos) continue;
         const std::string key = optionFor(lower(trim(t.substr(0, eq))));
-        if (key == "perfil_3d" || !o.has(key) || !findGameOption(key)) continue;
+        if (key == "profile_3d" || !o.has(key) || !findGameOption(key)) continue;
         if (!header.empty()) {
             out << "\n" << header << "\n";
             header.clear();

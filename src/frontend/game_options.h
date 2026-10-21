@@ -11,10 +11,10 @@ namespace plumsg {
 
 // Options a game can keep a value of its own for, which takes the place of the general
 // one while that game is loaded. Each game's own values live in a small .ini of that game
-// in the perfiles folder: the 3D options in [perfil_3d] (the 3D profiles of before) and
+// in the profiles folder: the 3D options in [profile_3d] (the 3D profiles of before) and
 // the rest in the same sections and with the same keys as in plumsg.ini.
 struct GameOption {
-    const char* key;    // the key in the .ini; "perfil_3d" stands for every 3D option, "mandos" for both pads
+    const char* key;    // the key in the .ini; "profile_3d" stands for every 3D option, "pads" for both pads
     const char* label;  // for the Opciones de este juego window
     const char* group;  // Vídeo, 3D, Sonido, Consola, Velocidad
     void (*copy)(const Settings& from, Settings& to);
@@ -24,7 +24,7 @@ const GameOption* findGameOption(const std::string& key);
 
 // The key in GameOverrides::own for a game's own console buttons (keyboard and pads),
 // kept in its file under [teclado], [teclado2] and [mando] as in plumsg.ini.
-constexpr const char* kGameControls = "controles";
+constexpr const char* kGameControls = "controls";
 
 struct GameOverrides {
     std::set<std::string> own;  // keys of gameOptions() this game has its own value for, and kGameControls

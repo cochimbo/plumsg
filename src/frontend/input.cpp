@@ -1,6 +1,7 @@
 #include "input.h"
 
 #include "../core/i18n.h"
+#include "../core/ini_names.h"
 
 #include <algorithm>
 #include <cctype>
@@ -12,12 +13,13 @@ namespace plumsg {
 
 namespace {
 
-// Names used in the [teclado] / [mando] sections of the .ini file.
-constexpr const char* kButtonNames[InputConfig::kButtons] = {"arriba", "abajo", "izquierda", "derecha", "a", "b",
+// Names used in the [keyboard] / [gamepad] sections of the .ini file (iniName() reads the
+// Spanish ones older versions wrote).
+constexpr const char* kButtonNames[InputConfig::kButtons] = {"up", "down", "left", "right", "a", "b",
                                                              "c", "start", "x", "y", "z", "mode"};
 constexpr const char* kHotkeyNames[InputConfig::kHotkeys] = {
-    "efecto_3d", "guardar_estado", "cargar_estado", "ranura_anterior", "ranura_siguiente",
-    "menu_estados", "rebobinar", "avance_rapido", "camara_lenta", "biblioteca", "parar", "contador_fps"};
+    "pseudo_3d", "save_state", "load_state", "previous_slot", "next_slot",
+    "states_menu", "rewind", "fast_forward", "slow_motion", "library", "stop", "fps_counter"};
 
 constexpr int kTriggerThreshold = 16000;  // of 32767: a trigger counts as pressed past halfway
 
@@ -139,40 +141,40 @@ bool InputConfig::parse(std::istream& in, InputConfig& c) {
         line = trim(line);
         if (line.empty() || line[0] == '#' || line[0] == ';') continue;
         if (line.front() == '[' && line.back() == ']') {
-            section = lower(trim(line.substr(1, line.size() - 2)));
+            section = iniName(lower(trim(line.substr(1, line.size() - 2))));
             continue;
         }
         size_t eq = line.find('=');
         if (eq == std::string::npos) continue;
-        const std::string key = lower(trim(line.substr(0, eq)));
+        const std::string key = iniName(lower(trim(line.substr(0, eq))));
         const std::string value = trim(line.substr(eq + 1));
 
-        if (section == "mando" && key == "stick_como_cruceta") {
-            c.stickAsDpad = value == "1" || lower(value) == "si" || lower(value) == "true";
+        if (section == "gamepad" && key == "stick_as_dpad") {
+            c.stickAsDpad = value == "1" || iniName(lower(value)) == "yes" || lower(value) == "true";
             continue;
         }
-        if (section == "mando" && key == "zona_muerta") {
+        if (section == "gamepad" && key == "deadzone") {
             c.stickDeadzone = std::clamp(std::atoi(value.c_str()), 0, 32767);
             continue;
         }
         const int b = buttonIndex(key);
         const int h = hotkeyIndex(key);
         if (b < 0 && h < 0) continue;
-        if (section == "teclado2" && b >= 0) {
+        if (section == "keyboard2" && b >= 0) {
             auto& list = c.keys2[b];
             list.clear();
             for (const auto& name : splitList(value)) {
                 SDL_Scancode sc = SDL_GetScancodeFromName(name.c_str());
                 if (sc != SDL_SCANCODE_UNKNOWN) list.push_back(sc);
             }
-        } else if (section == "teclado") {
+        } else if (section == "keyboard") {
             auto& list = b >= 0 ? c.keys[b] : c.hotkeyKeys[h];
             list.clear();
             for (const auto& name : splitList(value)) {
                 SDL_Scancode sc = SDL_GetScancodeFromName(name.c_str());
                 if (sc != SDL_SCANCODE_UNKNOWN) list.push_back(sc);
             }
-        } else if (section == "mando") {
+        } else if (section == "gamepad") {
             auto& list = b >= 0 ? c.pad[b] : c.hotkeyPad[h];
             list.clear();
             for (const auto& name : splitList(value)) {
@@ -211,11 +213,11 @@ void writePadList(std::ostream& out, const char* name, const std::vector<SDL_Gam
 }  // namespace
 
 void InputConfig::writeButtons(std::ostream& out) const {
-    out << "[teclado]\n";
+    out << "[keyboard]\n";
     for (int i = 0; i < kButtons; ++i) writeKeyList(out, kButtonNames[i], keys[i]);
-    out << "\n[teclado2]\n";
+    out << "\n[keyboard2]\n";
     for (int i = 0; i < kButtons; ++i) writeKeyList(out, kButtonNames[i], keys2[i]);
-    out << "\n[mando]\n";
+    out << "\n[gamepad]\n";
     for (int i = 0; i < kButtons; ++i) writePadList(out, kButtonNames[i], pad[i]);
 }
 
@@ -230,27 +232,26 @@ void InputConfig::write(std::ostream& out) const {
     auto padList = [&](const char* name, const std::vector<SDL_GameControllerButton>& list) {
         writePadList(out, name, list);
     };
-    out << "# Controles de plumsg. Puedes poner varias teclas o botones separados por comas.\n"
-           "# [teclado] es el jugador 1 y [teclado2] el jugador 2; el primer mando es el\n"
-           "# jugador 1 y el segundo, el jugador 2.\n"
-           "# Teclas: nombres de SDL (Up, Down, Left, Right, A, S, Return, Space, Right Shift...).\n"
-           "# Botones de mando: a, b, x, y, back, guide, start, leftstick, rightstick,\n"
+    out << "# plumsg controls. You can give several keys or buttons separated by commas.\n"
+           "# [keyboard] is player 1 and [keyboard2] player 2; the first gamepad is player 1\n"
+           "# and the second, player 2.\n"
+           "# Keys: SDL names (Up, Down, Left, Right, A, S, Return, Space, Right Shift...).\n"
+           "# Gamepad buttons: a, b, x, y, back, guide, start, leftstick, rightstick,\n"
            "# leftshoulder, rightshoulder, lefttrigger, righttrigger, dpup, dpdown, dpleft, dpright.\n"
-           "# efecto_3d activa y desactiva el efecto pseudo-3D; guardar_estado, cargar_estado,\n"
-           "# ranura_anterior y ranura_siguiente manejan los estados guardados; menu_estados\n"
-           "# abre un menú para elegir ranura, guardar y cargar con el mando.\n"
-           "# rebobinar y avance_rapido funcionan mientras se mantienen pulsados; camara_lenta\n"
-           "# la activa y la desactiva. biblioteca abre la lista de juegos con sus carátulas.\n"
-           "# parar cierra el juego y vuelve a la pantalla de inicio (o a la biblioteca).\n\n[teclado]\n";
+           "# pseudo_3d turns the pseudo-3D effect on and off; save_state, load_state, previous_slot\n"
+           "# and next_slot handle save states; states_menu opens a menu to choose a slot, save and\n"
+           "# load with the gamepad. rewind and fast_forward work while held; slow_motion turns it on\n"
+           "# and off. library opens the game list with its covers. stop closes the game and goes\n"
+           "# back to the start screen (or the library). fps_counter shows the FPS counter.\n\n[keyboard]\n";
     for (int i = 0; i < kButtons; ++i) keyList(kButtonNames[i], keys[i]);
     for (int i = 0; i < kHotkeys; ++i) keyList(kHotkeyNames[i], hotkeyKeys[i]);
-    out << "\n[teclado2]\n";
+    out << "\n[keyboard2]\n";
     for (int i = 0; i < kButtons; ++i) keyList(kButtonNames[i], keys2[i]);
-    out << "\n[mando]\n";
+    out << "\n[gamepad]\n";
     for (int i = 0; i < kButtons; ++i) padList(kButtonNames[i], pad[i]);
     for (int i = 0; i < kHotkeys; ++i) padList(kHotkeyNames[i], hotkeyPad[i]);
-    out << "stick_como_cruceta = " << (stickAsDpad ? "si" : "no") << "\n";
-    out << "zona_muerta = " << stickDeadzone << "\n";
+    out << "stick_as_dpad = " << (stickAsDpad ? "yes" : "no") << "\n";
+    out << "deadzone = " << stickDeadzone << "\n";
 }
 
 Input::~Input() {

@@ -140,7 +140,7 @@ also have **its own buttons**: in **Game > Options for this game**, **Controls**
 *This game's own buttons* and assign the keys and gamepad buttons you want; while that
 game is open they replace the general ones (shortcuts such as save state or rewind stay
 the general ones). **Back to the general ones** removes them. They are saved in the game's
-`.ini` in `perfiles\`.
+`.ini` in `profiles\`.
 
 - **State**: save, load and choose a slot; hovering the mouse over a slot shows its
   thumbnail. The **States menu** (F4, or the gamepad's left stick click) pauses the game
@@ -202,7 +202,7 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   shadows from each plane on those behind) and **Live camera** (a 3 to 4 degree sway that
   follows the sprites and the scrolling). **Save the 3D just for this game** creates a
   profile with all those settings (also the 3D effect and the camera) that comes back
-  when that ROM is opened; it is in `perfiles\` next to `states\`. Unticking it puts the
+  when that ROM is opened; it is in `profiles\` next to `states\`. Unticking it puts the
   game back on the general settings.
 
 - **File > Library** (F10): the games in one or more folders and their subfolders, with
@@ -217,8 +217,8 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   keyboard, Page Up and Page Down). **Download missing covers** looks them up by each
   game's name (No-Intro and Redump names, like `Sonic The Hedgehog (USA, Europe).md`,
   almost always match) in libretro-thumbnails, in each console's set, and saves them in
-  `caratulas\` next to `states\` (32X ones in `caratulas\32X\` and Mega CD ones in
-  `caratulas\MegaCD\`). Your own picture works too: a `.png` or `.jpg` with the game's
+  `covers\` next to `states\` (32X ones in `covers\32X\` and Mega CD ones in
+  `covers\MegaCD\`). Your own picture works too: a `.png` or `.jpg` with the game's
   name next to it, or in a `caratulas` or `covers` folder in the games folder. If one
   does not appear, or the wrong one does, **Find cover...** in the game's menu (right
   click, X on the gamepad or the menu key) lets you change the name searched for and
@@ -232,7 +232,7 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   players (from libretro-database's metadat files, downloaded once per console; there are
   none for the Mega CD), a screenshot of the game (from libretro-thumbnails) and its
   Wikipedia description, in plumsg's language or, failing that, in English, with a link
-  to the page. Everything is kept in `fichas\` next to `caratulas\`; **Search again**
+  to the page. Everything is kept in `game-info\` next to `covers\`; **Search again**
   looks up the game's description and screenshot again.
 - **Console > Mega CD BIOS** (or the library's button): the BIOS file for each region
   (Japan, USA and Europe, 128 KB, like `bios_CD_U.bin`). plumsg says whether the file looks
@@ -240,7 +240,7 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   itself. Each disc uses its region's BIOS.
 - **Game > Cheats**: Game Genie codes (`ABCD-EFGH`, they change the ROM) and Action Replay
   (`FF0A12:0009`, or `FF0A12:09` for one byte; they set that RAM value every frame). Each
-  is turned on or off with its checkbox and saved for that game in `trucos\`. A code can
+  is turned on or off with its checkbox and saved for that game in `cheats\`. A code can
   be several joined with `+` (`AJ0T-CA9Y+FFA3C5:0006`). On the Master System and Game Gear
   they are digits: Game Genie `3A8-6CF-E66` (the last three, optional, say which byte
   changes, and every ROM bank is searched) and Action Replay `00C0-1205`. **Cheats from
@@ -284,7 +284,7 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   SoundFont's, and the Game Gear's stereo puts each PSG channel on its side.
 
   plumsg comes with **GeneralUser GS** in `soundfonts\` next to the executable. The `.sf2`
-  files left in `sonido\soundfonts\` (**Open the SoundFonts folder** opens it) show up in
+  files left in `sound\soundfonts\` (**Open the SoundFonts folder** opens it) show up in
   the **SoundFont** drop-down to pick with one click, and **Choose another (.sf2)...**
   opens one from anywhere:
   - **SoundFont 2** format (`.sf2`). `.sf3` (compressed), `.sfz` and `.dls` do not work; an
@@ -302,9 +302,9 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   library): to choose what each instrument sounds like without having to play at the
   same time.
   - **Record from the game** records the music while you play, until **Stop recording**.
-    The recording is saved in `sonido\pistas\` (next to `states\`) as a `.vgz`.
+    The recording is saved in `sound\tracks\` (next to `states\`) as a `.vgz`.
   - **Get songs** looks for the songs in the game's ROM and records them one by one into
-    `sonido\pistas\<game>\`, numbered, without names (`Canción 01.vgz`, `Canción 02.vgz`...), each with one loop and
+    `sound\tracks\<game>\`, numbered, without names (`Song 01.vgz`, `Song 02.vgz`...), each with one loop and
     its loop point so it keeps playing. It starts the game by itself and finds its sound
     driver (the code that drives the FM chip, or the Z80) and how the game asks it for
     music: a byte the game writes and the driver clears (Sega's SMPS and similar), a
@@ -325,13 +325,13 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   - Along the way it learns which are the game's **sound effects** (rings, jumps,
     hits...): the FM instruments that play in the short sounds and in no song. With **Sound
     > Original sound effects** (the default) they sound as on the console and only the
-    music goes through the SoundFont. They are saved in `sonido\<game>.efectos`.
+    music goes through the SoundFont. They are saved in `sound\<game>.effects`.
   - **Mega CD** discs and **MSU-MD** games always sound original: their music is CD audio
     tracks, and the FM and PSG only play effects.
   - The ROM does not have its songs' names (each game keeps its music its own way), but
     [vgmrips](https://vgmrips.net) has almost all of them: its `.zip` for a game, or its
     `.vgm` and `.vgz` files, are opened with **Open .vgm...** and saved in
-    `sonido\pistas\<game>\` (**Folder** opens it). From then on, that game's **Track** list
+    `sound\tracks\<game>\` (**Folder** opens it). From then on, that game's **Track** list
     has each song by its name, like "Green Hill Zone", next to the recordings. The game's
     own sound test works too: start recording and play its songs.
   - **Play** plays it with the game paused. **Original** and **Synthesizer** switch between
@@ -352,8 +352,8 @@ the general ones). **Back to the general ones** removes them. They are saved in 
     effect, and before 0.0.23 that made it pass for another, unassigned instrument. What
     was saved with the old fingerprints still works.
   - What you choose is heard straight away, in the game too, and saved in
-    `sonido\<game>.ini`, for that game only. With the editor open without a game it goes
-    to `sonido\cache.ini`, which applies to all of them (versions up to 0.0.22 saved each
+    `sound\<game>.ini`, for that game only. With the editor open without a game it goes
+    to `sound\cache.ini`, which applies to all of them (versions up to 0.0.22 saved each
     game's settings there too, and they still play); a game's own settings override the
     shared ones.
 - In full screen, **Open ROM...** uses plumsg's own file browser (gamepad-friendly too)
@@ -372,7 +372,7 @@ In **Game > Record**:
   second, to share a bit of a game.
 
 It stops with the same shortcut (or from the menu); the time recorded shows at the top
-center. The files go to the `grabaciones` folder (next to `states`), named after the game
+center. The files go to the `recordings` folder (next to `states`), named after the game
 and the date; **Open the recordings folder** opens it. In the 2D view the console's
 picture is recorded as is, sharp and without the filter (the video at 960x672); in 3D,
 what is on screen, without the menus (the video up to 720 lines and the GIF around
@@ -426,30 +426,30 @@ gives it, and next time it logs in by itself.
   you cannot rewind, use slow motion or cheats, or load states (saving them is fine).
   Turning it on with a game open restarts the game.
 - Offline, achievements are kept and sent when the connection comes back.
-- Each save state has next to it (`.logros`) how the achievements stood at that moment.
+- Each save state has next to it (`.achievements`) how the achievements stood at that moment.
 
 ### From the command line (LaunchBox, Playnite, arcade cabinets)
 
 ```
 plumsg.exe "C:\Games\Sonic.md" --fullscreen --3d
-plumsg.exe "C:\Games\Sonic CD.cue" --region eu --estado 1
+plumsg.exe "C:\Games\Sonic CD.cue" --region eu --load-state 1
 ```
 
 | Option | What it does |
 |---|---|
 | `game` | the cartridge or disc to open |
-| `--fullscreen` / `--windowed` | full screen or windowed (also `--pantalla-completa` / `--ventana`) |
+| `--fullscreen` / `--windowed` | full screen or windowed (up to 0.0.31 they were Spanish, e.g. `--pantalla-completa`; those still work) |
 | `--3d` / `--2d` | with or without the pseudo-3D view |
-| `--filtro f` | `ninguno` (none), `scanlines` or `crt` |
-| `--reescalado r` | `ninguno` (none), `xbr` or `anime4k` (experimental) |
+| `--filter f` | `none`, `scanlines` or `crt` |
+| `--upscaling u` | `none`, `xbr` or `anime4k` (experimental) |
 | `--region r` | `auto`, `jp`, `us` or `eu` |
-| `--estado N` (or `--load-state N`) | loads the game's save state N (0-9) when it opens |
-| `--biblioteca folder` | opens the library of that folder |
-| `--lista` | with `--biblioteca`: shows it as a list instead of a grid |
-| `--grabar f.avi` | records the game from the start, as video (`.avi`) or GIF (`.gif`) |
-| `--host` (or `--alojar`) | hosts a netplay game with the game (on the Network menu's port) |
-| `--join address` (or `--unirse`) | joins that host's netplay game (`IP` or `IP:port`) |
-| `--help` (or `--ayuda`) | shows the options |
+| `--load-state N` | loads the game's save state N (0-9) when it opens |
+| `--library folder` | opens the library of that folder |
+| `--list` | with `--library`: shows it as a list instead of a grid |
+| `--record f.avi` | records the game from the start, as video (`.avi`) or GIF (`.gif`) |
+| `--host` | hosts a netplay game with the game (on the Network menu's port) |
+| `--join address` | joins that host's netplay game (`IP` or `IP:port`) |
+| `--help` | shows the options |
 
 The full screen and region given this way are for that time only: `plumsg.ini` stays as it
 was. In LaunchBox, for example, add plumsg as an emulator with the path to `plumsg.exe`
@@ -457,8 +457,8 @@ and `--fullscreen` in the command-line parameters.
 
 ### If plumsg closes suddenly
 
-If plumsg closes because of a crash, it leaves a report in the `fallos` folder of the
-settings folder (`%APPDATA%\plumsg\plumsg\fallos`, or next to the executable in portable
+If plumsg closes because of a crash, it leaves a report in the `crash-reports` folder of the
+settings folder (`%APPDATA%\plumsg\plumsg\crash-reports`, or next to the executable in portable
 mode): a `.txt` with what happened, where and with which game, and on Windows a `.dmp`
 dump with the same name to open in a debugger. The next time it opens, plumsg says where
 it is. To report the crash, attach both files.
@@ -511,7 +511,7 @@ On Windows, the `windows-installer.yml` workflow builds the installer with Inno 
 - `240p`: Artemio Urbina's 240p Test Suite (`tests/240p/`): 35 scripts go through its
   menus to its test patterns and video tests, and each screen has to look as it did.
 - `frontend_tests` (only with the interface, needs SDL2): each game's own options and
-  buttons, read and written in its `perfiles\` file, and the crash reports.
+  buttons, read and written in its `profiles\` file, and the crash reports.
 - `m68k_json_runner --cycles files.json.gz`: the 68000 single-step tests
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
 - `rom_runner rom.md --frames 300 --png shot.png`: runs a ROM without a window and saves
@@ -520,13 +520,13 @@ On Windows, the `windows-installer.yml` workflow builds the installer with Inno 
   test.md` writes the test ROM to a file.
 - `zex_runner zexdoc.com`: the Z80 exerciser.
 - The emulator also takes screenshots from the command line:
-  `plumsg rom.md --3d --inclinacion 30 --cuadros 120 --captura 3d.png`, with
-  `--filtro crt` or `--filtro scanlines`, or of the library with
-  `plumsg --biblioteca folder --descargar-caratulas --captura library.png`
-  (`--biblioteca` can be repeated, `--bios` opens the BIOS window and
-  `--buscar-caratula` the cover search for the library's first game;
-  `plumsg rom.md --trucos --captura cheats.png` opens the game's cheats with its list and
-  `--opciones-juego` its own options, or `--opciones-juego controles` its buttons).
+  `plumsg rom.md --3d --tilt 30 --frames 120 --screenshot 3d.png`, with
+  `--filter crt` or `--filter scanlines`, or of the library with
+  `plumsg --library folder --download-covers --screenshot library.png`
+  (`--library` can be repeated, `--bios` opens the BIOS window and
+  `--find-cover` the cover search for the library's first game;
+  `plumsg rom.md --cheats --screenshot cheats.png` opens the game's cheats with its list and
+  `--game-options` its own options, or `--game-options controls` its buttons).
 
 ## Without a window: `plumsg-headless`
 

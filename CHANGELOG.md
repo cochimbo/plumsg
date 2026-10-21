@@ -3,11 +3,17 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## Unreleased
+## 0.1.0-beta.1 (unreleased)
 
+- **English names on disk and on the command line.** The settings folders (`profiles`,
+  `cheats`, `covers`, `game-info`, `sound`, `recordings`, `crash-reports`), the keys and
+  values in `plumsg.ini` and the per-game files, the command-line options and the crash
+  reports are now in English. Folders and files from earlier versions are renamed the
+  first time plumsg opens, old `.ini` files keep reading (and are saved in English), and
+  the Spanish options (`--pantalla-completa`, `--biblioteca`...) still work.
 - Compatibility list: [129 games tested](docs/compatibility.md), all of them start.
 - 32X: Darxide (PAL) and Tempo now start.
-- If plumsg closes suddenly, it leaves a report in `fallos\` and says so the next time it
+- If plumsg closes suddenly, it leaves a report in `crash-reports\` and says so the next time it
   opens.
 - About shows the version.
 - Error messages say what to do: a file that is not a game, a state that does not load or

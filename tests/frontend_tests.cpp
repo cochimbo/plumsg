@@ -1,5 +1,5 @@
 // Frontend tests that need SDL's key names but no window: a game's own options and
-// controls, read from and written to its file in the perfiles folder.
+// controls, read from and written to its file in the profiles folder.
 #define SDL_MAIN_HANDLED
 #include <cstdio>
 #include <cstdlib>
@@ -39,8 +39,8 @@ void testGameControls() {
     // [teclado] shares avance_rapido with [velocidad]: a hotkey there is not the option.
     const GameOverrides o = parseGameOverrides(
         "[video]\nfiltro = crt\n[teclado]\na = Z\navance_rapido = F1\n[mando]\nb = y\n", general, generalInput);
-    check(o.has(kGameControls) && o.has("filtro") && o.own.size() == 2, "juego: botones propios y filtro");
-    check(!o.has("avance_rapido"), "juego: un atajo de [teclado] no es la opción avance_rapido");
+    check(o.has(kGameControls) && o.has("filter") && o.own.size() == 2, "juego: botones propios y filtro");
+    check(!o.has("fast_forward"), "juego: un atajo de [teclado] no es la opción avance_rapido");
     check(o.controls.keys[kA] == std::vector<SDL_Scancode>{SDL_SCANCODE_Z}, "juego: A en la tecla Z");
     check(o.controls.pad[kB] == std::vector<SDL_GameControllerButton>{SDL_CONTROLLER_BUTTON_Y}, "juego: B en el botón Y");
     check(o.controls.keys[kStart] == generalInput.keys[kStart], "juego: los botones que no tiene siguen a los generales");
@@ -51,7 +51,7 @@ void testGameControls() {
           "juego: los botones propios se guardan y se leen igual");
 
     const GameOverrides plain = parseGameOverrides("[velocidad]\navance_rapido = 6\n", general, generalInput);
-    check(plain.has("avance_rapido") && !plain.has(kGameControls), "juego: sin [teclado] ni [mando] no hay botones propios");
+    check(plain.has("fast_forward") && !plain.has(kGameControls), "juego: sin [teclado] ni [mando] no hay botones propios");
     check(formatGameOverrides(plain, "juego.md").find("[teclado]") == std::string::npos,
           "juego: sin botones propios no se escribe [teclado]");
 }
@@ -86,9 +86,9 @@ void testSpriteLimitOption() {
     const InputConfig generalInput = InputConfig::defaults();
     check(!general.unlimitedSprites, "sin límite de sprites: desactivado si no se dice");
     const GameOverrides o = parseGameOverrides("[video]\nsin_limite_sprites = si\n", general, generalInput);
-    check(o.has("sin_limite_sprites") && o.values.unlimitedSprites, "sin límite de sprites: un juego con su propio valor");
+    check(o.has("no_sprite_limit") && o.values.unlimitedSprites, "sin límite de sprites: un juego con su propio valor");
     const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
-    check(back.has("sin_limite_sprites") && back.values.unlimitedSprites,
+    check(back.has("no_sprite_limit") && back.values.unlimitedSprites,
           "sin límite de sprites: se guarda y se lee igual en el juego");
     Settings s;
     s.unlimitedSprites = true;
@@ -142,13 +142,13 @@ void testWidescreenOption() {
     check(general.wideLeft == 0 && general.wideRight == 0, "pantalla ancha: desactivada si no se dice");
     const GameOverrides o = parseGameOverrides("[video]\npantalla_ancha_izquierda = 53\npantalla_ancha_derecha = 16\n", general,
                                                generalInput);
-    check(o.has("pantalla_ancha") && o.values.wideLeft == 53 && o.values.wideRight == 16,
+    check(o.has("widescreen") && o.values.wideLeft == 53 && o.values.wideRight == 16,
           "pantalla ancha: un juego con sus propios lados");
     const GameOverrides back = parseGameOverrides(formatGameOverrides(o, "juego.md"), general, generalInput);
-    check(back.has("pantalla_ancha") && back.values.wideLeft == 53 && back.values.wideRight == 16,
+    check(back.has("widescreen") && back.values.wideLeft == 53 && back.values.wideRight == 16,
           "pantalla ancha: se guarda y se lee igual en el juego");
     const GameOverrides old = parseGameOverrides("[video]\npantalla_ancha = 16:9\n", general, generalInput);
-    check(old.has("pantalla_ancha") && old.values.wideLeft == 53 && old.values.wideRight == 53,
+    check(old.has("widescreen") && old.values.wideLeft == 53 && old.values.wideRight == 53,
           "pantalla ancha: lee los 16:9 de antes");
     Settings s;
     s.wideLeft = 32;
@@ -159,6 +159,24 @@ void testWidescreenOption() {
     std::istringstream text(out.str());
     Settings::parse(text, again);
     check(again.wideLeft == 32 && again.wideRight == 56, "pantalla ancha: plumsg.ini lo guarda");
+}
+
+// plumsg.ini up to 0.0.31 was Spanish: it still reads, and the next save is English.
+void testSpanishIni() {
+    std::istringstream old(
+        "[interfaz]\nidioma = fr\n[video]\nescalado = estirar\nsuavizado = si\n[audio]\nvolumen = 35\n"
+        "[consola]\nregion = europa\n[velocidad]\navance_rapido = 7\n");
+    Settings s;
+    Settings::parse(old, s);
+    check(s.language == "fr" && s.render.scale == ScaleMode::Stretch && s.render.smooth && s.volume == 35 &&
+              s.region == Region::EuropePal && s.fastForward == 7,
+          "ini: lee el plumsg.ini en español de antes");
+    std::ostringstream out;
+    s.write(out);
+    const std::string text = out.str();
+    check(text.find("[interface]") != std::string::npos && text.find("scale = stretch") != std::string::npos &&
+              text.find("fast_forward = 7") != std::string::npos && text.find("volumen") == std::string::npos,
+          "ini: lo guarda en inglés");
 }
 
 #ifndef _WIN32
@@ -208,6 +226,7 @@ int main() {
     testWidescreenOption();
     testOverclockOption();
     testEqualizerOption();
+    testSpanishIni();
 #ifndef _WIN32
     testCrashReport();
 #endif

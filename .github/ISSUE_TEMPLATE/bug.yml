@@ -58,7 +58,7 @@ body:
     id: crash-report
     attributes:
       label: Crash report
-      description: If plumsg closed suddenly, attach the .txt and the .dmp from the fallos folder here (plumsg tells you where they are the next time it opens).
+      description: If plumsg closed suddenly, attach the .txt and the .dmp from the crash-reports folder here (plumsg tells you where they are the next time it opens).
   - type: checkboxes
     id: options
     attributes:
