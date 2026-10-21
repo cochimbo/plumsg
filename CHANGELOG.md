@@ -3,7 +3,7 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## Unreleased
+## 0.1.0-beta.1 (unreleased)
 
 - **English names on disk and on the command line.** The settings folders (`profiles`,
   `cheats`, `covers`, `game-info`, `sound`, `recordings`, `crash-reports`), the keys and
