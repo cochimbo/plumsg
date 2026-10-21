@@ -1,0 +1,72 @@
+name: Report a bug
+description: A game that does not work right, a crash, or anything else that fails.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. First, check the [FAQ](https://github.com/cochimbo/plumsg/blob/main/docs/faq.md) and the [compatibility list](https://github.com/cochimbo/plumsg/blob/main/docs/compatibility.md).
+        Do not attach ROMs, discs or BIOS files: the file name is enough.
+  - type: input
+    id: version
+    attributes:
+      label: plumsg version
+      description: It is in Help > About plumsg.
+      placeholder: 0.0.31-alpha
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game
+      description: The exact file name, and the console. Leave it empty if it does not depend on the game.
+      placeholder: Sonic The Hedgehog (USA, Europe).md
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: What you expected and what happened. A screenshot or video helps a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: The steps from opening plumsg. If you have a save state from just before, attach it (it is in the states folder).
+      placeholder: |
+        1. Open the game
+        2. Go to stage 2
+        3. ...
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: Graphics card
+      description: If the bug is about the picture, the 3D or performance.
+      placeholder: Intel UHD 620, NVIDIA GTX 1060...
+  - type: textarea
+    id: crash-report
+    attributes:
+      label: Crash report
+      description: If plumsg closed suddenly, attach the .txt and the .dmp from the fallos folder here (plumsg tells you where they are the next time it opens).
+  - type: checkboxes
+    id: options
+    attributes:
+      label: Options you had on
+      options:
+        - label: 3D effect
+        - label: Cheats
+        - label: Overclock
+        - label: Run-ahead
+        - label: Netplay
+        - label: Roland sound (synthesizer)

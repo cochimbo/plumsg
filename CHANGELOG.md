@@ -1,151 +1,152 @@
-# Registro de cambios
+# Changelog
 
-Lo que trae cada versión, de la más nueva a la más vieja. Los instaladores están en las
-[releases](https://github.com/cochimbo/plumsg/releases).
+What each version brings, newest first. Installers are on the
+[releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## Sin publicar
+## Unreleased
 
-- Lista de compatibilidad: [129 juegos probados](docs/compatibilidad.md), arrancan todos.
-- 32X: Darxide (PAL) y Tempo ya arrancan.
-- Si plumsg se cierra de golpe, deja un informe en `fallos\` y avisa al abrirlo otra vez.
-- Guía rápida, preguntas frecuentes, este registro y una plantilla para avisar de fallos.
-- Pruebas: los estados de versiones anteriores siguen cargando, y el 240p Test Suite
-  comprueba 35 pantallas de vídeo en cada cambio.
+- Compatibility list: [129 games tested](docs/compatibility.md), all of them start.
+- 32X: Darxide (PAL) and Tempo now start.
+- If plumsg closes suddenly, it leaves a report in `fallos\` and says so the next time it
+  opens.
+- About shows the version.
+- Quick start guide, FAQ, this changelog and a bug report template; all documentation is
+  now in English.
+- Tests: save states from earlier versions keep loading, and the 240p Test Suite checks 35
+  video screens on every change.
 
-## 0.0.31 (20-10-2026)
+## 0.0.31 (2026-10-20)
 
-- Sacar canciones: la cuenta final ya no se queda en la primera canción.
+- Get songs: the final count no longer stops at the first song.
 
-## 0.0.30 (20-10-2026)
+## 0.0.30 (2026-10-20)
 
-- NBA Jam TE de 32X arranca (EEPROM serie de los cartuchos).
-- Menú de estados: pestaña Sistema (pausar, reiniciar, parar la emulación).
-- Sonido Roland: mejores sugerencias de instrumentos, batería FM y elección del
-  instrumento comparando el sonido.
-- Ficha del juego: texto japonés y de otras escrituras en vez de `?????`.
-- Logros: el indicador de reto ya no se queda encima de la biblioteca.
+- NBA Jam TE on 32X starts (cartridge serial EEPROM).
+- States menu: System tab (pause, reset, stop emulation).
+- Roland sound: better instrument suggestions, FM drums, and choosing the instrument by
+  comparing the sound.
+- Game details: Japanese and other scripts instead of `?????`.
+- Achievements: the challenge indicator no longer stays on top of the library.
 
-## 0.0.29 (20-10-2026)
+## 0.0.29 (2026-10-20)
 
-- 32X: caché de las SH-2 (Blackthorne pasa de 5 a 30 fps) y temporizadores corregidos.
+- 32X: SH-2 cache (Blackthorne goes from 5 to 30 fps) and fixed timers.
 
-## 0.0.28 (20-10-2026)
+## 0.0.28 (2026-10-20)
 
-- Contador de FPS con gráfica (F).
-- 32X más rápida.
-- Reescalado experimental de la vista 2D: xBR y Anime4K.
-- Los `.chd` ya no pueden desbordar la pila.
+- FPS counter with a graph (F).
+- Faster 32X.
+- Experimental upscaling of the 2D view: xBR and Anime4K.
+- `.chd` files can no longer overflow the stack.
 
-## 0.0.27 (20-10-2026)
+## 0.0.27 (2026-10-20)
 
-- Biblioteca: panel de detalles y vista de lista ordenable.
+- Library: details panel and a sortable list view.
 
-## 0.0.26 (20-10-2026)
+## 0.0.26 (2026-10-20)
 
-- Menú de estados con pestañas de opciones.
+- States menu with option tabs.
 
-## 0.0.25 (19-10-2026)
+## 0.0.25 (2026-10-19)
 
-- F11 y Alt+Intro: pantalla completa también con la biblioteca u otra ventana abierta.
+- F11 and Alt+Enter: full screen also with the library or another window open.
 
-## 0.0.24 (19-10-2026)
+## 0.0.24 (2026-10-19)
 
-- Sacar canciones: Ecco the Dolphin.
+- Get songs: Ecco the Dolphin.
 
-## 0.0.23 (19-10-2026)
+## 0.0.23 (2026-10-19)
 
-- Editor de instrumentos: Sonic 1, tablas alineadas, ecualizador y "Todo a las
-  sugerencias".
+- Instrument editor: Sonic 1, aligned tables, equalizer and "All back to suggestions".
 
-## 0.0.22 (19-10-2026)
+## 0.0.22 (2026-10-19)
 
-- Pantalla ancha: cada lado ajustable al momento y guardable por juego.
+- Widescreen: each side adjustable live and savable per game.
 
-## 0.0.21 (19-10-2026)
+## 0.0.21 (2026-10-19)
 
-- **Master System y Game Gear**: VDP, mappers de Sega y Codemasters, FM (YM2413), modos
-  del TMS9918, pantalla y paleta de la Game Gear, trucos, sonido Roland y sacar canciones.
-- Run-ahead, sin límite de sprites, overclock y pantalla ancha.
-- Grabar vídeo (`.avi`) o GIF.
+- **Master System and Game Gear**: VDP, Sega and Codemasters mappers, FM (YM2413), TMS9918
+  modes, the Game Gear's screen and palette, cheats, Roland sound and Get songs.
+- Run-ahead, no sprite limit, overclock and widescreen.
+- Record video (`.avi`) or GIF.
 
-## 0.0.20 (19-10-2026)
+## 0.0.20 (2026-10-19)
 
-- **RetroAchievements**: logros, clasificaciones y modo hardcore.
-- plumsg en inglés, francés y portugués.
-- Sacar canciones: Streets of Rage 3, Beyond Oasis, Castle of Illusion, QuackShot, NHL 96
-  y otros de EA.
+- **RetroAchievements**: achievements, leaderboards and hardcore mode.
+- plumsg in English, French and Portuguese.
+- Get songs: Streets of Rage 3, Beyond Oasis, Castle of Illusion, QuackShot, NHL 96 and
+  other EA games.
 
-## 0.0.19 (18-10-2026)
+## 0.0.19 (2026-10-18)
 
-- **MSU-MD**: cartuchos con la música en pistas de CD.
-- Botones propios de cada juego.
-- Sacar canciones: juegos con GEMS (Sonic Spinball, Earthworm Jim, Taz).
+- **MSU-MD**: cartridges with their music on CD tracks.
+- Each game's own buttons.
+- Get songs: GEMS games (Sonic Spinball, Earthworm Jim, Taz).
 
-## 0.0.18 (18-10-2026)
+## 0.0.18 (2026-10-18)
 
-- Trucos de internet: las listas de cada juego de libretro-database.
-- Sacar canciones encuentra cómo pide la música el juego (también Streets of Rage 2).
+- Cheats from the internet: each game's lists from libretro-database.
+- Get songs finds how the game asks for its music (Streets of Rage 2 too).
 
-## 0.0.17 (18-10-2026)
+## 0.0.17 (2026-10-18)
 
-- Biblioteca: "Buscar carátula..." en el menú del juego.
+- Library: "Find cover..." in the game's menu.
 
-## 0.0.16 (18-10-2026)
+## 0.0.16 (2026-10-18)
 
-- Efectos de sonido originales con el sonido Roland.
-- Icono de la ciruela y **Juego > Parar emulación** (F12).
+- Original sound effects with the Roland sound.
+- Plum icon and **Game > Stop emulation** (F12).
 
-## 0.0.14 (18-10-2026)
+## 0.0.14 (2026-10-18)
 
-- **Sonido Roland**: la música FM y PSG tocada sobre un SoundFont, con su editor de
-  instrumentos.
-- Sacar canciones de la ROM.
+- **Roland sound**: FM and PSG music played on a SoundFont, with its instrument editor.
+- Get songs from the ROM.
 
-## 0.0.9.1 (18-10-2026)
+## 0.0.9.1 (2026-10-18)
 
-- Mega CD: Silpheed ya no se congela al empezar la fase 1.
-- Opciones de cada juego y menú del botón derecho en la biblioteca.
+- Mega CD: Silpheed no longer freezes as stage 1 starts.
+- Per-game options and a right-click menu in the library.
 
-## 0.0.9 (17-10-2026)
+## 0.0.9 (2026-10-17)
 
-- Marquesina de PLUMSG; el puntero del ratón se esconde al jugar.
+- PLUMSG marquee; the mouse pointer hides while playing.
 
-## 0.0.8 (17-10-2026)
+## 0.0.8 (2026-10-17)
 
-- **Juego en red** a dobles con rollback.
+- Two-player **netplay** with rollback.
 
-## 0.0.7.1 (17-10-2026)
+## 0.0.7.1 (2026-10-17)
 
-- `plumsg-headless`, el emulador sin ventana para pruebas.
-- Abrir juegos desde la línea de comandos (LaunchBox, Playnite).
-- Mega CD: sonido, región y Snatcher.
+- `plumsg-headless`, the emulator without a window, for tests.
+- Opening games from the command line (LaunchBox, Playnite).
+- Mega CD: sound, region and Snatcher.
 
-## 0.0.7 (17-10-2026)
+## 0.0.7 (2026-10-17)
 
-- **Mega CD**: `.cue`, `.iso` y `.chd`, la segunda CPU, PCM, gráficos y audio de CD.
+- **Mega CD**: `.cue`, `.iso` and `.chd`, the second CPU, PCM, graphics and CD audio.
 
-## 0.0.6 (17-10-2026)
+## 0.0.6 (2026-10-17)
 
-- **32X**, sin BIOS.
+- **32X**, without a BIOS.
 
-## 0.0.5 (17-10-2026)
+## 0.0.5 (2026-10-17)
 
-- Biblioteca con varias carpetas y pestañas por consola; BIOS del Mega CD.
+- Library with several folders and a tab per console; Mega CD BIOS.
 
-## 0.0.4 (17-10-2026)
+## 0.0.4 (2026-10-17)
 
-- Biblioteca con carátulas, trucos y filtros CRT.
+- Library with cover art, cheats and CRT filters.
 
-## 0.0.3 (17-10-2026)
+## 0.0.3 (2026-10-17)
 
-- Rebobinado, avance rápido, cámara lenta, perfiles 3D por juego e iluminación.
+- Rewind, fast forward, slow motion, per-game 3D profiles and lighting.
 
-## 0.0.2 (17-10-2026)
+## 0.0.2 (2026-10-17)
 
-- Menú de estados con el mando.
-- VDP: Contra Hard Corps y el borrado horizontal.
-- 3D: el fondo ya no asoma a través del suelo.
+- States menu usable with a gamepad.
+- VDP: Contra Hard Corps and horizontal blanking.
+- 3D: the background no longer shows through the floor.
 
-## 0.0.1 (17-10-2026)
+## 0.0.1 (2026-10-17)
 
-- Primera versión: Mega Drive con pseudo-3D y estados guardados.
+- First version: Mega Drive with pseudo-3D and save states.
