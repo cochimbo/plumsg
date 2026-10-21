@@ -21,9 +21,9 @@ bool read3DKey(const std::string& key, const std::string& value, RenderOptions& 
 // Writes them as key = value lines, with comments.
 void write3D(std::ostream& out, const RenderOptions& r);
 
-// A game profile file: a [perfil_3d] section with the keys above.
+// A game profile file: a [profile_3d] section (or [perfil_3d], as before 0.0.32) with the keys above.
 std::string formatProfile(const RenderOptions& r, const std::string& game);
-// Applies the profile's keys onto `r`; false if `text` has no [perfil_3d] section.
+// Applies the profile's keys onto `r`; false if `text` has no [profile_3d] section.
 bool parseProfile(const std::string& text, RenderOptions& r);
 
 }  // namespace plumsg

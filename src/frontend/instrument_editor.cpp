@@ -117,7 +117,7 @@ RolandSound::Assignments InstrumentEditor::assignmentsFor(const std::string& sou
 std::set<uint32_t> InstrumentEditor::effectsFor(const std::string& soundFolder, const std::string& game) {
     std::set<uint32_t> out;
     if (game.empty()) return out;
-    const std::string text = readText(soundFolder + withoutExtension(fileName(game)) + ".efectos");
+    const std::string text = readText(soundFolder + withoutExtension(fileName(game)) + ".effects");
     size_t pos = 0;
     while (pos < text.size()) {
         size_t end = text.find('\n', pos);
@@ -207,8 +207,8 @@ std::string trackTitle(std::vector<uint8_t> bytes, const std::string& name) {
 
 }  // namespace
 
-// The game's songs (sonido/pistas/<game>/: .vgm, .vgz and vgmrips .zip packs), then its
-// recordings (sonido/pistas/<game> <date>.vgz), newest first.
+// The game's songs (sound/tracks/<game>/: .vgm, .vgz and vgmrips .zip packs), then its
+// recordings (sound/tracks/<game> <date>.vgz), newest first.
 void InstrumentEditor::listTracks() {
     tracks_.clear();
     if (gameName_.empty()) return;
@@ -623,7 +623,7 @@ void InstrumentEditor::startExtraction() {
     message_.clear();
     Extraction* x = extraction_.get();
     const std::string rom = game_, game = gameName_, folder = gameTracksFolder();
-    const std::string effectsPath = folder_ + gameName_ + ".efectos";
+    const std::string effectsPath = folder_ + gameName_ + ".effects";
     x->thread = std::thread([x, rom, game, folder, effectsPath]() {
         SongExtractor extractor;
         std::string error;
@@ -637,7 +637,7 @@ void InstrumentEditor::startExtraction() {
             },
             [&](const SongExtractor::Song& song) {
                 char name[32];
-                std::snprintf(name, sizeof name, "Canción %02d.vgz", saved + 1);
+                std::snprintf(name, sizeof name, "Song %02d.vgz", saved + 1);
                 if (!writeBytes(folder + name, song.vgz.data(), song.vgz.size())) return;
                 std::lock_guard<std::mutex> lock(x->mutex);
                 x->saved = ++saved;

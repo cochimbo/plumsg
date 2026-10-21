@@ -40,7 +40,7 @@ char gDir[1024];
 char gGame[1024];
 bool gInstalled = false;
 
-const char* const kPending = "ultimo-fallo.txt";  // the report nobody has been told about
+const char* const kPending = "last-crash.txt";  // the report nobody has been told about
 
 void copyTo(char* out, size_t size, const std::string& s) {
     const size_t n = s.size() < size - 1 ? s.size() : size - 1;
@@ -76,8 +76,8 @@ void writeReport(const char* base, const char* what, const char* where, const ch
     if (f == INVALID_HANDLE_VALUE) return;
     char text[4096];
     std::snprintf(text, sizeof text,
-                  "plumsg %s se ha cerrado por un fallo.\r\n\r\nQué pasó: %s\r\nDónde: %s\r\nJuego: %s\r\n%s%s%s",
-                  PLUMSG_VERSION, what, where, gGame[0] ? gGame : "(ninguno)", dump[0] ? "Volcado: " : "", dump,
+                  "plumsg %s closed because of a crash.\r\n\r\nWhat happened: %s\r\nWhere: %s\r\nGame: %s\r\n%s%s%s",
+                  PLUMSG_VERSION, what, where, gGame[0] ? gGame : "(none)", dump[0] ? "Dump: " : "", dump,
                   dump[0] ? "\r\n" : "");
     writeAll(f, text);
     CloseHandle(f);
@@ -112,11 +112,11 @@ LONG WINAPI onException(EXCEPTION_POINTERS* info) {
     const EXCEPTION_RECORD* r = info->ExceptionRecord;
     char what[256];
     if (r->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && r->NumberParameters >= 2) {
-        std::snprintf(what, sizeof what, "acceso no válido a memoria (%s en %p)",
-                      r->ExceptionInformation[0] == 0 ? "lectura" : r->ExceptionInformation[0] == 1 ? "escritura" : "ejecución",
+        std::snprintf(what, sizeof what, "invalid memory access (%s at %p)",
+                      r->ExceptionInformation[0] == 0 ? "read" : r->ExceptionInformation[0] == 1 ? "write" : "execute",
                       reinterpret_cast<void*>(r->ExceptionInformation[1]));
     } else {
-        std::snprintf(what, sizeof what, "excepción 0x%08lX", static_cast<unsigned long>(r->ExceptionCode));
+        std::snprintf(what, sizeof what, "exception 0x%08lX", static_cast<unsigned long>(r->ExceptionCode));
     }
     // Where: the module and the offset in it, which stays the same from run to run.
     char where[600];
@@ -154,11 +154,11 @@ void writeReport(const char* base, const char* what, const char* where, const ch
     const int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) return;
     char text[4096];
-    std::snprintf(text, sizeof text, "plumsg %s se ha cerrado por un fallo.\n\nQué pasó: %s\nDónde: %s\nJuego: %s\n",
-                  PLUMSG_VERSION, what, where, gGame[0] ? gGame : "(ninguno)");
+    std::snprintf(text, sizeof text, "plumsg %s closed because of a crash.\n\nWhat happened: %s\nWhere: %s\nGame: %s\n",
+                  PLUMSG_VERSION, what, where, gGame[0] ? gGame : "(none)");
     writeAll(fd, text);
 #if defined(__GLIBC__)
-    writeAll(fd, "\nPila:\n");
+    writeAll(fd, "\nStack:\n");
     void* frames[64];
     backtrace_symbols_fd(frames, backtrace(frames, 64), fd);
 #endif
@@ -177,11 +177,11 @@ void onSignal(int sig) {
     static volatile std::sig_atomic_t once = 0;
     if (!once) {
         once = 1;
-        const char* what = sig == SIGSEGV ? "acceso no válido a memoria (SIGSEGV)"
-                           : sig == SIGFPE ? "error aritmético (SIGFPE)"
-                           : sig == SIGILL ? "instrucción no válida (SIGILL)"
-                           : sig == SIGABRT ? "el programa se abortó (SIGABRT)"
-                                            : "señal inesperada";
+        const char* what = sig == SIGSEGV ? "invalid memory access (SIGSEGV)"
+                           : sig == SIGFPE ? "arithmetic error (SIGFPE)"
+                           : sig == SIGILL ? "illegal instruction (SIGILL)"
+                           : sig == SIGABRT ? "the program aborted (SIGABRT)"
+                                            : "unexpected signal";
         char base[1100];
         reportBase(base, sizeof base);
         writeReport(base, what, "-", "");
@@ -195,11 +195,11 @@ void onTerminate() {
     static bool once = false;
     if (!once) {
         once = true;
-        char what[600] = "excepción de C++ sin capturar";
+        char what[600] = "uncaught C++ exception";
         try {
             if (std::exception_ptr e = std::current_exception()) std::rethrow_exception(e);
         } catch (const std::exception& e) {
-            std::snprintf(what, sizeof what, "excepción de C++ sin capturar: %s", e.what());
+            std::snprintf(what, sizeof what, "uncaught C++ exception: %s", e.what());
         } catch (...) {
         }
         char base[1100];

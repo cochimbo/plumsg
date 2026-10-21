@@ -11,8 +11,9 @@ repository.
 ### Where are my saves, states and settings?
 
 In `%APPDATA%\plumsg\plumsg\` (type that into the Explorer address bar): `plumsg.ini`,
-`states\`, `perfiles\` (per-game settings), `trucos\` (cheats), `caratulas\` (covers),
-`grabaciones\` (recordings), `sonido\` (sound) and `fallos\` (crash reports). Cartridge
+`states\`, `profiles\` (per-game settings), `cheats\`, `covers\`, `game-info\`,
+`recordings\`, `sound\` and `crash-reports\`. Up to 0.0.31 these folders had Spanish
+names (`perfiles`, `trucos`...); plumsg renames them by itself the first time it opens. Cartridge
 saves (`.sav`) go next to the ROM.
 
 To carry everything on a USB stick (**portable mode**), create an empty `plumsg.ini` next
@@ -111,6 +112,6 @@ netplay window: fewer jumps in exchange for a little delay when pressing.
 
 ### plumsg closed suddenly
 
-It leaves a report in `fallos\` (in the settings folder) and tells you where it is the
+It leaves a report in `crash-reports\` (in the settings folder) and tells you where it is the
 next time you open it. [Report the bug](https://github.com/cochimbo/plumsg/issues/new/choose)
 and attach the `.txt` and, on Windows, the `.dmp` with the same name.

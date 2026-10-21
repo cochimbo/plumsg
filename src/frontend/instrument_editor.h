@@ -73,7 +73,7 @@ public:
     // list); false (and the reason shown in the window) if it cannot. A file from
     // elsewhere is copied into the game's track folder, so it is there next time.
     bool openTrack(const std::string& path);
-    // A recording of `game` (its path): saved in sonido/pistas/ and opened.
+    // A recording of `game` (its path): saved in sound/tracks/ and opened.
     void saveRecording(const std::vector<uint8_t>& file, const std::string& game);
 
     // Draws the window; call between ImGui::NewFrame and ImGui::Render.
@@ -89,7 +89,7 @@ private:
     std::vector<Instrument> instruments() const;
     std::string gamePath() const;  // sonido/<game>.ini
     std::string cachePath() const { return folder_ + "cache.ini"; }
-    std::string tracksFolder() const { return folder_ + "pistas/"; }
+    std::string tracksFolder() const { return folder_ + "tracks/"; }
     // A song in the list: a file, or a file inside a .zip.
     struct Track {
         std::string path;

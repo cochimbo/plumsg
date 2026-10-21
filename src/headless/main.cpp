@@ -391,7 +391,7 @@ int extractSongs(const std::string& game, const std::string& dir) {
         },
         [&](const SongExtractor::Song& song) {
             char name[64];
-            std::snprintf(name, sizeof name, "/Cancion %02X.vgz", song.number);
+            std::snprintf(name, sizeof name, "/Song %02X.vgz", song.number);
             std::ofstream out(dir + name, std::ios::binary);
             out.write(reinterpret_cast<const char*>(song.vgz.data()), static_cast<std::streamsize>(song.vgz.size()));
             if (!out) std::fprintf(stderr, "cannot write %s%s\n", dir.c_str(), name);
