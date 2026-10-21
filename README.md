@@ -599,7 +599,7 @@ artifact.
 
 ## Licenses
 
-Own code under the repository's license. Libraries: SDL2 (zlib), Dear ImGui (MIT), miniz
+Own code under the [MIT License](LICENSE). Libraries: SDL2 (zlib), Dear ImGui (MIT), miniz
 (MIT, in `third_party/miniz`), stb_image and stb_image_write (public domain or MIT, in
 `third_party/stb`), ymfm (BSD-3-Clause), the Anime4K network weights (MIT, by bloc97, in
 `src/render/anime4k_shaders.h`, generated with `tools/anime4k.py`), the xBR shader written
