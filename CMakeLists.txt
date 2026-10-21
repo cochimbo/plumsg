@@ -316,6 +316,10 @@ if(PLUMSG_BUILD_TESTS)
            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/headless_test -DSTATES=${CMAKE_CURRENT_SOURCE_DIR}/tests/states
            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_tests.cmake)
 
+  # The 240p Test Suite's screens (tests/240p): each must draw as it did.
+  add_test(NAME 240p COMMAND ${CMAKE_COMMAND} -DHEADLESS=$<TARGET_FILE:plumsg-headless>
+           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/240p_test -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/240p_tests.cmake)
+
   # Tom Harte's 68000 single-step tests: m68k_json_runner path/to/v1/*.json.gz
   add_executable(m68k_json_runner tests/m68k_json_runner.cpp)
   target_link_libraries(m68k_json_runner PRIVATE plumsg_core)

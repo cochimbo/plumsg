@@ -46,7 +46,7 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPLUMSG_BUILD_FRONTEND=OFF
           cmake --build build --parallel --target plumsg-headless core_tests
       - name: Headless tests
-        run: ctest --test-dir build --output-on-failure -R "headless|core_tests"
+        run: ctest --test-dir build --output-on-failure -R "headless|core_tests|240p"
       - name: Sample run with an input script
         run: |
           mkdir -p headless-out

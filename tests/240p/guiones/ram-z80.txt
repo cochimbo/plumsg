@@ -1,0 +1,8 @@
+# 240p Test Suite: ram-z80
+420+2 down
+432+2 down
+444+2 down
+456+2 a
+516+2 down
+528+2 a
+738 quit

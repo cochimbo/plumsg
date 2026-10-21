@@ -1,0 +1,2 @@
+# 240p Test Suite: menu
+540 quit

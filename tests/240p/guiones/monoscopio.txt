@@ -1,0 +1,7 @@
+# 240p Test Suite: monoscopio
+420+2 a
+480+2 down
+492+2 a
+552+2 a
+642+2 a
+822 quit

@@ -1,0 +1,10 @@
+# 240p Test Suite: scroll
+420+2 down
+432+2 a
+492+2 down
+504+2 down
+516+2 down
+528+2 down
+540+2 a
+630+2 a
+810 quit

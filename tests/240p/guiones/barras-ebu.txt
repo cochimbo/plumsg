@@ -1,0 +1,7 @@
+# 240p Test Suite: barras-ebu
+420+2 a
+480+2 a
+540+2 down
+552+2 down
+564+2 a
+774 quit

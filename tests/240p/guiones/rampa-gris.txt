@@ -1,0 +1,11 @@
+# 240p Test Suite: rampa-gris
+420+2 a
+480+2 a
+540+2 down
+552+2 down
+564+2 down
+576+2 down
+588+2 down
+600+2 down
+612+2 a
+822 quit

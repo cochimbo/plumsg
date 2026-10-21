@@ -1,0 +1,8 @@
+# 240p Test Suite: barras-smpte
+420+2 a
+480+2 a
+540+2 down
+552+2 down
+564+2 down
+576+2 a
+786 quit

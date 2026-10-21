@@ -1,0 +1,10 @@
+# 240p Test Suite: convergencia
+420+2 a
+480+2 down
+492+2 a
+552+2 down
+564+2 down
+576+2 down
+588+2 a
+678+2 a
+858 quit

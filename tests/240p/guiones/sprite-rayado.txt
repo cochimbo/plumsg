@@ -1,0 +1,6 @@
+# 240p Test Suite: sprite-rayado
+420+2 down
+432+2 a
+492+2 down
+504+2 a
+714 quit

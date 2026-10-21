@@ -1,0 +1,7 @@
+# 240p Test Suite: sincro-audio
+420+2 down
+432+2 down
+444+2 a
+504+2 down
+516+2 a
+726 quit
