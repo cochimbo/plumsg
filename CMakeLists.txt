@@ -271,18 +271,20 @@ target_link_libraries(plumsg PRIVATE ${PLUMSG_SDL2_TARGET})
 if(WIN32)
   target_link_libraries(plumsg PRIVATE comdlg32 wininet dbghelp)
 endif()
-# The version the crash reports name: the tag and commit it was built from.
+# The version About and the crash reports show: -DPLUMSG_VERSION=... (the release workflow
+# passes the release's), else the tag and commit it was built from.
+set(PLUMSG_VERSION "" CACHE STRING "Version shown in About and in crash reports (empty: git describe)")
+set(plumsg_version "${PLUMSG_VERSION}")
 find_package(Git QUIET)
-set(PLUMSG_VERSION "dev")
-if(GIT_FOUND)
+if(NOT plumsg_version AND GIT_FOUND)
   execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                  OUTPUT_VARIABLE git_version OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-  if(git_version)
-    set(PLUMSG_VERSION "${git_version}")
-  endif()
+                  OUTPUT_VARIABLE plumsg_version OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 endif()
-set_source_files_properties(src/frontend/crash.cpp PROPERTIES COMPILE_DEFINITIONS "PLUMSG_VERSION=\"${PLUMSG_VERSION}\"")
+if(NOT plumsg_version)
+  set(plumsg_version "dev")
+endif()
+set_source_files_properties(src/frontend/crash.cpp src/frontend/ui.cpp PROPERTIES COMPILE_DEFINITIONS "PLUMSG_VERSION=\"${plumsg_version}\"")
 
 # Copy SDL2.dll next to plumsg.exe so it runs straight from the build folder.
 if(WIN32 AND TARGET SDL2::SDL2)

@@ -13,6 +13,12 @@ el emulador de Game Gear, del que hereda el Z80, el PSG, el frontend y el efecto
 
 Las capturas son de la ROM de prueba del propio proyecto, ejecutada en Linux con Mesa.
 
+**Para empezar**: la [guía rápida](docs/guia-rapida.md). Dudas: las
+[preguntas frecuentes](docs/preguntas-frecuentes.md). Qué juegos van: la
+[lista de compatibilidad](docs/compatibilidad.md). Qué trae cada versión: el
+[registro de cambios](CHANGELOG.md). Algo falla:
+[avisa aquí](https://github.com/cochimbo/plumsg/issues/new/choose).
+
 ## Estado
 
 Primera versión. Lo que hay:

@@ -1,0 +1,72 @@
+name: Avisar de un fallo
+description: Un juego que no va bien, un cierre inesperado u otra cosa que falla.
+labels: [fallo]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por avisar. Antes, mira las [preguntas frecuentes](https://github.com/cochimbo/plumsg/blob/main/docs/preguntas-frecuentes.md) y la [lista de compatibilidad](https://github.com/cochimbo/plumsg/blob/main/docs/compatibilidad.md).
+        No adjuntes ROMs, discos ni BIOS: basta con el nombre del archivo.
+  - type: input
+    id: version
+    attributes:
+      label: Versión de plumsg
+      description: Está en Ayuda > Acerca de.
+      placeholder: 0.0.31-alpha
+    validations:
+      required: true
+  - type: input
+    id: juego
+    attributes:
+      label: Juego
+      description: El nombre exacto del archivo, y la consola. Déjalo vacío si no depende del juego.
+      placeholder: Sonic The Hedgehog (USA, Europe).md
+  - type: textarea
+    id: que-pasa
+    attributes:
+      label: Qué pasa
+      description: Qué esperabas y qué pasó. Una captura o un vídeo ayudan mucho.
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Cómo hacer que pase
+      description: Los pasos desde que abres plumsg. Si tienes un estado guardado justo antes, adjúntalo (está en la carpeta states).
+      placeholder: |
+        1. Abrir el juego
+        2. Ir a la fase 2
+        3. ...
+  - type: dropdown
+    id: sistema
+    attributes:
+      label: Sistema
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+        - Otro
+    validations:
+      required: true
+  - type: input
+    id: grafica
+    attributes:
+      label: Tarjeta gráfica
+      description: Si el fallo es de imagen, del 3D o de rendimiento.
+      placeholder: Intel UHD 620, NVIDIA GTX 1060...
+  - type: textarea
+    id: informe
+    attributes:
+      label: Informe del cierre
+      description: Si plumsg se cerró de golpe, adjunta aquí el .txt y el .dmp de la carpeta fallos (plumsg te dice dónde al abrirlo otra vez).
+  - type: checkboxes
+    id: opciones
+    attributes:
+      label: Opciones que tenías puestas
+      options:
+        - label: Efecto 3D
+        - label: Trucos
+        - label: Overclock
+        - label: Run-ahead
+        - label: Juego en red
+        - label: Sonido Roland (sintetizador)

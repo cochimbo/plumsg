@@ -25,6 +25,10 @@
 #define STBI_NO_STDIO
 #include "stb_image.h"
 
+#ifndef PLUMSG_VERSION
+#define PLUMSG_VERSION "dev"
+#endif
+
 namespace plumsg {
 
 namespace {
@@ -1636,6 +1640,7 @@ void Ui::drawAbout() {
         ImGui::Image(static_cast<ImTextureID>(logoTexture_), ImVec2(w, w * logoHeight_ / logoWidth_));
     }
     ImGui::TextUnformatted(tr("plumsg, emulador de Sega Mega Drive / Genesis con efecto pseudo-3D."));
+    ImGui::TextDisabled("%s", trf("Versión %s", PLUMSG_VERSION).c_str());
     ImGui::Spacing();
     ImGui::TextUnformatted(tr("Arrastra una ROM a la ventana o usa Archivo > Abrir ROM."));
     ImGui::SeparatorText(tr("Atajos"));

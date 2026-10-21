@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Preguntas frecuentes
+    url: https://github.com/cochimbo/plumsg/blob/main/docs/preguntas-frecuentes.md
+    about: BIOS, mandos, juego en red, dónde se guardan las partidas...

@@ -2622,6 +2622,9 @@ msgstr "Velocidade normal"
 msgid "Ventana"
 msgstr "Janela"
 
+msgid "Versión %s"
+msgstr "Versão %s"
+
 msgid "Vibraslap"
 msgstr "Vibraslap"
 
