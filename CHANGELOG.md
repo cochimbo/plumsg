@@ -10,6 +10,11 @@ What each version brings, newest first. Installers are on the
 - If plumsg closes suddenly, it leaves a report in `fallos\` and says so the next time it
   opens.
 - About shows the version.
+- Error messages say what to do: a file that is not a game, a state that does not load or
+  save, no internet for covers or cheats.
+- Opening a folder as if it were a game no longer closes plumsg.
+- Get songs is marked experimental on the Master System and Game Gear, where it does not
+  find the music of many games yet.
 - Quick start guide, FAQ, this changelog and a bug report template; all documentation is
   now in English.
 - Tests: save states from earlier versions keep loading, and the 240p Test Suite checks 35

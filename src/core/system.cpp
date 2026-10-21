@@ -98,6 +98,8 @@ ConsoleSystem detectSystem(const std::string& path) {
     if (e == ".zip") {
         // Only the central directory is needed for the names, but miniz wants the file
         // in memory; zips of cartridges are small.
+        std::error_code ec;
+        if (fs::is_directory(fs::u8path(path), ec)) return ConsoleSystem::MegaDrive;  // reading it would throw
         std::ifstream in(fs::u8path(path), std::ios::binary);
         std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         mz_zip_archive zip{};

@@ -132,6 +132,7 @@ private:
     bool open_ = false;
     std::string game_;
     std::string gameName_;  // file name without extension
+    bool smsGame_ = false;  // Master System or Game Gear: Get songs is experimental there
     RolandSound synth_;
     VgmPlayer player_;
     Track track_;               // the open one

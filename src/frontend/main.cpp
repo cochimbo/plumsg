@@ -298,7 +298,7 @@ struct App {
         std::error_code ec;
         std::filesystem::create_directories(std::filesystem::u8path(statesDir), ec);
         if (!console.saveState(data) || !writeFile(statePath(slot), data))
-            return trf("No se pudo guardar el estado en %s", statePath(slot).c_str());
+            return trf("No se pudo guardar el estado en %s: ¿falta espacio en el disco?", statePath(slot).c_str());
         refreshSlot(slot);
         return trf("Estado guardado en la ranura %d", slot);
     }
@@ -308,7 +308,8 @@ struct App {
         std::vector<uint8_t> data;
         if (!readFile(statePath(slot), data)) return trf("La ranura %d está vacía", slot);
         std::string error;
-        if (!console.loadState(data, &error)) return trf("No se pudo cargar el estado: %s", error.c_str());
+        if (!console.loadState(data, &error))
+            return trf("No se pudo cargar el estado: %s. La partida sigue como estaba.", error.c_str());
         if (loaded) *loaded = true;
         return trf("Estado cargado de la ranura %d", slot);
     }
@@ -766,8 +767,15 @@ int main(int argc, char** argv) {
             runAheadFailed = false;
         } else {
             useGameOptions(app->romLoaded ? app->romPath : std::string());
-            if (!capturing) ui->showError(app->lastError);
-            if (app->lastError.find("BIOS") != std::string::npos) ui->openBios();  // the game is fine: it waits for its BIOS
+            // A missing BIOS already says what to do; anything else is the file's fault.
+            const bool bios = app->lastError.find("BIOS") != std::string::npos;
+            if (!capturing)
+                ui->showError(bios ? app->lastError
+                                   : trf("No se pudo abrir %s:\n%s\n\nplumsg abre cartuchos de Mega Drive, 32X, Master System y "
+                                         "Game Gear y discos de Mega CD. Si el archivo es uno de ellos, puede estar "
+                                         "incompleto o dañado: prueba a copiarlo otra vez.",
+                                         fileName(path).c_str(), app->lastError.c_str()));
+            if (bios) ui->openBios();  // the game is fine: it waits for its BIOS
             else settings.removeRecent(path);
         }
         save();

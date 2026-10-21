@@ -134,6 +134,20 @@ void testZipRom() {
     std::remove(path.c_str());
 }
 
+// A folder named like a game (dropped on the window, or given on the command line) is
+// refused with a message; reading it as a file used to throw and close plumsg.
+void testFolderAsRom() {
+    std::error_code ec;
+    for (const char* name : {"core_tests_folder.md", "core_tests_folder.zip"}) {
+        std::filesystem::create_directory(name, ec);
+        Cartridge cart;
+        std::string error;
+        check(!cart.loadFile(name, &error) && !error.empty(), "a folder is not loaded as a ROM");
+        detectSystem(name);  // the library asks every entry: must not throw either
+        std::filesystem::remove(name, ec);
+    }
+}
+
 void testSram() {
     // A 1 MB ROM with no SRAM in its header still gets the usual 64 KB at 0x200000.
     std::vector<uint8_t> rom = testrom::build();
@@ -2628,6 +2642,7 @@ int main() {
     testHeader();
     testSmd();
     testZipRom();
+    testFolderAsRom();
     testSram();
     testEeprom();
     testPads();
