@@ -200,6 +200,7 @@ target_link_libraries(plumsg_imgui PUBLIC ${PLUMSG_SDL2_TARGET})
 
 add_executable(plumsg WIN32
   src/frontend/main.cpp
+  src/frontend/crash.cpp
   src/frontend/input.cpp
   src/frontend/audio.cpp
   src/frontend/settings.cpp
@@ -268,8 +269,22 @@ if(TARGET SDL2::SDL2main)
 endif()
 target_link_libraries(plumsg PRIVATE ${PLUMSG_SDL2_TARGET})
 if(WIN32)
-  target_link_libraries(plumsg PRIVATE comdlg32 wininet)
+  target_link_libraries(plumsg PRIVATE comdlg32 wininet dbghelp)
 endif()
+# The version About and the crash reports show: -DPLUMSG_VERSION=... (the release workflow
+# passes the release's), else the tag and commit it was built from.
+set(PLUMSG_VERSION "" CACHE STRING "Version shown in About and in crash reports (empty: git describe)")
+set(plumsg_version "${PLUMSG_VERSION}")
+find_package(Git QUIET)
+if(NOT plumsg_version AND GIT_FOUND)
+  execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                  OUTPUT_VARIABLE plumsg_version OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+endif()
+if(NOT plumsg_version)
+  set(plumsg_version "dev")
+endif()
+set_source_files_properties(src/frontend/crash.cpp src/frontend/ui.cpp PROPERTIES COMPILE_DEFINITIONS "PLUMSG_VERSION=\"${plumsg_version}\"")
 
 # Copy SDL2.dll next to plumsg.exe so it runs straight from the build folder.
 if(WIN32 AND TARGET SDL2::SDL2)
@@ -300,7 +315,12 @@ if(PLUMSG_BUILD_TESTS)
 
   # plumsg-headless end to end: hashes, savestates, input scripts and checks.
   add_test(NAME headless COMMAND ${CMAKE_COMMAND} -DHEADLESS=$<TARGET_FILE:plumsg-headless>
-           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/headless_test -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_tests.cmake)
+           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/headless_test -DSTATES=${CMAKE_CURRENT_SOURCE_DIR}/tests/states
+           -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_tests.cmake)
+
+  # The 240p Test Suite's screens (tests/240p): each must draw as it did.
+  add_test(NAME 240p COMMAND ${CMAKE_COMMAND} -DHEADLESS=$<TARGET_FILE:plumsg-headless>
+           -DWORK=${CMAKE_CURRENT_BINARY_DIR}/240p_test -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/240p_tests.cmake)
 
   # Tom Harte's 68000 single-step tests: m68k_json_runner path/to/v1/*.json.gz
   add_executable(m68k_json_runner tests/m68k_json_runner.cpp)
@@ -313,7 +333,7 @@ if(PLUMSG_BUILD_TESTS)
   # The frontend's files (a game's own options and controls); needs SDL2 for the key names.
   if(PLUMSG_BUILD_FRONTEND)
     add_executable(frontend_tests tests/frontend_tests.cpp src/frontend/game_options.cpp src/frontend/input.cpp
-                   src/frontend/settings.cpp)
+                   src/frontend/settings.cpp src/frontend/crash.cpp)
     target_link_libraries(frontend_tests PRIVATE plumsg_core ${PLUMSG_SDL2_TARGET})
     add_test(NAME frontend_tests COMMAND frontend_tests)
   endif()

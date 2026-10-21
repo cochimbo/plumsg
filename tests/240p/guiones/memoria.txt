@@ -1,0 +1,9 @@
+# 240p Test Suite: memoria
+420+2 down
+432+2 down
+444+2 down
+456+2 a
+516+2 down
+528+2 down
+540+2 a
+750 quit

@@ -1,461 +1,478 @@
-<p align="center"><img src="src/frontend/assets/icon.png" alt="La ciruela de plumsg" width="128"><br><img src="docs/marquesina.png" alt="PLUMSG" width="640"></p>
+<p align="center"><img src="src/frontend/assets/icon.png" alt="The plumsg plum" width="128"><br><img src="docs/marquesina.png" alt="PLUMSG" width="640"></p>
 
 # plumsg
 
-Emulador de **Sega Mega Drive / Genesis**, **32X** y **Mega CD** para Windows (y Linux) con un efecto
-**pseudo-3D** que separa las capas de la consola y las pone a distintas profundidades, y
-con **estados guardados** (savestates). Parte de [plumgg](https://github.com/cochimbo/plumgg),
-el emulador de Game Gear, del que hereda el Z80, el PSG, el frontend y el efecto 3D.
+A **Sega Mega Drive / Genesis**, **32X** and **Mega CD / Sega CD** emulator for Windows (and
+Linux) with a **pseudo-3D** effect that pulls the console's layers apart and puts them at
+different depths, and with **save states**. It grew out of
+[plumgg](https://github.com/cochimbo/plumgg), the Game Gear emulator, from which it inherits
+the Z80, the PSG, the frontend and the 3D effect.
 
-| 2D | Pseudo-3D (vóxeles) |
+| 2D | Pseudo-3D (voxels) |
 |---|---|
-| ![ROM de prueba en 2D](docs/captura-2d.png) | ![La misma imagen en pseudo-3D](docs/captura-3d.png) |
+| ![Test ROM in 2D](docs/captura-2d.png) | ![The same picture in pseudo-3D](docs/captura-3d.png) |
 
-Las capturas son de la ROM de prueba del propio proyecto, ejecutada en Linux con Mesa.
+The screenshots are of the project's own test ROM, running on Linux with Mesa.
 
-## Estado
+**Getting started**: the [quick start](docs/quick-start.md). Questions: the
+[FAQ](docs/faq.md). Which games work: the [compatibility list](docs/compatibility.md).
+What each version brings: the [changelog](CHANGELOG.md). Something fails:
+[report it here](https://github.com/cochimbo/plumsg/issues/new/choose).
 
-Primera versión. Lo que hay:
+## Status
 
-- **CPU 68000** completa, con tiempos por instrucción: pasa 1.000.020 de los 1.000.060
-  tests de un solo paso de Tom Harte (los 40 que fallan son casos raros de *address error*).
-- **VDP**: modos H32/H40, V28/V30 (PAL), planos A y B con scroll por pantalla, por fila de
-  tiles y por línea, scroll vertical por columnas, ventana, sprites (enlaces, límites por
-  línea, enmascarado, colisión), prioridades, sombra/resalte, entrelazado, DMA (68000,
-  relleno y copia), interrupciones de línea y de cuadro, contador HV.
-- **Z80** con su mapa de memoria, BUSREQ/RESET y banco hacia el 68000.
-- **Sonido**: YM2612 (con [ymfm](https://github.com/aaronsgiles/ymfm)) y PSG, mezclados y
-  remuestreados a la salida.
-- **Cartuchos** `.bin`, `.md`, `.gen`, `.smd` (entrelazado) y dentro de `.zip`; SRAM a
-  `.sav` junto a la ROM; la EEPROM serie (I2C) con la que guardan los juegos de Acclaim
-  (NBA Jam, NBA Jam TE también en 32X, NFL Quarterback Club...) y algunos de Sega y EA
-  (Wonder Boy in Monster World, Mega Man: The Wily Wars, John Madden '93...), también a
-  `.sav`; mapper de Super Street Fighter II.
-- **32X** (`.32x`, o un `.bin` con su cabecera): las dos CPU SH-2 con sus módulos
-  (división, DMA, temporizadores, puerto serie entre ellas), el VDP de la 32X (los modos de
-  píxeles empaquetados, color directo y por tramos, con su paleta y la prioridad frente a
-  la Mega Drive), el sonido PWM, los registros de comunicación y la FIFO del 68000. No
-  hace falta BIOS: plumsg hace lo que hacen las ROM de arranque. En el 3D, la imagen de la
-  32X va plana al fondo y el efecto sigue en los planos de la Mega Drive. La caché de las
-  SH-2 cuenta para el tiempo (leer de la ROM lo que ya está en caché no espera, como en la
-  consola), y una SH-2 que solo espera a que cambie un registro no se emula instrucción a
-  instrucción: su reloj avanza hasta que algo puede cambiarlo.
-- **Master System** (`.sms`, o un `.bin` con su cabecera `TMR SEGA`), como la ejecuta la
-  propia Mega Drive: el Z80 y el PSG de la consola con el VDP de la Master System (modo 4:
-  fondo con scroll por línea y bloqueos de scroll, tiles delante de los sprites, columna
-  izquierda tapada, 64 sprites de 8x8 u 8x16 con zoom, interrupciones de línea y de cuadro,
-  modos de 192, 224 y 240 líneas), el mapper de Sega con la RAM de cartucho (a `.sav`) y
-  los mandos: botón 1 = A o B, botón 2 = C, Start = Pausa. También el mapper de
-  Codemasters, los modos antiguos del TMS9918 (Graphics I y II, texto, sus sprites) y la
-  unidad FM (YM2413), que está en las consolas japonesas (región Japón) y, con
-  **Consola > Sonido FM de la Master System**, en todas. En el 3D el fondo
-  va al plano B, sus tiles de prioridad al plano A y los sprites a su capa.
-- **Game Gear** (`.gg`, o un `.bin` con la cabecera de Game Gear): la misma máquina con su
-  pantalla de 160x144 (la parte central de la imagen, mostrada a 4:3), su paleta de 4096
-  colores, el botón START (el Start del mando) y el sonido en estéreo.
-- **Mega CD** (`.cue` con sus `.bin` o `.wav`, `.iso`, `.chd`, o un `.bin` de una sola
-  pista de datos): la segunda CPU 68000 a 12,5 MHz con su memoria de programa, la memoria
-  de palabras compartida (modos de 2 y 1 Mbit, con las vistas por celdas y por puntos), la
-  memoria de guardado (a `.sav` junto al disco), el controlador de CD (con DMA), la unidad
-  emulada a nivel de órdenes, el chip gráfico que gira y escala sellos, el temporizador,
-  el chip PCM RF5C164 y el audio de CD, todo mezclado con el FM y el PSG. Necesita la BIOS
-  de la región del disco (ver abajo).
-- **MSU-MD**: cartuchos parcheados por la comunidad para tocar su música desde pistas de
-  CD. Basta con dejar junto al cartucho un `.cue` con su mismo nombre (`Sonic.md` y
-  `Sonic.cue`, con las pistas que nombre): el juego arranca con el Mega CD conectado, como
-  en una consola de verdad (modo 1). Vale la BIOS del Mega CD de cualquier región; sin
-  ninguna el juego va solo, sin música en CD, y plumsg lo dice. En la biblioteca ese `.cue`
-  no sale como un disco aparte, y la partida se guarda en el cartucho.
-- **Mandos** de 3 y 6 botones, dos jugadores, región automática o forzada.
-- **Estados**: 10 ranuras por juego con fecha y miniatura.
-- **Pseudo-3D**: cinco planos (cielo, plano B, plano A, sprites y tiles con prioridad),
-  en estilo de capas o de vóxeles, con extrusión de los tiles macizos del plano A.
-  Iluminación lateral con sombras suaves entre planos, cámara viva que se balancea
-  siguiendo la acción, y la inclinación de la cámara se puede quitar para mirar de frente.
-- **Perfiles 3D por juego**: cada ROM puede guardar sus propios ajustes del 3D.
-- **Rebobinado, avance rápido y cámara lenta**.
-- **Run-ahead**: quita 1 o más fotogramas de retardo a los mandos, como en RetroArch.
-- **Sin límite de sprites**: se ven todos los sprites de cada línea, sin el parpadeo que
-  causa el límite de la consola.
-- **Pantalla ancha** 16:9, 16:10 o a medida, cada lado por separado: se ve lo que hay más
-  allá de los bordes de la pantalla.
-- **Overclock**: el procesador de la consola va más rápido, para los juegos que se ralentizan.
-- **Filtros de imagen** para la vista 2D: scanlines o CRT completo.
-- **Reescalado experimental** de la vista 2D en la tarjeta gráfica: xBR o la red neuronal Anime4K.
-- **Trucos** Game Genie y Action Replay, guardados por juego, con las listas de trucos de
-  cada juego de libretro-database para elegirlos de un menú.
-- **Biblioteca de juegos** con carátulas, que se descargan solas de libretro-thumbnails,
-  con varias carpetas y una pestaña por consola (Mega Drive, 32X y Mega CD).
-- **BIOS del Mega CD**: se indica dónde está la de cada región (no viene con plumsg), y
-  cada disco arranca con la de su región.
-- **Juego en red** a dobles, con *rollback* como GGPO: cada uno en su ordenador, por
-  internet o en casa (ver abajo).
-- **RetroAchievements**: los logros, retos y clasificaciones de retroachievements.org,
-  con tu cuenta de allí y modo hardcore (ver abajo).
+First version. What it has:
 
-No hay ROMs comerciales en el repositorio ni en CI: las pruebas usan una ROM generada por el
-propio proyecto (`tests/test_rom.h`), un programa de 32X propio (`tests/mars/`) y otro de
-Mega CD con un disco hecho en memoria (`tests/megacd/`). Tampoco las BIOS del Mega CD.
+- **68000 CPU**, complete, with per-instruction timing: it passes 1,000,020 of Tom
+  Harte's 1,000,060 single-step tests (the 40 that fail are rare *address error* cases).
+- **VDP**: H32/H40 and V28/V30 (PAL) modes, planes A and B with full-screen, per-tile-row
+  and per-line scrolling, per-column vertical scrolling, window, sprites (links, per-line
+  limits, masking, collision), priorities, shadow/highlight, interlace, DMA (68000, fill
+  and copy), line and frame interrupts, HV counter.
+- **Z80** with its memory map, BUSREQ/RESET and the bank into 68000 space.
+- **Sound**: YM2612 (with [ymfm](https://github.com/aaronsgiles/ymfm)) and PSG, mixed and
+  resampled to the output.
+- **Cartridges**: `.bin`, `.md`, `.gen`, `.smd` (interleaved) and inside a `.zip`; SRAM to a
+  `.sav` next to the ROM; the serial (I2C) EEPROM that Acclaim games save to (NBA Jam, NBA
+  Jam TE also on 32X, NFL Quarterback Club...) and some Sega and EA ones (Wonder Boy in
+  Monster World, Mega Man: The Wily Wars, John Madden '93...), also to a `.sav`; the Super
+  Street Fighter II mapper.
+- **32X** (`.32x`, or a `.bin` with its header): both SH-2 CPUs with their modules
+  (division, DMA, timers, the serial port between them), the 32X VDP (packed pixel,
+  direct color and run-length modes, with its palette and its priority against the Mega
+  Drive), PWM sound, the communication registers and the 68000's FIFO. No BIOS needed:
+  plumsg does what the boot ROMs do. In 3D, the 32X picture sits flat at the back and the
+  effect stays on the Mega Drive planes. The SH-2 cache counts for timing (reading from
+  ROM what is already cached does not wait, as on the console), and an SH-2 that is only
+  waiting for a register to change is not emulated instruction by instruction: its clock
+  jumps ahead until something can change it.
+- **Master System** (`.sms`, or a `.bin` with its `TMR SEGA` header), run the way the Mega
+  Drive itself runs it: the console's Z80 and PSG with the Master System VDP (mode 4:
+  background with per-line scrolling and scroll locks, tiles in front of sprites, the
+  blanked left column, 64 8x8 or 8x16 sprites with zoom, line and frame interrupts, 192,
+  224 and 240-line modes), the Sega mapper with cartridge RAM (to a `.sav`) and the pads:
+  button 1 = A or B, button 2 = C, Start = Pause. Also the Codemasters mapper, the old
+  TMS9918 modes (Graphics I and II, text, their sprites) and the FM unit (YM2413), which
+  Japanese consoles have (Japan region) and, with **Console > Master System FM sound**,
+  all of them. In 3D the background goes to plane B, its priority tiles to plane A and
+  the sprites to their layer.
+- **Game Gear** (`.gg`, or a `.bin` with the Game Gear header): the same machine with its
+  160x144 screen (the middle of the picture, shown at 4:3), its 4096-color palette, the
+  START button (the pad's Start) and stereo sound.
+- **Mega CD** (`.cue` with its `.bin` or `.wav` files, `.iso`, `.chd`, or a single data
+  track `.bin`): the second 68000 CPU at 12.5 MHz with its program RAM, the shared word
+  RAM (2 and 1 Mbit modes, with the cell and dot views), backup RAM (to a `.sav` next to
+  the disc), the CD controller (with DMA), the drive emulated at command level, the
+  graphics chip that rotates and scales stamps, the timer, the RF5C164 PCM chip and CD
+  audio, all mixed with the FM and the PSG. It needs the BIOS for the disc's region (see
+  below).
+- **MSU-MD**: cartridges patched by the community to play their music from CD tracks.
+  Just put a `.cue` with the same name next to the cartridge (`Sonic.md` and `Sonic.cue`,
+  with the tracks it names): the game starts with the Mega CD attached, as on a real
+  console (mode 1). A Mega CD BIOS of any region works; with none the game runs on its
+  own, without CD music, and plumsg says so. That `.cue` does not show up as a separate
+  disc in the library, and the game saves to the cartridge.
+- **Pads** with 3 and 6 buttons, two players, automatic or forced region.
+- **Save states**: 10 slots per game with date and thumbnail.
+- **Pseudo-3D**: five planes (sky, plane B, plane A, sprites and priority tiles), in
+  layers or voxel style, with extrusion of plane A's solid tiles. Side lighting with soft
+  shadows between planes, a live camera that sways following the action, and the camera
+  tilt can be removed to look straight on.
+- **Per-game 3D profiles**: each ROM can keep its own 3D settings.
+- **Rewind, fast forward and slow motion**.
+- **Run-ahead**: removes 1 or more frames of input lag, as in RetroArch.
+- **No sprite limit**: every sprite on a line is shown, without the flicker the console's
+  limit causes.
+- **Widescreen** 16:9, 16:10 or custom, each side separately: you see what lies beyond
+  the edges of the screen.
+- **Overclock**: the console's processor runs faster, for games that slow down.
+- **Image filters** for the 2D view: scanlines or full CRT.
+- **Experimental upscaling** of the 2D view on the graphics card: xBR or the Anime4K
+  neural network.
+- **Cheats**: Game Genie and Action Replay, saved per game, with each game's cheat lists
+  from libretro-database to pick from a menu.
+- **Game library** with cover art, downloaded by itself from libretro-thumbnails, with
+  several folders and a tab per console (Mega Drive, 32X and Mega CD).
+- **Mega CD BIOS**: you say where each region's BIOS is (it does not come with plumsg),
+  and each disc starts with its region's.
+- Two-player **netplay** with GGPO-style *rollback*: each player on their own computer,
+  over the internet or at home (see below).
+- **RetroAchievements**: retroachievements.org achievements, challenges and leaderboards,
+  with your account there and hardcore mode (see below).
 
-## Uso
+There are no commercial ROMs in the repository or in CI: the tests use a ROM generated by
+the project itself (`tests/test_rom.h`), its own 32X program (`tests/mars/`), its own Mega
+CD program with a disc built in memory (`tests/megacd/`) and the free 240p Test Suite
+(`tests/240p/`). Nor are the Mega CD BIOS files there.
 
-Arrastra una ROM o un disco a la ventana, usa **Archivo > Abrir ROM** o abre la **biblioteca** (F10).
+## Usage
 
-| Tecla | Acción |
+Drag a ROM or a disc onto the window, use **File > Open ROM...** or open the **library**
+(F10).
+
+| Key | Action |
 |---|---|
-| Flechas | Cruceta |
-| A, S, D | Botones A, B, C |
-| Q, W, E | Botones X, Y, Z |
-| Intro | Start |
-| Mayús derecha | Mode |
-| F3 | Efecto 3D |
-| F5 / F8 | Guardar / cargar estado en la ranura actual |
-| F4 (mando: clic del stick izquierdo) | Menú de estados |
-| F10 o Ctrl+L | Biblioteca de juegos |
-| F6 / F7 | Ranura anterior / siguiente |
-| Retroceso (mando: gatillo izquierdo), mantener | Rebobinar |
-| Tab (mando: gatillo derecho), mantener | Avance rápido |
-| F9 | Cámara lenta (activar / desactivar) |
-| F | Contador de FPS con su gráfica (activar / desactivar) |
-| F1 | Reiniciar |
-| F12 | Parar la emulación: cierra el juego y vuelve a la pantalla de inicio (o a la biblioteca) |
-| F2 | Cambiar de vista (2D / capas de depuración) |
-| P | Pausa |
-| M | Silenciar |
-| F11 o Alt+Intro | Pantalla completa |
-| Esc | Mostrar u ocultar la barra de menús |
+| Arrows | D-pad |
+| A, S, D | Buttons A, B, C |
+| Q, W, E | Buttons X, Y, Z |
+| Enter | Start |
+| Right Shift | Mode |
+| F3 | 3D effect |
+| F5 / F8 | Save / load state in the current slot |
+| F4 (gamepad: left stick click) | States menu |
+| F10 or Ctrl+L | Game library |
+| F6 / F7 | Previous / next slot |
+| Backspace (gamepad: left trigger), hold | Rewind |
+| Tab (gamepad: right trigger), hold | Fast forward |
+| F9 | Slow motion (on / off) |
+| F | FPS counter with its graph (on / off) |
+| F1 | Reset |
+| F12 | Stop emulation: closes the game and goes back to the start screen (or the library) |
+| F2 | Change view (2D / debug layers) |
+| P | Pause |
+| M | Mute |
+| F11 or Alt+Enter | Full screen |
+| Esc | Show or hide the menu bar |
 
-Todo se puede cambiar en **Opciones > Controles**. El primer mando conectado es el
-jugador 1 y el segundo, el jugador 2; el teclado del jugador 2 está vacío por defecto.
-Cada juego puede tener además **sus propios botones**: en **Juego > Opciones de este
-juego**, pestaña **Controles**, marca *Botones propios de este juego* y asigna las teclas y
-los botones del mando que quieras; mientras ese juego está abierto sustituyen a los
-generales (los atajos como guardar estado o rebobinar siguen siendo los generales).
-**Volver a los generales** los quita. Se guardan en el `.ini` del juego en `perfiles\`.
+Everything can be changed in **Options > Controls**. The first gamepad connected is
+player 1 and the second, player 2; player 2's keyboard is empty by default. Each game can
+also have **its own buttons**: in **Game > Options for this game**, **Controls** tab, tick
+*This game's own buttons* and assign the keys and gamepad buttons you want; while that
+game is open they replace the general ones (shortcuts such as save state or rewind stay
+the general ones). **Back to the general ones** removes them. They are saved in the game's
+`.ini` in `perfiles\`.
 
-- **Estado**: guardar, cargar y elegir ranura; al pasar el ratón sobre una ranura se ve su
-  miniatura. El **menú de estados** (F4, o el clic del stick izquierdo del mando) pausa el
-  juego y muestra las 10 ranuras con su miniatura: arriba y abajo para elegir, A (o Intro)
-  para cargar, Y (o Espacio) para guardar y B (o Esc) para cerrar. Los estados están en `%APPDATA%\plumsg\plumsg\states\` (o en `states\` junto
-  al ejecutable si hay un `plumsg.ini` a su lado, modo portátil). Un estado de otra ROM o
-  dañado se rechaza sin tocar la partida. Cargar un estado restaura también la SRAM en
-  memoria; el `.sav` se sigue escribiendo al salir, al cambiar de ROM o al parar la emulación.
-- **Juego > Parar emulación** (F12): cierra el juego sin cerrar plumsg. Guarda su partida de
-  cartucho, sale de la partida en red si la hay y vuelve a la pantalla de inicio, o a la
-  biblioteca si tiene carpetas.
-- **Juego > Velocidad**: cámara lenta y cuántos segundos se pueden rebobinar (20 por
-  defecto, hasta 60; 0 lo desactiva), a qué velocidad va el avance rápido (4x) y la cámara
-  lenta (50 %). El sonido acompaña: más agudo al acelerar y más grave a cámara lenta. Al
-  rebobinar el juego va hacia atrás fotograma a fotograma, en silencio, y al soltar sigue
-  desde ahí.
-- **Juego > Velocidad > Contador de FPS** (F, o en la pestaña Velocidad del menú de
-  estados): los fotogramas por segundo del juego frente a los que debería dar (60 o 50),
-  los cuadros que llegan a la ventana, los milisegundos que tarda en emularse cada
-  fotograma (y qué parte del tiempo de un fotograma son) y los del bucle entero, con dos
-  gráficas de los últimos 10 segundos (FPS y milisegundos, con la línea del objetivo
-  discontinua). **Posición del contador** elige la esquina.
-- **Juego > Latencia > Run-ahead** (desactivado por defecto, de 1 a 4 fotogramas): en cada
-  fotograma el juego corre por delante ese número de fotogramas, sin sonido, se ve su
-  imagen y vuelve atrás, así lo que pulsas se ve antes. Con 1 suele bastar; cada fotograma
-  más pide más al ordenador. También se puede fijar por juego en Opciones de este juego.
-- **Opciones > Vídeo > Sin límite de sprites** (desactivado por defecto): la consola dibuja
-  como mucho 20 sprites por línea (16 en modo estrecho) y 320 píxeles de sprites, y los
-  juegos van turnando cuáles se quedan fuera, por eso parpadean. Con esta opción se dibujan
-  todos. La consola sigue avisando al juego de que se ha pasado igual que la real, así que
-  el juego se comporta igual: no afecta a partidas en red, run-ahead, logros ni estados. El
-  truco de tapar sprites con uno en x = 0 se respeta. Si un juego parpadea igual, es que
-  esconde los sprites él mismo. También se puede fijar por juego.
-- **Opciones > Vídeo > Pantalla ancha** (desactivada por defecto): botones para 4:3, 16:10 y
-  16:9, y un deslizador por lado (de 0 a 56 columnas) que cambia la imagen al momento,
-  siempre centrada. A los lados se dibuja lo que el juego tiene en los planos y los sprites
-  más allá de los bordes. Como el juego nunca pensó que eso se viera, en algunos aparecen
-  enemigos antes de tiempo, trozos del nivel aún sin dibujar o cosas escondidas fuera; se
-  arregla quitando columnas de ese lado (en Sonic, por ejemplo, el derecho, porque el nivel
-  se dibuja justo antes de entrar en pantalla). «Guardar la pantalla ancha solo para este
-  juego» guarda los dos lados para el juego abierto, y también se fija en Opciones de este
-  juego. El juego no lo nota: no afecta a partidas en red, run-ahead, logros ni estados (la
-  miniatura del estado se queda en 4:3). El headless la prueba con `--widescreen 16:9` o
-  `--widescreen 53,16` (izquierda, derecha).
-- **Consola**: región (automática según la cabecera, Japón, EE. UU. o Europa/PAL) y tipo
-  de mando (3 o 6 botones) de cada puerto. Cambiar la región reinicia el juego.
-- **Consola > Overclock** (desactivado por defecto): el 68000 va al 150, 200, 300 o 400 % de su
-  velocidad, así los juegos que se ralentizan cuando hay mucho en pantalla acaban cada
-  fotograma a tiempo. El resto de la consola (Z80, VDP, sonido, Mega CD y 32X) sigue a su
-  velocidad. Al contrario que el límite de sprites, el juego sí corre distinto: alguno puede
-  ir demasiado rápido o fallar, y entonces se desactiva para ese juego (se puede fijar por
-  juego en Opciones de este juego). Va en los estados guardados; en una partida en red
-  manda el del anfitrión, y en modo hardcore de RetroAchievements se queda desactivado.
-- **Opciones > Vídeo**: escalado, 4:3 o píxeles cuadrados, y las opciones del 3D
-  (estilo, profundidad, inclinación, giro, zoom, grosor, extrusión, sombras, plano B con
-  prioridad delante, plano B plano para juegos que pintan el cielo en él). La cámara del
-  3D se gira arrastrando con el ratón o con el stick derecho, y se centra con doble clic.
-  Tres casillas cambian cómo se nota la profundidad: **Inclinar la cámara** (sin marcar,
-  mira de frente y la imagen coincide con la 2D), **Iluminación** (luz lateral sobre los
-  bloques y sombras suaves de cada plano sobre los de detrás) y **Cámara viva** (un
-  balanceo de 3 a 4 grados que sigue a los sprites y al scroll).
-  **Guardar el 3D solo para este juego** crea un perfil con todos esos ajustes (también
-  el efecto 3D y la cámara) que se recupera al abrir esa ROM; está en `perfiles\` junto a
-  `states\`. Al desmarcarlo, el juego vuelve a los ajustes generales.
+- **State**: save, load and choose a slot; hovering the mouse over a slot shows its
+  thumbnail. The **States menu** (F4, or the gamepad's left stick click) pauses the game
+  and shows the 10 slots with their thumbnails: up and down to choose, A (or Enter) to
+  load, Y (or Space) to save and B (or Esc) to close. States are in
+  `%APPDATA%\plumsg\plumsg\states\` (or in `states\` next to the executable if there is a
+  `plumsg.ini` beside it, portable mode). A state from another ROM, or a damaged one, is
+  rejected without touching the game. Loading a state also restores the SRAM in memory;
+  the `.sav` is still written when quitting, changing ROM or stopping emulation.
+- **Game > Stop emulation** (F12): closes the game without closing plumsg. It saves the
+  cartridge save, leaves the netplay session if there is one and goes back to the start
+  screen, or to the library if it has folders.
+- **Game > Speed**: slow motion and how many seconds can be rewound (20 by default, up to
+  60; 0 turns it off), how fast fast forward goes (4x) and slow motion (50 %). The sound
+  follows: higher when speeding up and lower in slow motion. When rewinding the game goes
+  backwards frame by frame, silently, and on release it carries on from there.
+- **Game > Speed > FPS counter** (F, or in the Speed tab of the States menu): the game's
+  frames per second against what it should be (60 or 50), the frames that reach the
+  window, the milliseconds each frame takes to emulate (and what share of a frame's time
+  that is) and those of the whole loop, with two graphs of the last 10 seconds (FPS and
+  milliseconds, with the target as a dashed line). **Counter position** picks the corner.
+- **Game > Latency > Run-ahead** (off by default, 1 to 4 frames): every frame the game runs
+  that many frames ahead, without sound, shows that picture and goes back, so what you
+  press shows up sooner. 1 is usually enough; each extra frame asks more of the computer.
+  It can also be set per game in Options for this game.
+- **Options > Video > No sprite limit** (off by default): the console draws at most 20
+  sprites per line (16 in narrow mode) and 320 pixels of sprites, and games take turns
+  over which ones are left out, which is why they flicker. With this option all of them
+  are drawn. The console still tells the game it went over, just like the real one, so
+  the game behaves the same: it does not affect netplay, run-ahead, achievements or
+  states. The trick of hiding sprites with one at x = 0 is respected. If a game still
+  flickers, it is hiding the sprites itself. It can also be set per game.
+- **Options > Video > Widescreen** (off by default): buttons for 4:3, 16:10 and 16:9, and a
+  slider per side (0 to 56 columns) that changes the picture live, always centered. On
+  the sides you see what the game has in its planes and sprites beyond the edges. Since
+  the game never expected that to be seen, some show enemies early, bits of the level not
+  drawn yet or things hidden off screen; that is fixed by removing columns from that side
+  (in Sonic, for example, the right one, because the level is drawn just before it comes
+  into view). "Save the widescreen only for this game" keeps both sides for the open
+  game, and it can also be set in Options for this game. The game does not notice: it
+  does not affect netplay, run-ahead, achievements or states (the state thumbnail stays
+  4:3). The headless build tests it with `--widescreen 16:9` or `--widescreen 53,16`
+  (left, right).
+- **Console**: region (automatic from the header, Japan, USA or Europe/PAL) and pad type
+  (3 or 6 buttons) for each port. Changing the region resets the game.
+- **Console > Overclock** (off by default): the 68000 runs at 150, 200, 300 or 400 % of its
+  speed, so games that slow down when there is a lot on screen finish each frame on
+  time. The rest of the console (Z80, VDP, sound, Mega CD and 32X) keeps its speed.
+  Unlike the sprite limit, the game does run differently: some may go too fast or fail,
+  and then it is turned off for that game (it can be set per game in Options for this
+  game). It is stored in save states; in netplay the host's setting rules, and in
+  RetroAchievements hardcore mode it stays off.
+- **Options > Video**: scaling, 4:3 or square pixels, and the 3D options (style, depth,
+  tilt, rotation, zoom, thickness, extrusion, shadows, plane B with priority in front,
+  flat plane B for games that paint the sky on it). The 3D camera turns by dragging with
+  the mouse or with the right stick, and is centered with a double click. Three
+  checkboxes change how the depth shows: **Tilt the camera** (unticked, it looks straight
+  on and the picture matches the 2D one), **Lighting** (side light on the blocks and soft
+  shadows from each plane on those behind) and **Live camera** (a 3 to 4 degree sway that
+  follows the sprites and the scrolling). **Save the 3D just for this game** creates a
+  profile with all those settings (also the 3D effect and the camera) that comes back
+  when that ROM is opened; it is in `perfiles\` next to `states\`. Unticking it puts the
+  game back on the general settings.
 
-- **Archivo > Biblioteca** (F10): los juegos de una o varias carpetas y sus subcarpetas,
-  con su carátula, en una cuadrícula que se maneja con el ratón, el teclado o el mando
-  (cruceta para elegir, A para jugar, B para cerrar, Y para buscar). La primera vez pide la
-  carpeta; con **Añadir carpeta...** se suman más y con **Quitar** se sacan. Cada juego
-  sabe de qué consola es por su extensión: `.md`, `.gen`, `.smd` y `.bin` son de Mega
-  Drive (un `.bin` con la cabecera de la 32X o de un disco se reconoce también), `.32x` de
-  32X, `.sms` de Master System, `.gg` de Game Gear, y `.cue`, `.chd` e `.iso` de Mega CD; las pistas `.bin` de
-  un `.cue` no salen aparte. Las pestañas **Todos**, **Mega Drive**, **32X**, **Mega CD**,
-  **Master System** y **Game Gear** filtran por
-  consola (con el mando, los botones L y R; con el teclado, RePág y AvPág).
-  **Descargar carátulas que faltan** las busca por el nombre de cada juego (los nombres de
-  No-Intro y Redump, como `Sonic The Hedgehog (USA, Europe).md`, aciertan casi siempre) en
-  libretro-thumbnails, en el juego de carátulas de cada consola, y las guarda en
-  `caratulas\` junto a `states\` (las de 32X en `caratulas\32X\` y las de Mega CD en
-  `caratulas\MegaCD\`). También vale una imagen propia: un `.png` o `.jpg` con el nombre
-  del juego a su lado, o en una carpeta `caratulas` o `covers` de la carpeta de juegos.
-  Si una no sale, o sale la que no es, **Buscar carátula...** en el menú del juego (botón
-  derecho, X en el mando o la tecla de menú) deja cambiar el nombre que se busca y lista
-  las carátulas de nombre parecido (vale con parte del nombre, una errata o `2` por `II`);
-  al pulsar una se ve, y **Usar esta carátula** la guarda como la del juego. Si
-  hay carpetas elegidas, la biblioteca se abre al arrancar sin juego.
-  **Cuadrícula** y **Lista** cambian la vista (también Select en el mando o la tecla V):
-  la lista tiene columnas de título, consola, año, género, desarrolladora y jugadores, y
-  se ordena pulsando su cabecera o con el desplegable de orden, que vale para las dos.
-  Con **Detalles** marcado, un panel a la derecha muestra el juego elegido: su carátula,
-  un botón para jugar, desarrolladora, distribuidora, género, año y jugadores (de los
-  ficheros metadat de libretro-database, que se bajan una vez por consola; el Mega CD no
-  tiene), una captura del juego (de libretro-thumbnails) y la descripción de Wikipedia, en
-  el idioma de plumsg o, si no la hay, en inglés, con un enlace a la página. Todo se guarda
-  en `fichas\` junto a `caratulas\`; **Buscar otra vez** vuelve a buscar la descripción y
-  la captura del juego.
-- **Consola > BIOS del Mega CD** (o el botón de la biblioteca): el archivo de la BIOS de
-  cada región (Japón, EE. UU. y Europa, 128 KB, como `bios_CD_U.bin`). plumsg dice si el
-  archivo parece una BIOS y de qué región es, y **Buscar en las carpetas de la
-  biblioteca** las encuentra solas. Cada disco usará la BIOS de su región.
-- **Juego > Trucos**: códigos Game Genie (`ABCD-EFGH`, cambian la ROM) y Action Replay
-  (`FF0A12:0009`, o `FF0A12:09` para un byte; fijan ese valor de la RAM en cada cuadro).
-  Cada uno se activa o desactiva con su casilla y se guarda para ese juego en `trucos\`.
-  Un código puede ser varios unidos con `+` (`AJ0T-CA9Y+FFA3C5:0006`). En Master System y
-  Game Gear son de cifras: Game Genie `3A8-6CF-E66` (los tres últimos, opcionales, dicen
-  qué byte cambia, y se busca en todos los bancos de la ROM) y Action Replay `00C0-1205`.
-  En **Trucos de internet** salen los de la lista del juego en
-  [libretro-database](https://github.com/libretro/libretro-database) (la base de trucos de
-  RetroArch, casi 2.100 listas de Mega Drive, más las de 32X y Mega CD), que se descarga al
-  abrir la ventana: la del nombre de la ROM primero y en **Lista** otras de nombre parecido
-  (las de Action Replay, otras regiones). Se filtran por nombre (vienen en inglés) y
-  **Añadir** pone el truco en la lista del juego, activado. Si el juego comprueba la ROM
-  (Sonic se queda en rojo), se añade también su **Master Code**.
-- **Opciones > Vídeo > Filtro 2D**: **Scanlines** (las líneas oscuras entre líneas de la
-  tele, más finas donde la imagen es brillante) o **CRT** (además, la pantalla un poco
-  curva, la máscara de colores y las esquinas oscuras), con su intensidad. Se notan más
-  cuanto más grande es la ventana, mejor a pantalla completa.
-- **Opciones > Vídeo > Reescalado (experimental)**: dibuja la imagen 2D más grande de lo
-  que la hace la consola, adivinando el detalle. **xBR** redondea los bordes en escalera de
-  las diagonales (un solo paso, sirve cualquier gráfica). **Anime4K** es una red neuronal
-  pequeña que dobla la imagen una vez, o dos a partir de unas 540 líneas, y queda más suave.
-  Mientras está puesto sustituye al filtro 2D; la vista 3D y las grabaciones no lo usan. También
-  está en la pestaña de opciones del menú de estados y en las opciones propias de cada juego.
-- **Sonido**: volumen, silenciar y el modo de la música. **Original** es el sonido de los
-  chips. **Sintetizador** toca la música del FM y del PSG como notas General MIDI sobre un
-  SoundFont, como sonaría en un módulo como el Roland SC-55; las voces y la batería digitalizada (el DAC)
-  siguen sonando como en la consola. El control **Sonido original** deja oír también el FM y el PSG
-  por debajo, y **Reverb** y **Chorus** añaden ambiente. Cada instrumento del juego recibe
-  un instrumento General MIDI con unas reglas automáticas, que se cambian a mano en el
-  **Editor de instrumentos**. Las reglas miran el sonido (su envolvente, lo brillante que es y
-  la relación entre sus operadores: bajos, pianos, campanas, marimbas, flautas, clarinetes,
-  metales, órganos, cuerdas, pads, guitarras...) y cómo lo toca el juego: tras las primeras
-  notas, un sonido corto que repite casi siempre la misma nota pasa a la batería (bombo,
-  caja, toms o charles), el registro habitual dice si es un bajo, los acordes lo hacen un
-  pad y las notas muy cortas, cuerdas en pizzicato. Con **Elegir instrumentos comparando el sonido** (en el menú
-  Sonido, encendido de serie), cuando un instrumento FM lleva 8 notas se toca a escondidas en
-  un YM2612 aparte junto a cada instrumento de su familia General MIDI en el SoundFont, se
-  comparan su espectro y su envolvente y suena el más parecido. Se hace en segundo plano y
-  llega unos cuadros después. Todo esto se puede cambiar solo para un juego desde sus opciones.
-  En la Master System y la Game Gear también: el FM (YM2413) toca sus 15 instrumentos de
-  serie como los General MIDI que imitan (violín, guitarra, piano...) y su batería con la
-  del SoundFont, y el estéreo de la Game Gear lleva cada canal del PSG a su lado.
+- **File > Library** (F10): the games in one or more folders and their subfolders, with
+  their cover, in a grid you can drive with the mouse, the keyboard or a gamepad (D-pad to
+  choose, A to play, B to close, Y to search). The first time it asks for the folder;
+  **Add folder...** adds more and **Remove** takes them out. Each game's console comes
+  from its extension: `.md`, `.gen`, `.smd` and `.bin` are Mega Drive (a `.bin` with a 32X
+  or disc header is recognized too), `.32x` is 32X, `.sms` Master System, `.gg` Game Gear,
+  and `.cue`, `.chd` and `.iso` Mega CD; the `.bin` tracks of a `.cue` do not show up on
+  their own. The **All**, **Mega Drive**, **32X**, **Mega CD**, **Master System** and
+  **Game Gear** tabs filter by console (with a gamepad, the L and R buttons; with the
+  keyboard, Page Up and Page Down). **Download missing covers** looks them up by each
+  game's name (No-Intro and Redump names, like `Sonic The Hedgehog (USA, Europe).md`,
+  almost always match) in libretro-thumbnails, in each console's set, and saves them in
+  `caratulas\` next to `states\` (32X ones in `caratulas\32X\` and Mega CD ones in
+  `caratulas\MegaCD\`). Your own picture works too: a `.png` or `.jpg` with the game's
+  name next to it, or in a `caratulas` or `covers` folder in the games folder. If one
+  does not appear, or the wrong one does, **Find cover...** in the game's menu (right
+  click, X on the gamepad or the menu key) lets you change the name searched for and
+  lists the covers with similar names (part of the name, a typo or `2` for `II` will do);
+  clicking one shows it, and **Use this cover** saves it as the game's. If folders are
+  set, the library opens on start when there is no game. **Grid** and **List** switch the
+  view (also Select on the gamepad or the V key): the list has title, console, year,
+  genre, developer and players columns, and is sorted by clicking its header or with the
+  sort drop-down, which works for both. With **Details** ticked, a panel on the right
+  shows the chosen game: its cover, a play button, developer, publisher, genre, year and
+  players (from libretro-database's metadat files, downloaded once per console; there are
+  none for the Mega CD), a screenshot of the game (from libretro-thumbnails) and its
+  Wikipedia description, in plumsg's language or, failing that, in English, with a link
+  to the page. Everything is kept in `fichas\` next to `caratulas\`; **Search again**
+  looks up the game's description and screenshot again.
+- **Console > Mega CD BIOS** (or the library's button): the BIOS file for each region
+  (Japan, USA and Europe, 128 KB, like `bios_CD_U.bin`). plumsg says whether the file looks
+  like a BIOS and which region it is, and **Search the library's folders** finds them by
+  itself. Each disc uses its region's BIOS.
+- **Game > Cheats**: Game Genie codes (`ABCD-EFGH`, they change the ROM) and Action Replay
+  (`FF0A12:0009`, or `FF0A12:09` for one byte; they set that RAM value every frame). Each
+  is turned on or off with its checkbox and saved for that game in `trucos\`. A code can
+  be several joined with `+` (`AJ0T-CA9Y+FFA3C5:0006`). On the Master System and Game Gear
+  they are digits: Game Genie `3A8-6CF-E66` (the last three, optional, say which byte
+  changes, and every ROM bank is searched) and Action Replay `00C0-1205`. **Cheats from
+  the internet** shows those in the game's list in
+  [libretro-database](https://github.com/libretro/libretro-database) (RetroArch's cheat
+  database, almost 2,100 Mega Drive lists, plus 32X and Mega CD ones), downloaded when the
+  window opens: the one with the ROM's name first, and other similarly named ones in
+  **List** (Action Replay ones, other regions). They are filtered by name and **Add** puts
+  the cheat in the game's list, turned on. If the game checks its ROM (Sonic stays red),
+  its **Master Code** is added too.
+- **Options > Video > 2D filter**: **Scanlines** (the dark lines between the TV's lines,
+  thinner where the picture is bright) or **CRT** (also the slightly curved screen, the
+  color mask and the dark corners), with their strength. They show more the bigger the
+  window, best in full screen.
+- **Options > Video > Upscaling (experimental)**: draws the 2D picture bigger than the
+  console makes it, guessing the detail. **xBR** rounds off the stair-stepped edges of
+  diagonals (a single pass, any graphics card will do). **Anime4K** is a small neural
+  network that doubles the picture once, or twice from about 540 lines, and looks
+  smoother. While it is on it replaces the 2D filter; the 3D view and recordings do not
+  use it. It is also in the options tab of the States menu and in each game's own
+  options.
+- **Sound**: volume, mute and the music mode. **Original** is the chips' own sound.
+  **Synthesizer** plays the FM and PSG music as General MIDI notes on a SoundFont, as it
+  would sound on a module like the Roland SC-55; voices and sampled drums (the DAC) keep
+  sounding as on the console. The **Original sound** control lets you hear the FM and PSG
+  underneath too, and **Reverb** and **Chorus** add ambience. Each of the game's
+  instruments gets a General MIDI instrument from some automatic rules, which can be
+  changed by hand in the **Instrument editor**. The rules look at the sound (its envelope,
+  how bright it is and the relation between its operators: basses, pianos, bells,
+  marimbas, flutes, clarinets, brass, organs, strings, pads, guitars...) and at how the
+  game plays it: after the first notes, a short sound that almost always repeats the same
+  note goes to the drums (kick, snare, toms or hi-hat), the usual register says whether it
+  is a bass, chords make it a pad and very short notes, pizzicato strings. With **Choose
+  instruments by comparing the sound** (in the Sound menu, on by default), once an FM
+  instrument has played 8 notes it is played quietly on a separate YM2612 next to each
+  instrument of its General MIDI family in the SoundFont, their spectrum and envelope are
+  compared and the closest one is used. This happens in the background and arrives a few
+  frames later. All of this can be changed for one game only from its options. On the
+  Master System and Game Gear too: the FM (YM2413) plays its 15 built-in instruments as
+  the General MIDI ones they imitate (violin, guitar, piano...) and its drums with the
+  SoundFont's, and the Game Gear's stereo puts each PSG channel on its side.
 
-  plumsg trae **GeneralUser GS** en `soundfonts\` junto al ejecutable. Los `.sf2` que se
-  dejen en `sonido\soundfonts\` (**Abrir la carpeta de SoundFonts** la abre) salen en el
-  desplegable **SoundFont** para elegir uno con un clic, y **Elegir otro (.sf2)...** abre
-  uno de cualquier sitio:
-  - Formato **SoundFont 2** (`.sf2`). No valen los `.sf3` (comprimidos), `.sfz` ni `.dls`;
-    un `.sf3` se puede pasar a `.sf2` con Polyphone.
-  - Tiene que estar ordenado como **General MIDI**: los 128 instrumentos en el banco 0 y la
-    batería en el banco 128. Los SoundFonts GM, GS y XG lo cumplen; uno de un solo
-    instrumento sonará igual en todos los canales o en silencio.
-  - Se carga entero en memoria y ocupa unas dos veces lo que pesa: uno de 30 MB va al
-    instante, uno de 500 MB tarda unos segundos y necesita 1 GB libre.
-  - Si el archivo no se puede leer o no es un SoundFont, plumsg avisa con un mensaje.
+  plumsg comes with **GeneralUser GS** in `soundfonts\` next to the executable. The `.sf2`
+  files left in `sonido\soundfonts\` (**Open the SoundFonts folder** opens it) show up in
+  the **SoundFont** drop-down to pick with one click, and **Choose another (.sf2)...**
+  opens one from anywhere:
+  - **SoundFont 2** format (`.sf2`). `.sf3` (compressed), `.sfz` and `.dls` do not work; an
+    `.sf3` can be turned into an `.sf2` with Polyphone.
+  - It has to be laid out as **General MIDI**: the 128 instruments in bank 0 and the drums
+    in bank 128. GM, GS and XG SoundFonts are; a single-instrument one will sound the same
+    on every channel, or silent.
+  - It is loaded whole into memory and takes about twice its size: a 30 MB one is
+    instant, a 500 MB one takes a few seconds and needs 1 GB free.
+  - If the file cannot be read or is not a SoundFont, plumsg says so.
 
-  Algunos que suenan bien: GeneralUser GS (el incluido), FluidR3 GM y los que imitan el
-  SC-55 o el SC-88.
-- **Sonido > Editor de instrumentos** (o **Editor de instrumentos...** en el menú de un juego
-  de la biblioteca): para elegir con qué suena cada instrumento sin tener que jugar a la vez.
-  - **Grabar del juego** graba la música mientras juegas, hasta **Parar la grabación**. La
-    grabación se guarda en `sonido\pistas\` (junto a `states\`) como `.vgz`.
-  - **Sacar canciones** busca las canciones en la ROM del juego y las graba una a una en
-    `sonido\pistas\<juego>\`, sin nombre ("Canción 1", "Canción 2"...), cada una con una
-    vuelta y su punto de vuelta para que siga sonando. Arranca el juego por su cuenta y
-    localiza su driver de sonido (el código que toca el chip FM, o el Z80) y cómo le pide el
-    juego la música: un byte que el juego escribe y el driver vacía (el SMPS de Sega y
-    parecidos), una rutina a la que el juego llama con el número en un registro (como
-    Streets of Rage 2) o en la pila (los juegos de EA, como NHL 96, que tienen dos rutinas,
-    cada una con sus canciones, y Ecco the Dolphin), o un anillo de órdenes en la memoria
-    del Z80 donde el juego deja mensajes (el GEMS de los juegos de Sega of America, como
-    Sonic Spinball). Luego le va pidiendo cada número. Probado con Sonic 1, 2 y 3, Gunstar
-    Heroes, Ristar, Shinobi III, Golden Axe, Streets of Rage 2, Sonic Spinball, Earthworm
-    Jim, Taz in Escape from Mars, NHL 96, Ecco the Dolphin, Castle of Illusion, QuackShot,
-    Streets of Rage 3, Beyond Oasis y Shadowrun (estos tres con el driver en el 68000, que
-    le pasa las notas al Z80). En la Master System y la Game Gear, donde el juego y el
-    driver comparten el Z80, busca el byte que el juego escribe y el código que toca el PSG
-    o el FM vacía; los `.vgz` llevan el PSG, el YM2413 y el estéreo de la Game Gear
-    (probado de momento con un juego de prueba propio). Lo que suena en uno o dos canales,
-    aunque dure (un motor, una alarma), cuenta como efecto y no como canción. Tarda unos
-    minutos, con una barra de progreso, y se puede parar.
-  - De paso aprende cuáles son los **efectos de sonido** del juego (anillos, saltos,
-    golpes...): los instrumentos FM que suenan en los sonidos cortos y en ninguna canción.
-    Con **Sonido > Efectos de sonido originales** (la opción de serie) suenan como en la
-    consola y solo la música pasa por el SoundFont. Se guardan en `sonido\<juego>.efectos`.
-  - Los discos de **Mega CD** y los juegos **MSU-MD** suenan siempre originales: su música
-    son pistas de audio del CD, y el FM y el PSG solo hacen efectos.
-  - La ROM no trae sus canciones con nombre (cada juego guarda su música a su manera), pero
-    [vgmrips](https://vgmrips.net) tiene casi todas: su `.zip` de un juego, o sus `.vgm` y
-    `.vgz`, se abren con **Abrir .vgm...** y se guardan en `sonido\pistas\<juego>\`
-    (**Carpeta** la abre). Desde entonces, la lista **Pista** de ese juego trae cada canción
-    por su nombre, como "Green Hill Zone", junto a las grabaciones. También vale el sound
-    test del juego: se pone a grabar y se van tocando sus canciones.
-  - **Tocar** la reproduce con el juego en pausa. **Original** y **Sintetizador** cambian entre
-    los dos sonidos en el mismo punto, para comparar, y la lista **SoundFont** de debajo (la
-    misma de **Sonido**) cambia de SoundFont sin salir del editor. **Ecualizador...** sube o
-    baja graves, medios y agudos del sintetizador (de -12 a 12 dB), aquí y en los juegos.
-    Cada canal (FM 1-6, DAC, PSG 1-3 y ruido) tiene **Solo** y **Silencio**.
-  - La tabla enseña los instrumentos de la pista (FM A, FM B...: las letras para no
-    confundirlos con los canales FM 1-6), con lo que suenan, sus canales y sus notas, en
-    filas a la altura de las de los canales; los canales del instrumento elegido se marcan.
-    Los que suenan en ese momento salen en verde. A cada uno se le puede dar un
-    **Instrumento** General MIDI (con octava y volumen), una pieza de la **Batería** GM, o
-    dejarle su **Sonido original**. **Escuchar solo este** calla todo lo demás, **Volver a la
-    sugerencia** deshace lo elegido en ese instrumento y **Todo a las sugerencias...**, en
-    todos los del juego.
-  - Un instrumento FM se reconoce por sus registros, sin su volumen ni su velocidad de
-    release: drivers como el de Sonic ponen el release al máximo para cortar una nota o
-    dejar sitio a un efecto, y antes de la 0.0.23 eso lo hacía pasar por otro instrumento
-    sin asignar. Lo guardado con las huellas de antes sigue valiendo.
-  - Lo elegido se oye al momento, también en el juego, y se guarda en
-    `sonido\<juego>.ini`, solo para ese juego. Con el editor abierto sin juego va a
-    `sonido\cache.ini`, que vale para todos (las versiones hasta la 0.0.22 guardaban ahí
-    también lo de cada juego, y se sigue oyendo); lo de cada juego manda sobre lo común.
-- A pantalla completa, **Abrir ROM** usa el explorador propio de plumsg (también con el
-  mando) en vez del diálogo de Windows, que se quedaba escondido detrás del juego.
+  Some that sound good: GeneralUser GS (the included one), FluidR3 GM and those that
+  imitate the SC-55 or SC-88.
+- **Sound > Instrument editor** (or **Instrument editor...** in a game's menu in the
+  library): to choose what each instrument sounds like without having to play at the
+  same time.
+  - **Record from the game** records the music while you play, until **Stop recording**.
+    The recording is saved in `sonido\pistas\` (next to `states\`) as a `.vgz`.
+  - **Get songs** looks for the songs in the game's ROM and records them one by one into
+    `sonido\pistas\<game>\`, numbered, without names (`Canción 01.vgz`, `Canción 02.vgz`...), each with one loop and
+    its loop point so it keeps playing. It starts the game by itself and finds its sound
+    driver (the code that drives the FM chip, or the Z80) and how the game asks it for
+    music: a byte the game writes and the driver clears (Sega's SMPS and similar), a
+    routine the game calls with the number in a register (like Streets of Rage 2) or on
+    the stack (EA games, like NHL 96, which have two routines, each with its songs, and
+    Ecco the Dolphin), or a ring of commands in Z80 memory where the game leaves messages
+    (the GEMS of Sega of America games, like Sonic Spinball). Then it asks for each
+    number in turn. Tested with Sonic 1, 2 and 3, Gunstar Heroes, Ristar, Shinobi III,
+    Golden Axe, Streets of Rage 2, Sonic Spinball, Earthworm Jim, Taz in Escape from Mars,
+    NHL 96, Ecco the Dolphin, Castle of Illusion, QuackShot, Streets of Rage 3, Beyond
+    Oasis and Shadowrun (those three with the driver on the 68000, which passes the notes
+    to the Z80). On the Master System and Game Gear, where the game and the driver share
+    the Z80, it looks for the byte the game writes and the code that drives the PSG or the
+    FM clears; the `.vgz` files have the PSG, the YM2413 and the Game Gear's stereo
+    (tested so far with one of the project's own test games). Whatever plays on one or two
+    channels, even for a long time (an engine, an alarm), counts as a sound effect and not
+    a song. It takes a few minutes, with a progress bar, and can be stopped.
+  - Along the way it learns which are the game's **sound effects** (rings, jumps,
+    hits...): the FM instruments that play in the short sounds and in no song. With **Sound
+    > Original sound effects** (the default) they sound as on the console and only the
+    music goes through the SoundFont. They are saved in `sonido\<game>.efectos`.
+  - **Mega CD** discs and **MSU-MD** games always sound original: their music is CD audio
+    tracks, and the FM and PSG only play effects.
+  - The ROM does not have its songs' names (each game keeps its music its own way), but
+    [vgmrips](https://vgmrips.net) has almost all of them: its `.zip` for a game, or its
+    `.vgm` and `.vgz` files, are opened with **Open .vgm...** and saved in
+    `sonido\pistas\<game>\` (**Folder** opens it). From then on, that game's **Track** list
+    has each song by its name, like "Green Hill Zone", next to the recordings. The game's
+    own sound test works too: start recording and play its songs.
+  - **Play** plays it with the game paused. **Original** and **Synthesizer** switch between
+    the two sounds at the same point, to compare, and the **SoundFont** list below (the
+    same as in **Sound**) changes SoundFont without leaving the editor. **Equalizer...**
+    raises or lowers the synthesizer's bass, mids and treble (-12 to 12 dB), here and in
+    games. Each channel (FM 1-6, DAC, PSG 1-3 and noise) has **Solo** and **Mute**.
+  - The table shows the track's instruments (FM A, FM B...: letters so as not to confuse
+    them with FM channels 1-6), what they sound like, their channels and their notes, in
+    rows level with the channels'; the chosen instrument's channels are highlighted. Those
+    playing at that moment are green. Each can be given a General MIDI **Instrument**
+    (with octave and volume), a GM **Drums** piece, or keep its **Original sound**. **Hear
+    only this one** silences everything else, **Back to the suggestion** undoes what was
+    chosen for that instrument and **All back to suggestions...** for every one in the
+    game.
+  - An FM instrument is recognized by its registers, without its volume or release rate:
+    drivers like Sonic's set the release to the maximum to cut a note or make room for an
+    effect, and before 0.0.23 that made it pass for another, unassigned instrument. What
+    was saved with the old fingerprints still works.
+  - What you choose is heard straight away, in the game too, and saved in
+    `sonido\<game>.ini`, for that game only. With the editor open without a game it goes
+    to `sonido\cache.ini`, which applies to all of them (versions up to 0.0.22 saved each
+    game's settings there too, and they still play); a game's own settings override the
+    shared ones.
+- In full screen, **Open ROM...** uses plumsg's own file browser (gamepad-friendly too)
+  instead of the Windows dialog, which used to hide behind the game.
 
-La configuración se guarda en `plumsg.ini`.
+The settings are saved in `plumsg.ini`.
 
-### Grabar vídeo o GIF
+### Recording video or GIF
 
-En **Juego > Grabar**:
+In **Game > Record**:
 
-- **Grabar vídeo** (`Ctrl+R`) graba la partida con su sonido en un `.avi` (Motion JPEG y
-  PCM), que abren Windows, VLC y los editores de vídeo sin instalar nada. Pasa sin problema
-  de 1 GB.
-- **Grabar GIF** (`Ctrl+G`) graba un GIF animado sin sonido, a 30 imágenes por segundo,
-  para compartir un trozo de partida.
+- **Record video** (`Ctrl+R`) records the game with its sound to an `.avi` (Motion JPEG and
+  PCM), which Windows, VLC and video editors open without installing anything. It goes
+  past 1 GB without trouble.
+- **Record GIF** (`Ctrl+G`) records an animated GIF without sound, at 30 frames per
+  second, to share a bit of a game.
 
-Se para con el mismo atajo (o en el menú); arriba en el centro se ve el tiempo grabado. Los
-archivos van a la carpeta `grabaciones` (junto a `states`), con el nombre del juego y la
-fecha; **Abrir la carpeta de grabaciones** la abre. En la vista 2D se graba la imagen de la
-consola tal cual, nítida y sin el filtro (el vídeo a 960x672); en 3D, lo que se ve en
-pantalla, sin los menús (el vídeo hasta 720 líneas y el GIF hacia 480x360). Los menús, la
-pausa o el rebobinado quedan en la grabación como en pantalla; si el juego se para o se
-cambia de juego, la grabación se cierra.
+It stops with the same shortcut (or from the menu); the time recorded shows at the top
+center. The files go to the `grabaciones` folder (next to `states`), named after the game
+and the date; **Open the recordings folder** opens it. In the 2D view the console's
+picture is recorded as is, sharp and without the filter (the video at 960x672); in 3D,
+what is on screen, without the menus (the video up to 720 lines and the GIF around
+480x360). Menus, pause or rewinding end up in the recording as on screen; if the game
+stops or another game is opened, the recording is closed.
 
-### Jugar en red
+### Netplay
 
-Menú **Red > Jugar en red...**. Los dos abren antes el mismo juego (la misma ROM).
+**Network > Netplay...** menu. Both players open the same game (the same ROM) first.
 
-- Quien **aloja** (jugador 1) pulsa *Alojar*. Mientras espera puede seguir jugando: la
-  partida en red empieza en el punto en que esté, con su partida guardada del cartucho,
-  su región y sus mandos.
-- Quien **se une** (jugador 2) escribe la dirección del anfitrión (`IP` o `IP:puerto`) y
-  pulsa *Unirse*. Recibe la partida del anfitrión en un momento y empiezan los dos a la vez.
-- Cada uno juega con **sus controles del jugador 1** (teclado o mando).
-- En casa basta la dirección que muestra la ventana (la de la red local). Por internet,
-  el anfitrión abre (redirige) en su router el **puerto UDP 7845** (se cambia en la
-  ventana) hacia su ordenador y le da al otro su IP pública; o los dos usan una red
-  privada como Tailscale o ZeroTier y no hay que abrir nada. La primera vez Windows
-  pregunta si plumsg puede usar la red: hay que permitirlo.
+- The **host** (player 1) clicks *Host*. While waiting they can keep playing: the netplay
+  game starts from where they are, with their cartridge save, their region and their
+  pads.
+- The one who **joins** (player 2) types the host's address (`IP` or `IP:port`) and clicks
+  *Join*. They receive the host's game in a moment and both start at once.
+- Each player uses **their player 1 controls** (keyboard or gamepad).
+- At home, the address the window shows is enough. Over the internet, the host forwards
+  **UDP port 7845** (it can be changed in the window) on their router to their computer
+  and gives the other player their public IP; or both use a private network like
+  Tailscale or ZeroTier and nothing needs opening. The first time, Windows asks whether
+  plumsg may use the network: allow it.
 
-Cómo funciona: cada consola ejecuta el juego por su cuenta y solo se envían los botones.
-Lo que pulsa el otro se adivina (sigue con lo último que pulsó) hasta que llega; si se
-adivinó mal, plumsg vuelve atrás unos fotogramas con un estado guardado y los repite con
-lo bueno, sin que se note más que un pequeño salto. Así nadie espera a la red mientras el
-ping no pase de unos 150 ms. El **retardo de los mandos** (2 fotogramas por defecto)
-reduce esos saltos a cambio de un poco de retraso al pulsar. Cada segundo las dos
-consolas comparan su memoria; si alguna vez dejaran de coincidir, la ventana lo avisa.
+How it works: each console runs the game on its own and only the buttons are sent. What
+the other player presses is guessed (they keep doing what they last did) until it
+arrives; if the guess was wrong, plumsg goes back a few frames with a save state and
+replays them with the right input, with no more than a small jump. So nobody waits for
+the network as long as the ping stays under about 150 ms. The **input delay** (2 frames by
+default) reduces those jumps in exchange for a little delay when pressing. Every second
+both consoles compare their memory; if they ever stopped matching, the window says so.
 
-Durante la partida en red no se puede pausar, rebobinar, cambiar la velocidad, cargar
-estados, reiniciar, cambiar la región ni usar trucos (harían que las dos consolas
-dejaran de ver lo mismo). Guardar estados sí. Al que se une no se le toca su partida
-guardada del cartucho: la que usa es la del anfitrión.
+During netplay you cannot pause, rewind, change the speed, load states, reset, change the
+region or use cheats (they would make the two consoles stop seeing the same thing). Saving
+states is fine. The joining player's cartridge save is not touched: the host's is used.
 
-### Logros (RetroAchievements)
+### Achievements (RetroAchievements)
 
-Menú **Logros**. Activa *RetroAchievements* e inicia sesión en **Logros > Cuenta...** con tu
-cuenta de [retroachievements.org](https://retroachievements.org) (es gratis). La contraseña
-no se guarda: plumsg guarda en `plumsg.ini` la sesión que da el servidor, y la próxima vez
-entra solo.
+**Achievements** menu. Turn on *RetroAchievements* and log in under **Achievements >
+Account...** with your [retroachievements.org](https://retroachievements.org) account (it
+is free). The password is not saved: plumsg saves in `plumsg.ini` the session the server
+gives it, and next time it logs in by itself.
 
-- Al abrir un juego se busca en RetroAchievements por su hash (el mismo que usan RetroArch
-  y los demás emuladores; en el Mega CD, el de la cabecera del disco). Si lo conoce, sale
-  un aviso con cuántos logros tienes de ese juego.
-- Cada logro conseguido sale en la esquina de abajo a la derecha con su insignia, también
-  a pantalla completa y con la barra de menús escondida. Arriba a la izquierda salen los
-  retos en marcha, el progreso de un logro que se está consiguiendo y los contadores de
-  las clasificaciones.
-- **Logros > Logros de este juego...** los lista todos, conseguidos o no, con su progreso.
-- **Modo hardcore**: los logros cuentan para la puntuación hardcore y las clasificaciones, pero
-  no se puede rebobinar, ir a cámara lenta, usar trucos ni cargar estados (guardarlos sí).
-  Al activarlo con un juego abierto, el juego vuelve a empezar.
-- Sin conexión, los logros se guardan y se envían cuando vuelve.
-- Cada estado guardado lleva al lado (`.logros`) cómo iban los logros en ese momento.
+- When a game is opened it is looked up in RetroAchievements by its hash (the same one
+  RetroArch and other emulators use; for the Mega CD, the disc header's). If it is known,
+  a notice says how many of that game's achievements you have.
+- Each achievement you earn shows in the bottom right corner with its badge, also in full
+  screen and with the menu bar hidden. The top left shows the running challenges, the
+  progress of an achievement being earned and the leaderboard counters.
+- **Achievements > This game's achievements...** lists them all, earned or not, with
+  their progress.
+- **Hardcore mode**: achievements count for the hardcore score and the leaderboards, but
+  you cannot rewind, use slow motion or cheats, or load states (saving them is fine).
+  Turning it on with a game open restarts the game.
+- Offline, achievements are kept and sent when the connection comes back.
+- Each save state has next to it (`.logros`) how the achievements stood at that moment.
 
-### Desde la línea de comandos (LaunchBox, Playnite, muebles arcade)
+### From the command line (LaunchBox, Playnite, arcade cabinets)
 
 ```
-plumsg.exe "C:\Juegos\Sonic.md" --pantalla-completa --3d
-plumsg.exe "C:\Juegos\Sonic CD.cue" --region eu --estado 1
+plumsg.exe "C:\Games\Sonic.md" --fullscreen --3d
+plumsg.exe "C:\Games\Sonic CD.cue" --region eu --estado 1
 ```
 
-| Opción | Qué hace |
+| Option | What it does |
 |---|---|
-| `juego` | el cartucho o disco que se abre |
-| `--pantalla-completa` / `--ventana` | a pantalla completa o en ventana (también `--fullscreen` / `--windowed`) |
-| `--3d` / `--2d` | con o sin la vista pseudo-3D |
-| `--filtro f` | `ninguno`, `scanlines` o `crt` |
-| `--reescalado r` | `ninguno`, `xbr` o `anime4k` (experimental) |
-| `--region r` | `auto`, `jp`, `us` o `eu` |
-| `--estado N` | carga el estado guardado N (0-9) del juego al abrirlo |
-| `--biblioteca carpeta` | abre la biblioteca de esa carpeta |
-| `--lista` | con `--biblioteca`: la muestra como lista en vez de cuadrícula |
-| `--grabar f.avi` | graba la partida desde el principio, en vídeo (`.avi`) o GIF (`.gif`) |
-| `--alojar` | aloja una partida en red con el juego (en el puerto del menú Red) |
-| `--unirse direccion` | se une a la partida en red de ese anfitrión (`IP` o `IP:puerto`) |
-| `--ayuda` | muestra las opciones |
+| `game` | the cartridge or disc to open |
+| `--fullscreen` / `--windowed` | full screen or windowed (also `--pantalla-completa` / `--ventana`) |
+| `--3d` / `--2d` | with or without the pseudo-3D view |
+| `--filtro f` | `ninguno` (none), `scanlines` or `crt` |
+| `--reescalado r` | `ninguno` (none), `xbr` or `anime4k` (experimental) |
+| `--region r` | `auto`, `jp`, `us` or `eu` |
+| `--estado N` (or `--load-state N`) | loads the game's save state N (0-9) when it opens |
+| `--biblioteca folder` | opens the library of that folder |
+| `--lista` | with `--biblioteca`: shows it as a list instead of a grid |
+| `--grabar f.avi` | records the game from the start, as video (`.avi`) or GIF (`.gif`) |
+| `--host` (or `--alojar`) | hosts a netplay game with the game (on the Network menu's port) |
+| `--join address` (or `--unirse`) | joins that host's netplay game (`IP` or `IP:port`) |
+| `--help` (or `--ayuda`) | shows the options |
 
-La pantalla completa y la región que se dan así valen solo para esa vez: `plumsg.ini`
-sigue como estaba. En LaunchBox, por ejemplo, se añade plumsg como emulador con la ruta
-de `plumsg.exe` y `--pantalla-completa` en los parámetros de la línea de comandos.
+The full screen and region given this way are for that time only: `plumsg.ini` stays as it
+was. In LaunchBox, for example, add plumsg as an emulator with the path to `plumsg.exe`
+and `--fullscreen` in the command-line parameters.
 
-### Idioma
+### If plumsg closes suddenly
 
-plumsg está en español, inglés, francés y portugués. La primera vez usa el idioma del
-sistema (o inglés si no es ninguno de esos), y se cambia en **Opciones > Idioma**. Cómo
-añadir textos o idiomas: [src/frontend/lang/README.md](src/frontend/lang/README.md).
+If plumsg closes because of a crash, it leaves a report in the `fallos` folder of the
+settings folder (`%APPDATA%\plumsg\plumsg\fallos`, or next to the executable in portable
+mode): a `.txt` with what happened, where and with which game, and on Windows a `.dmp`
+dump with the same name to open in a debugger. The next time it opens, plumsg says where
+it is. To report the crash, attach both files.
 
-## Compilar
+### Language
 
-Hace falta CMake 3.16+, un compilador de C++17 y SDL2 (si no está instalado, CMake lo
-descarga). Dear ImGui, ymfm y libchdr se descargan solos.
+plumsg is in English, Spanish, French and Portuguese. The first time it uses the system's
+language (or English if it is none of those), and it is changed in **Options > Language**.
+How to add texts or languages: [src/frontend/lang/README.md](src/frontend/lang/README.md).
+
+## Building
+
+You need CMake 3.16+, a C++17 compiler and SDL2 (if it is not installed, CMake downloads
+it). Dear ImGui, ymfm and libchdr are downloaded by themselves.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -463,131 +480,136 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-En Windows, el workflow `windows-installer.yml` genera el instalador con Inno Setup (ver
+On Windows, the `windows-installer.yml` workflow builds the installer with Inno Setup (see
 [installer/README.md](installer/README.md)).
 
-## Pruebas
+## Tests
 
-- `core_tests`: cartucho, mandos, PSG, VDP, la ROM de prueba (imagen y sonido),
-  savestates (determinismo, ida y vuelta, archivos dañados), el rebobinado (volver atrás y
-  repetir da los mismos fotogramas), el ritmo del avance rápido y la cámara lenta, la
-  separación en planos del 3D (con la cámara recta, el 3D tiene que verse igual que el 2D),
-  la cámara viva, los perfiles 3D, los códigos de trucos (Game Genie descodificado como
-  Genesis Plus GX), los nombres de la biblioteca y cómo se reconoce la consola de cada
-  juego, las pistas de un `.cue` y las BIOS del Mega CD. De la 32X: instrucciones de la
-  SH-2 y sus módulos, el arranque sin BIOS, el dibujo sobre la imagen de la Mega Drive y
-  los estados, y un programa en C (`tests/mars/program.c`) que las dos SH-2 ejecutan y
-  tiene que dar exactamente lo mismo que el PC (división de libgcc, aritmética de 64 bits
-  y de coma flotante...), más interrupciones, paleta y sonido PWM. Se recompila con
-  `tests/mars/build.sh` (hace falta `gcc-sh-elf`); el resultado va en el repositorio.
-  Del Mega CD: hojas `.cue` (varios archivos, `INDEX 00`, `PREGAP`), un `.chd` hecho con
-  chdman (`tests/megacd/disco.chd`), y un programa en ensamblador para las dos CPU
-  (`tests/megacd/main.s` hace de BIOS y carga `sub.s` en la CPU secundaria) que prueba
-  la comunicación entre ellas, interrupciones, la memoria de guardado, las órdenes a la
-  unidad, la lectura de un sector por el controlador y por DMA, el chip gráfico, el PCM,
-  el audio de CD y los estados; el mismo programa como cartucho prueba el modo 1 de los
-  juegos MSU-MD (el Mega CD en 0x400000) y cómo se encuentra su `.cue`. Se recompila con `tests/megacd/build.sh` (hace falta
-  `binutils-m68k-linux-gnu`).
-  Del juego en red: dos sesiones conectadas por una red simulada que retrasa, desordena,
-  duplica y pierde paquetes tienen que ver los mismos fotogramas entre sí y que una sola
-  consola con los dos mandos, aunque vuelvan atrás muchas veces.
-- `frontend_tests` (solo con la interfaz, necesita SDL2): las opciones propias de cada
-  juego y sus botones, leídos y escritos en su archivo de `perfiles\`.
-- `m68k_json_runner --cycles archivos.json.gz`: los tests de un solo paso del 68000
+- `core_tests`: cartridge, pads, PSG, VDP, the test ROM (picture and sound), save states
+  (determinism, round trip, damaged files), rewind (going back and replaying gives the
+  same frames), the pace of fast forward and slow motion, the 3D's plane separation (with
+  the camera straight, the 3D has to look the same as the 2D), the live camera, 3D
+  profiles, cheat codes (Game Genie decoded as Genesis Plus GX does), library names and
+  how each game's console is recognized, the tracks of a `.cue` and the Mega CD BIOS. For
+  the 32X: SH-2 instructions and modules, booting without a BIOS, drawing over the Mega
+  Drive picture and states, and a C program (`tests/mars/program.c`) that both SH-2s run
+  and that has to give exactly the same as the PC (libgcc division, 64-bit and floating
+  point arithmetic...), plus interrupts, palette and PWM sound. It is rebuilt with
+  `tests/mars/build.sh` (needs `gcc-sh-elf`); the result is in the repository. For the
+  Mega CD: `.cue` sheets (several files, `INDEX 00`, `PREGAP`), a `.chd` made with chdman
+  (`tests/megacd/disco.chd`), and an assembly program for both CPUs (`tests/megacd/main.s`
+  acts as the BIOS and loads `sub.s` on the second CPU) that tests the communication
+  between them, interrupts, backup RAM, drive commands, reading a sector through the
+  controller and through DMA, the graphics chip, PCM, CD audio and states; the same
+  program as a cartridge tests MSU-MD games' mode 1 (the Mega CD at 0x400000) and how
+  their `.cue` is found. It is rebuilt with `tests/megacd/build.sh` (needs
+  `binutils-m68k-linux-gnu`). For netplay: two sessions connected by a simulated network
+  that delays, reorders, duplicates and loses packets have to see the same frames as
+  each other and as a single console with both pads, even if they go back many times.
+- `headless`: `plumsg-headless` end to end (hashes, input scripts, checks), and the save
+  states from earlier versions in `tests/states/`.
+- `240p`: Artemio Urbina's 240p Test Suite (`tests/240p/`): 35 scripts go through its
+  menus to its test patterns and video tests, and each screen has to look as it did.
+- `frontend_tests` (only with the interface, needs SDL2): each game's own options and
+  buttons, read and written in its `perfiles\` file, and the crash reports.
+- `m68k_json_runner --cycles files.json.gz`: the 68000 single-step tests
   ([SingleStepTests/680x0](https://github.com/SingleStepTests/680x0)).
-- `rom_runner rom.md --frames 300 --png captura.png`: ejecuta una ROM sin ventana y guarda la
-  imagen (con `--layers prefijo` también cada capa del VDP, y `--wav` el sonido). Con un
-  disco de Mega CD, `--bios archivo` dice qué BIOS usar.
-  `rom_runner --write-test-rom prueba.md` escribe la ROM de prueba a un archivo.
-- `zex_runner zexdoc.com`: el ejercitador del Z80.
-- El emulador también hace capturas desde la línea de comandos:
-  `plumsg rom.md --3d --inclinacion 30 --cuadros 120 --captura 3d.png`, con
-  `--filtro crt` o `--filtro scanlines`, o de la biblioteca con
-  `plumsg --biblioteca carpeta --descargar-caratulas --captura biblioteca.png`
-  (`--biblioteca` se puede repetir, `--bios` abre la ventana de las BIOS y
-  `--buscar-caratula` la búsqueda de carátula del primer juego de la biblioteca;
-  `plumsg rom.md --trucos --captura trucos.png` abre los trucos del juego con su lista y
-  `--opciones-juego` sus opciones propias, o `--opciones-juego controles` sus botones).
+- `rom_runner rom.md --frames 300 --png shot.png`: runs a ROM without a window and saves
+  the picture (with `--layers prefix` also each VDP layer, and `--wav` the sound). With a
+  Mega CD disc, `--bios file` says which BIOS to use. `rom_runner --write-test-rom
+  test.md` writes the test ROM to a file.
+- `zex_runner zexdoc.com`: the Z80 exerciser.
+- The emulator also takes screenshots from the command line:
+  `plumsg rom.md --3d --inclinacion 30 --cuadros 120 --captura 3d.png`, with
+  `--filtro crt` or `--filtro scanlines`, or of the library with
+  `plumsg --biblioteca folder --descargar-caratulas --captura library.png`
+  (`--biblioteca` can be repeated, `--bios` opens the BIOS window and
+  `--buscar-caratula` the cover search for the library's first game;
+  `plumsg rom.md --trucos --captura cheats.png` opens the game's cheats with its list and
+  `--opciones-juego` its own options, or `--opciones-juego controles` its buttons).
 
-## Sin ventana: `plumsg-headless`
+## Without a window: `plumsg-headless`
 
-`plumsg-headless` es el emulador sin ventana, sin sonido y sin tarjeta gráfica, para
-pruebas, CI y reproducir fallos. Ejecuta un cartucho o un disco durante N fotogramas,
-pulsa los botones que diga un guion y guarda lo que se le pida: capturas PNG, el sonido
-en WAV, la partida en GIF o en vídeo (`--gif`, `--avi`), un hash por fotograma, estados y volcados de la RAM. También comprueba
-resultados y dice en qué fotograma una ejecución empieza a ser distinta.
+`plumsg-headless` is the emulator without a window, sound output or graphics card, for
+tests, CI and reproducing bugs. It runs a cartridge or disc for N frames, presses the
+buttons a script says and saves whatever is asked: PNG screenshots, the sound as WAV, the
+game as GIF or video (`--gif`, `--avi`), a hash per frame, states and RAM dumps. It also
+checks results and says on which frame a run starts to differ.
 
-Para compilar solo esto (sin SDL2, ImGui ni OpenGL):
+To build just this (without SDL2, ImGui or OpenGL):
 
 ```
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPLUMSG_BUILD_FRONTEND=OFF
 cmake --build build --target plumsg-headless
 ```
 
-Ejemplos (`plumsg-headless --help` da todas las opciones):
+Examples (`plumsg-headless --help` gives every option):
 
 ```
-# 600 fotogramas y una captura del último
-plumsg-headless juego.md --frames 600 --png final.png
+# 600 frames and a screenshot of the last one
+plumsg-headless game.md --frames 600 --png last.png
 
-# un disco de Mega CD con las BIOS de una carpeta, una captura cada 60 fotogramas
-plumsg-headless disco.cue --bios-dir bios/ --frames 1800 --png-every 60 --out-dir capturas
+# a Mega CD disc with the BIOS files in a folder, a screenshot every 60 frames
+plumsg-headless disc.cue --bios-dir bios/ --frames 1800 --png-every 60 --out-dir shots
 
-# con un guion de mando, y guardando el hash de cada fotograma
-plumsg-headless juego.md --input partida.txt --hash-log hashes.txt
+# with an input script, saving the hash of every frame
+plumsg-headless game.md --input play.txt --hash-log hashes.txt
 
-# después de un cambio en el core: ¿en qué fotograma deja de verse igual?
-plumsg-headless juego.md --input partida.txt --expect-log hashes.txt
+# after a change in the core: on which frame does it stop looking the same?
+plumsg-headless game.md --input play.txt --expect-log hashes.txt
 ```
 
-El guion tiene una orden por línea: los fotogramas (`N`, `N-M` o `N+K`, contados desde
-0) y los botones que se mantienen pulsados en ellos (`up down left right a b c x y z
-start mode`, y `p2.start` etc. para el segundo mando), o una orden: `screenshot
-[archivo]`, `savestate archivo`, `loadstate archivo`, `dump-ram archivo`, `hash`,
-`reset`, `power` o `quit`. Con `--do "120+4 start"` se da una línea desde la línea de
-órdenes.
+The script has one command per line: the frames (`N`, `N-M` or `N+K`, counted from 0) and
+the buttons held during them (`up down left right a b c x y z start mode`, and `p2.start`
+etc. for the second pad), or a command: `screenshot [file]`, `savestate file`, `loadstate
+file`, `dump-ram file`, `hash`, `reset`, `power` or `quit`. `--do "120+4 start"` gives a
+line on the command line.
 
 ```
-120+4    start          # pulsar Start en la pantalla de título
+120+4    start          # press Start on the title screen
 300-420  right
-330+10   right c        # saltar mientras anda
-420      screenshot nivel.png
+330+10   right c        # jump while walking
+420      screenshot level.png
 600      quit
 ```
 
-Código de salida: 0 bien, 1 no se pudo leer o escribir algo, 2 opciones o guion mal
-escritos, 3 falló una comprobación (`--expect-hash`, `--expect-audio`, `--expect-log`).
-Con `--json archivo` (o `-` para la salida estándar) el resumen sale en JSON. Trae tres
-ROM propias: `--test-rom` (la de las pruebas), `--pad-test-rom`, que pinta el fondo
-según los botones del mando 1, y `--two-pad-test-rom`, en la que cada fotograma depende
-de todo lo que pulsaron los dos mandos antes (para probar el juego en red).
+Exit code: 0 fine, 1 something could not be read or written, 2 badly written options or
+script, 3 a check failed (`--expect-hash`, `--expect-audio`, `--expect-log`). With `--json
+file` (or `-` for standard output) the summary comes out as JSON. It has three built-in
+ROMs: `--test-rom` (the one the tests use), `--pad-test-rom`, which paints the background
+according to pad 1's buttons, and `--two-pad-test-rom`, in which every frame depends on
+everything both pads pressed before (for testing netplay).
 
-También juega en red como la ventana, para probarlo: `--netplay-host PUERTO` aloja y
-`--netplay-join IP:PUERTO` se une, cada uno con su guion (el anfitrión usa los botones
-del mando 1 y el invitado los de `p2.`). `--net-lag MS` y `--net-loss PORCENTAJE` simulan
-una conexión lenta o que pierde paquetes. El `--hash-log` de cada uno tiene que ser igual
-al de una partida sin red con los dos guiones juntos:
+It also plays netplay like the window does, to test it: `--netplay-host PORT` hosts and
+`--netplay-join IP:PORT` joins, each with its own script (the host uses pad 1's buttons
+and the guest the `p2.` ones). `--net-lag MS` and `--net-loss PERCENT` simulate a slow
+connection or one that loses packets. Each side's `--hash-log` has to match that of a run
+without netplay with both scripts together:
 
 ```
-plumsg-headless juego.md --frames 3000 --netplay-host 7845 --net-lag 60 --input p1.txt --hash-log red1.txt &
-plumsg-headless juego.md --frames 3000 --netplay-join 127.0.0.1 --net-lag 60 --input p2.txt --hash-log red2.txt
-cat p1.txt p2.txt > juntos.txt
-plumsg-headless juego.md --frames 3000 --input juntos.txt --expect-log red1.txt
+plumsg-headless game.md --frames 3000 --netplay-host 7845 --net-lag 60 --input p1.txt --hash-log net1.txt &
+plumsg-headless game.md --frames 3000 --netplay-join 127.0.0.1 --net-lag 60 --input p2.txt --hash-log net2.txt
+cat p1.txt p2.txt > both.txt
+plumsg-headless game.md --frames 3000 --input both.txt --expect-log net1.txt
 ```
 
-Las pruebas de `ctest` lo usan
-(`tests/headless_tests.cmake`) y el trabajo `headless` de CI lo compila sin SDL2 y guarda
-sus capturas, sonido y hashes como artefacto.
+The `ctest` tests use it (`tests/headless_tests.cmake`, `tests/240p_tests.cmake`) and the
+`headless` CI job builds it without SDL2 and keeps its screenshots, sound and hashes as an
+artifact.
 
-## Licencias
+## Licenses
 
-Código propio bajo la licencia del repositorio. Bibliotecas: SDL2 (zlib), Dear ImGui (MIT),
-miniz (MIT, en `third_party/miniz`), stb_image y stb_image_write (dominio público o MIT, en `third_party/stb`),
-ymfm (BSD-3-Clause), los pesos de la red Anime4K (MIT, de bloc97, en
-`src/render/anime4k_shaders.h`, generado con `tools/anime4k.py`), el shader xBR escrito siguiendo el
-xbr-lv2 de Hyllian (MIT), libchdr (BSD-3-Clause, para los `.chd`), TinySoundFont (MIT, en
-`third_party/tsf`), rcheevos (MIT, para RetroAchievements). El SoundFont incluido es GeneralUser GS de S. Christian Collins, con su
-propia licencia libre (`soundfonts\GeneralUser-GS-LICENSE.txt` en la instalación). La 32X y el Mega CD se han escrito con la documentación de Sega y el código de
-[ares](https://github.com/ares-emulator/ares) (ISC) como referencia. Las carátulas y capturas son de libretro-thumbnails, las listas de trucos y los datos de
-los juegos de libretro-database y las descripciones de Wikipedia (CC BY-SA 4.0); se
-descargan al usarlas y no van en el repositorio.
+Own code under the repository's license. Libraries: SDL2 (zlib), Dear ImGui (MIT), miniz
+(MIT, in `third_party/miniz`), stb_image and stb_image_write (public domain or MIT, in
+`third_party/stb`), ymfm (BSD-3-Clause), the Anime4K network weights (MIT, by bloc97, in
+`src/render/anime4k_shaders.h`, generated with `tools/anime4k.py`), the xBR shader written
+following Hyllian's xbr-lv2 (MIT), libchdr (BSD-3-Clause, for `.chd` files), TinySoundFont
+(MIT, in `third_party/tsf`), rcheevos (MIT, for RetroAchievements). The included
+SoundFont is GeneralUser GS by S. Christian Collins, with its own free license
+(`soundfonts\GeneralUser-GS-LICENSE.txt` in the installation). The 32X and Mega CD were
+written using Sega's documentation and [ares](https://github.com/ares-emulator/ares)
+(ISC) code as a reference. The 240p Test Suite in `tests/240p/` is GPL v2 and its SGDK
+library LGPL v3, with their source next to it. Cover art and screenshots come from
+libretro-thumbnails, the cheat lists and game details from libretro-database and the
+descriptions from Wikipedia (CC BY-SA 4.0); they are downloaded when used and are not in
+the repository.

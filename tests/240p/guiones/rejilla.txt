@@ -1,0 +1,8 @@
+# 240p Test Suite: rejilla
+420+2 a
+480+2 down
+492+2 a
+552+2 down
+564+2 a
+654+2 a
+834 quit

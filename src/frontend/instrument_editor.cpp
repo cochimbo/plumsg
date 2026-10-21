@@ -13,6 +13,7 @@
 
 #include "imgui.h"
 #include "../core/i18n.h"
+#include "../core/system.h"
 #include "miniz.h"
 
 namespace plumsg {
@@ -139,6 +140,8 @@ void InstrumentEditor::open(const std::string& game) {
     if (game != game_) endExtraction();
     game_ = game;
     gameName_ = withoutExtension(fileName(game));
+    const ConsoleSystem system = game.empty() ? ConsoleSystem::MegaDrive : detectSystem(game);
+    smsGame_ = system == ConsoleSystem::MasterSystem || system == ConsoleSystem::GameGear;
     message_.clear();
     selected_ = soloInstrument_ = 0;
     mutedVoices_ = soloVoices_ = 0;
@@ -513,14 +516,15 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
                               "el .zip de vgmrips) sale en la lista.\n%s"), gameTracksFolder().c_str());
         ImGui::SameLine();
         ImGui::BeginDisabled(extraction_ != nullptr && !extraction_->done);
-        if (ImGui::Button(tr("Sacar canciones"))) startExtraction();
+        if (ImGui::Button(smsGame_ ? tr("Sacar canciones (experimental)") : tr("Sacar canciones"))) startExtraction();
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("%s", tr("Busca las canciones en la ROM del juego y las graba una a una, sin nombre\n"
+            ImGui::SetTooltip(tr("Busca las canciones en la ROM del juego y las graba una a una, sin nombre\n"
                               "(Canción 1, Canción 2...), con las pistas del juego. Sirve para los juegos\n"
                               "con un driver de sonido como el de Sonic (SMPS), el de Streets of Rage 2,\n"
                               "el de EA (NHL 96) o el GEMS (Sonic Spinball, Earthworm Jim).\n"
-                              "Tarda unos minutos."));
+                              "Tarda unos minutos.%s"),
+                              smsGame_ ? tr("\n\nEn Master System y Game Gear aún no encuentra la música de muchos juegos.") : "");
     }
     const bool canRecord = !view.loadedGame.empty() && view.loadedGame == game_;
     if (view.recording || !game_.empty()) ImGui::SameLine();

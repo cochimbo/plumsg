@@ -1,0 +1,11 @@
+# 240p Test Suite: scroll-rejilla
+420+2 down
+432+2 a
+492+2 down
+504+2 down
+516+2 down
+528+2 down
+540+2 down
+552+2 a
+642+2 a
+822 quit

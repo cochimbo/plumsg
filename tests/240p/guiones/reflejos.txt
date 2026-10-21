@@ -1,0 +1,8 @@
+# 240p Test Suite: reflejos
+420+2 down
+432+2 a
+492+2 down
+504+2 down
+516+2 down
+528+2 a
+738 quit

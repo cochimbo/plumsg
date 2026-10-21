@@ -22,6 +22,7 @@
 #include "../net/udp.h"
 #include "achievements.h"
 #include "audio.h"
+#include "crash.h"
 #include "fps_counter.h"
 #include "game_options.h"
 #include "http.h"
@@ -224,6 +225,7 @@ struct App {
             return false;
         }
         romPath = path;
+        setCrashContext(path);
         hostsBattery = false;
         lastError.clear();
         achievementsHash = Achievements::gameHash(console);  // before cheats change the ROM
@@ -246,6 +248,7 @@ struct App {
         saveBattery();
         romLoaded = false;
         romPath.clear();
+        setCrashContext("");
         hostsBattery = false;
         cheats.clear();
         console.setCheats({});
@@ -295,7 +298,7 @@ struct App {
         std::error_code ec;
         std::filesystem::create_directories(std::filesystem::u8path(statesDir), ec);
         if (!console.saveState(data) || !writeFile(statePath(slot), data))
-            return trf("No se pudo guardar el estado en %s", statePath(slot).c_str());
+            return trf("No se pudo guardar el estado en %s: ¿falta espacio en el disco?", statePath(slot).c_str());
         refreshSlot(slot);
         return trf("Estado guardado en la ranura %d", slot);
     }
@@ -305,7 +308,8 @@ struct App {
         std::vector<uint8_t> data;
         if (!readFile(statePath(slot), data)) return trf("La ranura %d está vacía", slot);
         std::string error;
-        if (!console.loadState(data, &error)) return trf("No se pudo cargar el estado: %s", error.c_str());
+        if (!console.loadState(data, &error))
+            return trf("No se pudo cargar el estado: %s. La partida sigue como estaba.", error.c_str());
         if (loaded) *loaded = true;
         return trf("Estado cargado de la ranura %d", slot);
     }
@@ -469,6 +473,9 @@ CommandLine parse(int argc, char** argv) {
 int main(int argc, char** argv) {
     const CommandLine cmd = parse(argc, argv);
     const Paths paths = findPaths();
+    // Next to plumsg.ini: the reports of the runs that ended in a crash.
+    const std::string crashDir = paths.ini.substr(0, paths.ini.find_last_of("/\\") + 1) + "fallos/";
+    installCrashHandler(crashDir);
     Settings settings = Settings::load(paths.ini);
     // Until a language is picked in Opciones > Idioma, the system's.
     applyLanguage(settings.language.empty() ? systemLanguage() : settings.language);
@@ -558,6 +565,9 @@ int main(int argc, char** argv) {
 
     input->openAll();
     auto ui = std::make_unique<Ui>(window, context, settings, *input);
+    // The last run crashed: say where its report is, so that it can be sent.
+    if (const std::string report = takeCrashReport(crashDir); !report.empty() && !capturing)
+        ui->showError(trf("plumsg se cerró por un fallo la última vez.\nEl informe está en %s", report.c_str()));
     auto roland = std::make_unique<RolandSound>();  // before the console, which points at it
     auto app = std::make_unique<App>();
     app->statesDir = paths.states;
@@ -757,8 +767,15 @@ int main(int argc, char** argv) {
             runAheadFailed = false;
         } else {
             useGameOptions(app->romLoaded ? app->romPath : std::string());
-            if (!capturing) ui->showError(app->lastError);
-            if (app->lastError.find("BIOS") != std::string::npos) ui->openBios();  // the game is fine: it waits for its BIOS
+            // A missing BIOS already says what to do; anything else is the file's fault.
+            const bool bios = app->lastError.find("BIOS") != std::string::npos;
+            if (!capturing)
+                ui->showError(bios ? app->lastError
+                                   : trf("No se pudo abrir %s:\n%s\n\nplumsg abre cartuchos de Mega Drive, 32X, Master System y "
+                                         "Game Gear y discos de Mega CD. Si el archivo es uno de ellos, puede estar "
+                                         "incompleto o dañado: prueba a copiarlo otra vez.",
+                                         fileName(path).c_str(), app->lastError.c_str()));
+            if (bios) ui->openBios();  // the game is fine: it waits for its BIOS
             else settings.removeRecent(path);
         }
         save();

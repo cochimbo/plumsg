@@ -1,0 +1,15 @@
+# 240p Test Suite: zona-led
+420+2 down
+432+2 a
+492+2 down
+504+2 down
+516+2 down
+528+2 down
+540+2 down
+552+2 down
+564+2 down
+576+2 down
+588+2 down
+600+2 a
+690+2 a
+870 quit

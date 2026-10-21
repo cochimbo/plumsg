@@ -1,26 +1,26 @@
-# Traducciones
+# Translations
 
-Los textos se escriben en español en el código y cada idioma tiene aquí su `.po`
-(`en.po`, `fr.po`, `pt.po`), que se mete dentro del ejecutable al compilar.
+Texts are written in Spanish in the code, and each language has its `.po` here
+(`en.po`, `fr.po`, `pt.po`), which is built into the executable.
 
-## Al añadir o cambiar un texto
+## When adding or changing a text
 
-1. Envuélvelo en el código:
-   - `tr("Guardar estado")` para un texto que se muestra tal cual (también vale con
-     `"Texto##id"`: solo se traduce lo de antes de `##`).
-   - `trf("Ranura %d", n)` cuando lleva `%d`, `%s`...
-   - `N_("...")` en tablas o constantes que se traducen más tarde con `tr(...)`.
-2. Ejecuta `python3 tools/i18n.py --update`: añade los textos nuevos a los `.po` (con la
-   traducción vacía) y quita los que ya no están.
-3. Rellena el `msgstr` en los tres `.po` (`python3 tools/i18n.py --missing` lista lo
-   que falta). Mantén los `%d`/`%s` en el mismo orden.
-4. `python3 tools/i18n.py --check` (la prueba `i18n` de `ctest`) falla mientras falte
-   algo.
+1. Wrap it in the code:
+   - `tr("Guardar estado")` for a text shown as is (`"Text##id"` works too: only what
+     comes before `##` is translated).
+   - `trf("Ranura %d", n)` when it has `%d`, `%s`...
+   - `N_("...")` in tables or constants that are translated later with `tr(...)`.
+2. Run `python3 tools/i18n.py --update`: it adds the new texts to the `.po` files (with an
+   empty translation) and removes the ones that are gone.
+3. Fill in the `msgstr` in all three `.po` files (`python3 tools/i18n.py --missing` lists
+   what is missing). Keep the `%d`/`%s` in the same order.
+4. `python3 tools/i18n.py --check` (the `i18n` test in `ctest`) fails while anything is
+   missing.
 
-Los `.po` van ordenados, así que dos ramas que añaden textos distintos rara vez chocan.
+The `.po` files are kept sorted, so two branches that add different texts rarely clash.
 
-## Añadir un idioma
+## Adding a language
 
-Añade el código en `PLUMSG_LANGUAGES` (CMakeLists.txt), en `LANGUAGES` (tools/i18n.py)
-y en `kLanguages` (src/frontend/languages.cpp) con su nombre, y crea el `.po` con
+Add its code to `PLUMSG_LANGUAGES` (CMakeLists.txt), to `LANGUAGES` (tools/i18n.py) and
+to `kLanguages` (src/frontend/languages.cpp) with its name, and create the `.po` with
 `tools/i18n.py --update`.

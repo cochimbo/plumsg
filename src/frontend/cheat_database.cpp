@@ -150,7 +150,7 @@ void CheatDatabase::work() {
                 r.files = cheatFileNames(index_[static_cast<int>(task.system)], stem, 20);
                 if (r.files.empty()) r.status = tr("La base de trucos de libretro no tiene listas para este juego.");
                 else if (!download(task.system, r.files.front(), &r.cheats, &status))
-                    r.status = status == 0 ? tr(kOffline) : tr("No se pudo descargar la lista de trucos.");
+                    r.status = status == 0 ? tr(kOffline) : tr("No se pudo descargar la lista de trucos. ¿Hay conexión a internet?");
                 if (!r.files.empty()) r.file = r.files.front();
             } else {
                 // Without the list of names (GitHub limits how often it is asked for),
@@ -175,7 +175,7 @@ void CheatDatabase::work() {
         } else {
             r.file = task.file;
             if (!download(task.system, task.file, &r.cheats, &status))
-                r.status = status == 0 ? tr(kOffline) : tr("No se pudo descargar la lista de trucos.");
+                r.status = status == 0 ? tr(kOffline) : tr("No se pudo descargar la lista de trucos. ¿Hay conexión a internet?");
         }
         std::lock_guard<std::mutex> lock(mutex_);
         reply_ = std::move(r);

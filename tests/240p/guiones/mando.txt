@@ -1,0 +1,7 @@
+# 240p Test Suite: mando
+420+2 down
+432+2 down
+444+2 down
+456+2 a
+516+2 a
+726 quit

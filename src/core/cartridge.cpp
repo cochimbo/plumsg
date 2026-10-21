@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 
@@ -160,6 +161,12 @@ const EepromConfig* eepromFor(const std::string& serial) {
 }  // namespace
 
 bool Cartridge::loadFile(const std::string& path, std::string* error) {
+    // A folder opens fine as a stream on Linux, and reading it throws.
+    std::error_code ec;
+    if (std::filesystem::is_directory(std::filesystem::u8path(path), ec)) {
+        if (error) *error = trf("%s es una carpeta: abre un juego de dentro, o añádela a la biblioteca", path.c_str());
+        return false;
+    }
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         if (error) *error = trf("no se puede abrir %s", path.c_str());

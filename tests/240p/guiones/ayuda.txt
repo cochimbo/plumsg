@@ -1,0 +1,7 @@
+# 240p Test Suite: ayuda
+420+2 down
+432+2 down
+444+2 down
+456+2 down
+468+2 a
+678 quit

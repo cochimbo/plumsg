@@ -47,11 +47,24 @@ jobs:
           Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\sdl2"
           "SDL2_ROOT=$env:RUNNER_TEMP\sdl2\SDL2-$env:SDL2_VERSION" >> $env:GITHUB_ENV
 
+      - name: Compute version
+        if: steps.src.outputs.present == 'true'
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG) {
+            if ($env:RELEASE_TAG -notmatch '^v\d') { Write-Host "::error::release_tag must look like v1.2.3"; exit 1 }
+            $v = $env:RELEASE_TAG.Substring(1)
+          }
+          else { $v = "0.0.0-dev.$env:GITHUB_RUN_NUMBER" }
+          "APP_VERSION=$v" >> $env:GITHUB_ENV
+
       - name: Build emulator (Release)
         if: steps.src.outputs.present == 'true'
         shell: pwsh
         run: |
-          cmake -S . -B build -A x64 "-DCMAKE_PREFIX_PATH=$env:SDL2_ROOT/cmake" "-DSDL2_DIR=$env:SDL2_ROOT/cmake"
+          # A release shows its own version in About and crash reports; other builds, git describe.
+          $version = if ($env:RELEASE_TAG) { "-DPLUMSG_VERSION=$env:APP_VERSION" } else { "-DPLUMSG_VERSION=" }
+          cmake -S . -B build -A x64 "-DCMAKE_PREFIX_PATH=$env:SDL2_ROOT/cmake" "-DSDL2_DIR=$env:SDL2_ROOT/cmake" $version
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build --config Release --parallel
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -84,17 +97,6 @@ jobs:
           Invoke-WebRequest "$gu/GeneralUser-GS.sf2" -OutFile dist\soundfonts\GeneralUser-GS.sf2
           Invoke-WebRequest "$gu/documentation/LICENSE.txt" -OutFile dist\soundfonts\GeneralUser-GS-LICENSE.txt
           Get-ChildItem dist
-
-      - name: Compute version
-        if: steps.src.outputs.present == 'true'
-        shell: pwsh
-        run: |
-          if ($env:RELEASE_TAG) {
-            if ($env:RELEASE_TAG -notmatch '^v\d') { Write-Host "::error::release_tag must look like v1.2.3"; exit 1 }
-            $v = $env:RELEASE_TAG.Substring(1)
-          }
-          else { $v = "0.0.0-dev.$env:GITHUB_RUN_NUMBER" }
-          "APP_VERSION=$v" >> $env:GITHUB_ENV
 
       - name: Build installer (Inno Setup)
         if: steps.src.outputs.present == 'true'

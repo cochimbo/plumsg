@@ -1,0 +1,6 @@
+# 240p Test Suite: pluge
+420+2 a
+480+2 a
+540+2 a
+630+2 start
+810 quit

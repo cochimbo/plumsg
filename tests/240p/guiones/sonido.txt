@@ -1,0 +1,6 @@
+# 240p Test Suite: sonido
+420+2 down
+432+2 down
+444+2 a
+504+2 a
+714 quit

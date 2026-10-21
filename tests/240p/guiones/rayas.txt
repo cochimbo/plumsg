@@ -1,0 +1,12 @@
+# 240p Test Suite: rayas
+420+2 down
+432+2 a
+492+2 down
+504+2 down
+516+2 down
+528+2 down
+540+2 down
+552+2 down
+564+2 a
+654+2 a
+834 quit

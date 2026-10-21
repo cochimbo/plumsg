@@ -1,0 +1,7 @@
+# 240p Test Suite: lag
+420+2 down
+432+2 a
+492+2 down
+504+2 down
+516+2 a
+726 quit

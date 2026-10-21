@@ -1,0 +1,5 @@
+# 240p Test Suite: sombra
+420+2 down
+432+2 a
+492+2 a
+702 quit

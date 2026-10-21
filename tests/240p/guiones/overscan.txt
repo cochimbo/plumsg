@@ -1,0 +1,9 @@
+# 240p Test Suite: overscan
+420+2 a
+480+2 down
+492+2 a
+552+2 down
+564+2 down
+576+2 a
+666+2 a
+846 quit

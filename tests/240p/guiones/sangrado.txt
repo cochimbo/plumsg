@@ -1,0 +1,11 @@
+# 240p Test Suite: sangrado
+420+2 a
+480+2 a
+540+2 down
+552+2 down
+564+2 down
+576+2 down
+588+2 down
+600+2 a
+690+2 a
+870 quit

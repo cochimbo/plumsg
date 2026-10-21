@@ -1,0 +1,14 @@
+# 240p Test Suite: nitidez
+420+2 a
+480+2 a
+540+2 down
+552+2 down
+564+2 down
+576+2 down
+588+2 down
+600+2 down
+612+2 down
+624+2 down
+636+2 down
+648+2 a
+858 quit

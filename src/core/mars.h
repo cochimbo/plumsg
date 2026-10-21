@@ -49,6 +49,9 @@ public:
 
     // Stereo PWM samples at the output rate produced since the last call.
     void setSampleRate(double hz, double masterClock);
+    // A PAL console: the VDP's mode register says so, and the games' start-up code checks
+    // it against the Mega Drive's version register.
+    void setPal(bool pal) { pal_ = pal; }
     std::vector<int16_t>& samples() { return pwmOut_; }
 
     Sh2& master() { return master_; }
@@ -121,6 +124,7 @@ private:
     void raiseDreq0();
 
     Cartridge& cart_;
+    bool pal_ = false;
     Sh2 master_{*this, 0};
     Sh2 slave_{*this, 1};
     std::array<uint8_t, 0x400> bootRom_[2]{};  // generated boot code of each SH-2
