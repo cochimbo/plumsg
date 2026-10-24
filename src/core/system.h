@@ -30,7 +30,8 @@ ConsoleSystem detectSystem(const std::string& path);
 // The same from the first bytes of a .bin (at least 0x8000 if there are that many, for
 // the Master System's header).
 ConsoleSystem detectSystemFromData(const std::vector<uint8_t>& start);
-// The region a Master System or Game Gear cartridge's header asks for: Japan, else USA.
+// The region a Master System or Game Gear cartridge asks for: Europe for the games that
+// only run at 50 Hz, else Japan or USA as its header says.
 Region smsRegion(const std::vector<uint8_t>& rom);
 
 // The files a .cue sheet points to (FILE lines), as full paths next to the .cue.

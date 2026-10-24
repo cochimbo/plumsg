@@ -2518,8 +2518,55 @@ void testSongExtract(testrom::Asking asking) {
           "Canciones: con efectos Roland, el efecto pasa por el SoundFont");
 }
 
+// The cartridge with four more bytes at its end that give the whole of it this CRC32:
+// the CRC is affine in those bits, so they are solved for over GF(2).
+std::vector<uint8_t> withCrc32(std::vector<uint8_t> rom, uint32_t target) {
+    rom.resize(rom.size() + 4, 0);
+    const auto crc = [&] { return static_cast<uint32_t>(mz_crc32(MZ_CRC32_INIT, rom.data(), rom.size())); };
+    const size_t at = rom.size() - 4;
+    const uint32_t base = crc();
+    uint32_t cols[32];
+    for (int b = 0; b < 32; ++b) {
+        rom[at + b / 8] = static_cast<uint8_t>(1 << (b % 8));
+        cols[b] = crc() ^ base;
+        rom[at + b / 8] = 0;
+    }
+    // Rows of [cols | want]: row i is bit i of every column, and of the CRC wanted.
+    uint64_t rows[32];
+    for (int i = 0; i < 32; ++i) {
+        rows[i] = ((target ^ base) >> i & 1ull) << 32;
+        for (int b = 0; b < 32; ++b) rows[i] |= static_cast<uint64_t>(cols[b] >> i & 1) << b;
+    }
+    for (int b = 0, r = 0; b < 32; ++b) {
+        int p = r;
+        while (p < 32 && !(rows[p] >> b & 1)) ++p;
+        if (p == 32) continue;
+        std::swap(rows[p], rows[r]);
+        for (int i = 0; i < 32; ++i)
+            if (i != r && (rows[i] >> b & 1)) rows[i] ^= rows[r];
+        ++r;
+    }
+    for (int i = 0; i < 32; ++i)
+        for (int b = 0; b < 32; ++b)
+            if (rows[i] & (1ull << b)) {
+                if (rows[i] >> 32 & 1) rom[at + b / 8] |= static_cast<uint8_t>(1 << (b % 8));
+                break;
+            }
+    return rom;
+}
+
 void testMasterSystem() {
     namespace st = smstestrom;
+    {
+        // Back to the Future Part III only runs on a 50 Hz console, though its header
+        // says "export" as the American games do (issue #89).
+        const std::vector<uint8_t> bttf = withCrc32(st::build(), 0x2D48C1D3);
+        MegaDrive md;
+        md.loadRomData(bttf);
+        check(mz_crc32(MZ_CRC32_INIT, bttf.data(), bttf.size()) == 0x2D48C1D3 && smsRegion(bttf) == Region::EuropePal &&
+                  md.isMasterSystem() && md.pal() && md.masterSystem()->vdp().pal() && !md.masterSystem()->fmPresent(),
+              "Master System: a game that needs 50 Hz runs on a European console");
+    }
     const std::vector<uint8_t> rom = st::build();
     check(detectSystemFromData(rom) == ConsoleSystem::MasterSystem && smsRegion(rom) == Region::UsaNtsc,
           "Master System: detected from its header");
