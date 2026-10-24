@@ -3,8 +3,23 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## Unreleased
+## 0.1.0-beta.4
 
+- The VDP writes through its 4-word FIFO in its access slots, with timed DMA:
+  VDPFIFOTesting passes all its 122 tests ([#90](https://github.com/cochimbo/plumsg/issues/90)),
+  and testpico 55 of its 57 ([#69](https://github.com/cochimbo/plumsg/issues/69)).
+- Master System: the VDP's counters, interrupts, latched H counter and sprite
+  collisions match the hardware, and SMSVDPTest passes everything
+  ([#72](https://github.com/cochimbo/plumsg/issues/72)).
+- "Direct colour" DMA pictures (colours written to the backdrop with the display off)
+  show, steady ([#95](https://github.com/cochimbo/plumsg/issues/95)).
+- Sprite masking after a line that ran out of sprite pixels, as on the console: the
+  Sprite Masking Test ROM passes all 9 tests in H32 and H40
+  ([#101](https://github.com/cochimbo/plumsg/issues/101)).
+- Mega CD: KRIKzz's mcd-verificator runs, loaded as a cartridge in place of the BIOS
+  (with a .cue of the same name in the tray), and passes 16 of its 19 groups; the CD
+  controller's flags, DMA and interrupts behave as it measures
+  ([#80](https://github.com/cochimbo/plumsg/issues/80)).
 - Paprium runs: the chip on its cartridge is emulated (it unpacks the graphics, builds
   the sprites, scales the pictures in the menus, keeps the saves and plays the sound
   effects), so the game gets past its "Vapor Ware" decoy to the NX terminal, the intro,

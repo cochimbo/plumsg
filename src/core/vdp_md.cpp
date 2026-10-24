@@ -701,10 +701,14 @@ void VdpMd::drawSprites(int line, int left, int right, LineCells& out, std::arra
     int pixels = 0;
     bool beyond = false;  // past what the real VDP would draw on this line
     bool masked = false, sawNonZeroX = false;
+    // A sprite at x = 0 hides the lower-priority sprites after it on this line, once a
+    // sprite at another x came before it, or from the first one if the line before ran
+    // out of sprite pixels.
+    const bool maskFromStart = dotOverflow_;
+    dotOverflow_ = false;
     for (int i = 0; i < count; ++i) {
         const Found& s = found[i];
-        // A sprite at x = 0 hides the lower-priority sprites after it on this line.
-        if (s.x == 0 && sawNonZeroX) masked = true;
+        if (s.x == 0 && (sawNonZeroX || maskFromStart)) masked = true;
         if (s.x != 0) sawNonZeroX = true;
         const bool hflip = (s.attr & 0x0800) != 0, vflip = (s.attr & 0x1000) != 0;
         const int height = s.vcells * tileRows;
@@ -714,6 +718,7 @@ void VdpMd::drawSprites(int line, int left, int right, LineCells& out, std::arra
         for (int cx = 0; cx < s.hcells; ++cx) {
             if (pixels >= maxPixels && !beyond) {
                 spriteOverflow_ = true;
+                dotOverflow_ = true;
                 if (!unlimitedSprites_) return;
                 beyond = true;
             }
