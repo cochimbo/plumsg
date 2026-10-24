@@ -1,0 +1,6 @@
+# What each system's built-in test ROM shows at frame 119 (picture, sound) in the
+# versions that saved these states. A state loaded at frame 89 must show the same
+# after 30 more frames.
+megadrive d171be7e dac54033
+mastersystem 4220de49 fbe896c5
+gamegear 72c5cc29 defdb1c5

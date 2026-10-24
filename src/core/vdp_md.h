@@ -15,8 +15,12 @@ namespace plumsg {
 // and full/2-cell vertical scroll, the window, sprites with the per-line limits (or
 // without them, as an option) and masking, priorities, shadow/highlight, H32/H40,
 // V28/V30 and interlace mode 2.
-// DMA (68000 to VRAM/CRAM/VSRAM, fill and copy) runs at once; the time a 68000 DMA
-// would take is returned so the CPU can be stalled for it.
+// Writes go through the console's 4-word FIFO and reach memory in the VDP's access
+// slots (18 a line in H40, 16 in H32 while drawing; about 205/167 in blanking), a VRAM
+// word taking two of them. DMA runs through the same slots: a 68000 DMA feeds the FIFO
+// and holds the CPU until its last word is in; fill and copy run on their own while the
+// CPU goes on. The port calls that take a master clock run it in time; the ones without
+// do everything at once (tests).
 //
 // Every line it renders goes into a VideoFrameMd twice: the final mix and the three
 // layers apart, which is what the pseudo-3D view needs.
@@ -36,12 +40,19 @@ public:
 
     void reset();
 
-    // CPU ports. Writing the control port can start a 68000 DMA; the return value is how
-    // many master clocks the 68000 is held off the bus for it (0 otherwise).
+    // CPU ports at master clock `clock` (counted as the scheduler counts it). The return
+    // value is how many master clocks the CPU waits: for a 68000 DMA to take its last
+    // word, for room in a full FIFO, or for the FIFO to empty before a read.
+    int writeControl(uint16_t value, uint64_t clock);
+    int writeData(uint16_t value, uint64_t clock);
+    uint16_t readData(uint64_t clock, int* wait = nullptr);
+    // The same with every write and DMA finished at once.
     int writeControl(uint16_t value);
     int writeData(uint16_t value);
     uint16_t readData();
-    // The status register at `lineClock` master clocks into the current line.
+    // The status register at `clock`, `lineClock` master clocks into the current line.
+    // Bits 15-10 are not driven by the VDP: they read as 0 here.
+    uint16_t readStatus(int lineClock, uint64_t clock);
     uint16_t readStatus(int lineClock);
     // H/V counter for the current position: `lineClock` master clocks into the line.
     uint16_t readHV(int lineClock) const;
@@ -49,7 +60,10 @@ public:
     // Called by the scheduler.
     int linesPerFrame() const { return pal_ ? 313 : 262; }
     int activeLines() const { return (pal_ && (regs_[1] & 0x08)) ? 240 : 224; }
-    void startLine(int line);   // updates the V counter and VBlank
+    void startLine(int line, uint64_t clock);  // updates the V counter and VBlank
+    void startLine(int line) { startLine(line, ~uint64_t{0}); }
+    // Runs the access slots up to `clock`: what the FIFO and a DMA write by then is in memory.
+    void sync(uint64_t clock);
     // The VINT comes this many master clocks after VBlank starts: games that wait for
     // the VBlank flag with interrupts on see it before their handler runs (Snatcher).
     static constexpr int kVintDelay = 788;
@@ -89,18 +103,55 @@ public:
 
     template <class Ar>
     void state(Ar& ar) {
+        int unusedBusyLines = 0;  // kept so older states still load
         ar(vram_, cram_, vsram_, regs_, pendingControl_, code_, addr_, fillPending_, readBuffer_, vcounter_,
            hintCounter_, vintPending_, hintPending_, z80Irq_, spriteOverflow_, spriteCollision_, oddFrame_,
-           inVblank_, dmaBusyLines_, pal_, frameNumber_);
-        if constexpr (Ar::kLoading) cacheColors();
+           inVblank_, unusedBusyLines, pal_, frameNumber_);
+        if constexpr (Ar::kLoading) {
+            cacheColors();
+            // A state without the FIFO's own block: nothing is waiting, and the slots
+            // line up again with the next line.
+            clearFifo();
+        }
+    }
+    // The FIFO, the DMA under way and the slot clock, in a block of their own.
+    template <class Ar>
+    void fifoState(Ar& ar) {
+        ar(fifoData_, fifoNext_, queueCount_, halfDone_, dmaMode_, dmaLeft_, dmaSource_, fillValue_, copyRead_,
+           copyByte_, slotLine_, slotLineStart_, syncedTo_, hvLatch_);
+        for (FifoEntry& e : queue_) ar(e.addr, e.value, e.code, e.startsFill);
     }
 
 private:
+    // A write waiting in the FIFO for its slot.
+    struct FifoEntry {
+        uint32_t addr = 0;
+        uint16_t value = 0;
+        uint8_t code = 0;
+        bool startsFill = false;  // the data port write a DMA fill was waiting for
+    };
+    enum DmaMode : uint8_t { kDmaNone, kDmaTransfer, kDmaFill, kDmaCopy };
+    static constexpr uint64_t kUntimed = ~uint64_t{0};
+
     void writeRegister(int reg, uint8_t value);
-    void writeWord(uint16_t value);  // to the memory selected by code_/addr_, then auto-increment
-    int runDma();                    // starts the DMA selected by the registers
-    void dmaFill(uint16_t value);
+    // Stores a word in VRAM, CRAM or VSRAM as the FIFO hands it over.
+    void storeWord(uint8_t code, uint32_t addr, uint16_t value);
+    void push(uint16_t value);  // into the FIFO, at code_/addr_, then auto-increment
+    int startDma(uint64_t clock);
     uint32_t dmaLength() const;
+    void refill();  // a 68000 DMA puts its next words in the FIFO while there is room
+    void finishDma();
+    // One access slot: the oldest write in the FIFO, or a step of a fill or copy.
+    void slot();
+    bool busy() const { return queueCount_ > 0 || dmaMode_ != kDmaNone; }
+    int slotsPerLine(int line) const;
+    // The time of the n-th access slot after `clock` (n >= 1), counting lines on from the
+    // one the slots are at now, with the registers as they are.
+    uint64_t slotAfter(uint64_t clock, uint64_t n) const;
+    uint64_t slotsToDrain() const;  // slots until the FIFO is empty and the DMA done
+    void drain();                   // finishes everything now
+    void clearFifo();
+    int entrySlots(const FifoEntry& e) const { return (e.code & 0x0F) == 1 ? 2 : 1; }
     void cacheColors();
     uint32_t color(int index, MdShade shade) const;
 
@@ -126,6 +177,28 @@ private:
     uint32_t addr_ = 0;
     bool fillPending_ = false;     // DMA fill armed: waits for a data port write
     uint16_t readBuffer_ = 0;
+    uint16_t hvLatch_ = 0;         // the HV counter while the latch (register 0 bit 1) is on
+
+    // The FIFO's four words as last written: reads from CRAM, VSRAM and the 8-bit VRAM
+    // target take the bits those memories lack from the oldest one, fifoData_[fifoNext_].
+    std::array<uint16_t, 4> fifoData_{};
+    uint8_t fifoNext_ = 0;
+    // The writes still waiting, oldest first; a fifth one is the CPU's, held until there
+    // is room.
+    std::array<FifoEntry, 5> queue_{};
+    uint8_t queueCount_ = 0;
+    bool halfDone_ = false;  // the oldest is a VRAM word with one of its two slots spent
+    uint8_t dmaMode_ = kDmaNone;
+    uint32_t dmaLeft_ = 0;     // words (transfer), bytes or words (fill), bytes (copy)
+    uint32_t dmaSource_ = 0;   // transfer: the 68000 address it reads; copy: the VRAM one
+    uint16_t fillValue_ = 0;
+    bool copyRead_ = false;    // copy: the byte is read, its write comes next slot
+    uint8_t copyByte_ = 0;
+    // The slot clock: the line the slots are counted in, where it starts, and how far
+    // they have run.
+    int slotLine_ = 0;
+    uint64_t slotLineStart_ = 0;
+    uint64_t syncedTo_ = 0;
 
     int vcounter_ = 0;
     int hintCounter_ = 0;
@@ -136,7 +209,6 @@ private:
     bool spriteCollision_ = false;
     bool oddFrame_ = false;
     bool inVblank_ = false;
-    int dmaBusyLines_ = 0;  // fill/copy still "running", for the status bit
     bool pal_ = false;
     uint64_t frameNumber_ = 0;
     bool unlimitedSprites_ = false;

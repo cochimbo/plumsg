@@ -211,6 +211,9 @@ private:
     void runFrameMd();
     std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
+    // When a VDP port access happens: a second access in the same instruction comes after
+    // the wait the first one caused.
+    uint64_t vdpClock() const { return std::max(now_, vdpFreeAt_); }
 
     template <class Ar>
     void busState(Ar& ar);
@@ -252,6 +255,7 @@ private:
     Region discRegion_ = Region::UsaNtsc;  // what the disc's security code is for
     uint64_t now_ = 0;         // master clock of whoever is running
     uint64_t lineStart_ = 0;
+    uint64_t vdpFreeAt_ = 0;   // until when a VDP access made the CPU wait
     uint64_t m68kClock_ = 0;   // master clocks the 68000 has reached
     uint64_t z80Clock_ = 0;
     uint64_t psgClock_ = 0;
