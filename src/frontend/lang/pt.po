@@ -1516,6 +1516,9 @@ msgstr ""
 "A câmera balança alguns graus acompanhando a ação,\n"
 "assim as camadas se movem entre si mesmo olhando de frente."
 
+msgid "La música de Paprium no está en la ROM: pon sus pistas (.ogg, .mp3 o .wav, cada una empezando por su número en el álbum) en la carpeta %s."
+msgstr "A música de Paprium não está na ROM: coloque as suas faixas (.ogg, .mp3 ou .wav, cada uma começando pelo seu número no álbum) na pasta %s."
+
 msgid "La música en CD de este juego (MSU-MD) necesita una BIOS del Mega CD: elígela en Consola > BIOS del Mega CD."
 msgstr "A música em CD deste jogo (MSU-MD) precisa de uma BIOS do Mega CD: escolha-a em Console > BIOS do Mega CD."
 

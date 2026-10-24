@@ -58,6 +58,15 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
             disc = std::move(open);
     }
     attachCd(std::move(disc), true);
+    if (paprium_) {
+        // Its music, recordings the cartridge plays, from a folder by the ROM with its name.
+        const std::filesystem::path rom = std::filesystem::u8path(path);
+        const std::filesystem::path folder = rom.parent_path() / rom.stem();
+        if (paprium_->setMusicFolder(folder) == 0)
+            loadNotice_ = trf("La música de Paprium no está en la ROM: pon sus pistas (.ogg, .mp3 o .wav, cada una "
+                              "empezando por su número en el álbum) en la carpeta %s.",
+                              folder.u8string().c_str());
+    }
     return true;
 }
 
@@ -153,11 +162,8 @@ void MegaDrive::setUpMars() {
 }
 
 void MegaDrive::setUpPaprium() {
-    if (!sms_ && !disc_ && Paprium::detect(cart_)) {
-        if (!paprium_) paprium_ = std::make_unique<Paprium>(cart_);
-    } else {
-        paprium_.reset();
-    }
+    paprium_.reset();
+    if (!sms_ && !disc_ && Paprium::detect(cart_)) paprium_ = std::make_unique<Paprium>(cart_);
 }
 
 void MegaDrive::setUpSms() {
@@ -442,6 +448,7 @@ void MegaDrive::runFrameSms() {
 }
 
 void MegaDrive::runFrame() {
+    if (paprium_ && paprium_->takeRestart()) reset();
     applyRamCheats();
     if (roland_) roland_->beginFrame(now_);
     if (sms_) runFrameSms();

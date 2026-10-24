@@ -31,6 +31,17 @@ else()
   target_compile_options(plumsg_miniz PRIVATE -w)
 endif()
 
+# minimp3 (CC0) and stb_vorbis (public domain / MIT), vendored: Paprium's music, read
+# from .mp3 and .ogg files.
+add_library(plumsg_decoders STATIC third_party/minimp3/minimp3.c third_party/stb/stb_vorbis_build.c)
+set_target_properties(plumsg_decoders PROPERTIES LINKER_LANGUAGE C)
+target_include_directories(plumsg_decoders PUBLIC third_party)
+if(MSVC)
+  target_compile_options(plumsg_decoders PRIVATE /W0)
+else()
+  target_compile_options(plumsg_decoders PRIVATE -w)
+endif()
+
 # ymfm (BSD-3-Clause, Aaron Giles) emulates the YM2612. Pinned to a known commit.
 FetchContent_Declare(ymfm
   GIT_REPOSITORY https://github.com/aaronsgiles/ymfm.git
@@ -132,6 +143,7 @@ add_library(plumsg_core STATIC
   src/core/sh2.cpp
   src/core/mars.cpp
   src/core/paprium.cpp
+  src/core/music_track.cpp
   src/core/cd_image.cpp
   src/core/megacd.cpp
   src/core/netplay.cpp
@@ -142,7 +154,7 @@ add_library(plumsg_core STATIC
 )
 # stb_image_write (public domain / MIT, vendored) encodes the JPEG frames of the AVI recordings.
 target_include_directories(plumsg_core PUBLIC src src/core PRIVATE third_party/tsf third_party/stb)
-target_link_libraries(plumsg_core PUBLIC plumsg_miniz Threads::Threads PRIVATE plumsg_ymfm chdr-static)
+target_link_libraries(plumsg_core PUBLIC plumsg_miniz Threads::Threads PRIVATE plumsg_ymfm chdr-static plumsg_decoders)
 
 # UDP sockets for netplay (the session itself is in the core).
 add_library(plumsg_net STATIC src/net/udp.cpp)

@@ -1,6 +1,8 @@
 #include "paprium.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstring>
 
 namespace plumsg {
@@ -18,6 +20,24 @@ constexpr uint32_t kDmaList = 0x1400;   // VDP register writes for each DMA, 16 
 constexpr uint32_t kDmaCount = 0x1F16;
 constexpr uint32_t kSpriteCount = 0x1F18;
 constexpr int kSaveBank = 0x780;
+
+// The chip's music numbers, and the number on the album of the track each one plays
+// (0: none).
+constexpr uint8_t kAlbumTrack[0x3F] = {
+    0,  2,  8,  42, 5,  31, 43, 3,  0,  0,  0,  26, 23, 0,  7,  36, 35, 30, 21, 44, 29,
+    24, 27, 4,  45, 15, 0,  28, 33, 41, 46, 0,  13, 22, 11, 38, 40, 47, 17, 25, 16, 0,
+    19, 14, 0,  0,  9,  20, 0,  18, 48, 49, 10, 12, 32, 6,  50, 1,  39, 34, 37, 51, 52};
+
+// The chip's volume levels, 0-255, on a logarithmic curve.
+int volumeLevel(int v) {
+    static const auto kLevels = [] {
+        std::array<int, 256> t{};
+        for (int i = 0; i < 256; ++i)
+            t[i] = static_cast<int>(std::lround(255.0 * std::log1p(0.034 * i) / std::log1p(0.034 * 255)));
+        return t;
+    }();
+    return kLevels[static_cast<size_t>(std::clamp(v, 0, 255))];
+}
 
 }  // namespace
 
@@ -56,6 +76,10 @@ void Paprium::reset() {
     audioFlags_ = 0;
     audioPhase_ = 0;
     samples_.clear();
+    musicTrack_ = 0;
+    musicPos_ = 0;
+    musicVolume_ = 0;
+    restart_ = false;
     sfxPtr_ = romLong(romLong(0xAF77C) + 0x778);
     // Where the boot command will say the data is; a state loaded needs it too.
     spritePtr_ = romLong(0x10014);
@@ -101,12 +125,23 @@ void Paprium::command(uint16_t value) {
     const int arg = value & 0xFF;
     switch (value >> 8) {
         case 0x88: audioFlags_ = static_cast<uint8_t>(arg); break;
+        case 0x8C: playMusic(arg & 0x7F); break;
+        case 0x8D:
+            if (arg == 0 || arg == 8) musicTrack_ = 0;
+            break;
+        case 0xC9: musicVolume_ = arg; break;
         case 0xCA: sfxVolume_ = arg; break;
         case 0xD1: playSound(arg); break;
         case 0xD2: stopSound(arg); break;
         case 0xD3: loopSound(arg); break;
-        case 0x84:  // the ROM's second 32 KB, back over the RAM
+        case 0x84:
+            // The game asks for this once: the first time it is switched on, after the
+            // language is picked and saved. It then jumps to 0x8200, where the ROM has a
+            // joke game (a "Streets of Rage 4") for copies without the chip. What the chip
+            // puts there can't be read from the ROM; starting again leads to the game, as
+            // switching on with the save made does.
             std::copy_n(cart_.rom().begin() + 0x8000, 0x8000, ram_.begin() + 0x8000);
+            restart_ = true;
             break;
         case 0xAD: drawObject(arg); break;
         case 0xAE: startSprites(); break;
@@ -139,7 +174,7 @@ void Paprium::command(uint16_t value) {
         case 0xE0: saveWrite(arg); break;
         case 0xF4: scalerLoad(); break;
         case 0xF5: scale(); break;
-        default: break;  // the music and the rest: not emulated
+        default: break;  // the rest: nothing to do
     }
 }
 
@@ -540,6 +575,7 @@ void Paprium::runAudio(size_t count, double rate) {
             audioPhase_ -= 1.0;
             echoL_[echoPos_] = echoR_[echoPos_] = 0;
             l = r = 0;
+            musicSample(l, r);
             soundSample(l, r);
             echoPos_ = (echoPos_ + 1) % kEcho;
             l += echoL_[echoPos_];
@@ -554,6 +590,65 @@ void Paprium::runAudio(size_t count, double rate) {
         samples_.push_back(static_cast<int16_t>(std::clamp(l, -32768, 32767)));
         samples_.push_back(static_cast<int16_t>(std::clamp(r, -32768, 32767)));
     }
+}
+
+// ---------------------------------------------------------------------------------
+// Music: recordings of the album, from files, started and stopped by the game.
+
+int Paprium::setMusicFolder(const std::filesystem::path& folder) {
+    namespace fs = std::filesystem;
+    for (auto& f : musicFiles_) f.clear();
+    int found = 0;
+    std::error_code ec;
+    for (fs::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec)) {
+        if (!it->is_regular_file(ec)) continue;
+        std::string ext = it->path().extension().u8string();
+        for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (ext != ".wav" && ext != ".mp3" && ext != ".ogg") continue;
+        const std::string name = it->path().filename().u8string();
+        size_t digits = 0;
+        while (digits < name.size() && std::isdigit(static_cast<unsigned char>(name[digits]))) ++digits;
+        if (digits == 0 || digits > 2) continue;
+        const int number = std::stoi(name.substr(0, digits));
+        if (number < 1 || number >= static_cast<int>(musicFiles_.size()) || !musicFiles_[number].empty()) continue;
+        musicFiles_[number] = it->path();
+        ++found;
+    }
+    music_.reset();
+    musicOpen_ = 0;
+    openMusic();
+    return found;
+}
+
+void Paprium::playMusic(int track) {
+    musicTrack_ = static_cast<uint8_t>(track < static_cast<int>(sizeof kAlbumTrack) ? track : 0);
+    musicPos_ = 0;
+    openMusic();
+}
+
+// Opens the file of the track that plays, if it isn't open already.
+void Paprium::openMusic() {
+    if (musicTrack_ == musicOpen_) return;
+    musicOpen_ = musicTrack_;
+    music_.reset();
+    const int number = musicTrack_ < sizeof kAlbumTrack ? kAlbumTrack[musicTrack_] : 0;
+    if (number > 0 && !musicFiles_[number].empty()) music_ = MusicTrack::open(musicFiles_[number]);
+}
+
+// One 48 kHz sample of the music, looping at the end of the track.
+void Paprium::musicSample(int& l, int& r) {
+    if (musicTrack_ == 0 || !music_ || music_->frames() == 0) return;
+    const uint64_t frames = music_->frames();
+    if ((musicPos_ >> 32) >= frames) musicPos_ = 0;
+    const size_t at = static_cast<size_t>(musicPos_ >> 32);
+    int l0, r0, l1, r1;
+    music_->frame(at, l0, r0);
+    music_->frame(at + 1 < frames ? at + 1 : 0, l1, r1);
+    const int64_t frac = static_cast<int64_t>((musicPos_ >> 16) & 0xFFFF);
+    const int level = volumeLevel(musicVolume_);
+    l += static_cast<int>((l0 + ((l1 - l0) * frac >> 16)) * level >> 8);
+    r += static_cast<int>((r0 + ((r1 - r0) * frac >> 16)) * level >> 8);
+    musicPos_ += (static_cast<uint64_t>(music_->rate()) << 32) / 48000;
 }
 
 }  // namespace plumsg

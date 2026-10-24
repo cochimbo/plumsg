@@ -66,6 +66,11 @@ First version. What it has:
   graphics chip that rotates and scales stamps, the timer, the RF5C164 PCM chip and CD
   audio, all mixed with the FM and the PSG. It needs the BIOS for the disc's region (see
   below).
+- **Paprium**: the chip on its cartridge (graphics unpacking, sprites, the menus'
+  scaling, saves and sound effects). Its music is recordings outside the ROM: put the
+  album's tracks (`.ogg`, `.mp3` or `.wav`, each name starting with its number, such as
+  `01 Theme of Paprium.ogg`) in a folder with the ROM's name next to it (`Paprium.bin`
+  and `Paprium/`).
 - **MSU-MD**: cartridges patched by the community to play their music from CD tracks.
   Just put a `.cue` with the same name next to the cartridge (`Sonic.md` and `Sonic.cue`,
   with the tracks it names): the game starts with the Mega CD attached, as on a real
@@ -604,7 +609,8 @@ Own code under the [MIT License](LICENSE). Libraries: SDL2 (zlib), Dear ImGui (M
 `third_party/stb`), ymfm (BSD-3-Clause), the Anime4K network weights (MIT, by bloc97, in
 `src/render/anime4k_shaders.h`, generated with `tools/anime4k.py`), the xBR shader written
 following Hyllian's xbr-lv2 (MIT), libchdr (BSD-3-Clause, for `.chd` files), TinySoundFont
-(MIT, in `third_party/tsf`), rcheevos (MIT, for RetroAchievements). The included
+(MIT, in `third_party/tsf`), rcheevos (MIT, for RetroAchievements), minimp3 (CC0, in
+`third_party/minimp3`) and stb_vorbis (public domain or MIT, in `third_party/stb`). The included
 SoundFont is GeneralUser GS by S. Christian Collins, with its own free license
 (`soundfonts\GeneralUser-GS-LICENSE.txt` in the installation). The 32X and Mega CD were
 written using Sega's documentation and [ares](https://github.com/ares-emulator/ares)

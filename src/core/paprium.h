@@ -2,9 +2,12 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
+#include <memory>
 #include <vector>
 
 #include "cartridge.h"
+#include "music_track.h"
 
 namespace plumsg {
 
@@ -14,8 +17,9 @@ namespace plumsg {
 // 0x1FEA, and the chip answers in that RAM: it unpacks graphics (read a block at a
 // time from 0xC000), builds the sprite table and the DMA list that loads the sprites'
 // tiles, scales the rotating picture in the menus and keeps the saves. It also plays
-// the sound effects, samples in the ROM, at 48 kHz on 8 voices. The music it plays
-// itself is not emulated.
+// the sound effects, samples in the ROM, at 48 kHz on 8 voices. The music is not in the
+// ROM: the cartridge plays recordings of it, so it is read from files the player brings
+// (see setMusicFolder).
 class Paprium {
 public:
     // The cartridge's own header names it.
@@ -31,6 +35,17 @@ public:
     void write8(uint32_t addr, uint8_t value);
     void write16(uint32_t addr, uint16_t value);
 
+    // Where the music's files are: a folder with the album's tracks, each file's name
+    // starting with its number on the album ("01 Theme of Paprium.ogg"). How many it found.
+    int setMusicFolder(const std::filesystem::path& folder);
+
+    // Whether the console should be reset now (see command 0x84); asking clears it.
+    bool takeRestart() {
+        const bool r = restart_;
+        restart_ = false;
+        return r;
+    }
+
     // Adds `count` stereo samples at `rate` Hz to samples().
     void runAudio(size_t count, double rate);
     std::vector<int16_t>& samples() { return samples_; }
@@ -42,7 +57,11 @@ public:
         for (Voice& v : voices_)
             ar(v.ptr, v.left, v.tick, v.phase, v.age, v.volume, v.pan, v.type, v.number, v.flags, v.loop, v.echoLeft);
         ar(echoL_, echoR_, echoPos_, echoSide_, sfxVolume_, audioFlags_, audioPhase_, sfxPtr_, spritePtr_, tilePtr_);
-        if constexpr (Ar::kLoading) loadObjects();
+        ar(musicTrack_, musicPos_, musicVolume_, restart_);
+        if constexpr (Ar::kLoading) {
+            loadObjects();
+            openMusic();
+        }
     }
 
 private:
@@ -73,6 +92,9 @@ private:
     void loopSound(int mask);
     void stopSound(int mask);
     void soundSample(int& l, int& r);
+    void playMusic(int track);
+    void openMusic();
+    void musicSample(int& l, int& r);
 
     Cartridge& cart_;
     std::array<uint8_t, 0x10000> ram_{};
@@ -106,6 +128,14 @@ private:
     std::vector<int16_t> samples_;
     uint32_t spritePtr_ = 0, tilePtr_ = 0;
     std::vector<uint8_t> objects_;  // the object and animation tables, unpacked from spritePtr_
+
+    std::array<std::filesystem::path, 53> musicFiles_;  // by number on the album
+    uint8_t musicTrack_ = 0;  // the chip's number for what plays, 0 for nothing
+    uint64_t musicPos_ = 0;   // 32.32: where it is in the file
+    int32_t musicVolume_ = 0;
+    std::unique_ptr<MusicTrack> music_;
+    uint8_t musicOpen_ = 0;  // which track music_ is
+    bool restart_ = false;
 };
 
 }  // namespace plumsg

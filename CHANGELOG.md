@@ -7,9 +7,10 @@ What each version brings, newest first. Installers are on the
 
 - Paprium runs: the chip on its cartridge is emulated (it unpacks the graphics, builds
   the sprites, scales the pictures in the menus, keeps the saves and plays the sound
-  effects), so the game gets past its "Vapor Ware" decoy to the NX terminal, the demos
+  effects), so the game gets past its "Vapor Ware" decoy to the NX terminal, the intro, the menus
   and the levels ([#68](https://github.com/cochimbo/plumsg/issues/68)). Its music is
-  not in the ROM and is not played.
+  not in the ROM: it plays from the album's tracks (.ogg, .mp3 or .wav) put in a folder
+  with the ROM's name next to it.
 
 ## 0.1.0-beta.3
 

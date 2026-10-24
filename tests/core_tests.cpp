@@ -14,6 +14,7 @@
 #include <random>
 #include <set>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -1325,6 +1326,45 @@ void testPaprium() {
     bool same = cart.hasSaveData() && cart.saveRamByte(0x780) == 0;
     for (uint32_t i = 0; i < 0x780; ++i) same = same && chip.read8(0x5000 + i) == static_cast<uint8_t>(i * 7);
     check(same, "paprium: a save bank written and read back");
+
+    chip.write16(0x1FEA, 0x8400);
+    check(chip.takeRestart() && !chip.takeRestart(), "paprium: command 0x84 starts the game again");
+
+    // The music: a .wav in the folder, the album's track 2, which the chip calls 1.
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "plumsg_paprium_test";
+    std::filesystem::create_directories(dir);
+    {
+        std::vector<uint8_t> wav = {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ', 16, 0, 0, 0,
+                                    1, 0, 2, 0, 0xC0, 0x5D, 0, 0, 0, 0x77, 1, 0, 4, 0, 16, 0, 'd', 'a', 't', 'a'};
+        const uint32_t frames = 24000, bytes = frames * 4;
+        for (int i = 0; i < 4; ++i) wav.push_back(static_cast<uint8_t>(bytes >> (i * 8)));
+        for (uint32_t i = 0; i < frames; ++i) {
+            const int16_t l = 10000, r = -10000;
+            wav.insert(wav.end(), {static_cast<uint8_t>(l), static_cast<uint8_t>(l >> 8), static_cast<uint8_t>(r),
+                                   static_cast<uint8_t>(r >> 8)});
+        }
+        std::ofstream(dir / "02 Acid Dub.wav", std::ios::binary).write(reinterpret_cast<const char*>(wav.data()),
+                                                                       static_cast<std::streamsize>(wav.size()));
+    }
+    check(chip.setMusicFolder(dir) == 1, "paprium: the music's files found by their numbers");
+    chip.write16(0x1FEA, 0xCAFF);
+    chip.write16(0x1FEA, 0xC9FF);
+    chip.write16(0x1FEA, 0x8C01);
+    bool playing = false;
+    for (int tries = 0; tries < 2000 && !playing; ++tries) {
+        chip.samples().clear();
+        chip.runAudio(480, 48000);
+        playing = chip.samples().back() != 0;
+        if (!playing) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    const auto& music = chip.samples();
+    check(playing && std::abs(music[music.size() - 2] - 9921) < 50 && std::abs(music.back() + 9921) < 50,
+          "paprium: the music plays from its file");
+    chip.write16(0x1FEA, 0x8D00);
+    chip.samples().clear();
+    chip.runAudio(480, 48000);
+    check(chip.samples().back() == 0, "paprium: and stops");
+    std::filesystem::remove_all(dir);
 }
 
 void testMsuMd() {
