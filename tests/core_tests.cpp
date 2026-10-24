@@ -2576,6 +2576,17 @@ void testSmsMapper() {
     sms.out(0xBF, 0x00);
     sms.out(0xBF, 0x01);
     check(sms.in(0xBE, 0) == 0xAB && sms.in(0xBE, 0) == 0xCD, "SMS VDP: VRAM written and read back");
+    // The H counter port keeps what TH going high latched: 0xF4 where the line starts,
+    // 0x93 and then 0xE9 across the jump.
+    sms.out(0x3F, 0x55, 0);
+    sms.out(0x3F, 0xFF, 0);
+    check(sms.in(0x7F, 0) == 0xF4 && sms.in(0x7F, 100) == 0xF4, "SMS VDP: H counter latched by TH");
+    sms.out(0x3F, 0x55, 196 - 212 + 228);
+    sms.out(0x3F, 0xFF, 196 - 212 + 228);
+    const uint8_t before = sms.in(0x7F, 0);
+    sms.out(0x3F, 0x55, 197 - 212 + 228);
+    sms.out(0x3F, 0xFF, 197 - 212 + 228);
+    check(before == 0x93 && sms.in(0x7F, 0) == 0xE9, "SMS VDP: H counter jumps from 0x93 to 0xE9");
 }
 
 void testSmsPhase2() {

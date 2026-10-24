@@ -435,16 +435,48 @@ void MegaDrive::runFrameSms() {
     const int lines = vdp.linesPerFrame();
     for (int line = 0; line < lines; ++line) {
         lineStart_ = now_;
-        vdp.startLine(line, drawing_);
+        if (smsLineEarly_) smsLineEarly_ = false;  // a port access already started it
+        else vdp.startLine(line, drawing_);
+        smsLine_ = line;
         z80_.setIrqLine(vdp.irq());
         const uint64_t end = lineStart_ + kMasterPerLine;
+        // The line counter and the frame interrupt come a few cycles into the line.
+        bool lineDue = true, frameDue = true;
+        auto raiseDue = [&](uint64_t upTo) {
+            if (lineDue && upTo >= lineStart_ + VdpSms::kLineIrqAt * 15) {
+                vdp.runLineCounter(line);
+                lineDue = false;
+                z80_.setIrqLine(vdp.irq());
+            }
+            if (frameDue && upTo >= lineStart_ + VdpSms::kFrameIrqAt * 15) {
+                vdp.raiseFrameInterrupt(line);
+                frameDue = false;
+                z80_.setIrqLine(vdp.irq());
+            }
+        };
         while (z80Clock_ < end) {
+            raiseDue(z80Clock_);
             now_ = z80Clock_;
             z80Clock_ += static_cast<uint64_t>(z80_.step()) * 15;
         }
+        raiseDue(end);
         now_ = end;
     }
     vdp.endFrame();
+}
+
+// How far into the line a Master System port access comes. One that comes after the end
+// of the line (the instruction began before it) starts the next line first, so that it
+// sees that line's counters and flags.
+int MegaDrive::smsPortCycle() {
+    int cycle = lineClock() / 15 + z80_.ioCycle;
+    if (smsLineEarly_) return cycle - VdpSms::kCyclesPerLine;
+    if (cycle >= VdpSms::kCyclesPerLine && smsLine_ + 1 < sms_->vdp().linesPerFrame()) {
+        sms_->vdp().startLine(smsLine_ + 1, drawing_);
+        smsLineEarly_ = true;
+        cycle -= VdpSms::kCyclesPerLine;
+    }
+    return cycle;
 }
 
 void MegaDrive::runFrame() {
@@ -751,7 +783,7 @@ void MegaDrive::psgWrite(uint8_t value) {
 uint8_t MegaDrive::in(uint16_t port) {
     if (!sms_) return 0xFF;
     if (sms_->fmPresent() && (port & 0xFF) == 0xF2) return sms_->fmControl();
-    const uint8_t value = sms_->in(static_cast<uint8_t>(port), lineClock() / 15);
+    const uint8_t value = sms_->in(static_cast<uint8_t>(port), smsPortCycle());
     z80_.setIrqLine(sms_->vdp().irq());  // reading the status clears the interrupt
     return value;
 }
@@ -785,7 +817,7 @@ void MegaDrive::out(uint16_t port, uint8_t value) {
         }
         return;
     }
-    sms_->out(static_cast<uint8_t>(port), value);
+    sms_->out(static_cast<uint8_t>(port), value, smsPortCycle());
     z80_.setIrqLine(sms_->vdp().irq());  // an interrupt enable may have changed
 }
 

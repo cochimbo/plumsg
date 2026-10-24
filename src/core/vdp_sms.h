@@ -42,20 +42,38 @@ public:
     static constexpr int kGgWidth = 160, kGgHeight = 144, kGgLeft = 48;
     bool pal() const { return pal_; }
 
+    // A line has 228 Z80 cycles. Here it starts where the V counter changes; `cycle`
+    // says how far into it a port access comes.
+    static constexpr int kCyclesPerLine = 228;
+
     // CPU ports: 0xBE data, 0xBF control, 0x7E V counter, 0x7F H counter.
     uint8_t readData();
     void writeData(uint8_t value);
-    uint8_t readStatus();  // clears the flags and the interrupt
-    void writeControl(uint8_t value);
+    uint8_t readStatus(int cycle = 0);  // clears the flags and the interrupt
+    void writeControl(uint8_t value, int cycle = 0);
     uint8_t vcounter() const;
-    // The H counter at `cycle` Z80 cycles into the line (it counts pixels / 2).
-    uint8_t hcounter(int cycle) const;
+    // The H counter port gives the value latched by the last rise of a TH line, not the
+    // running counter.
+    uint8_t hcounter() const { return hcLatch_; }
+    void latchHcounter(int cycle) { hcLatch_ = hcounterAt(cycle); }
+    // The running H counter (pixels / 2) `cycle` Z80 cycles into the line.
+    static uint8_t hcounterAt(int cycle);
 
     // Called by the scheduler at the start of every line: draws it if it is an active
-    // one (and `draw`), runs the line counter and raises the frame interrupt.
+    // one (and `draw`), and looks for its sprites.
     int linesPerFrame() const { return pal_ ? 313 : 262; }
     int activeLines() const;
     void startLine(int line, bool draw);
+    // The interrupts come a few cycles into the line, the line counter's at
+    // kLineIrqAt and the frame's at kFrameIrqAt; the scheduler calls these then. The
+    // frame flag shows kFrameFlagDelay cycles into the line, a sprite collision
+    // kCollisionDelay cycles after the beam meets the pixel's X / 1.5.
+    void runLineCounter(int line);
+    void raiseFrameInterrupt(int line);
+    static constexpr int kLineIrqAt = 4, kFrameIrqAt = 3, kFrameFlagDelay = 0, kCollisionDelay = 24;
+    // A write to the X scroll this many cycles before the end of a line is too late for
+    // the next one.
+    static constexpr int kHscrollLatchLead = 1;
     void endFrame();
 
     // The Z80's INT line: a pending frame or line interrupt whose enable is set.
@@ -86,11 +104,17 @@ public:
         ar(cramHigh_, cramLatch_);
         if constexpr (Ar::kLoading) cacheColors();
     }
+    // What came after the Game Gear, kept apart too.
+    template <class Ar>
+    void timingState(Ar& ar) {
+        ar(hcLatch_, hscrollHeld_, heldHscroll_);
+    }
 
 private:
     void cacheColors();
     void renderLine(int line);
     void renderLineTms(int line);
+    void spriteLine(int line, uint8_t* color, uint8_t* number);
     void cropGameGear(int line);
     bool mode4() const { return (regs_[0] & 0x04) != 0; }
     uint16_t nameTableBase() const;
@@ -106,12 +130,17 @@ private:
     uint16_t addr_ = 0;
     uint8_t latch_ = 0;            // that first byte
     uint8_t readBuffer_ = 0;
+    uint8_t hcLatch_ = 0;
+    bool hscrollHeld_ = false;  // register 8 changed too late for the coming line,
+    uint8_t heldHscroll_ = 0;   // which takes this value instead
     int line_ = 0;
     int lineCounter_ = 0;
     bool frameIrq_ = false;
+    bool frameRaised_ = false;  // the frame interrupt of this frame came early, by a read
     bool lineIrq_ = false;
     bool spriteOverflow_ = false;
     bool spriteCollision_ = false;
+    int collisionAt_ = 0;  // the cycle of the line from which the collision flag shows
     uint8_t vscrollLatch_ = 0;     // register 9 as it was when the frame started
     bool pal_ = false;
     uint64_t frameNumber_ = 0;
