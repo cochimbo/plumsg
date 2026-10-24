@@ -853,6 +853,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         io_.state(w);
         block("IO  ", w.data());
     }
+    {
+        StateWriter w;
+        io_.riseState(w);
+        block("IOTH", w.data());
+    }
     if (overclock_ != 100) {
         StateWriter w;
         uint16_t percent = static_cast<uint16_t>(overclock_);
@@ -1007,6 +1012,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);
         else if (id == fourcc("IO  ")) io_.state(b);
+        else if (id == fourcc("IOTH")) io_.riseState(b);
         else if (id == fourcc("CART")) cart_.state(b);
         else if (id == fourcc("EEPR")) cart_.eepromState(b);
         else if (id == fourcc("THMB")) thumbnail = data;

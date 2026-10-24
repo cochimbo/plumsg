@@ -7,6 +7,8 @@ What each version brings, newest first. Installers are on the
 
 - Danny Sullivan's Indy Heat (prototype) no longer stays on a black screen
   ([#100](https://github.com/cochimbo/plumsg/issues/100)).
+- Trouble Shooter reads the pad right: Start and A work and C no longer pauses
+  ([#91](https://github.com/cochimbo/plumsg/issues/91)).
 
 ## 0.1.0-beta.1
 
