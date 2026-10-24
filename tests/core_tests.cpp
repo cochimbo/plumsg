@@ -35,6 +35,7 @@
 #include "megacd/megacd_program.h"
 #include "cd_image.h"
 #include "netplay.h"
+#include "notation.h"
 #include "pad_test_rom.h"
 #include "sms_test_rom.h"
 #include "music_rom.h"
@@ -1989,6 +1990,41 @@ void testAchievements() {
     check(!ra.gameLoaded(), "logros: juego cerrado");
 }
 
+// The Partitura's figures: the tempo and bars guessed, and notes written as figures.
+void testNotation() {
+    using namespace notation;
+    // Quarters at 150 BPM (0.4 s), from 1.3 s, with eighths now and then.
+    std::vector<double> onsets;
+    for (int i = 0; i < 32; ++i) {
+        onsets.push_back(1.3 + 0.4 * i);
+        if (i % 4 == 3) onsets.push_back(1.3 + 0.4 * i + 0.2);
+    }
+    const Meter m = guessMeter(onsets);
+    check(m.bpm() == 150, "Notación: adivina el tempo de negras a 150 BPM");
+    check(std::fabs(std::remainder(m.origin - 1.3, m.quarter)) < 0.02, "Notación: los compases empiezan en una nota");
+    // Notes a second apart are two beats at 120 BPM: the tempo is halved into 70-150.
+    check(guessMeter({0, 1, 2, 3, 4, 5}).bpm() == 120, "Notación: el tempo cae entre 70 y 150 BPM");
+
+    Meter q;  // 120 BPM from 0: a sixteenth is 0.125 s
+    q.quarter = 0.5;
+    q.origin = 0;
+    check(split(0, 16) == std::vector<int>{16} && split(2, 6) == std::vector<int>{6} && split(1, 3) == std::vector<int>{1, 2} &&
+              split(4, 12) == std::vector<int>{12} && split(0, 12, true) == std::vector<int>{8, 4},
+          "Notación: las duraciones se escriben con las figuras que caben donde empiezan");
+    // A quarter (let go early), a dotted quarter and an eighth, then a rest of a half
+    // (as two quarters: it starts on the fourth beat and goes over the bar line).
+    const std::vector<Played> line = {{0.0, 0.4, 60, 1}, {0.5, 1.2, 62, 2}, {1.25, 1.45, 64, 3}};
+    const std::vector<Figure> f = transcribe(line, q, 0, 20);
+    check(f.size() == 5 && f[0].length == 4 && !f[0].rest && f[1].length == 6 && f[2].length == 2 && f[2].notes == std::vector<int>{64} &&
+              f[3].rest && f[3].length == 4 && f[4].rest && f[4].at == 16 && f[4].length == 4,
+          "Notación: negra, negra con puntillo, corchea y silencios de negra a cada lado de la barra");
+    // A note over the bar line is tied; notes starting together are a chord.
+    const std::vector<Figure> t = transcribe({{1.5, 2.5, 67, 1}, {1.5, 2.5, 60, 2}}, q, 12, 20);
+    check(t.size() == 2 && t[0].tied && t[0].length == 4 && t[1].at == 16 && t[1].length == 4 && !t[1].tied &&
+              t[0].notes == std::vector<int>{60, 67},
+          "Notación: una nota que cruza la barra se liga, y las que empiezan juntas son un acorde");
+}
+
 void testRoland() {
     Ym2612 ym;
     ym.setMasterClock(MegaDrive::kMasterNtsc);
@@ -2148,6 +2184,29 @@ void testRoland() {
     check(log.empty(), "Roland: un canal en silencio no da notas");
     roland.setListening(0, {});
     fm(0, 0x28, 0x00);
+
+    // The score: the notes at the chip's pitch, whatever they sound as, without drums.
+    {
+        const RolandSound::Score& score = roland.score();
+        const bool b3 = std::any_of(score.begin(), score.end(), [](const RolandSound::ScoreNote& n) { return n.note == 59 && n.voice == 0; });
+        const bool drums = std::any_of(score.begin(), score.end(), [](const RolandSound::ScoreNote& n) { return n.note == 38; });
+        const bool ended = std::all_of(score.begin(), score.end(), [](const RolandSound::ScoreNote& n) { return n.end > n.start; });
+        check(b3 && !drums && ended, "Roland: la partitura escribe el Si3 tal cual (octava, original o en silencio), sin la batería");
+        // Only following: no notes to the synth, every channel to the chips but an
+        // instrument switched off.
+        roland.setFollowOnly(true);
+        log.clear();
+        fm(0, 0x28, 0xF0);
+        check(log.empty() && (roland.chipChannels() & 1) && roland.score().back().end == 0,
+              "Roland: solo siguiendo, la nota va a la partitura y suena el chip");
+        roland.setListening(0, {fmPrint});
+        check(!(roland.chipChannels() & 1), "Roland: un instrumento apagado calla también en el chip");
+        roland.setListening(0, {});
+        fm(0, 0x28, 0x00);
+        roland.setFollowOnly(false);
+        roland.clearScore();
+        check(roland.score().empty(), "Roland: la partitura se vacía");
+    }
 
     // Sonic's driver sets the release rates to the fastest to cut a note: it is still
     // the same instrument, and what an old file chose under either old fingerprint holds.
@@ -2779,6 +2838,7 @@ int main() {
     testMegaCd();
     testMsuMd();
     testNetplay();
+    testNotation();
     testRoland();
     testAchievements();
     testVgm();

@@ -118,6 +118,7 @@ add_library(plumsg_core STATIC
   src/core/ym2612.cpp
   src/core/ym2413.cpp
   src/core/audio_mixer.cpp
+  src/core/notation.cpp
   src/core/roland.cpp
   src/core/timbre.cpp
   src/core/vgm.cpp
@@ -206,6 +207,7 @@ add_executable(plumsg WIN32
   src/frontend/settings.cpp
   src/frontend/game_options.cpp
   src/frontend/instrument_editor.cpp
+  src/frontend/score_view.cpp
   src/frontend/file_dialog.cpp
   src/frontend/ui.cpp
   src/frontend/library.cpp

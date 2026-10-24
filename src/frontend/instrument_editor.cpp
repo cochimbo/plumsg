@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
@@ -302,9 +303,16 @@ bool InstrumentEditor::loadTrack(const Track& track) {
     synth_.clearSeen();
     player_.load(std::move(file));
     player_.setLoop(loop_);
-    player_.analyse();  // every instrument in it, before playing
+    // Every instrument in it, before playing, and all its notes for the score.
+    synth_.clearScore();
+    synth_.setScoreLimit(SIZE_MAX);
+    player_.analyse();
+    trackScore_ = synth_.score();
+    synth_.setScoreLimit(RolandSound::kScoreNotes);
+    synth_.clearScore();
     trackSeen_ = synth_.seen();
     soloInstrument_ = 0;
+    silencedInstruments_.clear();
     applyListening();
     return true;
 }
@@ -338,10 +346,38 @@ void InstrumentEditor::play(double seconds, double rate, std::vector<int16_t>& o
     }
 }
 
+double InstrumentEditor::trackPosition() const {
+    const double length = player_.file().seconds();
+    return length > 0 ? std::fmod(player_.position(), length) : player_.position();
+}
+
+void InstrumentEditor::togglePlay() {
+    if (!player_.loaded()) return;
+    playing_ = !playing_;
+    if (!playing_) synth_.allNotesOff();
+}
+
+void InstrumentEditor::stopTrack() {
+    playing_ = false;
+    player_.restart();
+    applyListening();
+}
+
+void InstrumentEditor::seekTrack(double seconds) {
+    if (!player_.loaded()) return;
+    player_.seek(seconds);
+    applyListening();
+}
+
+void InstrumentEditor::toggleInstrument(uint32_t fingerprint) {
+    if (!silencedInstruments_.erase(fingerprint)) silencedInstruments_.insert(fingerprint);
+    applyListening();
+}
+
 void InstrumentEditor::applyListening() {
     uint32_t muted = mutedVoices_;
     if (soloVoices_) muted |= ((1u << RolandSound::kVoices) - 1) & ~soloVoices_;
-    std::set<uint32_t> silenced;
+    std::set<uint32_t> silenced = silencedInstruments_;
     if (soloInstrument_)
         for (const auto& [fp, seen] : trackSeen_)
             if (fp != soloInstrument_) silenced.insert(fp);
@@ -730,12 +766,13 @@ void InstrumentEditor::drawInstruments(const std::vector<Instrument>& list) {
         if ((active >> v) & 1) now.insert(synth_.voiceInstrument(v));
     if (!selected_ || std::none_of(list.begin(), list.end(), [&](const Instrument& i) { return i.fingerprint == selected_; }))
         selected_ = list.front().fingerprint;
-    if (!ImGui::BeginTable("lista", 4, kListFlags | ImGuiTableFlags_Resizable)) return;
+    if (!ImGui::BeginTable("lista", 5, kListFlags | ImGuiTableFlags_Resizable)) return;
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableSetupColumn(tr("Instrumento"), ImGuiTableColumnFlags_WidthStretch, 1.8f);
     ImGui::TableSetupColumn(tr("Suena como"), ImGuiTableColumnFlags_WidthStretch, 2.2f);
     ImGui::TableSetupColumn(tr("Canales"), ImGuiTableColumnFlags_WidthStretch, 1.3f);
     ImGui::TableSetupColumn(tr("Notas"), ImGuiTableColumnFlags_WidthStretch, 0.5f);
+    ImGui::TableSetupColumn(tr("Oír"), ImGuiTableColumnFlags_WidthFixed);
     ImGui::TableHeadersRow();
     const float row = ImGui::GetFrameHeight();
     for (const Instrument& i : list) {
@@ -780,6 +817,10 @@ void InstrumentEditor::drawInstruments(const std::vector<Instrument>& list) {
             ImGui::TextDisabled("%s", tr("no suena en esta pista"));
         }
         if (on) ImGui::PopStyleColor();
+        ImGui::TableSetColumnIndex(4);
+        bool heard = !silencedInstruments_.count(i.fingerprint);
+        if (ImGui::Checkbox("##oir", &heard)) toggleInstrument(i.fingerprint);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("Quítalo para no oír este instrumento (también en la Partitura)."));
         ImGui::PopID();
     }
     ImGui::EndTable();

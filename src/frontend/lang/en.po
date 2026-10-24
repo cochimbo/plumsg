@@ -27,6 +27,9 @@ msgstr " (%+d oct.)"
 msgid " (hardcore)"
 msgstr " (hardcore)"
 
+msgid "%.0f s a la vista"
+msgstr "%.0f s in view"
+
 msgid "%d / %d px"
 msgstr "%d / %d px"
 
@@ -262,6 +265,9 @@ msgstr "Host"
 
 msgid "Aplausos"
 msgstr "Applause"
+
+msgid "Aquí se escriben las notas de la música mientras suena: abre un juego, o una pista en el Editor de instrumentos. La música de los discos de Mega CD son pistas de audio y no tiene notas que escribir."
+msgstr "The music's notes are written here as it plays: open a game, or a track in the Instrument editor. The music of Mega CD discs is audio tracks and has no notes to write."
 
 msgid "Archivo"
 msgstr "File"
@@ -955,6 +961,13 @@ msgstr "Port %d is in use (is another plumsg hosting?)."
 msgid "El puerto de \"%s\" no es válido."
 msgstr "The port in \"%s\" is not valid."
 
+msgid ""
+"El tempo y dónde empiezan los compases (4/4) se adivinan por cuándo empiezan las notas.\n"
+"Si las figuras salen el doble o la mitad de largas, quítalo y pon el tempo a mano."
+msgstr ""
+"The tempo and where the bars (4/4) begin are guessed from when the notes start.\n"
+"If the figures come out twice or half as long, untick it and set the tempo by hand."
+
 msgid "Elegir archivo"
 msgstr "Choose file"
 
@@ -994,11 +1007,17 @@ msgstr "Emulation stopped"
 msgid "En casa, tu amigo se une a %s:%d."
 msgstr "At home, your friend joins %s:%d."
 
+msgid "En directo"
+msgstr "Live"
+
 msgid "En esta pista no suena música del YM2612 ni del PSG."
 msgstr "This track plays no YM2612 or PSG music."
 
 msgid "En modo hardcore no se pueden cargar estados"
 msgstr "States cannot be loaded in hardcore mode"
+
+msgid "En pausa"
+msgstr "Paused"
 
 msgid "En una partida en red no se puede pausar ni reiniciar."
 msgstr "In a netplay game you cannot pause or reset."
@@ -1054,6 +1073,9 @@ msgstr "Waiting for the other player on port %d"
 
 msgid "Esperando al otro jugador en el puerto %d. Mientras, puedes seguir jugando: la partida empezará donde estés."
 msgstr "Waiting for the other player on port %d. Meanwhile you can keep playing: the game will start wherever you are."
+
+msgid "Esperando notas... (la batería no se escribe: no tiene notas)"
+msgstr "Waiting for notes... (drums are not written: they have no notes)"
 
 msgid "Estado"
 msgstr "State"
@@ -1512,6 +1534,13 @@ msgstr "The session has expired: type the password again."
 msgid "La unidad FM (YM2413) venía en las Master System japonesas; con esto está también en las demás regiones, para los juegos que la usan si la encuentran."
 msgstr "The FM unit (YM2413) came with Japanese Master Systems; with this it is also there in the other regions, for the games that use it when they find it."
 
+msgid ""
+"La velocidad de la música. Las notas del sintetizador no cambian de tono;\n"
+"el sonido original sí, como en cámara lenta."
+msgstr ""
+"The music's speed. The synthesizer's notes keep their pitch;\n"
+"the original sound does not, as in slow motion."
+
 msgid "La#"
 msgstr "A#"
 
@@ -1520,6 +1549,15 @@ msgstr "The songs of Mega CD discs are audio tracks on the disc, not in the chip
 
 msgid "Las dos consolas se han descompasado (fotograma %d): lo que veis ya no es lo mismo. Salid y volved a empezar."
 msgstr "The two consoles went out of sync (frame %d): you no longer see the same thing. Leave and start again."
+
+msgid ""
+"Las notas de la música en pentagramas, un instrumento en cada uno, mientras suena:\n"
+"la del juego o la pista del Editor de instrumentos. Se puede pausar, cambiar la\n"
+"velocidad, moverse por ella y silenciar cada instrumento."
+msgstr ""
+"The music's notes on staves, one instrument on each, as it plays:\n"
+"the game's or the Instrument editor's track. It can be paused, sped up or slowed\n"
+"down, moved along, and each instrument muted."
 
 msgid ""
 "Las notas del YM2612 y del PSG suenan con instrumentos General MIDI del SoundFont\n"
@@ -1925,6 +1963,9 @@ msgstr "Original (YM2612 and PSG)"
 msgid "Overclock"
 msgstr "Overclock"
 
+msgid "Oír"
+msgstr "Hear"
+
 msgid "Oír todos"
 msgstr "Hear all"
 
@@ -1964,8 +2005,14 @@ msgstr "Stop emulation"
 msgid "Parar la grabación"
 msgstr "Stop recording"
 
+msgid "Parar y volver al principio"
+msgstr "Stop and go back to the start"
+
 msgid "Parece de otra región"
 msgstr "Looks like another region's"
+
+msgid "Partitura"
+msgstr "Score"
 
 msgid "Pausa"
 msgstr "Pause"
@@ -2096,6 +2143,9 @@ msgstr "Pseudo-3D"
 msgid "Puerto UDP"
 msgstr "UDP port"
 
+msgid "Pulsa o arrastra para ir a otro punto."
+msgstr "Click or drag to go elsewhere."
+
 msgid "Pulsa un botón..."
 msgstr "Press a button..."
 
@@ -2135,6 +2185,9 @@ msgstr ""
 
 msgid "Quitar"
 msgstr "Remove"
+
+msgid "Quítalo para no oír este instrumento (también en la Partitura)."
+msgstr "Untick it to stop hearing this instrument (in the Score too)."
 
 msgid "Ranura %d"
 msgstr "Slot %d"
@@ -2313,6 +2366,13 @@ msgstr "The connection with the other player was lost."
 msgid "Sección de metales"
 msgstr "Brass section"
 
+msgid ""
+"Seguir la música. Arrastra los pentagramas para moverte por ellos; la rueda con\n"
+"Mayús los mueve también, y con Ctrl acerca o aleja."
+msgstr ""
+"Follow the music. Drag the staves to move along them; the wheel with\n"
+"Shift moves them too, and with Ctrl zooms in or out."
+
 msgid "Segundos de rebobinado"
 msgstr "Rewind seconds"
 
@@ -2345,6 +2405,9 @@ msgstr "Whistle"
 
 msgid "Silenciar"
 msgstr "Mute"
+
+msgid "Silenciar este instrumento"
+msgstr "Mute this instrument"
 
 msgid "Silencio"
 msgstr "Mute"
@@ -2496,6 +2559,9 @@ msgstr "Keyboard (player 2)"
 
 msgid "Teléfono"
 msgstr "Telephone ring"
+
+msgid "Tempo automático"
+msgstr "Automatic tempo"
 
 msgid "Tienes %u de %u logros (%u de %u puntos)"
 msgstr "You have %u of %u achievements (%u of %u points)"
@@ -2708,6 +2774,9 @@ msgstr "Back to the suggestion"
 msgid "Volver a los generales"
 msgstr "Back to the general ones"
 
+msgid "Volver a oír este instrumento"
+msgstr "Hear this instrument again"
+
 msgid "Voz \"ooh\""
 msgstr "Voice \"ooh\""
 
@@ -2898,6 +2967,8 @@ msgid ""
 "  --game-options controls   ...en la pestaña de sus controles\n"
 "  --instruments          abrir el editor de instrumentos (del juego, si se da)\n"
 "  --track f.vgm          con --instruments: abrir esa música (.vgm o .vgz)\n"
+"  --seek s               con --track: tocarla desde ese segundo\n"
+"  --score                abrir la Partitura\n"
 "  --record f.avi         grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
 "  --screenshot f.png     guardar una captura tras --frames N fotogramas y salir\n"
 "\n"
@@ -2927,6 +2998,8 @@ msgstr ""
 "  --game-options controls   ...on the tab of its controls\n"
 "  --instruments          open the instrument editor (for the game, if given)\n"
 "  --track f.vgm          with --instruments: open that music (.vgm or .vgz)\n"
+"  --seek s               with --track: play it from that second\n"
+"  --score                open the Score\n"
 "  --record f.avi         record the game from the start, as video (.avi) or GIF (.gif)\n"
 "  --screenshot f.png     save a screenshot after --frames N frames and quit\n"
 "\n"
