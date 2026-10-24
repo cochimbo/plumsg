@@ -16,7 +16,7 @@ namespace plumsg {
 // without them, as an option) and masking, priorities, shadow/highlight, H32/H40,
 // V28/V30 and interlace mode 2.
 // Writes go through the console's 4-word FIFO and reach memory in the VDP's access
-// slots (18 a line in H40, 16 in H32 while drawing; about 205/167 in blanking), a VRAM
+// slots (18 a line in H40, 16 in H32 while drawing, where the hardware has them; about 205/167 in blanking), a VRAM
 // word taking two of them. DMA runs through the same slots: a 68000 DMA feeds the FIFO
 // and holds the CPU until its last word is in; fill and copy run on their own while the
 // CPU goes on. The port calls that take a master clock run it in time; the ones without
@@ -30,6 +30,14 @@ public:
     // Where the active part of a line ends and horizontal blanking starts, in master
     // clocks from the start of the line. Lines are drawn and HINT fires here.
     static constexpr int kActiveClocks = 2560;
+    // The access slots of a line: how many fall in its picture part (before
+    // kActiveClocks) and how many in its horizontal blanking, and where (master clocks
+    // from the start of the line; none: spread evenly over the part).
+    struct SlotLayout {
+        int picture, blank;
+        const uint16_t* pictureAt;
+        const uint16_t* blankAt;
+    };
     // Where the V counter moves on to the line's number (before, it still shows the
     // previous one), and VBlank starts and ends. testpico's HBlank tests, which read the
     // status right after the V counter changes, pin it to 2564-2573 in both H32 and H40.
@@ -151,7 +159,7 @@ private:
     // One access slot: the oldest write in the FIFO, or a step of a fill or copy.
     void slot();
     bool busy() const { return queueCount_ > 0 || dmaMode_ != kDmaNone; }
-    int slotsPerLine(int line) const;
+    SlotLayout slotLayout(int line) const;
     // The time of the n-th access slot after `clock` (n >= 1), counting lines on from the
     // one the slots are at now, with the registers as they are.
     uint64_t slotAfter(uint64_t clock, uint64_t n) const;
@@ -222,6 +230,17 @@ private:
     int wideLeft_ = 0, wideRight_ = 0;
 
     std::array<uint32_t, 64 * 3> colors_{};  // CRAM as RGBA, normal/shadow/highlight
+    // With the display off the screen shows the backdrop colour as it is at each pixel:
+    // the colours written to CRAM during the line, with when (for "direct colour" DMA
+    // pictures). Not part of the state; the slot being run is `slotClock_`.
+    struct CramWrite {
+        uint64_t clock;
+        uint8_t index;
+        uint32_t before, after;
+    };
+    std::array<CramWrite, 256> cramWrites_{};
+    int cramWriteCount_ = 0;
+    uint64_t slotClock_ = kUntimed;
     std::unique_ptr<VideoFrameMd> frame_;
     std::function<uint16_t(uint32_t)> dmaRead_;
 };
