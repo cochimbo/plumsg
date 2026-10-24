@@ -3101,7 +3101,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
         ImGui::SameLine();
         ImGui::BeginDisabled(!mine);
         ImGui::SetNextItemWidth(220);
-        if (key == "vista") {
+        if (key == "view") {
             if (ImGui::BeginCombo(tr(opt.label), s.view.c_str())) {
                 for (const char* view : state.views)
                     if (ImGui::Selectable(view, s.view == view)) {
@@ -3110,36 +3110,36 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
                     }
                 ImGui::EndCombo();
             }
-        } else if (key == "escalado") {
+        } else if (key == "scale") {
             static const char* names[] = {N_("Escala entera"), N_("Ajustar"), N_("Estirar")};
             int i = static_cast<int>(s.render.scale);
             if (comboTr(tr(opt.label), &i, names, 3)) {
                 s.render.scale = static_cast<ScaleMode>(i);
                 edited = true;
             }
-        } else if (key == "suavizado") {
+        } else if (key == "smooth") {
             edited |= ImGui::Checkbox(tr("Suavizar píxeles"), &s.render.smooth);
-        } else if (key == "filtro") {
+        } else if (key == "filter") {
             static const char* names[] = {N_("Ninguno"), N_("Scanlines"), "CRT"};
             int i = static_cast<int>(s.render.filter);
             if (comboTr(tr(opt.label), &i, names, 3)) {
                 s.render.filter = static_cast<Filter2D>(i);
                 edited = true;
             }
-        } else if (key == "reescalado") {
+        } else if (key == "upscaling") {
             static const char* names[] = {N_("Ninguno"), "xBR", "Anime4K"};
             int i = static_cast<int>(s.render.upscale);
             if (comboTr(tr(opt.label), &i, names, 3)) {
                 s.render.upscale = static_cast<Upscale2D>(i);
                 edited = true;
             }
-        } else if (key == "intensidad_filtro") {
+        } else if (key == "filter_strength") {
             float strength = s.render.filterStrength * 100.0f;
             if (ImGui::SliderFloat(tr(opt.label), &strength, 0.0f, 100.0f, "%.0f %%")) s.render.filterStrength = strength / 100.0f;
             edited |= ImGui::IsItemDeactivatedAfterEdit();
-        } else if (key == "pixeles_cuadrados") {
+        } else if (key == "square_pixels") {
             edited |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &s.render.squarePixels);
-        } else if (key == "sin_limite_sprites") {
+        } else if (key == "no_sprite_limit") {
             edited |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &s.unlimitedSprites);
         } else if (key == "widescreen") {
             ImGui::TextUnformatted(tr(opt.label));
@@ -3148,12 +3148,12 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             ImGui::TextUnformatted(tr(opt.label));
             ImGui::SameLine();
             ImGui::TextDisabled("%s", v.loaded ? tr("(se ajustan en Opciones > Vídeo)") : tr("(se ajustan en Vídeo con el juego abierto)"));
-        } else if (key == "volumen") {
+        } else if (key == "volume") {
             ImGui::SliderInt(tr(opt.label), &s.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
-        } else if (key == "silencio") {
+        } else if (key == "mute") {
             edited |= ImGui::Checkbox(tr("Silenciar"), &s.mute);
-        } else if (key == "modo") {
+        } else if (key == "mode") {
             int i = s.roland ? 1 : 0;
             static const char* names[] = {N_("Original (YM2612 y PSG)"), N_("Sintetizador (SoundFont)")};
             if (comboTr(tr(opt.label), &i, names, 2)) {
@@ -3165,11 +3165,11 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             std::snprintf(path, sizeof path, "%s", s.soundfont.c_str());
             if (ImGui::InputTextWithHint(tr(opt.label), tr("el incluido"), path, sizeof path)) s.soundfont = path;
             edited |= ImGui::IsItemDeactivatedAfterEdit();
-        } else if (key == "mezcla_chip" || key == "reverb" || key == "chorus") {
-            int& amount = key == "mezcla_chip" ? s.chipMix : key == "reverb" ? s.reverb : s.chorus;
+        } else if (key == "chip_mix" || key == "reverb" || key == "chorus") {
+            int& amount = key == "chip_mix" ? s.chipMix : key == "reverb" ? s.reverb : s.chorus;
             ImGui::SliderInt(tr(opt.label), &amount, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
-        } else if (key == "efectos") {
+        } else if (key == "effects") {
             edited |= ImGui::Checkbox(tr("Efectos de sonido originales"), &s.effectsOriginal);
         } else if (key == "region") {
             int i = static_cast<int>(s.region);
@@ -3191,26 +3191,28 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
         } else if (key == "overclock") {
             edited |= overclockCombo(tr(opt.label), s.overclock);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", tr(kOverclockTip));
-        } else if (key == "rebobinado_segundos") {
+        } else if (key == "rewind_seconds") {
             ImGui::SliderInt(tr(opt.label), &s.rewindSeconds, 0, Settings::kMaxRewindSeconds,
                              s.rewindSeconds ? "%d s" : tr("desactivado"), ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
-        } else if (key == "avance_rapido") {
+        } else if (key == "fast_forward") {
             ImGui::SliderInt(tr(opt.label), &s.fastForward, 2, 10, "%dx", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
-        } else if (key == "camara_lenta") {
+        } else if (key == "slow_motion") {
             ImGui::SliderInt(tr(opt.label), &s.slowMotion, 10, 90, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "run_ahead") {
             runAheadSlider(tr(opt.label), s.runAhead);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
+        } else {
+            ImGui::TextUnformatted(tr(opt.label));  // a key with no control of its own here: at least name its box
         }
         ImGui::EndDisabled();
         ImGui::PopID();
         if (!edited) continue;
         out.gameOptionsChanged = true;
         if (v.loaded && (key == "region" || key == "pads")) out.consoleChanged = true;
-        if (v.loaded && key == "rebobinado_segundos") out.rewindChanged = true;
+        if (v.loaded && key == "rewind_seconds") out.rewindChanged = true;
         if (v.loaded && std::string(opt.group) == "Sonido") out.soundChanged = true;
     }
 }
