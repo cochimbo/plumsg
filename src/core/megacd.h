@@ -115,6 +115,7 @@ public:
         }
         out_.mixed.clear();
         cachedLba_ = kNoSector;
+        cdc_.line = cdcLine();
         updateIrq();
     }
 
@@ -169,6 +170,8 @@ private:
 
     // CDC (Sanyo LC8951).
     void cdcPoll();
+    bool cdcLine() const;
+    uint16_t cdcDataRegister() const;
     void cdcDecode(int32_t sector);
     uint8_t cdcRead();
     void cdcWrite(uint8_t data);
@@ -244,6 +247,10 @@ private:
     } io_;
     uint8_t led_ = 0;
     Irq external_, subcodeIrq_;
+    // IFL2 set by the main CPU in the instruction it is running: the request reaches the
+    // sub CPU when that instruction ends (its write is its last bus cycle), not when the
+    // sub CPU was last caught up, at the instruction's start.
+    bool externalRequested_ = false;
 
     struct Comm {
         uint8_t cfm = 0, cfs = 0;
@@ -261,6 +268,7 @@ private:
         uint8_t address = 0;
         uint16_t stopwatch = 0;
         Irq irq, decoderIrq, transferIrq, commandIrq;
+        bool line = false;  // cdcLine() as it was (not saved: it follows from the flags)
         std::array<uint8_t, 8> commandFifo{};
         uint8_t commandRead = 0, commandWrite = 0;
         bool commandEmpty = true;

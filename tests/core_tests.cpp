@@ -1389,6 +1389,21 @@ void testPaprium() {
     std::filesystem::remove_all(dir);
 }
 
+// A program made to stand in for the Mega CD's BIOS (KRIKzz's mcd-verificator), loaded as
+// a cartridge: it goes in the BIOS's place, at 0, and the cartridge slot stays empty.
+void testMegaCdBootRom() {
+    std::vector<uint8_t> rom(0x20000, 0);
+    std::memcpy(&rom[0x120], "CDX BOOT ROM", 12);
+    std::memcpy(&rom[0x180], "BR 00000000-00", 14);
+    rom[0x200] = 0x12;
+    rom[0x201] = 0x34;
+    MegaDrive md;
+    md.loadRomData(rom);
+    check(md.isMegaCd() && !md.hasMsuMd() && md.peek16(0x200) == 0x1234,
+          "Mega CD: una ROM de arranque hace de BIOS");
+    check(md.peek(0x400001) == 0xFF, "Mega CD: sin cartucho no hay cartucho de RAM");
+}
+
 void testMsuMd() {
     std::vector<uint8_t> bios(kMegaCdProgram, kMegaCdProgram + sizeof kMegaCdProgram);
     bios.resize(0x20000);
@@ -2966,6 +2981,7 @@ int main() {
     testMarsProgram();
     testCdImage();
     testMegaCd();
+    testMegaCdBootRom();
     testMsuMd();
     testPaprium();
     testNetplay();
