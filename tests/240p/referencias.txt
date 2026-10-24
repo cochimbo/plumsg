@@ -22,7 +22,7 @@ pluge 115fb545
 ram-z80 50c4c84a
 rampa-gris ab8e82c5
 rayas f96c31c5
-reflejos 25e3e229
+reflejos 102960b5
 rejilla 48780651
 sangrado fc40adc5
 scroll-rejilla d054ef45

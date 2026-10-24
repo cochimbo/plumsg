@@ -36,6 +36,7 @@ enum : uint32_t {
     kHead = 1u << 0,  // HEAD registers show the subheader instead of the header
     kForm = 1u << 2,
     kMode = 1u << 3,
+    kSyncInterrupt = 1u << 7,  // SYIEN: DECI comes at every sector time, sync found or not
     kWriteRequest = 1u << 10,
     kAutoCorrection = 1u << 12,
 };
@@ -147,6 +148,11 @@ void MegaCd::runUntil(uint64_t masterClock) {
         step(cycles);
         subClock_ += static_cast<uint64_t>(cycles);
         if (subClock_ <= target) landModeWrite();
+    }
+    if (externalRequested_) {
+        externalRequested_ = false;
+        external_.raise();
+        updateIrq();
     }
 }
 
@@ -327,7 +333,8 @@ uint16_t MegaCd::readIo(uint32_t addr, bool upper, bool lower) {
             return static_cast<uint16_t>(cdc_.address | cdc_.transfer.destination << 8 | cdc_.transfer.ready << 14 |
                                          cdc_.transfer.completed << 15);
         case 0xFF8006: return lower ? cdcRead() : 0;
-        case 0xFF8008: return cdcTransferRead();
+        // The data register is the same for both CPUs; only the destination's reads move on.
+        case 0xFF8008: return cdc_.transfer.destination == 3 ? cdcTransferRead() : cdcDataRegister();
         case 0xFF800A: return static_cast<uint16_t>(cdc_.transfer.address >> 3);
         case 0xFF800C: return cdc_.stopwatch;
         case 0xFF800E: return static_cast<uint16_t>(comm_.cfm << 8 | comm_.cfs);
@@ -389,11 +396,20 @@ void MegaCd::writeIo(uint32_t addr, uint16_t value, bool upper, bool lower) {
             return;
         case 0xFF8004:
             if (lower) cdc_.address = low & 0x1F;
-            if (upper) cdc_.transfer.destination = static_cast<uint8_t>((value >> 8) & 7);
+            if (upper) {
+                // Writing the destination is also the only thing that clears EDT and DSR,
+                // and it puts the DMA address back to 0.
+                cdc_.transfer.destination = static_cast<uint8_t>((value >> 8) & 7);
+                cdc_.transfer.completed = cdc_.transfer.ready = false;
+                cdc_.transfer.address = 0;
+            }
             return;
         case 0xFF8006:
             if (lower) cdcWrite(low);
             updateIrq();
+            return;
+        case 0xFF8008:  // as on the main CPU's side
+            if (cdc_.transfer.destination == 3) cdcTransferRead();
             return;
         case 0xFF800A: cdc_.transfer.address = static_cast<uint32_t>(value) << 3; return;
         case 0xFF800C: cdc_.stopwatch = 0; return;
@@ -577,7 +593,7 @@ uint16_t MegaCd::readExternalIo(uint32_t addr) {
             return static_cast<uint16_t>(cdc_.transfer.destination << 8 | cdc_.transfer.ready << 14 |
                                          cdc_.transfer.completed << 15);
         case 0xA12006: return static_cast<uint16_t>(io_.vectorLevel4);
-        case 0xA12008: return cdc_.transfer.destination == 2 ? cdcTransferRead() : 0;
+        case 0xA12008: return cdc_.transfer.destination == 2 ? cdcTransferRead() : cdcDataRegister();
         case 0xA1200C: return cdc_.stopwatch;
         case 0xA1200E: return static_cast<uint16_t>(comm_.cfm << 8 | comm_.cfs);
         default: break;
@@ -597,10 +613,7 @@ void MegaCd::writeExternalIo(uint32_t addr, uint16_t value, bool upper, bool low
                 io_.request = io_.run ? (low & 2) != 0 : true;  // holding it in reset also takes its bus
                 io_.halt = io_.request;
             }
-            if (upper && (value & 0x0100)) {
-                external_.raise();
-                updateIrq();
-            }
+            if (upper && (value & 0x0100)) externalRequested_ = true;
             return;
         case 0xA12002:
             if (lower) {
@@ -613,6 +626,9 @@ void MegaCd::writeExternalIo(uint32_t addr, uint16_t value, bool upper, bool low
         case 0xA12006:
             if (upper) io_.vectorLevel4 = (io_.vectorLevel4 & 0xFFFF00FF) | (value & 0xFF00);
             if (lower) io_.vectorLevel4 = (io_.vectorLevel4 & 0xFFFFFF00) | low;
+            return;
+        case 0xA12008:  // a write takes a word as a read does, and drops it (mcd-verificator)
+            if (cdc_.transfer.destination == 2) cdcTransferRead();
             return;
         case 0xA1200E: comm_.cfm = static_cast<uint8_t>(value >> 8); return;
         default: break;
@@ -628,11 +644,17 @@ void MegaCd::writeExternalIo(uint32_t addr, uint16_t value, bool upper, bool low
 // CDC: Sanyo LC8951, emulated as a controller that never meets a read error.
 
 void MegaCd::cdcPoll() {
-    const bool pending = (cdc_.decoderIrq.enable && cdc_.decoderIrq.pending) ||
-                         (cdc_.transferIrq.enable && cdc_.transferIrq.pending) ||
-                         (cdc_.commandIrq.enable && cdc_.commandIrq.pending);
-    if (pending) cdc_.irq.raise();
-    else cdc_.irq.lower();
+    // The CDC's interrupt line is on while any enabled flag is up; the gate array takes
+    // the interrupt when it comes on, not while it stays on (mcd-verificator).
+    const bool line = cdcLine();
+    if (line && !cdc_.line) cdc_.irq.raise();
+    else if (!line) cdc_.irq.lower();
+    cdc_.line = line;
+}
+
+bool MegaCd::cdcLine() const {
+    return (cdc_.decoderIrq.enable && cdc_.decoderIrq.pending) || (cdc_.transferIrq.enable && cdc_.transferIrq.pending) ||
+           (cdc_.commandIrq.enable && cdc_.commandIrq.pending);
 }
 
 void MegaCd::cdcDecode(int32_t sector) {
@@ -658,7 +680,7 @@ void MegaCd::cdcDecode(int32_t sector) {
 }
 
 uint8_t MegaCd::cdcRead() {
-    uint8_t d = 0;
+    uint8_t d = cdc_.address & 0x10 ? 0xFF : 0;  // with RS (bit 4) up no register answers
     Transfer& t = cdc_.transfer;
     const bool head = (cdc_.control & kHead) != 0;
     switch (cdc_.address) {
@@ -701,8 +723,9 @@ uint8_t MegaCd::cdcRead() {
             break;
         default: break;
     }
-    // COMIN does not move on; STAT3 wraps round to 0.
-    if (cdc_.address) cdc_.address = (cdc_.address + 1) & 0xF;
+    // COMIN does not move on; the others count on through the RS bit (4) and wrap round
+    // to 0 after 31 (mcd-verificator).
+    if (cdc_.address) cdc_.address = (cdc_.address + 1) & 0x1F;
     return d;
 }
 
@@ -743,6 +766,10 @@ void MegaCd::cdcWrite(uint8_t data) {
         case 0xA:  // CTRL0
             cdc_.control = (cdc_.control & 0xFFFF00FF) | static_cast<uint32_t>(data & 0x7F) << 8;
             cdc_.decoderEnable = (data >> 7) & 1;
+            if (!cdc_.decoderEnable && cdc_.decoderIrq.pending) {  // DECI goes off with the decoder
+                cdc_.decoderIrq.pending = false;
+                cdcPoll();
+            }
             cdc_.decoderMode = (cdc_.control & kMode) != 0;
             cdc_.decoderForm = (cdc_.control & kForm) && (cdc_.control & kAutoCorrection);
             break;
@@ -771,23 +798,29 @@ void MegaCd::cdcWrite(uint8_t data) {
         }
         default: break;
     }
-    if (cdc_.address) cdc_.address = (cdc_.address + 1) & 0xF;
+    if (cdc_.address) cdc_.address = (cdc_.address + 1) & 0x1F;
 }
 
 void MegaCd::cdcDma() {
     Transfer& t = cdc_.transfer;
     if (!t.active) return;
     if (t.destination != 4 && t.destination != 5 && t.destination != 7) return;
+    // The memory taken from it (word RAM given to the main CPU, program RAM while the main
+    // CPU holds the sub CPU's bus): the transfer waits.
+    if ((t.destination == 7 && wordRamBlocked()) || (t.destination == 5 && io_.request)) return;
     const uint16_t data = cdc_.ram[(t.source >> 1) & 0x1FFF];
     switch (t.destination) {
-        case 4:  // PCM RAM, its active 4 KB bank
-            pcmWrite(0x1000 | ((t.address >> 1) & 0xFFF) | 1, static_cast<uint8_t>(data >> 8));
-            pcmWrite(0x1000 | ((t.address >> 1) & 0xFFF), static_cast<uint8_t>(data));
+        case 4:  // PCM RAM, its active 4 KB bank, a byte at a time and in order
+            pcmWrite(0x1000 | ((t.address >> 1) & 0xFFF), static_cast<uint8_t>(data >> 8));
+            if ((t.length & 0xFFF) >= 1) pcmWrite(0x1000 | (((t.address >> 1) + 1) & 0xFFF), static_cast<uint8_t>(data));
             t.address = (t.address + 2) & 0x7FFFF;
             break;
-        case 5:  // program RAM
-            subWrite(t.address & 0x7FFFE, data, true, true);
+        case 5: {  // program RAM, write protection or not
+            const uint32_t a = t.address & 0x7FFFE;
+            prg_[a] = static_cast<uint8_t>(data >> 8);
+            prg_[a + 1] = static_cast<uint8_t>(data);
             break;
+        }
         case 7:  // word RAM
             if (!io_.wramMode) subWrite(0x080000 | (t.address & 0x3FFFE), data, true, true);
             else subWrite(0x0C0000 | (t.address & 0x1FFFE), data, true, true);
@@ -796,23 +829,27 @@ void MegaCd::cdcDma() {
     }
     t.address = (t.address + 2) & 0x7FFFF;
     t.source = static_cast<uint16_t>(t.source + 2);
-    for (int i = 0; i < 2; ++i) {
-        const bool done = (t.length & 0xFFF) == 0;
-        t.length = static_cast<uint16_t>((t.length - 1) & 0xFFF);
-        if (done) cdcComplete();
-    }
+    // DBC is the bytes left less one. The odd byte left over at the end goes to PCM RAM,
+    // which takes bytes, and nowhere else (mcd-verificator).
+    const bool done = (t.length & 0xFFF) <= (t.destination == 4 ? 1 : 2);
+    t.length = static_cast<uint16_t>((t.length - 2) & 0xFFF);
+    if (done) cdcComplete();
 }
+
+uint16_t MegaCd::cdcDataRegister() const { return cdc_.ram[(cdc_.transfer.source >> 1) & 0x1FFF]; }
 
 uint16_t MegaCd::cdcTransferRead() {
     Transfer& t = cdc_.transfer;
     if (!t.ready) return 0xFFFF;
     const uint16_t data = cdc_.ram[(t.source >> 1) & 0x1FFF];
     t.source = static_cast<uint16_t>(t.source + 2);
-    for (int i = 0; i < 2; ++i) {
-        const bool done = (t.length & 0xFFF) == 0;
-        t.length = static_cast<uint16_t>((t.length - 1) & 0xFFF);
-        if (done) cdcComplete();
-    }
+    // The CDC hands the words on one ahead, through the data register: the transfer ends
+    // (EDT, and its interrupt) when the last word is in the register, and DSR goes down
+    // once that word is read too (mcd-verificator).
+    const uint16_t left = t.length & 0xFFF;
+    t.length = static_cast<uint16_t>((left - 2) & 0xFFF);
+    if (left <= 4 && t.active) cdcComplete();
+    t.ready = left > 2;
     updateIrq();
     return data;
 }
@@ -823,7 +860,7 @@ void MegaCd::cdcStart() {
     t.active = t.busy = true;
     t.ready = t.destination == 2 || t.destination == 3;
     t.completed = false;
-    cdc_.transferIrq.pending = false;
+    // DTEI stays until DTACK: a transfer that ends before it raises no new interrupt.
     cdcPoll();
 }
 
@@ -878,14 +915,26 @@ double MegaCd::cddPosition(int32_t sector) const {
 }
 
 void MegaCd::cddClock() {
-    if (++cdd_.counter < 434) return;
+    ++cdd_.counter;
+    // DECI goes back down by itself about 40% into the sector time, read or not, so the
+    // next sector's comes as a new interrupt (mcd-verificator).
+    if (cdd_.counter == 174 && cdc_.decoderIrq.pending) {
+        cdc_.decoderIrq.pending = false;
+        cdcPoll();
+    }
+    if (cdd_.counter < 434) return;
     cdd_.counter = 0;
     // 75 times a second.
-    if (!cdd_.hostClockEnable) return;
-    if (cdd_.statusPending) {
-        cdd_.statusPending = false;
-        cdd_.irq.raise();
+    const bool decoding = cdd_.hostClockEnable && cdd_.status == kPlaying && disc_ && !trackAudio(cdd_.track);
+    if (!decoding && cdc_.decoderEnable && (cdc_.control & kSyncInterrupt)) {
+        cdc_.decoderIrq.pending = true;
+        cdcPoll();
     }
+    if (!cdd_.hostClockEnable) return;
+    // The drive sends its status every time, with a command from the host or without, and
+    // each one raises the interrupt (mcd-verificator waits for it without sending one).
+    cdd_.statusPending = false;
+    cdd_.irq.raise();
     switch (cdd_.status) {
         case kStopped:
             cdd_.status = disc_ ? kReadingToc : kNoDisc;
