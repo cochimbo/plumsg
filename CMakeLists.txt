@@ -118,6 +118,7 @@ add_library(plumsg_core STATIC
   src/core/ym2612.cpp
   src/core/ym2413.cpp
   src/core/audio_mixer.cpp
+  src/core/notation.cpp
   src/core/roland.cpp
   src/core/timbre.cpp
   src/core/vgm.cpp

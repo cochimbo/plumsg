@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "../core/notation.h"
 #include "../core/roland.h"
 
 namespace plumsg {
@@ -33,10 +34,12 @@ struct ScoreRequests {
 };
 
 // The score (Sonido > Partitura), like GarageBand's: a track per instrument, each with
-// its staff (treble or bass clef, by where its notes lie), a head on the line or space
-// of each note (with its sharp) and a bar as long as it is held. A playhead runs over
-// them; on a track it can be dragged to go elsewhere. The view follows the playhead,
-// or stays where it was dragged to until Seguir. Each instrument can be switched off.
+// its staff (treble or bass clef, by where its notes lie) in 4/4 at the tempo guessed
+// from the music (or set by hand), its notes written as figures (notation::transcribe)
+// with their stems, flags, beams, dots, ties and accidentals, the rests, and the bar
+// lines. A playhead runs over them; on a track it can be dragged to go elsewhere. The
+// view follows the playhead, or stays where it was dragged to until Seguir. Each
+// instrument can be switched off.
 class ScoreWindow {
 public:
     bool isOpen() const { return open_; }
@@ -57,13 +60,15 @@ private:
         uint32_t voices = 0;  // the channels that played it
         bool treble = true;
         int index = 0;        // for its colour
+        std::vector<notation::Played> played;  // its notes; end < 0 while one still sounds
     };
     void updateRows(const ScoreMusic& music);
     void drawToolbar(const ScoreMusic& music, ScoreRequests& out);
+    void updateMeter(const ScoreMusic& music);
 
     bool open_ = false;
     double speed_ = 1.0;
-    float seconds_ = 8.0f;    // how much of the music the view spans
+    float seconds_ = 5.0f;    // how much of the music the view spans
     bool follow_ = true;      // the view keeps the playhead in sight
     double viewStart_ = 0;    // seconds at its left edge, when not following
     double dragSeek_ = -1;    // where the playhead is being dragged to
@@ -73,6 +78,13 @@ private:
     const RolandSound::Score* rowsFor_ = nullptr;
     size_t rowsNotes_ = 0;
     uint64_t rowsLast_ = 0;
+    // The tempo and where the bars start: guessed, or the tempo given by hand.
+    notation::Meter meter_, guessed_;
+    bool tempoAuto_ = true;
+    int bpm_ = 120;
+    double meterAt_ = -1;  // music.now when the guess was last made (a game's is made again)
+    const RolandSound::Score* meterFor_ = nullptr;  // and of which notes
+    size_t meterNotes_ = 0;
 };
 
 }  // namespace plumsg

@@ -6,7 +6,9 @@ What each version brings, newest first. Installers are on the
 ## Unreleased
 
 - **Score** (Sound > Score): the music's notes on staves as it plays, one track per
-  instrument like GarageBand, each with its clef, sharps and ledger lines. Play/pause, stop,
+  instrument like GarageBand, written as a score: in 4/4 at the tempo guessed from the
+  music (or set by hand), with whole to sixteenth notes, dots, ties, stems, flags and
+  beams, rests, bar lines, clefs, sharps and naturals. Play/pause, stop,
   x0.5/x1/x2 speed, a playhead to drag along the instrument editor's tracks, and a switch
   to mute each instrument. It works with the original sound too. The instrument editor
   gets a Hear column to switch instruments off as well.
