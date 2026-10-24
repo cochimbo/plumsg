@@ -29,6 +29,10 @@ namespace plumsg {
 // Game Gear's colours and screen, port 0x00 has the START button and the region, ports
 // 0x01-0x05 the link cable (nothing plugged in), and there is one pad and no pause
 // button. The PSG's stereo (port 0x06) the console handles, as it has the PSG.
+// Codemasters cartridges have a header of their own at 0x7FE0 whose checksum word is
+// followed by its complement.
+bool isCodemasters(const std::vector<uint8_t>& rom);
+
 class MasterSystem {
 public:
     MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame, bool gameGear = false);

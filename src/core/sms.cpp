@@ -2,17 +2,11 @@
 
 namespace plumsg {
 
-namespace {
-
-// Codemasters cartridges have a header of their own at 0x7FE0 whose checksum word is
-// followed by its complement.
 bool isCodemasters(const std::vector<uint8_t>& rom) {
     if (rom.size() < 0x8000) return false;
     const unsigned sum = rom[0x7FE6] | rom[0x7FE7] << 8, inverse = rom[0x7FE8] | rom[0x7FE9] << 8;
     return sum != 0 && sum + inverse == 0x10000;
 }
-
-}  // namespace
 
 MasterSystem::MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame, bool gameGear)
     : cart_(cart), ram_(ram), vdp_(frame), gameGear_(gameGear) {

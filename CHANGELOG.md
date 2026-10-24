@@ -12,6 +12,10 @@ What each version brings, newest first. Installers are on the
 - Paprium no longer runs at half speed when enemies are on screen: the copies of the
   sprites' graphics from its chip no longer wait for the VDP's timed DMA
   ([#68](https://github.com/cochimbo/plumsg/issues/68)).
+- Master System: the Codemasters games (Micro Machines, Cosmic Spacehead, the Dizzy
+  games) start on a PAL console too, as they were made for one: the top of the
+  picture of Micro Machines no longer flashes
+  ([#74](https://github.com/cochimbo/plumsg/issues/74)).
 
 ## 0.1.0-beta.4
 
