@@ -58,6 +58,15 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
             disc = std::move(open);
     }
     attachCd(std::move(disc), true);
+    if (paprium_) {
+        // Its music, recordings the cartridge plays, from a folder by the ROM with its name.
+        const std::filesystem::path rom = std::filesystem::u8path(path);
+        const std::filesystem::path folder = rom.parent_path() / rom.stem();
+        if (paprium_->setMusicFolder(folder) == 0)
+            loadNotice_ = trf("La música de Paprium no está en la ROM: pon sus pistas (.ogg, .mp3 o .wav, cada una "
+                              "empezando por su número en el álbum) en la carpeta %s.",
+                              folder.u8string().c_str());
+    }
     return true;
 }
 
@@ -88,6 +97,7 @@ void MegaDrive::attachCd(std::unique_ptr<CdImage> disc, bool cartridge) {
     ramCheats_.clear();
     setUpMars();
     setUpSms();
+    setUpPaprium();
     applyRegion();
     powerCycle();
 }
@@ -140,6 +150,7 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
 std::vector<int16_t>* MegaDrive::addOnSamples() {
     if (mars_) return &mars_->samples();
     if (mcd_) return &mcd_->samples();
+    if (paprium_) return &paprium_->samples();
     return nullptr;
 }
 
@@ -148,6 +159,11 @@ void MegaDrive::setUpMars() {
     if (wanted && !mars_) mars_ = std::make_unique<Mars>(cart_);
     if (!wanted) mars_.reset();
     vdp_.frame().mars.fill(0);
+}
+
+void MegaDrive::setUpPaprium() {
+    paprium_.reset();
+    if (!sms_ && !disc_ && Paprium::detect(cart_)) paprium_ = std::make_unique<Paprium>(cart_);
 }
 
 void MegaDrive::setUpSms() {
@@ -243,6 +259,8 @@ void MegaDrive::powerCycle() {
 
 void MegaDrive::reset() {
     cart_.reset();
+    if (paprium_) paprium_->reset();
+    tmss_ = 1;
     loadedThumbnail_.clear();
     io_.reset();
     ym_.reset();
@@ -430,6 +448,7 @@ void MegaDrive::runFrameSms() {
 }
 
 void MegaDrive::runFrame() {
+    if (paprium_ && paprium_->takeRestart()) reset();
     applyRamCheats();
     if (roland_) roland_->beginFrame(now_);
     if (sms_) runFrameSms();
@@ -438,6 +457,7 @@ void MegaDrive::runFrame() {
     ++frames_;
     loadedThumbnail_.clear();
     // Hand this frame's sound to the mixer.
+    if (paprium_) paprium_->runAudio(psg_.samples().size() / 2, mixer_.outputRate());
     psgBuffer_.insert(psgBuffer_.end(), psg_.samples().begin(), psg_.samples().end());
     psg_.clearSamples();
     const size_t before = mixer_.samples().size() / 2;
@@ -594,8 +614,10 @@ uint8_t MegaDrive::read8(uint32_t addr) {
         uint16_t w = 0;
         if (mcd_->read68k(addr, w)) return static_cast<uint8_t>((addr & 1) ? w : w >> 8);
     }
+    if (paprium_ && Paprium::inWindow(addr)) return paprium_->read8(addr);
     if (addr < 0x400000) return cart_.read8(addr);
     if (addr >= 0xE00000) return ram_[addr & 0xFFFF];
+    if (paprium_ && addr == 0xA14101) return tmss_;
     if (addr >= 0xC00000) {
         if (addr >= 0xC00020) return 0xFF;
         const uint16_t w = readVdp(addr & ~1u);
@@ -617,6 +639,7 @@ uint16_t MegaDrive::read16(uint32_t addr) {
         uint16_t w = 0;
         if (mcd_->read68k(addr, w)) return w;
     }
+    if (paprium_ && Paprium::inWindow(addr)) return paprium_->read16(addr);
     if (addr < 0x400000) return cart_.read16(addr);
     if (addr >= 0xE00000) return static_cast<uint16_t>(ram_[addr & 0xFFFF] << 8 | ram_[(addr & 0xFFFF) + 1]);
     if (addr >= 0xC00000) return addr < 0xC00020 ? readVdp(addr) : 0xFFFF;
@@ -648,6 +671,8 @@ void MegaDrive::write8(uint32_t addr, uint8_t value) {
     if (addr >= 0xE00000) {
         if (watching_ && !watchWrite(0xFF0000 | addr, value, true)) return;
         ram_[addr & 0xFFFF] = value;
+    } else if (paprium_ && Paprium::inWindow(addr)) {
+        paprium_->write8(addr, value);
     } else if (addr < 0x400000) {
         cart_.write8(addr, value);
     } else if (addr >= 0xC00000) {
@@ -658,6 +683,8 @@ void MegaDrive::write8(uint32_t addr, uint8_t value) {
         io_.write(addr | 1, value, now_);
     } else if (addr == 0xA11100 || addr == 0xA11200) {
         writeBusControl(addr, (value & 1) != 0);
+    } else if (paprium_ && (addr == 0xA14101 || (addr >= 0xA130F2 && addr < 0xA13100))) {
+        if (addr == 0xA14101) tmss_ = value;  // Paprium's chip has no banks
     } else if (addr >= 0xA130F0 && addr < 0xA13100) {
         cart_.writeTimeRegister(addr, value);
     }
@@ -677,6 +704,8 @@ void MegaDrive::write16(uint32_t addr, uint16_t value) {
         }
         ram_[addr & 0xFFFF] = static_cast<uint8_t>(value >> 8);
         ram_[(addr & 0xFFFF) + 1] = static_cast<uint8_t>(value);
+    } else if (paprium_ && Paprium::inWindow(addr)) {
+        paprium_->write16(addr, value);
     } else if (addr < 0x400000) {
         cart_.write16(addr, value);
     } else if (addr >= 0xC00000) {
@@ -687,6 +716,8 @@ void MegaDrive::write16(uint32_t addr, uint16_t value) {
         io_.write(addr | 1, static_cast<uint8_t>(value), now_);
     } else if (addr == 0xA11100 || addr == 0xA11200) {
         writeBusControl(addr, (value & 0x0100) != 0);
+    } else if (paprium_ && (addr == 0xA14100 || (addr >= 0xA130F2 && addr < 0xA13100))) {
+        if (addr == 0xA14100) tmss_ = static_cast<uint8_t>(value);
     } else if (addr >= 0xA130F0 && addr < 0xA13100) {
         cart_.writeTimeRegister(addr | 1, static_cast<uint8_t>(value));
     }
@@ -879,7 +910,7 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         mixer_.state(w);
         block("MIX ", w.data());
     }
-    if (mars_ || mcd_) {
+    if (mars_ || mcd_ || paprium_) {
         StateWriter w;
         mixer_.addOnState(w);
         block("MIXA", w.data());
@@ -896,6 +927,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         StateWriter w;
         mcd_->state(w);
         block("MCD ", w.data());
+    }
+    if (paprium_) {
+        StateWriter w;
+        paprium_->state(w);
+        block("PAPR", w.data());
     }
     {  // after M68K and MCD, which settle it for older states
         StateWriter w;
@@ -1038,6 +1074,9 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
             if (mars_) mars_->timingState(b);
             cacheFromBoot = id == fourcc("32X2");
         }
+        else if (id == fourcc("PAPR")) {
+            if (paprium_) paprium_->state(b);
+        }
         else if (id == fourcc("MCD ")) {
             if (mcd_) {
                 mcd_->state(b);
@@ -1102,6 +1141,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     psg_.clearSamples();
     if (mars_) mars_->samples().clear();
     if (mcd_) mcd_->samples().clear();
+    if (paprium_) paprium_->samples().clear();
     frames_ = frames;
     updateIrq();
     return true;

@@ -5,6 +5,12 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
+- Paprium runs: the chip on its cartridge is emulated (it unpacks the graphics, builds
+  the sprites, scales the pictures in the menus, keeps the saves and plays the sound
+  effects), so the game gets past its "Vapor Ware" decoy to the NX terminal, the intro,
+  the menus and the levels ([#68](https://github.com/cochimbo/plumsg/issues/68)). Its
+  music is not in the ROM: it plays from the album's tracks (.ogg, .mp3 or .wav) put in
+  a folder with the ROM's name next to it.
 - The Score's figures no longer change as it scrolls: they are written from a bar line
   before the view, and each staff keeps its clef.
 

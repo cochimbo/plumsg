@@ -16,6 +16,7 @@
 #include "m68k.h"
 #include "mars.h"
 #include "megacd.h"
+#include "paprium.h"
 #include "psg.h"
 #include "roland.h"
 #include "sms.h"
@@ -205,6 +206,7 @@ private:
     void attachCd(std::unique_ptr<CdImage> disc, bool cartridge);
     void setUpMars();             // adds or removes the 32X to suit the cartridge
     void setUpSms();              // switches to Master System mode for its cartridges, or back
+    void setUpPaprium();          // adds Paprium's chip for its cartridge
     void runFrameSms();
     void runFrameMd();
     std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
@@ -230,6 +232,8 @@ private:
     std::unique_ptr<CdImage> disc_;
     std::unique_ptr<MegaCd> mcd_;
     std::unique_ptr<MasterSystem> sms_;
+    std::unique_ptr<Paprium> paprium_;
+    uint8_t tmss_ = 1;  // what Paprium reads back from 0xA14101
     std::unique_ptr<Ym2413> opll_;  // the Master System's FM unit, with sms_
     bool smsFmAlways_ = false;
     bool smsFile_ = false;  // the file loaded is a Master System one by its name
