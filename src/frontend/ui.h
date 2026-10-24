@@ -138,6 +138,9 @@ public:
     void openBios() { showBios_ = true; }
     // "Buscar carátula..." for the library's game `game`.
     void openCoverSearch(size_t game);
+    // A PNG or JPEG of the user's as the game's cover, for when none is found online.
+    void chooseCoverImage(size_t game);
+    void useCoverImage(const std::string& file);
     bool coverSearchBusy() const { return showCoverSearch_ && (coverSearch_.autoPreview || library_.coverSearch().busy); }
     // The Trucos window, for the game main() handed it.
     void openCheats() { showCheats_ = true; }
@@ -268,9 +271,10 @@ private:
     std::vector<std::string> localAddresses_;  // this computer's, for the host to share
     bool showFolders_ = false;  // the library's list of folders, unfolded
     // What the file browser (or the system dialog) is choosing a file or folder for.
-    enum class BrowseFor { Game, LibraryFolder, CdBios, Soundfont, Track };
+    enum class BrowseFor { Game, LibraryFolder, CdBios, Soundfont, Track, CoverImage };
     BrowseFor browseFor_ = BrowseFor::Game;
     int biosSlot_ = 0;  // the region whose BIOS is being chosen
+    std::string coverImageFor_;  // the game (its path) whose cover image is being chosen
     std::string biosStatus_;
     std::map<std::string, BiosInfo> biosChecked_;  // what each chosen file looks like, read once
     bool openRequested_ = false;
@@ -304,7 +308,8 @@ private:
         bool tabChanged = false;  // the console tab was changed with the pad or the keyboard
         // The menu of one game (right click, X on the pad or the menu key): its index in
         // the filtered list, the item chosen with the pad or the keys, and a request to open it.
-        static constexpr int kItems = 5;  // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula
+        // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula, Carátula desde imagen
+        static constexpr int kItems = 6;
         int menuGame = -1;
         int menuItem = 0;
         bool openMenu = false;

@@ -8,10 +8,11 @@
 namespace plumsg {
 
 enum class DialogResult { Chosen, Cancelled, Unavailable };
-// What is being picked: a game (cartridge or disc), a folder, or any file (a BIOS).
-enum class Pick { Game, Folder, AnyFile };
+// What is being picked: a game (cartridge or disc), a folder, any file (a BIOS) or an
+// image (a cover).
+enum class Pick { Game, Folder, AnyFile, Image };
 
-// The system "open file" dialog, filtered to games (Pick::Game) or showing every file
+// The system "open file" dialog, filtered to games (Pick::Game), to images (Pick::Image) or showing every file
 // (Pick::AnyFile). Blocks until closed. Returns Unavailable on platforms without one;
 // the caller then uses FileBrowser.
 DialogResult openFileDialog(SDL_Window* window, const std::string& startFolder, Pick pick, std::string* chosen);

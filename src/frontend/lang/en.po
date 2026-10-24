@@ -60,6 +60,9 @@ msgstr "%s is a folder: open a game inside it, or add it to the library"
 msgid "%s no es un .wav que plumsg sepa leer"
 msgstr "%s is not a .wav plumsg can read"
 
+msgid "%s no es una imagen PNG o JPEG"
+msgstr "%s is not a PNG or JPEG image"
+
 msgid "%s, %u puntos"
 msgstr "%s, %u points"
 
@@ -544,6 +547,9 @@ msgstr "Folder: %s"
 msgid "Carreras"
 msgstr "Racing"
 
+msgid "Carátula desde imagen..."
+msgstr "Cover from image..."
+
 msgid "Casi"
 msgstr "Almost there"
 
@@ -958,6 +964,12 @@ msgstr "Choose folder"
 msgid "Elegir carpeta..."
 msgstr "Choose folder..."
 
+msgid "Elegir imagen"
+msgstr "Choose image"
+
+msgid "Elegir imagen del ordenador..."
+msgstr "Choose image from computer..."
+
 msgid "Elegir instrumentos comparando el sonido"
 msgstr "Choose instruments by comparing the sound"
 
@@ -1357,6 +1369,9 @@ msgstr "Lighting"
 
 msgid "Imagen"
 msgstr "Picture"
+
+msgid "Imágenes"
+msgstr "Images"
 
 msgid "Inclinación"
 msgstr "Tilt"
@@ -1828,6 +1843,9 @@ msgstr "The network could not be started."
 
 msgid "No se pudo iniciar sesión: %s"
 msgstr "Could not log in: %s"
+
+msgid "No se pudo leer %s"
+msgstr "Could not read %s"
 
 msgid "No se pudo leer %s."
 msgstr "%s could not be read."
@@ -2617,6 +2635,9 @@ msgstr "Uses the general value"
 
 msgid "Usa los de Opciones > Controles."
 msgstr "Uses the ones in Options > Controls."
+
+msgid "Usa un PNG o JPEG tuyo como carátula de este juego."
+msgstr "Use a PNG or JPEG of your own as this game's cover."
 
 msgid "Usar el stick izquierdo como cruceta"
 msgstr "Use the left stick as d-pad"

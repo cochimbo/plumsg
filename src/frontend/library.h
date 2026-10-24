@@ -80,6 +80,10 @@ public:
     // Saves the previewed cover as `game`'s own (in the covers folder, where it is
     // looked for first) and shows it in the grid.
     bool useCover(size_t game);
+    // Uses an image of the user's own (PNG or JPEG, "Elegir imagen..." in the search
+    // window) as `game`'s cover, copied to the covers folder like a downloaded one.
+    // False, with the reason in *error, if it is not an image or cannot be saved.
+    bool coverFromFile(size_t game, const std::string& file, std::string* error);
     // Forgets the search and frees the preview.
     void endCoverSearch();
     const CoverSearch& coverSearch() const { return search_; }
@@ -129,6 +133,9 @@ private:
     bool findLocal(const Job& job, std::string* coverPath) const;
     bool fetch(const Job& job, std::string* coverPath);
     void queue(Job job);
+    // Saves a PNG or JPEG as `game`'s cover, replacing any other one of its in the covers
+    // folder, and loads it again.
+    bool saveCover(size_t game, const std::vector<uint8_t>& image, std::string* error);
 
     std::string systemCovers(ConsoleSystem s) const;
 

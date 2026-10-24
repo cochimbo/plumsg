@@ -16,6 +16,9 @@ What each version brings, newest first. Installers are on the
 - If plumsg closes suddenly, it leaves a report in `crash-reports\` and says so the next time it
   opens.
 - About shows the version.
+- Library: a game's cover can be set from an image of your own (PNG or JPEG), with "Cover
+  from image..." in the game's menu or "Choose image from computer..." in Find cover, for
+  when it is not found online.
 - Error messages say what to do: a file that is not a game, a state that does not load or
   save, no internet for covers or cheats.
 - Opening a folder as if it were a game no longer closes plumsg.

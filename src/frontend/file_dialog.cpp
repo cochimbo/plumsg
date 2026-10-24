@@ -24,6 +24,12 @@ namespace fs = std::filesystem;
 
 namespace {
 
+// A .png, .jpg or .jpeg, whatever the case of its extension.
+bool isImageFile(const fs::path& p) {
+    std::string ext = p.extension().u8string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext == ".png" || ext == ".jpg" || ext == ".jpeg";
+}
 
 #ifdef _WIN32
 std::wstring widen(const std::string& s) {
@@ -66,13 +72,15 @@ DialogResult openFileDialog(SDL_Window* window, const std::string& startFolder, 
     if (pick == Pick::Game)
         addFilter(std::string(tr("Juegos")) + " (*.md, *.gen, *.smd, *.bin, *.32x, *.sms, *.gg, *.zip, *.cue, *.chd, *.iso)",
                   L"*.md;*.gen;*.smd;*.bin;*.32x;*.sms;*.gg;*.zip;*.cue;*.chd;*.iso");
+    if (pick == Pick::Image) addFilter(std::string(tr("Imágenes")) + " (*.png, *.jpg, *.jpeg)", L"*.png;*.jpg;*.jpeg");
     addFilter(tr("Todos los archivos"), L"*.*");
     filter += L'\0';
     ofn.lpstrFilter = filter.c_str();
     ofn.lpstrFile = file;
     ofn.nMaxFile = static_cast<DWORD>(std::size(file));
     ofn.lpstrInitialDir = folder.empty() ? nullptr : folder.c_str();
-    const std::wstring title = widen(pick == Pick::Game ? tr("Abrir juego") : tr("Elegir archivo"));
+    const std::wstring title =
+        widen(pick == Pick::Game ? tr("Abrir juego") : pick == Pick::Image ? tr("Elegir imagen") : tr("Elegir archivo"));
     ofn.lpstrTitle = title.c_str();
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
     if (!GetOpenFileNameW(&ofn)) return DialogResult::Cancelled;
@@ -107,7 +115,8 @@ void FileBrowser::list(const std::string& folder) {
     for (fs::directory_iterator it(fs::u8path(folder), fs::directory_options::skip_permission_denied, ec), end;
          !ec && it != end; it.increment(ec)) {
         const bool dir = it->is_directory(ec);
-        const bool wanted = pick_ == Pick::AnyFile || (pick_ == Pick::Game && isGameFile(it->path().u8string()));
+        const bool wanted = pick_ == Pick::AnyFile || (pick_ == Pick::Game && isGameFile(it->path().u8string())) ||
+                            (pick_ == Pick::Image && isImageFile(it->path()));
         if (dir || wanted) entries_.push_back({it->path().filename().u8string(), dir});
     }
     std::sort(entries_.begin(), entries_.end(), [](const Entry& a, const Entry& b) {
@@ -185,7 +194,10 @@ bool FileBrowser::draw(std::string* chosen) {
     const bool pickFolder = pick_ == Pick::Folder;
     // The same id in every language, so a language change does not lose the popup.
     const std::string title =
-        std::string(pickFolder ? tr("Elegir carpeta") : pick_ == Pick::Game ? tr("Abrir juego") : tr("Elegir archivo")) +
+        std::string(pickFolder              ? tr("Elegir carpeta")
+                    : pick_ == Pick::Game  ? tr("Abrir juego")
+                    : pick_ == Pick::Image ? tr("Elegir imagen")
+                                           : tr("Elegir archivo")) +
         "###explorador";
     if (justOpened_) {
         ImGui::OpenPopup(title.c_str());

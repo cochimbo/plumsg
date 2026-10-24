@@ -596,6 +596,7 @@ UiActions Ui::frame(const UiState& state) {
             case BrowseFor::Track:
                 if (editor_) editor_->openTrack(picked);
                 break;
+            case BrowseFor::CoverImage: useCoverImage(picked); break;
             case BrowseFor::CdBios: {
                 settings_.cdBios[static_cast<size_t>(biosSlot_)] = picked;
                 out.settingsChanged = true;
@@ -2198,7 +2199,8 @@ void Ui::drawLibrary(UiActions& out) {
             ImGui::TextDisabled("%s", g.title.c_str());
             ImGui::Separator();
             static const char* items[LibraryView::kItems] = {N_("Jugar"), N_("Trucos..."), N_("Opciones de este juego..."),
-                                                             N_("Editor de instrumentos..."), N_("Buscar carátula...")};
+                                                             N_("Editor de instrumentos..."), N_("Buscar carátula..."),
+                                                             N_("Carátula desde imagen...")};
             int picked = libraryView_.menuAction;
             for (int i = 0; i < LibraryView::kItems; ++i)
                 if (ImGui::Selectable(tr(items[i]), libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
@@ -2212,6 +2214,7 @@ void Ui::drawLibrary(UiActions& out) {
                     showLibrary_ = false;
                     break;
                 case 4: openCoverSearch(visible[static_cast<size_t>(n)]); break;
+                case 5: chooseCoverImage(visible[static_cast<size_t>(n)]); break;
                 default: break;
             }
             if (picked >= 0) {
@@ -2512,6 +2515,33 @@ void Ui::startCoverSearch() {
     library_.searchCovers(library_.games()[coverSearch_.game].system, coverSearch_.query);
 }
 
+void Ui::chooseCoverImage(size_t game) {
+    const auto& games = library_.games();
+    if (game >= games.size()) return;
+    coverImageFor_ = games[game].path;
+    const std::string start = coverImageFor_.substr(0, coverImageFor_.find_last_of("/\\"));
+    std::string chosen;
+    browseFor_ = BrowseFor::CoverImage;
+    const bool fullscreen = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+    switch (fullscreen ? DialogResult::Unavailable : openFileDialog(window_, start, Pick::Image, &chosen)) {
+        case DialogResult::Chosen: useCoverImage(chosen); break;
+        case DialogResult::Cancelled: break;
+        case DialogResult::Unavailable: browser_.open(start, Pick::Image); break;
+    }
+}
+
+// The game is found again by its path: the library may have been scanned meanwhile.
+void Ui::useCoverImage(const std::string& file) {
+    const auto& games = library_.games();
+    for (size_t i = 0; i < games.size(); ++i)
+        if (games[i].path == coverImageFor_) {
+            std::string error;
+            if (!library_.coverFromFile(i, file, &error) && !error.empty()) showError(error);
+            break;
+        }
+    coverImageFor_.clear();
+}
+
 // Looking for a game's cover by hand: the search term can be changed, and the box art
 // names that look like it are listed, the closest one shown; clicking another shows
 // that one, and the one shown can be used.
@@ -2582,6 +2612,12 @@ void Ui::drawCoverSearch() {
             showCoverSearch_ = false;
         ImGui::EndDisabled();
         ImGui::EndGroup();
+        // When the online set does not have it: an image of the user's own.
+        if (ImGui::Button(tr("Elegir imagen del ordenador..."))) {
+            showCoverSearch_ = false;
+            chooseCoverImage(coverSearch_.game);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("Usa un PNG o JPEG tuyo como carátula de este juego."));
         ImGui::End();
     } else if (showCoverSearch_) {
         ImGui::End();

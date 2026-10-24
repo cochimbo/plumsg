@@ -60,6 +60,9 @@ msgstr "%s é uma pasta: abra um jogo que esteja lá dentro, ou adicione-a à bi
 msgid "%s no es un .wav que plumsg sepa leer"
 msgstr "%s não é um .wav que o plumsg saiba ler"
 
+msgid "%s no es una imagen PNG o JPEG"
+msgstr "%s não é uma imagem PNG ou JPEG"
+
 msgid "%s, %u puntos"
 msgstr "%s, %u pontos"
 
@@ -544,6 +547,9 @@ msgstr "Pasta: %s"
 msgid "Carreras"
 msgstr "Corrida"
 
+msgid "Carátula desde imagen..."
+msgstr "Capa a partir de imagem..."
+
 msgid "Casi"
 msgstr "Quase lá"
 
@@ -958,6 +964,12 @@ msgstr "Escolher pasta"
 msgid "Elegir carpeta..."
 msgstr "Escolher pasta..."
 
+msgid "Elegir imagen"
+msgstr "Escolher imagem"
+
+msgid "Elegir imagen del ordenador..."
+msgstr "Escolher imagem do computador..."
+
 msgid "Elegir instrumentos comparando el sonido"
 msgstr "Escolher instrumentos comparando o som"
 
@@ -1357,6 +1369,9 @@ msgstr "Iluminação"
 
 msgid "Imagen"
 msgstr "Imagem"
+
+msgid "Imágenes"
+msgstr "Imagens"
 
 msgid "Inclinación"
 msgstr "Inclinação"
@@ -1828,6 +1843,9 @@ msgstr "Não foi possível iniciar a rede."
 
 msgid "No se pudo iniciar sesión: %s"
 msgstr "Não foi possível entrar: %s"
+
+msgid "No se pudo leer %s"
+msgstr "Não foi possível ler %s"
 
 msgid "No se pudo leer %s."
 msgstr "Não foi possível ler %s."
@@ -2617,6 +2635,9 @@ msgstr "Usa o valor geral"
 
 msgid "Usa los de Opciones > Controles."
 msgstr "Usa os de Opções > Controles."
+
+msgid "Usa un PNG o JPEG tuyo como carátula de este juego."
+msgstr "Use um PNG ou JPEG seu como capa deste jogo."
 
 msgid "Usar el stick izquierdo como cruceta"
 msgstr "Usar o analógico esquerdo como direcional"
