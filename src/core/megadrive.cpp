@@ -280,6 +280,7 @@ void MegaDrive::reset() {
     z80Reset_ = true;
     now_ = lineStart_ = m68kClock_ = z80Clock_ = psgClock_ = vdpFreeAt_ = 0;
     psgRemainder_ = 0;
+    refreshClocks_ = 0;
     ym_.setClockPosition(0);
     psgBuffer_.clear();
     if (mars_) {
@@ -315,13 +316,24 @@ void MegaDrive::runUntil(uint64_t clock) {
             now_ = m68kClock_;
             const uint64_t cycles = static_cast<uint64_t>(cpu_.step());
             // Overclocked, each cycle takes fewer master clocks (rounded, never 0).
-            m68kClock_ += overclock_ == 100 ? cycles * 7
-                                            : std::max<uint64_t>(1, (cycles * 700 + overclock_ / 2) / overclock_);
+            const uint64_t clocks = overclock_ == 100 ? cycles * 7
+                                                      : std::max<uint64_t>(1, (cycles * 700 + overclock_ / 2) / overclock_);
+            m68kClock_ += clocks;
+            // The DRAM refresh holds the 68000 off its bus for 2 of every 128 cycles
+            // (testpico's "time loop" counts them).
+            refreshClocks_ += static_cast<int>(clocks);
+            while (refreshClocks_ >= kRefreshEvery) {
+                refreshClocks_ -= kRefreshEvery;
+                m68kClock_ += kRefreshStall;
+            }
         } else if (z80Running()) {
             now_ = z80Clock_;
+            inZ80_ = true;
             z80Clock_ += static_cast<uint64_t>(z80_.step()) * 15;
+            inZ80_ = false;
         } else {
-            z80Clock_ = clock;
+            // A stopped Z80 keeps up with the 68000, so it starts the moment it is let go.
+            z80Clock_ = std::max(z80Clock_, std::min(clock, m68kClock_));
         }
     }
     now_ = clock;
@@ -474,12 +486,6 @@ void MegaDrive::runFrameMd() {
         if (mars_) mars_->startLine(line, vdp_.activeLines());
         updateIrq();
         z80_.setIrqLine(vdp_.z80Irq());
-        if (line == vdp_.activeLines()) {
-            runUntil(lineStart_ + VdpMd::kVintDelay);
-            vdp_.raiseVint();
-            updateIrq();
-            z80_.setIrqLine(vdp_.z80Irq());
-        }
         runUntil(lineStart_ + VdpMd::kActiveClocks);
         if (line < vdp_.activeLines() && drawing_) {
             vdp_.sync(lineStart_ + VdpMd::kActiveClocks);
@@ -489,6 +495,12 @@ void MegaDrive::runFrameMd() {
         if (mars_) mars_->startHblank(line, vdp_.activeLines());
         vdp_.endLine(line);
         updateIrq();
+        if (line == vdp_.activeLines()) {
+            runUntil(lineStart_ + VdpMd::kVcountClocks + VdpMd::kVintDelay);
+            vdp_.raiseVint();
+            updateIrq();
+            z80_.setIrqLine(vdp_.z80Irq());
+        }
         runUntil(lineStart_ + kMasterPerLine);
     }
     vdp_.endFrame();
@@ -529,7 +541,8 @@ uint16_t MegaDrive::readVdp(uint32_t addr) {
         case 0x00: case 0x02: {
             int wait = 0;
             const uint16_t v = vdp_.readData(t, &wait);
-            m68kClock_ += static_cast<uint64_t>(wait);
+            // Whoever reads waits for the word: the 68000, or the Z80 through its window.
+            (inZ80_ ? z80Clock_ : m68kClock_) += static_cast<uint64_t>(wait);
             vdpFreeAt_ = t + static_cast<uint64_t>(wait);
             return v;
         }
@@ -799,10 +812,12 @@ uint8_t MegaDrive::read(uint16_t addr) {
     if (addr >= 0x8000) {
         // The banked window onto the 68000's address space.
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);
+        z80Clock_ += kZ80BankDelay;
         if (a >= 0xA00000 && a < 0xA10000) return 0xFF;  // the Z80 cannot see itself
         return read8(a);
     }
     if (addr >= 0x7F00 && addr < 0x7F20) {
+        z80Clock_ += kZ80VdpDelay;
         const uint16_t w = readVdp(addr & 0x1E);
         return static_cast<uint8_t>((addr & 1) ? w : w >> 8);
     }
@@ -832,8 +847,10 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
         // Bank register: nine bits shifted in one at a time, low bit first.
         z80Bank_ = static_cast<uint16_t>(((z80Bank_ >> 1) | ((value & 1) << 8)) & 0x1FF);
     } else if (addr >= 0x7F00 && addr < 0x7F20) {
+        z80Clock_ += kZ80VdpDelay;
         if ((addr & 0x1F) >= 0x10) psgWrite(value);
     } else if (addr >= 0x8000) {
+        z80Clock_ += kZ80BankDelay;
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);
         if (a < 0xA00000 || a >= 0xA10000) write8(a, value);
     }
@@ -898,6 +915,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
     }
     {
         StateWriter w;
+        w(refreshClocks_);
+        block("RFSH", w.data());
+    }
+    {
+        StateWriter w;
         io_.state(w);
         block("IO  ", w.data());
     }
@@ -939,6 +961,9 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         StateWriter c;
         mars_->timingState(c);
         block("32X2", c.data());  // "32XC" in 0.0.27, before the boot ROMs turned the cache on
+        StateWriter i;
+        mars_->ioState(i);
+        block("32XI", i.data());
     }
     if (mcd_) {
         StateWriter w;
@@ -1050,6 +1075,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     bool cacheFromBoot = false;  // the state comes from a version whose boot turns the 32X's cache on
     uint16_t overclock = 100;  // states without the block are from a console at its speed
     std::vector<uint8_t> thumbnail, addOnState;
+    refreshClocks_ = 0;  // states without the block are from before the refresh
     while (ok && !r.atEnd()) {
         uint32_t id = 0, size = 0;
         r(id, size);
@@ -1072,6 +1098,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("VDPF")) vdp_.fifoState(b);
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);
+        else if (id == fourcc("RFSH")) b(refreshClocks_);
         else if (id == fourcc("IRQS")) {
             cpu_.irqState(b);
             if (mcd_) mcd_->sub().irqState(b);
@@ -1087,6 +1114,9 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
                 mars_->state(b);
                 mars_->clearTiming();  // a state without it (older) starts with empty caches
             }
+        }
+        else if (id == fourcc("32XI")) {
+            if (mars_) mars_->ioState(b);
         }
         else if (id == fourcc("32XC") || id == fourcc("32X2")) {
             if (mars_) mars_->timingState(b);

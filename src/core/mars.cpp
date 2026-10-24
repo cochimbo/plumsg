@@ -644,7 +644,7 @@ bool Mars::read68k(uint32_t addr, uint16_t& v) {
     const uint32_t reg = addr - 0xA15100;
     switch (reg) {
         case 0x00:
-            v = static_cast<uint16_t>((io_.adapterEnable ? 1 : 0) | (io_.adapterReset ? 2 : 0) | 0x80 |
+            v = static_cast<uint16_t>((io_.adapterEnable ? 1 : 0) | (io_.resetBit ? 2 : 0) | 0x80 |
                                       (vdp_.access ? 0x8000 : 0));
             return true;
         case 0x02:
@@ -660,7 +660,7 @@ bool Mars::read68k(uint32_t addr, uint16_t& v) {
         case 0x0C: v = static_cast<uint16_t>(dreq_.target >> 16 & 0xFF); return true;
         case 0x0E: v = static_cast<uint16_t>(dreq_.target); return true;
         case 0x10: v = dreq_.length; return true;
-        case 0x1A: v = io_.cartridgeMode ? 1 : 0; return true;
+        case 0x1A: v = static_cast<uint16_t>((io_.cartridgeMode ? 1 : 0) | (io_.tvBit8 ? 0x100 : 0)); return true;
         default: break;
     }
     if (reg >= 0x20 && reg < 0x30) {
@@ -724,6 +724,7 @@ bool Mars::write68k(uint32_t addr, uint16_t v, bool upper, bool lower) {
                     bootSh2s();
                 }
                 io_.adapterReset = run;
+                io_.resetBit = run;
             }
             if (upper) vdp_.access = v & 0x8000;
             return true;
@@ -754,7 +755,7 @@ bool Mars::write68k(uint32_t addr, uint16_t v, bool upper, bool lower) {
             return true;
         case 0x0A:
             if (upper) dreq_.source = (dreq_.source & 0xFF00FF) | (v & 0xFF00);
-            if (lower) dreq_.source = (dreq_.source & 0xFFFF00) | (v & 0x00FF);
+            if (lower) dreq_.source = (dreq_.source & 0xFFFF00) | (v & 0x00FE);  // words only
             return true;
         case 0x0C:
             if (lower) dreq_.target = (dreq_.target & 0x00FFFF) | static_cast<uint32_t>(v & 0xFF) << 16;
@@ -772,6 +773,7 @@ bool Mars::write68k(uint32_t addr, uint16_t v, bool upper, bool lower) {
             return true;
         case 0x1A:
             if (lower) io_.cartridgeMode = v & 1;
+            if (upper) io_.tvBit8 = v & 0x100;
             return true;
         default: break;
     }

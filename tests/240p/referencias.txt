@@ -22,13 +22,13 @@ pluge 115fb545
 ram-z80 50c4c84a
 rampa-gris ab8e82c5
 rayas f96c31c5
-reflejos fef55ec1
+reflejos 25e3e229
 rejilla 48780651
 sangrado fc40adc5
 scroll-rejilla d054ef45
 scroll 22bd8bf2
 sincro-audio 96a707d5
-sombra a235ec1e
+sombra efdd11d3
 sonido 30f97b0f
 sprite-rayado 201f4751
 tablero 0d2b9dc5

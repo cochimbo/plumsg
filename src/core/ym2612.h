@@ -56,7 +56,9 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
     double masterClock_ = 53693175.0;
+    int32_t subSample() const;
     uint64_t position_ = 0;  // master clocks already turned into samples
+    uint64_t now_ = 0;       // where the last runUntil brought it, maybe partway into a sample
     uint32_t muted_ = 0;
     std::array<uint8_t, 2> address_{};
     std::array<uint8_t, 6> keys_{};

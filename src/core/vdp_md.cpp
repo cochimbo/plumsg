@@ -28,7 +28,6 @@ void VdpMd::reset() {
     vintPending_ = hintPending_ = z80Irq_ = false;
     spriteOverflow_ = spriteCollision_ = false;
     oddFrame_ = false;
-    inVblank_ = false;
     fifoData_.fill(0);
     fifoNext_ = 0;
     clearFifo();
@@ -90,13 +89,13 @@ int VdpMd::writeControl(uint16_t value, uint64_t clock) {
             return 0;
         }
         code_ = static_cast<uint8_t>((code_ & 0x3C) | (value >> 14));
-        addr_ = (addr_ & 0xC000) | (value & 0x3FFF);
+        addr_ = (addr_ & 0x1C000) | (value & 0x3FFF);
         pendingControl_ = true;
         return 0;
     }
     pendingControl_ = false;
     code_ = static_cast<uint8_t>((code_ & 0x03) | ((value >> 2) & 0x3C));
-    addr_ = (addr_ & 0x3FFF) | ((value & 3u) << 14);
+    addr_ = (addr_ & 0x3FFF) | ((value & 7u) << 14);  // bit 2: A16, used in 128 KB mode
     // With DMA off CD5 does not latch, and a fill already armed stays armed; with it on, a
     // command without CD5 disarms it.
     if (!(regs_[1] & 0x10)) {
@@ -178,12 +177,18 @@ void VdpMd::push(uint16_t value) {
     fifoData_[fifoNext_] = value;
     fifoNext_ = static_cast<uint8_t>((fifoNext_ + 1) & 3);
     queue_[queueCount_++] = FifoEntry{addr_, value, code_, false};
-    addr_ = (addr_ + regs_[15]) & 0xFFFF;
+    addr_ = (addr_ + regs_[15]) & 0x1FFFF;
 }
 
 void VdpMd::storeWord(uint8_t code, uint32_t addr, uint16_t value) {
     switch (code & 0x0F) {
         case 1: {  // VRAM; an odd address stores the bytes swapped
+            if (regs_[1] & 0x80) {
+                // 128 KB mode, for a second bank of VRAM no console has: only the low byte
+                // is stored, its address bits shuffled. What lands where comes from testpico.
+                vram_[(addr & 0x7FFC) | ((addr >> 1) & 0x8000) | (((addr >> 1) & 1) ^ 1)] = static_cast<uint8_t>(value);
+                break;
+            }
             const uint32_t a = addr & 0xFFFF;
             if (a & 1) {
                 vram_[a & ~1u] = static_cast<uint8_t>(value);
@@ -249,7 +254,7 @@ void VdpMd::slot() {
         // an odd address writes the high bytes of the words, from an even one the low.
         if (target == 1) vram_[(addr_ ^ 1) & 0xFFFF] = static_cast<uint8_t>(fillValue_ >> 8);
         else if (target == 3 || target == 5) storeWord(code_, addr_, fifoData_[fifoNext_]);
-        addr_ = (addr_ + regs_[15]) & 0xFFFF;
+        addr_ = (addr_ + regs_[15]) & 0x1FFFF;
         if (--dmaLeft_ == 0) finishDma();
     } else if (dmaMode_ == kDmaCopy) {
         // A slot to read the byte and one to write it. Both addresses work on the bytes as
@@ -262,7 +267,7 @@ void VdpMd::slot() {
         copyRead_ = false;
         vram_[(addr_ ^ 1) & 0xFFFF] = copyByte_;
         dmaSource_ = (dmaSource_ + 1) & 0xFFFF;
-        addr_ = (addr_ + regs_[15]) & 0xFFFF;
+        addr_ = (addr_ + regs_[15]) & 0x1FFFF;
         if (--dmaLeft_ == 0) finishDma();
     }
 }
@@ -408,7 +413,7 @@ uint16_t VdpMd::readData(uint64_t clock, int* wait) {
         default: break;
     }
     readBuffer_ = v;
-    addr_ = (addr_ + regs_[15]) & 0xFFFF;
+    addr_ = (addr_ + regs_[15]) & 0x1FFFF;
     return v;
 }
 
@@ -421,7 +426,10 @@ uint16_t VdpMd::readStatus(int lineClock, uint64_t clock) {
     if (spriteOverflow_) s |= 0x40;
     if (spriteCollision_) s |= 0x20;
     if (oddFrame_ && (regs_[12] & 0x02)) s |= 0x10;
-    if (inVblank_ || !displayEnabled()) s |= 0x08;
+    // VBlank: from the V counter reaching the first line below the picture until it
+    // reaches the frame's last line, which already fetches the sprites for line 0.
+    const int v = counterLine(lineClock);
+    if ((v >= activeLines() && v != linesPerFrame() - 1) || !displayEnabled()) s |= 0x08;
     // HBlank: set a little after the active part of the line ends and cleared just after
     // the next line starts (H40) or as it starts (H32). Games poll it to time writes.
     const int lc = lineClock % kMasterPerLine;
@@ -441,7 +449,7 @@ uint16_t VdpMd::readStatus(int lineClock, uint64_t clock) {
 
 uint16_t VdpMd::readHV(int lineClock) const {
     if (regs_[0] & 0x02) return hvLatch_;
-    int v = vcounter_;
+    int v = counterLine(lineClock);
     const bool v30 = activeLines() == 240;
     if (pal_) {
         const int jump = v30 ? 0x10A : 0x102;
@@ -462,22 +470,25 @@ uint16_t VdpMd::readHV(int lineClock) const {
     return static_cast<uint16_t>(((v & 0xFF) << 8) | (h & 0xFF));
 }
 
+int VdpMd::counterLine(int lineClock) const {
+    if (lineClock % kMasterPerLine >= kVcountClocks) return vcounter_;
+    return (vcounter_ == 0 ? linesPerFrame() : vcounter_) - 1;
+}
+
 void VdpMd::startLine(int line, uint64_t clock) {
     if (clock != kUntimed) {
-        // The clock going back is a reset or a state loaded: what was waiting is done now.
-        if (clock >= syncedTo_) sync(clock);
-        else drain();
+        if (clock >= syncedTo_ || clock + kMasterPerLine <= syncedTo_) {
+            // The clock going back is a reset or a state loaded: what was waiting is done now.
+            if (clock >= syncedTo_) sync(clock);
+            else drain();
+            slotLineStart_ = syncedTo_ = clock;
+        }
+        // Otherwise a write that waited past the end of the last line has already taken
+        // this line's first slots, and they stay taken.
         slotLine_ = line;
-        slotLineStart_ = syncedTo_ = clock;
     }
     vcounter_ = line;
-    const int active = activeLines();
-    if (line == 0) inVblank_ = false;
-    if (line == active) {
-        inVblank_ = true;
-    } else if (line == active + 1) {
-        z80Irq_ = false;  // the Z80's interrupt line is held for about one line
-    }
+    if (line == activeLines() + 1) z80Irq_ = false;  // the Z80's interrupt line is held for about one line
 }
 
 void VdpMd::raiseVint() {
@@ -509,8 +520,11 @@ int VdpMd::irqLevel() const {
 }
 
 void VdpMd::acknowledge(int level) {
-    if (level == 6) vintPending_ = false;
-    else if (level == 4) hintPending_ = false;
+    if (level != 4 && level != 6) return;
+    // The acknowledge clears whichever interrupt is pending and enabled now, VINT first,
+    // whichever of the two the 68000 took: one disabled since it was raised stays pending.
+    if (vintPending_ && (regs_[1] & 0x20)) vintPending_ = false;
+    else if (hintPending_ && (regs_[0] & 0x10)) hintPending_ = false;
 }
 
 int VdpMd::wideColumnsFor(int aspectW, int aspectH) {
