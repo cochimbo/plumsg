@@ -60,6 +60,9 @@ msgstr "%s est un dossier : ouvrez un jeu qu'il contient, ou ajoutez-le à la bi
 msgid "%s no es un .wav que plumsg sepa leer"
 msgstr "%s n'est pas un .wav que plumsg sait lire"
 
+msgid "%s no es una imagen PNG o JPEG"
+msgstr "%s n'est pas une image PNG ou JPEG"
+
 msgid "%s, %u puntos"
 msgstr "%s, %u points"
 
@@ -544,6 +547,9 @@ msgstr "Dossier : %s"
 msgid "Carreras"
 msgstr "Course"
 
+msgid "Carátula desde imagen..."
+msgstr "Jaquette depuis une image..."
+
 msgid "Casi"
 msgstr "Presque"
 
@@ -958,6 +964,12 @@ msgstr "Choisir un dossier"
 msgid "Elegir carpeta..."
 msgstr "Choisir un dossier..."
 
+msgid "Elegir imagen"
+msgstr "Choisir une image"
+
+msgid "Elegir imagen del ordenador..."
+msgstr "Choisir une image de l'ordinateur..."
+
 msgid "Elegir instrumentos comparando el sonido"
 msgstr "Choisir les instruments en comparant le son"
 
@@ -1357,6 +1369,9 @@ msgstr "Éclairage"
 
 msgid "Imagen"
 msgstr "Image"
+
+msgid "Imágenes"
+msgstr "Images"
 
 msgid "Inclinación"
 msgstr "Inclinaison"
@@ -1828,6 +1843,9 @@ msgstr "Impossible de démarrer le réseau."
 
 msgid "No se pudo iniciar sesión: %s"
 msgstr "Connexion impossible : %s"
+
+msgid "No se pudo leer %s"
+msgstr "Impossible de lire %s"
 
 msgid "No se pudo leer %s."
 msgstr "Impossible de lire %s."
@@ -2617,6 +2635,9 @@ msgstr "Utilise la valeur générale"
 
 msgid "Usa los de Opciones > Controles."
 msgstr "Utilise ceux d'Options > Commandes."
+
+msgid "Usa un PNG o JPEG tuyo como carátula de este juego."
+msgstr "Utilisez un PNG ou JPEG à vous comme jaquette de ce jeu."
 
 msgid "Usar el stick izquierdo como cruceta"
 msgstr "Utiliser le stick gauche comme croix"

@@ -281,17 +281,39 @@ void Library::searchCovers(ConsoleSystem s, const std::string& query) {
 void Library::previewCover(ConsoleSystem s, const std::string& name) { askSearch({SearchTask::Preview, 0, s, name}); }
 
 bool Library::useCover(size_t game) {
-    if (game >= games_.size() || previewImage_.empty()) return false;
+    if (previewImage_.empty()) return false;
+    return saveCover(game, previewImage_, &search_.status);
+}
+
+bool Library::coverFromFile(size_t game, const std::string& file, std::string* error) {
+    std::vector<uint8_t> image;
+    if (!readAll(fs::u8path(file), image)) {
+        *error = trf("No se pudo leer %s", file.c_str());
+        return false;
+    }
+    int w = 0, h = 0, n = 0;
+    if (!isImage(image) || !stbi_info_from_memory(image.data(), static_cast<int>(image.size()), &w, &h, &n)) {
+        *error = trf("%s no es una imagen PNG o JPEG", fs::u8path(file).filename().u8string().c_str());
+        return false;
+    }
+    return saveCover(game, image, error);
+}
+
+bool Library::saveCover(size_t game, const std::vector<uint8_t>& image, std::string* error) {
+    if (game >= games_.size()) return false;
     Game& g = games_[game];
     const std::string target = systemCovers(g.system);
     if (target.empty()) return false;
     std::error_code ec;
     fs::create_directories(fs::u8path(target), ec);
+    // The .png is looked for before the .jpg: the old one, of either kind, must go.
+    for (const char* ext : {".png", ".jpg", ".jpeg"}) fs::remove(fs::u8path(target + g.stem + ext), ec);
+    const bool png = image.size() > 4 && image[0] == 0x89 && image[1] == 'P';
     {
-        std::ofstream f(fs::u8path(target + g.stem + ".png"), std::ios::binary);
-        f.write(reinterpret_cast<const char*>(previewImage_.data()), static_cast<std::streamsize>(previewImage_.size()));
+        std::ofstream f(fs::u8path(target + g.stem + (png ? ".png" : ".jpg")), std::ios::binary);
+        f.write(reinterpret_cast<const char*>(image.data()), static_cast<std::streamsize>(image.size()));
         if (!f) {
-            search_.status = trf("No se pudo guardar la carátula en %s", target.c_str());
+            *error = trf("No se pudo guardar la carátula en %s", target.c_str());
             return false;
         }
     }
