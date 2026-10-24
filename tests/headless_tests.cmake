@@ -114,12 +114,16 @@ run(2 --two-pad-test-rom --netplay-host 47846 --do "10 reset")
 
 # Savestates saved by earlier versions (tests/states/VERSION-SYSTEM.state, each taken
 # after frame 89 of the built-in test ROM) still load, and carry on with the same
-# picture and sound as a run that never stopped.
+# picture and sound those versions showed at frame 119 (tests/states/carry_on.txt).
+# That is not always what a run of this version shows: when the 68000 started
+# waiting on the VDP's FIFO the test ROM's YM2612 tone started a little later, so
+# its sound is a different phase from boot.
 if(STATES)
   file(GLOB states "${STATES}/*.state")
   if(NOT states)
     message(FATAL_ERROR "no savestates in ${STATES}")
   endif()
+  file(STRINGS "${STATES}/carry_on.txt" carry_on REGEX "^[^#]")
   foreach(system megadrive mastersystem gamegear)
     if(system STREQUAL "megadrive")
       set(rom --test-rom)
@@ -128,9 +132,15 @@ if(STATES)
     else()
       set(rom --gg-test-rom)
     endif()
-    run(0 ${rom} --frames 120 --hash-log "${WORK}/${system}-full.txt" --quiet)
-    file(STRINGS "${WORK}/${system}-full.txt" want REGEX "^119 ")
-    string(REGEX REPLACE "^[0-9]+ " "" want "${want}")
+    set(want "")
+    foreach(line ${carry_on})
+      if(line MATCHES "^${system} (.+)$")
+        set(want "${CMAKE_MATCH_1}")
+      endif()
+    endforeach()
+    if(NOT want)
+      message(FATAL_ERROR "no ${system} line in ${STATES}/carry_on.txt")
+    endif()
     file(GLOB old "${STATES}/*-${system}.state")
     foreach(state ${old})
       get_filename_component(name "${state}" NAME)

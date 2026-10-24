@@ -665,6 +665,12 @@ void M68000::move(uint16_t op) {
     const Ea dst = resolve(dstMode, dstReg, size, false);
     // MOVE to (xxx).L writes before fetching the address's second word, so a fault
     // stacks a PC one word earlier.
+    if (dstMode == 4 && size == 4) {
+        // A long MOVE to -(An) writes its low word first (the VDP sees the two in that order).
+        write16(dst.addr + 2, static_cast<uint16_t>(v));
+        write16(dst.addr, static_cast<uint16_t>(v >> 16));
+        return;
+    }
     write(dst, size, v);
 }
 

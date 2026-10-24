@@ -1,6 +1,6 @@
 # The hash of the last frame of each guiones/NAME.txt (240p_tests.cmake -DUPDATE=ON writes it)
 100-ire 3723d7c5
-240p-480i 42d9ba2d
+240p-480i 99bc0656
 ayuda 313d1e32
 barras-601 f1a6a3c5
 barras-ebu 6e72e9c5
@@ -10,8 +10,8 @@ blanco 32a6e5c5
 convergencia 5ed0d985
 creditos fce367f1
 fase 417016ff
-lag 7522eac6
-logo fd4593fb
+lag 1bdde2bd
+logo bc938dfb
 mando 5e2bbf00
 memoria 2f319bdd
 menu 8000faf5
@@ -22,12 +22,12 @@ pluge 115fb545
 ram-z80 50c4c84a
 rampa-gris ab8e82c5
 rayas f96c31c5
-reflejos 0eec2cb9
+reflejos fef55ec1
 rejilla 48780651
 sangrado fc40adc5
-scroll-rejilla a9536f45
-scroll c207cc68
-sincro-audio 2a3fdfd5
+scroll-rejilla d054ef45
+scroll 22bd8bf2
+sincro-audio 96a707d5
 sombra a235ec1e
 sonido 30f97b0f
 sprite-rayado 201f4751

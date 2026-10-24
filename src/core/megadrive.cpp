@@ -260,7 +260,7 @@ void MegaDrive::reset() {
     z80Bank_ = 0;
     z80BusReq_ = false;
     z80Reset_ = true;
-    now_ = lineStart_ = m68kClock_ = z80Clock_ = psgClock_ = 0;
+    now_ = lineStart_ = m68kClock_ = z80Clock_ = psgClock_ = vdpFreeAt_ = 0;
     psgRemainder_ = 0;
     ym_.setClockPosition(0);
     psgBuffer_.clear();
@@ -450,7 +450,7 @@ void MegaDrive::runFrameMd() {
     const int lines = vdp_.linesPerFrame();
     for (int line = 0; line < lines; ++line) {
         lineStart_ = now_;
-        vdp_.startLine(line);
+        vdp_.startLine(line, lineStart_);
         if (mars_) mars_->startLine(line, vdp_.activeLines());
         updateIrq();
         z80_.setIrqLine(vdp_.z80Irq());
@@ -462,6 +462,7 @@ void MegaDrive::runFrameMd() {
         }
         runUntil(lineStart_ + VdpMd::kActiveClocks);
         if (line < vdp_.activeLines() && drawing_) {
+            vdp_.sync(lineStart_ + VdpMd::kActiveClocks);
             vdp_.renderLine(line);
             if (mars_) mars_->renderLine(line, vdp_.frame());
         }
@@ -503,9 +504,18 @@ void MegaDrive::irqAcknowledge(int level) {
 // 68000 memory map
 
 uint16_t MegaDrive::readVdp(uint32_t addr) {
+    const uint64_t t = vdpClock();
     switch (addr & 0x1F) {
-        case 0x00: case 0x02: return vdp_.readData();
-        case 0x04: case 0x06: return vdp_.readStatus(lineClock());
+        case 0x00: case 0x02: {
+            int wait = 0;
+            const uint16_t v = vdp_.readData(t, &wait);
+            m68kClock_ += static_cast<uint64_t>(wait);
+            vdpFreeAt_ = t + static_cast<uint64_t>(wait);
+            return v;
+        }
+        case 0x04: case 0x06:  // bits 15-10 are not driven
+            return static_cast<uint16_t>((vdp_.readStatus(static_cast<int>(t - lineStart_), t) & 0x03FF) |
+                                         (openBus() & 0xFC00));
         case 0x08: case 0x0A: case 0x0C: case 0x0E: return vdp_.readHV(lineClock());
         default: return 0xFFFF;
     }
@@ -519,10 +529,12 @@ void MegaDrive::writeVdp(uint32_t addr, uint16_t value, bool byte) {
     }
     // Byte writes reach the VDP with the byte on both halves of the bus.
     if (byte) value = static_cast<uint16_t>((value & 0xFF) << 8 | (value & 0xFF));
+    const uint64_t t = vdpClock();
     int stall = 0;
-    if (port < 0x04) stall = vdp_.writeData(value);
-    else if (port < 0x08) stall = vdp_.writeControl(value);
+    if (port < 0x04) stall = vdp_.writeData(value, t);
+    else if (port < 0x08) stall = vdp_.writeControl(value, t);
     m68kClock_ += static_cast<uint64_t>(stall);
+    vdpFreeAt_ = t + static_cast<uint64_t>(stall);
     updateIrq();
 }
 
@@ -831,6 +843,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         block("VDP ", w.data());
     }
     {
+        StateWriter w;
+        vdp_.fifoState(w);
+        block("VDPF", w.data());
+    }
+    {
         std::vector<uint8_t> chip;
         ym_.saveState(chip);
         StateWriter w;
@@ -1016,6 +1033,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
             cpu_.forgetRoutine();
         } else if (id == fourcc("Z80 ")) z80_.state(b);
         else if (id == fourcc("VDP ")) vdp_.state(b);
+        else if (id == fourcc("VDPF")) vdp_.fifoState(b);
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);
         else if (id == fourcc("IRQS")) {
@@ -1103,6 +1121,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     if (mars_) mars_->samples().clear();
     if (mcd_) mcd_->samples().clear();
     frames_ = frames;
+    vdpFreeAt_ = 0;
     updateIrq();
     return true;
 }

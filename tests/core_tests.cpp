@@ -316,6 +316,7 @@ void testPsg() {
 void testVdpPorts() {
     VdpMd vdp;
     vdp.reset();
+    vdp.writeControl(0x8104);              // mode 5 (in mode 4 registers above 10 are ignored)
     vdp.writeControl(0x8F02);              // auto-increment 2
     vdp.writeControl(0x4000);              // VRAM write at 0
     vdp.writeControl(0x0000);

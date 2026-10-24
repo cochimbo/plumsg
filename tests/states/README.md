@@ -13,3 +13,6 @@ states people have already saved would stop loading or load wrong.
 
 When releasing a version, add its states (Master System and Game Gear exist since
 0.0.25).
+
+`carry_on.txt` has what those versions showed at frame 119, which the loaded states
+must show 30 frames after loading.

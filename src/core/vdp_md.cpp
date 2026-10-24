@@ -8,9 +8,6 @@ namespace {
 
 constexpr int kPlaneCells[4] = {32, 64, 32, 128};  // size code 2 is invalid; acts as 32
 
-// 68000 DMA bandwidth in bytes per line: {active display, blanking}, for H32 and H40.
-constexpr int kDmaBytesPerLine[2][2] = {{16, 167}, {18, 205}};
-
 }  // namespace
 
 VdpMd::VdpMd() : frame_(std::make_unique<VideoFrameMd>()) { reset(); }
@@ -25,13 +22,18 @@ void VdpMd::reset() {
     addr_ = 0;
     fillPending_ = false;
     readBuffer_ = 0;
+    hvLatch_ = 0;
     vcounter_ = 0;
     hintCounter_ = 0;
     vintPending_ = hintPending_ = z80Irq_ = false;
     spriteOverflow_ = spriteCollision_ = false;
     oddFrame_ = false;
     inVblank_ = false;
-    dmaBusyLines_ = 0;
+    fifoData_.fill(0);
+    fifoNext_ = 0;
+    clearFifo();
+    slotLine_ = 0;
+    slotLineStart_ = syncedTo_ = 0;
     cacheColors();
 }
 
@@ -53,14 +55,38 @@ void VdpMd::cacheColors() {
 uint32_t VdpMd::color(int index, MdShade shade) const { return colors_[static_cast<int>(shade) * 64 + (index & 63)]; }
 
 void VdpMd::writeRegister(int reg, uint8_t value) {
-    if (reg >= 24) return;
+    // Without mode 5 (M5 in register 1) only registers 0-10 take writes.
+    if (reg >= 24 || (reg > 10 && !(regs_[1] & 0x04))) return;
     regs_[reg] = value;
 }
 
-int VdpMd::writeControl(uint16_t value) {
+void VdpMd::clearFifo() {
+    queueCount_ = 0;
+    halfDone_ = false;
+    dmaMode_ = kDmaNone;
+    dmaLeft_ = 0;
+    copyRead_ = false;
+}
+
+int VdpMd::writeControl(uint16_t value) { return writeControl(value, kUntimed); }
+int VdpMd::writeData(uint16_t value) { return writeData(value, kUntimed); }
+uint16_t VdpMd::readData() { return readData(kUntimed); }
+uint16_t VdpMd::readStatus(int lineClock) { return readStatus(lineClock, kUntimed); }
+
+int VdpMd::writeControl(uint16_t value, uint64_t clock) {
+    sync(clock);
     if (!pendingControl_) {
         if ((value & 0xC000) == 0x8000) {
-            writeRegister((value >> 8) & 0x1F, static_cast<uint8_t>(value));
+            const int reg = (value >> 8) & 0x1F;
+            if (reg == 0 && (value & 0x02) && !(regs_[0] & 0x02)) {
+                // Turning the HV counter latch on freezes the counter where it is.
+                const int lineClock = clock == kUntimed ? 0 : static_cast<int>(clock - slotLineStart_);
+                hvLatch_ = readHV(lineClock);
+            }
+            writeRegister(reg, static_cast<uint8_t>(value));
+            // The VDP also takes it as a command's first word: CD1-CD0 become 10, which no
+            // memory answers to, so data port writes after it go nowhere.
+            code_ = static_cast<uint8_t>((code_ & 0x3C) | 0x02);
             return 0;
         }
         code_ = static_cast<uint8_t>((code_ & 0x3C) | (value >> 14));
@@ -71,8 +97,17 @@ int VdpMd::writeControl(uint16_t value) {
     pendingControl_ = false;
     code_ = static_cast<uint8_t>((code_ & 0x03) | ((value >> 2) & 0x3C));
     addr_ = (addr_ & 0x3FFF) | ((value & 3u) << 14);
-    if ((code_ & 0x20) && (regs_[1] & 0x10)) return runDma();
-    return 0;
+    // With DMA off CD5 does not latch, and a fill already armed stays armed; with it on, a
+    // command without CD5 disarms it.
+    if (!(regs_[1] & 0x10)) {
+        code_ &= ~0x20;
+        return 0;
+    }
+    if (!(code_ & 0x20)) {
+        fillPending_ = false;
+        return 0;
+    }
+    return startDma(clock);
 }
 
 uint32_t VdpMd::dmaLength() const {
@@ -80,67 +115,76 @@ uint32_t VdpMd::dmaLength() const {
     return len ? len : 0x10000;
 }
 
-int VdpMd::runDma() {
+int VdpMd::startDma(uint64_t clock) {
     const int type = regs_[23] >> 6;
     if (type == 2) {  // fill: starts with the next data port write
         fillPending_ = true;
         return 0;
     }
-    const uint32_t length = dmaLength();
-    const bool blank = inVblank_ || !displayEnabled();
-    const int rate = kDmaBytesPerLine[h40() ? 1 : 0][blank ? 1 : 0];
+    fillPending_ = false;
+    dmaLeft_ = dmaLength();
+    regs_[19] = regs_[20] = 0;
     if (type == 3) {  // VRAM copy, byte by byte
-        uint16_t src = static_cast<uint16_t>(regs_[21] | (regs_[22] << 8));
-        for (uint32_t i = 0; i < length; ++i) {
-            vram_[addr_ & 0xFFFF] = vram_[src];
-            ++src;
-            addr_ = (addr_ + regs_[15]) & 0xFFFF;
-        }
-        regs_[21] = static_cast<uint8_t>(src);
-        regs_[22] = static_cast<uint8_t>(src >> 8);
-        regs_[19] = regs_[20] = 0;
-        dmaBusyLines_ = static_cast<int>(length * 2 / static_cast<uint32_t>(rate)) + 1;
-        code_ &= ~0x20;
+        dmaMode_ = kDmaCopy;
+        dmaSource_ = static_cast<uint32_t>(regs_[21] | (regs_[22] << 8));
+        copyRead_ = false;
+        const uint32_t end = (dmaSource_ + dmaLeft_) & 0xFFFF;
+        regs_[21] = static_cast<uint8_t>(end);
+        regs_[22] = static_cast<uint8_t>(end >> 8);
+        if (clock == kUntimed) drain();
         return 0;
     }
-    // 68000 to VRAM, CRAM or VSRAM. The source wraps inside its 128 KB block.
-    uint32_t src = (static_cast<uint32_t>(regs_[23] & 0x7F) << 17) | (regs_[22] << 9) | (regs_[21] << 1);
-    for (uint32_t i = 0; i < length; ++i) {
-        const uint16_t word = dmaRead_ ? dmaRead_(src) : 0;
-        writeWord(word);
-        src = (src & 0xFE0000) | ((src + 2) & 0x1FFFF);
+    // 68000 to VRAM, CRAM or VSRAM, through the FIFO. The source wraps inside its 128 KB block.
+    dmaMode_ = kDmaTransfer;
+    dmaSource_ = (static_cast<uint32_t>(regs_[23] & 0x7F) << 17) | (regs_[22] << 9) | (regs_[21] << 1);
+    const uint32_t end = (dmaSource_ & 0xFE0000) | ((dmaSource_ + dmaLeft_ * 2) & 0x1FFFF);
+    regs_[21] = static_cast<uint8_t>(end >> 1);
+    regs_[22] = static_cast<uint8_t>(end >> 9);
+    const int perWord = (code_ & 0x0F) == 1 ? 2 : 1;
+    const uint32_t queued = queueCount_;
+    refill();
+    if (clock == kUntimed) {
+        drain();
+        return 0;
     }
-    regs_[21] = static_cast<uint8_t>(src >> 1);
-    regs_[22] = static_cast<uint8_t>(src >> 9);
-    regs_[19] = regs_[20] = 0;
-    code_ &= ~0x20;
-    // Each VRAM word takes two byte slots; CRAM and VSRAM take one.
-    const uint32_t units = (code_ & 0x0F) == 1 ? length * 2 : length;
-    return static_cast<int>(units * kMasterPerLine / static_cast<uint32_t>(rate));
+    // The 68000 stays off the bus until the last word is in the FIFO: one more goes in as
+    // each write leaves it.
+    uint64_t slots = 0;
+    uint32_t leaving = dmaLeft_;
+    for (uint32_t i = 0; i < queued && leaving > 0; ++i, --leaving) slots += static_cast<uint64_t>(entrySlots(queue_[i]));
+    slots += static_cast<uint64_t>(leaving) * static_cast<uint64_t>(perWord);
+    if (slots == 0) return 0;
+    if (halfDone_) --slots;
+    return static_cast<int>(slotAfter(clock, slots) - clock);
 }
 
-void VdpMd::dmaFill(uint16_t value) {
-    const uint32_t length = dmaLength();
-    const int target = code_ & 0x0F;
-    for (uint32_t i = 0; i < length; ++i) {
-        // The high byte goes to the other byte of the word at the address: filling from
-        // an odd address writes the high bytes of the words, from an even one the low.
-        if (target == 1) vram_[(addr_ ^ 1) & 0xFFFF] = static_cast<uint8_t>(value >> 8);
-        else if (target == 3) cram_[(addr_ >> 1) & 63] = value & 0x0EEE;
-        else if (target == 5 && ((addr_ >> 1) & 63) < 40) vsram_[(addr_ >> 1) & 63] = value & 0x07FF;
-        addr_ = (addr_ + regs_[15]) & 0xFFFF;
+void VdpMd::refill() {
+    while (dmaMode_ == kDmaTransfer && queueCount_ < 4) {
+        const uint16_t word = dmaRead_ ? dmaRead_(dmaSource_) : 0;
+        dmaSource_ = (dmaSource_ & 0xFE0000) | ((dmaSource_ + 2) & 0x1FFFF);
+        push(word);
+        if (--dmaLeft_ == 0) finishDma();
     }
-    if (target == 3) cacheColors();
-    regs_[19] = regs_[20] = 0;
-    const int rate = kDmaBytesPerLine[h40() ? 1 : 0][(inVblank_ || !displayEnabled()) ? 1 : 0];
-    dmaBusyLines_ = static_cast<int>(length / static_cast<uint32_t>(rate)) + 1;
+}
+
+void VdpMd::finishDma() {
+    dmaMode_ = kDmaNone;
+    dmaLeft_ = 0;
     code_ &= ~0x20;
 }
 
-void VdpMd::writeWord(uint16_t value) {
-    switch (code_ & 0x0F) {
+void VdpMd::push(uint16_t value) {
+    if (queueCount_ == queue_.size()) slot();  // never with the CPU held as it should be
+    fifoData_[fifoNext_] = value;
+    fifoNext_ = static_cast<uint8_t>((fifoNext_ + 1) & 3);
+    queue_[queueCount_++] = FifoEntry{addr_, value, code_, false};
+    addr_ = (addr_ + regs_[15]) & 0xFFFF;
+}
+
+void VdpMd::storeWord(uint8_t code, uint32_t addr, uint16_t value) {
+    switch (code & 0x0F) {
         case 1: {  // VRAM; an odd address stores the bytes swapped
-            const uint32_t a = addr_ & 0xFFFF;
+            const uint32_t a = addr & 0xFFFF;
             if (a & 1) {
                 vram_[a & ~1u] = static_cast<uint8_t>(value);
                 vram_[a | 1] = static_cast<uint8_t>(value >> 8);
@@ -151,7 +195,7 @@ void VdpMd::writeWord(uint16_t value) {
             break;
         }
         case 3: {  // CRAM
-            const int i = (addr_ >> 1) & 63;
+            const int i = (addr >> 1) & 63;
             cram_[i] = value & 0x0EEE;
             const int r = (value >> 1) & 7, g = (value >> 5) & 7, b = (value >> 9) & 7;
             auto pack = [](int lr, int lg, int lb) {
@@ -164,27 +208,185 @@ void VdpMd::writeWord(uint16_t value) {
             break;
         }
         case 5: {  // VSRAM
-            const int i = (addr_ >> 1) & 63;
+            const int i = (addr >> 1) & 63;
             if (i < 40) vsram_[i] = value & 0x07FF;
             break;
         }
-        default: break;  // the port is set up for reading
+        default: break;  // a read target, or none: the word is lost
     }
-    addr_ = (addr_ + regs_[15]) & 0xFFFF;
 }
 
-int VdpMd::writeData(uint16_t value) {
+void VdpMd::slot() {
+    if (queueCount_ > 0) {
+        if (entrySlots(queue_[0]) == 2 && !halfDone_) {
+            halfDone_ = true;
+            return;
+        }
+        halfDone_ = false;
+        const FifoEntry e = queue_[0];
+        std::copy(queue_.begin() + 1, queue_.begin() + queueCount_, queue_.begin());
+        --queueCount_;
+        storeWord(e.code, e.addr, e.value);
+        if (e.startsFill) {
+            // The fill goes on from where the address is now. VRAM gets the written word's
+            // high byte; CRAM and VSRAM get the FIFO's next entry, as the console does.
+            dmaMode_ = kDmaFill;
+            dmaLeft_ = dmaLength();
+            fillValue_ = e.value;
+            const uint32_t source = (regs_[21] | (regs_[22] << 8)) + dmaLeft_;
+            regs_[21] = static_cast<uint8_t>(source);
+            regs_[22] = static_cast<uint8_t>(source >> 8);
+            regs_[19] = regs_[20] = 0;
+        } else if (dmaMode_ == kDmaFill) {
+            fillValue_ = e.value;  // a data port write during a fill changes what it fills with
+        }
+        refill();
+        return;
+    }
+    if (dmaMode_ == kDmaFill) {
+        const int target = code_ & 0x0F;
+        // The high byte goes to the other byte of the word at the address: filling from
+        // an odd address writes the high bytes of the words, from an even one the low.
+        if (target == 1) vram_[(addr_ ^ 1) & 0xFFFF] = static_cast<uint8_t>(fillValue_ >> 8);
+        else if (target == 3 || target == 5) storeWord(code_, addr_, fifoData_[fifoNext_]);
+        addr_ = (addr_ + regs_[15]) & 0xFFFF;
+        if (--dmaLeft_ == 0) finishDma();
+    } else if (dmaMode_ == kDmaCopy) {
+        // A slot to read the byte and one to write it. Both addresses work on the bytes as
+        // the VDP keeps them, the two of each word swapped.
+        if (!copyRead_) {
+            copyByte_ = vram_[(dmaSource_ ^ 1) & 0xFFFF];
+            copyRead_ = true;
+            return;
+        }
+        copyRead_ = false;
+        vram_[(addr_ ^ 1) & 0xFFFF] = copyByte_;
+        dmaSource_ = (dmaSource_ + 1) & 0xFFFF;
+        addr_ = (addr_ + regs_[15]) & 0xFFFF;
+        if (--dmaLeft_ == 0) finishDma();
+    }
+}
+
+void VdpMd::drain() {
+    while (busy()) slot();
+}
+
+uint64_t VdpMd::slotsToDrain() const {
+    uint64_t slots = 0;
+    for (int i = 0; i < queueCount_; ++i) {
+        slots += static_cast<uint64_t>(entrySlots(queue_[static_cast<size_t>(i)]));
+        if (queue_[static_cast<size_t>(i)].startsFill) slots += dmaLength();
+    }
+    if (halfDone_) --slots;
+    if (dmaMode_ == kDmaFill) slots += dmaLeft_;
+    else if (dmaMode_ == kDmaCopy) slots += dmaLeft_ * 2 - (copyRead_ ? 1 : 0);
+    else if (dmaMode_ == kDmaTransfer) slots += dmaLeft_ * static_cast<uint64_t>((code_ & 0x0F) == 1 ? 2 : 1);
+    return slots;
+}
+
+int VdpMd::slotsPerLine(int line) const {
+    const bool drawing = displayEnabled() && line < activeLines();
+    return h40() ? (drawing ? 18 : 205) : (drawing ? 16 : 167);
+}
+
+namespace {
+
+// Where slot i of a line with n falls, in master clocks from its start. While the picture
+// is drawn (18 or 16 slots) there is one every 32 pixels and the rest come together in
+// horizontal blanking; in blanking they are spread evenly.
+uint64_t slotOffset(int i, int n) {
+    if (n == 18 || n == 16) {
+        const int inPicture = n == 18 ? 10 : 8;
+        if (i < inPicture) return static_cast<uint64_t>(2 * i + 1) * VdpMd::kActiveClocks / static_cast<uint64_t>(2 * inPicture);
+        const int k = i - inPicture, inBlank = n - inPicture;
+        return VdpMd::kActiveClocks + static_cast<uint64_t>(2 * k + 1) * (VdpMd::kMasterPerLine - VdpMd::kActiveClocks) /
+                                          static_cast<uint64_t>(2 * inBlank);
+    }
+    return static_cast<uint64_t>(2 * i + 1) * VdpMd::kMasterPerLine / static_cast<uint64_t>(2 * n);
+}
+
+// The first slot of n in a line starting at `start` that falls after `clock` (n if none).
+int firstSlotAfter(uint64_t start, int n, uint64_t clock) {
+    if (clock < start) return 0;
+    const uint64_t rel = clock - start;
+    int lo = 0, hi = n;
+    while (lo < hi) {
+        const int mid = (lo + hi) / 2;
+        if (slotOffset(mid, n) <= rel) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
+
+}  // namespace
+
+uint64_t VdpMd::slotAfter(uint64_t clock, uint64_t n) const {
+    int line = slotLine_;
+    uint64_t start = slotLineStart_;
+    for (;;) {
+        const int per = slotsPerLine(line);
+        const int first = firstSlotAfter(start, per, clock);
+        const uint64_t here = static_cast<uint64_t>(per - first);
+        if (n <= here) return start + slotOffset(first + static_cast<int>(n) - 1, per);
+        n -= here;
+        start += kMasterPerLine;
+        line = (line + 1) % linesPerFrame();
+    }
+}
+
+void VdpMd::sync(uint64_t clock) {
+    if (clock == kUntimed || clock <= syncedTo_) return;
+    while (busy()) {
+        const int per = slotsPerLine(slotLine_);
+        const uint64_t lineEnd = slotLineStart_ + kMasterPerLine;
+        const uint64_t limit = std::min(clock, lineEnd);
+        for (int i = firstSlotAfter(slotLineStart_, per, syncedTo_); i < per && busy(); ++i) {
+            const uint64_t at = slotLineStart_ + slotOffset(i, per);
+            if (at > limit) break;
+            slot();
+            syncedTo_ = at;
+        }
+        if (clock < lineEnd) break;
+        slotLineStart_ = lineEnd;
+        slotLine_ = (slotLine_ + 1) % linesPerFrame();
+        syncedTo_ = lineEnd;
+    }
+    // Nothing (more) to do: the slot clock just moves on.
+    if (clock >= slotLineStart_ + kMasterPerLine) {
+        const uint64_t lines = (clock - slotLineStart_) / kMasterPerLine;
+        slotLineStart_ += lines * kMasterPerLine;
+        slotLine_ = static_cast<int>((static_cast<uint64_t>(slotLine_) + lines) % static_cast<uint64_t>(linesPerFrame()));
+    }
+    syncedTo_ = clock;
+}
+
+int VdpMd::writeData(uint16_t value, uint64_t clock) {
+    sync(clock);
     pendingControl_ = false;
-    writeWord(value);
+    push(value);
     if (fillPending_) {
         fillPending_ = false;
-        dmaFill(value);
+        queue_[queueCount_ - 1u].startsFill = true;
     }
-    return 0;
+    if (clock == kUntimed) {
+        drain();
+        return 0;
+    }
+    if (queueCount_ <= 4) return 0;
+    // The FIFO was full: the CPU waits until its oldest write is done.
+    const uint64_t slots = static_cast<uint64_t>(entrySlots(queue_[0]) - (halfDone_ ? 1 : 0));
+    return static_cast<int>(slotAfter(clock, slots) - clock);
 }
 
-uint16_t VdpMd::readData() {
+uint16_t VdpMd::readData(uint64_t clock, int* wait) {
+    sync(clock);
     pendingControl_ = false;
+    // A read waits for the FIFO to empty (and a DMA to end), then takes a slot of its own.
+    if (wait) *wait = clock == kUntimed ? 0 : static_cast<int>(slotAfter(clock, slotsToDrain() + 1) - clock);
+    drain();
+    // CRAM and VSRAM are narrower than the bus and the 8-bit VRAM read gives one byte: the
+    // other bits come from the FIFO's next entry.
+    const uint16_t stale = fifoData_[fifoNext_];
     uint16_t v = readBuffer_;
     switch (code_ & 0x0F) {
         case 0: {
@@ -194,14 +396,14 @@ uint16_t VdpMd::readData() {
         }
         case 4: {
             const int i = (addr_ >> 1) & 63;
-            v = static_cast<uint16_t>((vsram_[i < 40 ? i : 0] & 0x07FF) | (readBuffer_ & 0xF800));
+            v = static_cast<uint16_t>((vsram_[i < 40 ? i : 0] & 0x07FF) | (stale & 0xF800));
             break;
         }
         case 8:
-            v = static_cast<uint16_t>((cram_[(addr_ >> 1) & 63] & 0x0EEE) | (readBuffer_ & 0xF111));
+            v = static_cast<uint16_t>((cram_[(addr_ >> 1) & 63] & 0x0EEE) | (stale & 0xF111));
             break;
         case 12:  // undocumented 8-bit VRAM read
-            v = static_cast<uint16_t>((readBuffer_ & 0xFF00) | vram_[(addr_ ^ 1) & 0xFFFF]);
+            v = static_cast<uint16_t>((stale & 0xFF00) | vram_[(addr_ ^ 1) & 0xFFFF]);
             break;
         default: break;
     }
@@ -210,8 +412,11 @@ uint16_t VdpMd::readData() {
     return v;
 }
 
-uint16_t VdpMd::readStatus(int lineClock) {
-    uint16_t s = 0x3600;  // FIFO empty; bits 10-15 read as the open bus usually holds them
+uint16_t VdpMd::readStatus(int lineClock, uint64_t clock) {
+    sync(clock);
+    uint16_t s = 0;
+    if (queueCount_ == 0) s |= 0x200;
+    if (queueCount_ >= 4) s |= 0x100;
     if (vintPending_) s |= 0x80;
     if (spriteOverflow_) s |= 0x40;
     if (spriteCollision_) s |= 0x20;
@@ -219,11 +424,15 @@ uint16_t VdpMd::readStatus(int lineClock) {
     if (inVblank_ || !displayEnabled()) s |= 0x08;
     // HBlank: set a little after the active part of the line ends and cleared just after
     // the next line starts (H40) or as it starts (H32). Games poll it to time writes.
-    const int clock = lineClock % kMasterPerLine;
+    const int lc = lineClock % kMasterPerLine;
     const int start = kActiveClocks + (h40() ? 228 : 280);
     const int end = kActiveClocks + (h40() ? 872 : 860) - kMasterPerLine;
-    if (clock >= start || clock < end) s |= 0x04;
-    if (dmaBusyLines_ > 0) s |= 0x02;
+    if (lc >= start || lc < end) s |= 0x04;
+    // DMA: a fill waiting for its data, or for that data to leave the FIFO, counts as
+    // under way.
+    bool dma = fillPending_ || dmaMode_ != kDmaNone;
+    for (int i = 0; i < queueCount_; ++i) dma = dma || queue_[static_cast<size_t>(i)].startsFill;
+    if (dma) s |= 0x02;
     if (pal_) s |= 0x01;
     pendingControl_ = false;
     spriteOverflow_ = spriteCollision_ = false;
@@ -231,6 +440,7 @@ uint16_t VdpMd::readStatus(int lineClock) {
 }
 
 uint16_t VdpMd::readHV(int lineClock) const {
+    if (regs_[0] & 0x02) return hvLatch_;
     int v = vcounter_;
     const bool v30 = activeLines() == 240;
     if (pal_) {
@@ -252,7 +462,14 @@ uint16_t VdpMd::readHV(int lineClock) const {
     return static_cast<uint16_t>(((v & 0xFF) << 8) | (h & 0xFF));
 }
 
-void VdpMd::startLine(int line) {
+void VdpMd::startLine(int line, uint64_t clock) {
+    if (clock != kUntimed) {
+        // The clock going back is a reset or a state loaded: what was waiting is done now.
+        if (clock >= syncedTo_) sync(clock);
+        else drain();
+        slotLine_ = line;
+        slotLineStart_ = syncedTo_ = clock;
+    }
     vcounter_ = line;
     const int active = activeLines();
     if (line == 0) inVblank_ = false;
@@ -277,7 +494,6 @@ void VdpMd::endLine(int line) {
     } else {
         hintCounter_ = regs_[10];
     }
-    if (dmaBusyLines_ > 0) --dmaBusyLines_;
 }
 
 void VdpMd::endFrame() {
