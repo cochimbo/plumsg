@@ -122,9 +122,27 @@ void MegaCd::runUntil(uint64_t masterClock) {
         if (!io_.halt) {
             if (resetPending_) {
                 resetPending_ = false;
+                subWaiting_ = false;
                 sub_.reset();
             }
-            cycles = sub_.step();
+            if (subWaiting_ && !wordRamBlocked()) subWaiting_ = false;
+            if (!subWaiting_) {
+                uint32_t d[8], a[8];
+                std::copy(std::begin(sub_.d), std::end(sub_.d), d);
+                std::copy(std::begin(sub_.a), std::end(sub_.a), a);
+                const uint32_t otherSp = sub_.otherSp, pc = sub_.pc;
+                const uint16_t sr = sub_.sr;
+                cycles = sub_.step();
+                if (subBlocked_) {  // undone, to run again once word RAM is back
+                    subBlocked_ = false;
+                    subWaiting_ = true;
+                    std::copy(d, d + 8, sub_.d);
+                    std::copy(a, a + 8, sub_.a);
+                    sub_.otherSp = otherSp;
+                    sub_.pc = pc;
+                    sub_.sr = sr;
+                }
+            }
         }
         step(cycles);
         subClock_ += static_cast<uint64_t>(cycles);
@@ -185,18 +203,27 @@ void MegaCd::irqAcknowledge(int level) {
 // ---------------------------------------------------------------------------------
 // Sub CPU bus
 
+bool MegaCd::subWaits(uint32_t addr) {
+    if (!subBlocked_ && addr >= 0x080000 && addr < 0x0C0000 && wordRamBlocked()) subBlocked_ = true;
+    return subBlocked_;
+}
+
 uint8_t MegaCd::read8(uint32_t addr) {
+    if (subWaits(addr)) return 0xFF;
     const uint16_t w = subRead(addr & ~1u, !(addr & 1), (addr & 1) != 0);
     return static_cast<uint8_t>((addr & 1) ? w : w >> 8);
 }
 
-uint16_t MegaCd::read16(uint32_t addr) { return subRead(addr, true, true); }
+uint16_t MegaCd::read16(uint32_t addr) { return subWaits(addr) ? 0xFFFF : subRead(addr, true, true); }
 
 void MegaCd::write8(uint32_t addr, uint8_t value) {
+    if (subWaits(addr)) return;
     subWrite(addr & ~1u, static_cast<uint16_t>(value << 8 | value), !(addr & 1), (addr & 1) != 0);
 }
 
-void MegaCd::write16(uint32_t addr, uint16_t value) { subWrite(addr, value, true, true); }
+void MegaCd::write16(uint32_t addr, uint16_t value) {
+    if (!subWaits(addr)) subWrite(addr, value, true, true);
+}
 
 uint16_t MegaCd::subRead(uint32_t addr, bool upper, bool lower) {
     addr &= 0xFFFFFE;
@@ -1094,6 +1121,7 @@ void MegaCd::gpuWrite(uint32_t nibble, uint8_t data) {
 
 void MegaCd::gpuStep(int clocks) {
     if (!gpu_.active) return;
+    if (wordRamBlocked()) return;  // word RAM given to the main CPU: it waits
     gpu_.counter += static_cast<uint32_t>(clocks);
     while (gpu_.counter >= gpu_.period) {
         gpu_.counter -= gpu_.period;
@@ -1171,8 +1199,11 @@ void MegaCd::gpuRender(uint32_t address, int width) {
 void MegaCd::gpuStart() {
     if (io_.wramMode) return;  // only in 2 Mbit mode
     gpu_.active = true;
-    gpu_.period = 5u * gpu_.imageHdots;
-    if (gpu_.period == 0) gpu_.period = 5;
+    // Each word RAM access takes 3 clocks: 4 reads for the line's vector, 2 per dot (map and
+    // stamp) and a read-modify-write per 4 dots written. Marko's Magic Football draws its
+    // sky in two passes and shows the first alone if the GPU runs ahead of this.
+    const uint32_t dots = gpu_.imageHdots;
+    gpu_.period = 3u * (4 + 2 * dots + ((dots + (gpu_.imageOffset & 3) + 3) >> 2));
     gpu_.counter = 0;
     gpu_.imageAddress = ((gpu_.imageBase << 1) + gpu_.imageOffset) & 0x7FFFF;
     gpu_.vectorAddress = gpu_.vectorBase >> 1;

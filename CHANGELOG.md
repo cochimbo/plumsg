@@ -15,6 +15,8 @@ What each version brings, newest first. Installers are on the
   [#92](https://github.com/cochimbo/plumsg/issues/92),
   [#99](https://github.com/cochimbo/plumsg/issues/99),
   [#75](https://github.com/cochimbo/plumsg/issues/75)).
+- Marko's Magic Football (Mega CD) draws its sky, its level map and its levels right
+  ([#79](https://github.com/cochimbo/plumsg/issues/79)).
 
 ## 0.1.0-beta.1
 

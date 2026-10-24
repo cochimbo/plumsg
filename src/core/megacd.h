@@ -142,6 +142,9 @@ private:
     uint16_t read16(uint32_t addr) override;
     void write8(uint32_t addr, uint8_t value) override;
     void write16(uint32_t addr, uint16_t value) override;
+    // A sub CPU access that has to wait for word RAM: marks the instruction (see subWaiting_)
+    // and tells the bus to drop it and whatever else the instruction does.
+    bool subWaits(uint32_t addr);
     void irqAcknowledge(int level) override;
     uint16_t subRead(uint32_t addr, bool upper, bool lower);
     void subWrite(uint32_t addr, uint16_t value, bool upper, bool lower);
@@ -217,6 +220,13 @@ private:
     // CPU reads RET twice after handing over word RAM and hangs if the sub already took it back.
     bool modeWritePending_ = false;
     uint8_t modeWrite_ = 0;
+    // In 2 Mbit mode a sub CPU access to word RAM while the console has it gets no
+    // acknowledge: the sub CPU waits there until the RAM comes back, then makes it.
+    // Marko's Magic Football hands the RAM over and writes the next row at once. The
+    // instruction is undone and run again, so the wait needs nothing in the state.
+    bool wordRamBlocked() const { return !io_.wramMode && !io_.wramSwitch; }
+    bool subBlocked_ = false;  // the instruction under way reached word RAM it can't have
+    bool subWaiting_ = false;  // the sub CPU waits for word RAM
 
     struct Counter {
         uint32_t divider = 0, dma = 0;

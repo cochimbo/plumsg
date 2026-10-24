@@ -1262,6 +1262,27 @@ void testMegaCd() {
     md.audio().clearSamples();
     md.runFrame();
     check(soundHash(md.audio().samples()) == sound && cd.sub().pc == pc, "Mega CD: tras cargar el estado sigue igual");
+
+    // In 2 Mbit mode the sub CPU waits for word RAM it has given to the console, and makes
+    // the access once it is back (Marko's Magic Football writes right after handing it over).
+    static const uint8_t kWait[] = {
+        0x13, 0xFC, 0x00, 0x01, 0x00, 0xFF, 0x80, 0x03,  // move.b #1,$FF8003 (RET: to the console)
+        0x33, 0xFC, 0x12, 0x34, 0x00, 0x08, 0x00, 0x00,  // move.w #$1234,$080000
+        0x33, 0xFC, 0x00, 0x01, 0x00, 0x07, 0xF1, 0x00,  // move.w #1,$07F100
+        0x60, 0xFE};                                     // bra.s *
+    std::copy(std::begin(kWait), std::end(kWait), cd.programRam().begin() + 0x70000);
+    cd.programRam()[0x7F100] = cd.programRam()[0x7F101] = 0;
+    cd.wordRam()[0] = 0;
+    cd.sub().pc = 0x70000;
+    cd.sub().sr = 0x2700;
+    md.runFrame();
+    md.runFrame();
+    check(cd.wordRam()[0] == 0 && cd.programRam()[0x7F101] == 0 && cd.sub().pc == 0x70008,
+          "Mega CD: la CPU secundaria espera la memoria de palabras que tiene la principal");
+    cd.write68k(0xA12002, 0x0002, false, true);  // DMNA: the console gives it back
+    md.runFrame();
+    check(cd.wordRam()[0] == 0x1234 && cd.programRam()[0x7F101] == 1,
+          "Mega CD: y escribe en cuanto se la devuelve");
 }
 
 // MSU-MD: a cartridge that boots with the Mega CD attached (mode 1) and plays CD tracks.
