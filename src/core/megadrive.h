@@ -176,6 +176,7 @@ private:
     // 68000 bus.
     uint8_t read8(uint32_t addr) override;
     uint16_t read16(uint32_t addr) override;
+    uint16_t openBus();
     void write8(uint32_t addr, uint8_t value) override;
     void write16(uint32_t addr, uint16_t value) override;
     void irqAcknowledge(int level) override;

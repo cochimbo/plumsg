@@ -3,7 +3,12 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## 0.1.0-beta.1 (unreleased)
+## Unreleased
+
+- Danny Sullivan's Indy Heat (prototype) no longer stays on a black screen
+  ([#100](https://github.com/cochimbo/plumsg/issues/100)).
+
+## 0.1.0-beta.1
 
 - **English names on disk and on the command line.** The settings folders (`profiles`,
   `cheats`, `covers`, `game-info`, `sound`, `recordings`, `crash-reports`), the keys and

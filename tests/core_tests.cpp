@@ -488,6 +488,25 @@ void testOverclock() {
     check(b.loadState(plainState, &error) && b.overclock() == 100, "overclock: a state without it loads at 100%");
 }
 
+void testBusAckOpenBus() {
+    // Indy Heat asks for the Z80's bus and waits with tst.b ($A11100).l; beq.s back, which
+    // only gets out through the bits besides BUSACK: they read the 68000's prefetch (the
+    // beq's opcode), as on the console. Then it writes 1 to $FF0000.
+    std::vector<uint8_t> rom(0x400, 0);
+    const uint8_t vectors[] = {0x00, 0xFF, 0x80, 0x00, 0x00, 0x00, 0x02, 0x00};
+    const uint8_t code[] = {0x33, 0xFC, 0x01, 0x00, 0x00, 0xA1, 0x11, 0x00,   // move.w #$100,$A11100
+                            0x33, 0xFC, 0x01, 0x00, 0x00, 0xA1, 0x12, 0x00,   // move.w #$100,$A11200
+                            0x4A, 0x39, 0x00, 0xA1, 0x11, 0x00, 0x67, 0xF8,   // tst.b $A11100; beq.s
+                            0x13, 0xFC, 0x00, 0x01, 0x00, 0xFF, 0x00, 0x00,   // move.b #1,$FF0000
+                            0x60, 0xFE};
+    std::copy(std::begin(vectors), std::end(vectors), rom.begin());
+    std::copy(std::begin(code), std::end(code), rom.begin() + 0x200);
+    MegaDrive md;
+    md.loadRomData(rom);
+    md.runFrame();
+    check(md.workRam()[0] == 1, "BUSACK: the bits besides bit 0 read the open bus (Indy Heat)");
+}
+
 void testVdpWidescreen() {
     // 16:9 adds 53 columns on each side in H40 (42 in H32), drawn from the plane and the
     // sprites past the edges. The console's own 320 columns stay as they were. Each side
@@ -2653,6 +2672,7 @@ int main() {
     testVdpSpriteLimit();
     testVdpWidescreen();
     testOverclock();
+    testBusAckOpenBus();
     testTestRom();
     testStates();
     testRewindBuffer();
