@@ -1010,7 +1010,7 @@ void M68000::group5(uint16_t op) {
     const bool isSub = (op & 0x0100) != 0;
     if (mode == 1) {  // to an address register: whole register, no flags
         a[reg] = isSub ? a[reg] - data : a[reg] + data;
-        cycles_ += 8;  // word or long (mcd-verificator's stopwatch loop counts it)
+        cycles_ += size == 4 ? 6 : 8;
         return;
     }
     const Ea ea = resolve(mode, reg, size);
