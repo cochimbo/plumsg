@@ -3,6 +3,11 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## Unreleased
+
+- The Score's figures no longer change as it scrolls: they are written from a bar line
+  before the view, and each staff keeps its clef.
+
 ## 0.1.0-beta.3
 
 - **Score** (Sound > Score): the music's notes on staves as it plays, one track per
