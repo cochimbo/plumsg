@@ -1347,6 +1347,37 @@ void testMegaCd() {
 }
 
 // MSU-MD: a cartridge that boots with the Mega CD attached (mode 1) and plays CD tracks.
+// Paprium's chip RAM: 68000 DMA from the first 64 KB finishes at once with setInstantDma,
+// other DMA still holds the CPU for its slots.
+void testVdpInstantDma() {
+    auto run = [](bool instant, uint32_t source, bool* landed) {
+        auto vdp = std::make_unique<VdpMd>();
+        vdp->reset();
+        vdp->setDmaReader([](uint32_t addr) { return static_cast<uint16_t>(addr); });
+        vdp->setInstantDma(instant);
+        vdp->writeControl(0x8174);  // display and DMA on
+        vdp->writeControl(0x8C81);
+        vdp->writeControl(0x8F02);
+        vdp->startLine(10, 0);
+        const uint16_t regs[] = {0x9300, 0x9404,  // 0x400 words
+                                 static_cast<uint16_t>(0x9500 | ((source >> 1) & 0xFF)),
+                                 static_cast<uint16_t>(0x9600 | ((source >> 9) & 0xFF)),
+                                 static_cast<uint16_t>(0x9700 | ((source >> 17) & 0x7F))};
+        for (uint16_t r : regs) vdp->writeControl(r, 100);
+        vdp->writeControl(0x4000, 200);  // VRAM 0, with DMA
+        const int stall = vdp->writeControl(0x0080, 210);
+        *landed = vdp->vram()[0x7FE] == static_cast<uint8_t>((source + 0x7FE) >> 8) &&
+                  vdp->vram()[0x7FF] == static_cast<uint8_t>(source + 0x7FE);
+        return stall;
+    };
+    bool landedChip = false, landedSlow = false, landedRam = false;
+    const int chip = run(true, 0x2000, &landedChip);
+    const int slow = run(false, 0x2000, &landedSlow);
+    const int ram = run(true, 0xFF0000, &landedRam);
+    check(chip == 0 && landedChip && slow > 100000 && !landedSlow && ram > 100000,
+          "VDP: DMA from a cartridge chip's RAM done at once, other DMA in the VDP's time");
+}
+
 // Paprium's chip, on a made-up ROM with its header: the status words, a block unpacked
 // and read out at 0xC000, and a save bank written and read back.
 void testPaprium() {
@@ -3069,6 +3100,7 @@ int main() {
     testMegaCdBootRom();
     testMsuMd();
     testPaprium();
+    testVdpInstantDma();
     testNetplay();
     testNotation();
     testRoland();

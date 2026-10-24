@@ -9,6 +9,9 @@ What each version brings, newest first. Installers are on the
   Part III, Sonic 2, Sensible Soccer, RoboCop 3, Home Alone and others) start on a PAL
   console instead of a black screen
   ([#89](https://github.com/cochimbo/plumsg/issues/89)).
+- Paprium no longer runs at half speed when enemies are on screen: the copies of the
+  sprites' graphics from its chip no longer wait for the VDP's timed DMA
+  ([#68](https://github.com/cochimbo/plumsg/issues/68)).
 
 ## 0.1.0-beta.4
 

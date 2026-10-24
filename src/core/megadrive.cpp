@@ -181,6 +181,11 @@ void MegaDrive::setUpMars() {
 void MegaDrive::setUpPaprium() {
     paprium_.reset();
     if (!sms_ && !disc_ && Paprium::detect(cart_)) paprium_ = std::make_unique<Paprium>(cart_);
+    // The chip's emulation sends every sprite's tiles each frame (the chip keeps them in
+    // VRAM and sends only the new ones, which isn't known how), far more than the VDP
+    // takes in a frame: done in the VDP's time the game runs at half speed with enemies on
+    // screen. DMA from the chip's RAM finishes at once instead.
+    vdp_.setInstantDma(paprium_ != nullptr);
 }
 
 void MegaDrive::setUpSms() {
