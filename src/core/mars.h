@@ -75,6 +75,11 @@ public:
         slave_.clearTiming();
     }
 
+    // Kept apart from state(): older states lack them, and get them from adapterReset.
+    template <class Ar>
+    void ioState(Ar& ar) {
+        ar(io_.resetBit, io_.tvBit8);
+    }
     template <class Ar>
     void state(Ar& ar) {
         master_.state(ar);
@@ -82,6 +87,10 @@ public:
         ar(sdram_, dram_, cram_, comm_, masterTicks_, sh2Ticks_, pwmTicks_, now_);
         ar(io_.adapterEnable, io_.adapterReset, io_.romBank, io_.cartridgeMode, io_.vectorLevel4, io_.hperiod,
            io_.hcounter, io_.hintVblank);
+        if constexpr (Ar::kLoading) {
+            io_.resetBit = io_.adapterReset;
+            io_.tvBit8 = false;
+        }
         for (auto& q : irq_) ar(q.enable, q.active);
         ar(dreq_.vram, dreq_.dma, dreq_.active, dreq_.source, dreq_.target, dreq_.length, dreq_.fifo, dreq_.count);
         ar(vdp_.mode, vdp_.lines, vdp_.priority, vdp_.dotshift, vdp_.autofillLength, vdp_.autofillAddress,
@@ -142,6 +151,9 @@ private:
 
     struct Io {
         bool adapterEnable = false, adapterReset = false;
+        // What the 68000 reads back of A15100's RES and A1511A's bit 8 (testpico's "32x
+        // init"): RES reads 1 from power on, though the SH-2s wait for it to go 0 to 1.
+        bool resetBit = true, tvBit8 = false;
         uint8_t romBank = 0;
         bool cartridgeMode = false;
         uint32_t vectorLevel4 = 0;
@@ -159,7 +171,7 @@ private:
     struct Dreq {
         bool vram = false, dma = false, active = false;
         uint32_t source = 0, target = 0;
-        uint16_t length = 0;
+        uint16_t length = 0xFFFF;  // as the console powers on (testpico)
         std::array<uint16_t, 8> fifo{};
         uint8_t count = 0;
     } dreq_;

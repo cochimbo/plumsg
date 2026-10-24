@@ -55,12 +55,19 @@ struct Ym2612::Impl : public ymfm::ymfm_interface {
     Chip chip{*this};
     std::array<int32_t, 2> timer{-1, -1};  // chip clocks left, -1 = stopped
     int32_t busy = 0;
+    bool reloading = false;  // a timer that ran out is starting over
 
     void ymfm_set_timer(uint32_t tnum, int32_t duration) override {
-        if (tnum < 2) timer[tnum] = duration;
+        if (tnum >= 2) return;
+        // Started by a write, timer A first counts on the sample after the next (testpico's
+        // "timer ab sync"; ymfm already starts timer B on its every-16th-sample count).
+        if (tnum == 0 && duration >= 0 && !reloading) duration += 144;
+        timer[tnum] = duration;
     }
-    void ymfm_set_busy_end(uint32_t clocks) override { busy = static_cast<int32_t>(clocks); }
-    bool ymfm_is_busy() override { return busy > 0; }
+    int32_t sub = 0;  // chip clocks since the last sample, when a port is accessed
+    // Busy is counted from the last sample, so it ends between samples as it should.
+    void ymfm_set_busy_end(uint32_t clocks) override { busy = static_cast<int32_t>(clocks) + sub; }
+    bool ymfm_is_busy() override { return busy > sub; }
 
     void advance(int32_t clocks) {
         busy = std::max(0, busy - clocks);
@@ -69,7 +76,9 @@ struct Ym2612::Impl : public ymfm::ymfm_interface {
             timer[t] -= clocks;
             if (timer[t] <= 0) {
                 timer[t] = -1;
+                reloading = true;
                 m_engine->engine_timer_expired(t);  // may re-arm it through ymfm_set_timer
+                reloading = false;
             }
         }
     }
@@ -87,6 +96,7 @@ void Ym2612::reset() {
 }
 
 void Ym2612::runUntil(uint64_t masterClocks) {
+    now_ = masterClocks;
     while (position_ + kMasterPerSample <= masterClocks) {
         position_ += kMasterPerSample;
         ymfm::ym2612::output_data out;
@@ -105,10 +115,18 @@ void Ym2612::write(int offset, uint8_t value) {
     } else if (port == 0 && address_[0] == 0x28 && (value & 3) != 3) {
         keys_[static_cast<size_t>((value & 3) + ((value & 4) ? 3 : 0))] = value & 0xF0;
     }
+    impl_->sub = subSample();
     impl_->chip.write(static_cast<uint32_t>(offset & 3), value);
 }
 
-uint8_t Ym2612::readStatus() { return impl_->chip.read_status(); }
+uint8_t Ym2612::readStatus() {
+    impl_->sub = subSample();
+    return impl_->chip.read_status();
+}
+
+int32_t Ym2612::subSample() const {
+    return now_ > position_ ? static_cast<int32_t>((now_ - position_) / 7) : 0;
+}
 
 uint8_t Ym2612::reg(int index) const { return impl_->chip.reg(static_cast<uint16_t>(index & 0x1FF)); }
 

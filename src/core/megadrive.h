@@ -40,6 +40,10 @@ public:
     static constexpr double kMasterNtsc = 53693175.0;
     static constexpr double kMasterPal = 53203424.0;
     static constexpr int kMasterPerLine = VdpMd::kMasterPerLine;
+    // Master clocks the Z80 waits, on average, for the 68000's bus: through the bank
+    // window, and to reach the VDP (testpico's "time z80 bank rom" and "time z80 vdp").
+    static constexpr int kZ80BankDelay = 49;
+    static constexpr int kZ80VdpDelay = 38;
 
     MegaDrive();
     MegaDrive(const MegaDrive&) = delete;
@@ -252,10 +256,14 @@ private:
     uint64_t now_ = 0;         // master clock of whoever is running
     uint64_t lineStart_ = 0;
     uint64_t vdpFreeAt_ = 0;   // until when a VDP access made the CPU wait
+    bool inZ80_ = false;       // the Z80 is running an instruction (its waits go on its clock)
     uint64_t m68kClock_ = 0;   // master clocks the 68000 has reached
     uint64_t z80Clock_ = 0;
     uint64_t psgClock_ = 0;
     int psgRemainder_ = 0;     // master clocks not yet worth a PSG cycle
+    int refreshClocks_ = 0;    // master clocks the 68000 has run since the last refresh
+    static constexpr int kRefreshEvery = 126 * 7;  // 126 cycles running, then
+    static constexpr int kRefreshStall = 2 * 7;    // 2 waiting
     int overclock_ = 100;      // the 68000's speed, percent of the real one
     uint64_t frames_ = 0;
     std::vector<int16_t> psgBuffer_;

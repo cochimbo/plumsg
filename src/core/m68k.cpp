@@ -448,13 +448,16 @@ int M68000::step() {
     if (halted) return 4;
     cycles_ = 0;
     try {
+        // The level is sampled while an instruction runs and acted on after it, so an
+        // interrupt raised by one instruction is taken after the next, even if that one
+        // drops it again (testpico's "irq ack v-h 2").
         const int mask = (sr >> 8) & 7;
-        const bool settled = irqLevel_ == seenIrqLevel_;
+        const int level = seenIrqLevel_;
         seenIrqLevel_ = irqLevel_;
-        if (settled && (irqLevel_ > mask || irqLevel_ == 7)) {
-            const int level = irqLevel_;
+        if (level > mask || level == 7) {
             stopped = false;
             bus_.irqAcknowledge(level);
+            seenIrqLevel_ = irqLevel_;
             instrPc_ = pc;
             exception(24 + level, pc);
             sr = static_cast<uint16_t>((sr & ~0x0700) | (level << 8));

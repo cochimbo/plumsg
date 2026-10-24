@@ -30,6 +30,10 @@ public:
     // Where the active part of a line ends and horizontal blanking starts, in master
     // clocks from the start of the line. Lines are drawn and HINT fires here.
     static constexpr int kActiveClocks = 2560;
+    // Where the V counter moves on to the line's number (before, it still shows the
+    // previous one), and VBlank starts and ends. testpico's HBlank tests, which read the
+    // status right after the V counter changes, pin it to 2564-2573 in both H32 and H40.
+    static constexpr int kVcountClocks = 2568;
 
     VdpMd();
 
@@ -56,6 +60,7 @@ public:
     uint16_t readStatus(int lineClock);
     // H/V counter for the current position: `lineClock` master clocks into the line.
     uint16_t readHV(int lineClock) const;
+    int counterLine(int lineClock) const;  // the line the V counter is on
 
     // Called by the scheduler.
     int linesPerFrame() const { return pal_ ? 313 : 262; }
@@ -64,10 +69,11 @@ public:
     void startLine(int line) { startLine(line, ~uint64_t{0}); }
     // Runs the access slots up to `clock`: what the FIFO and a DMA write by then is in memory.
     void sync(uint64_t clock);
-    // The VINT comes this many master clocks after VBlank starts: games that wait for
-    // the VBlank flag with interrupts on see it before their handler runs (Snatcher).
+    // The VINT comes this many master clocks after VBlank starts (at kVcountClocks of the
+    // first line below the picture): games that wait for the VBlank flag with interrupts
+    // on see it before their handler runs (Snatcher).
     static constexpr int kVintDelay = 788;
-    void raiseVint();           // at kVintDelay into the first line of VBlank
+    void raiseVint();
     void renderLine(int line);  // draws an active line with the registers as they are now
     void endLine(int line);     // HINT counter (at the start of horizontal blanking)
     void endFrame();
@@ -104,9 +110,10 @@ public:
     template <class Ar>
     void state(Ar& ar) {
         int unusedBusyLines = 0;  // kept so older states still load
+        bool unusedVblank = false;
         ar(vram_, cram_, vsram_, regs_, pendingControl_, code_, addr_, fillPending_, readBuffer_, vcounter_,
            hintCounter_, vintPending_, hintPending_, z80Irq_, spriteOverflow_, spriteCollision_, oddFrame_,
-           inVblank_, unusedBusyLines, pal_, frameNumber_);
+           unusedVblank, unusedBusyLines, pal_, frameNumber_);
         if constexpr (Ar::kLoading) {
             cacheColors();
             // A state without the FIFO's own block: nothing is waiting, and the slots
@@ -208,7 +215,6 @@ private:
     bool spriteOverflow_ = false;
     bool spriteCollision_ = false;
     bool oddFrame_ = false;
-    bool inVblank_ = false;
     bool pal_ = false;
     uint64_t frameNumber_ = 0;
     bool unlimitedSprites_ = false;
