@@ -201,6 +201,7 @@ void VdpMd::storeWord(uint8_t code, uint32_t addr, uint16_t value) {
         }
         case 3: {  // CRAM
             const int i = (addr >> 1) & 63;
+            const uint32_t before = colors_[i];
             cram_[i] = value & 0x0EEE;
             const int r = (value >> 1) & 7, g = (value >> 5) & 7, b = (value >> 9) & 7;
             auto pack = [](int lr, int lg, int lb) {
@@ -210,6 +211,8 @@ void VdpMd::storeWord(uint8_t code, uint32_t addr, uint16_t value) {
             colors_[i] = pack(r * 2, g * 2, b * 2);
             colors_[64 + i] = pack(r, g, b);
             colors_[128 + i] = pack(7 + r, 7 + g, 7 + b);
+            if (slotClock_ != kUntimed && cramWriteCount_ < static_cast<int>(cramWrites_.size()))
+                cramWrites_[static_cast<size_t>(cramWriteCount_++)] = {slotClock_, static_cast<uint8_t>(i), before, colors_[i]};
             break;
         }
         case 5: {  // VSRAM
@@ -289,35 +292,69 @@ uint64_t VdpMd::slotsToDrain() const {
     return slots;
 }
 
-int VdpMd::slotsPerLine(int line) const {
-    const bool drawing = displayEnabled() && line < activeLines();
-    return h40() ? (drawing ? 18 : 205) : (drawing ? 16 : 167);
+namespace {
+
+// The external access slots of a drawn line, in master clocks from its start (Kabuto's
+// hardware notes: H40 `Hssss AsaaBsbb ((A~aaBSbb)*3 AraaBSbb)*5 ~~ s*23 ~ s*11`, an
+// access every 16 clocks; H32 `... *4 ~~ s*13 ~ s*13 ~`, every 20). The picture part
+// has three every 32 (H40) or 24 (H32) pixels; the blanking after it, those that fall
+// while the next line's sprites are fetched.
+constexpr uint16_t kH40Picture[] = {24,   152,  280,  536,  664,  792,  1048, 1176,
+                                    1304, 1560, 1688, 1816, 2072, 2200, 2328};
+constexpr uint16_t kH40Blank[] = {2568, 2584, 2968};
+constexpr uint16_t kH32Picture[] = {30, 190, 350, 670, 830, 990, 1310, 1470, 1630, 1950, 2110, 2270};
+constexpr uint16_t kH32Blank[] = {2570, 2590, 2870, 3150};
+
+}  // namespace
+
+VdpMd::SlotLayout VdpMd::slotLayout(int line) const {
+    // The picture part of a line has the drawing pattern when the line is drawn; its
+    // horizontal blanking, when the next one is (it fetches for that line). Otherwise
+    // the slots are spread evenly. A transfer from the 68000 to CRAM or VSRAM, a word a
+    // slot, loses 7 of them a line to the 68000's DRAM refresh.
+    const bool display = displayEnabled();
+    const int lines = linesPerFrame(), active = activeLines();
+    const bool drawn = display && line < active;
+    const bool nextDrawn = display && (line + 1 < active || line == lines - 1);
+    const bool refreshGaps = dmaMode_ == kDmaTransfer && ((code_ & 0x0F) == 3 || (code_ & 0x0F) == 5);
+    const int even = (h40() ? 205 : 167) - (refreshGaps ? 7 : 0);
+    const int evenPicture = even * kActiveClocks / kMasterPerLine;
+    SlotLayout l{evenPicture, even - evenPicture, nullptr, nullptr};
+    if (drawn) {
+        l.pictureAt = h40() ? kH40Picture : kH32Picture;
+        l.picture = h40() ? 15 : 12;
+    }
+    if (nextDrawn) {
+        l.blankAt = h40() ? kH40Blank : kH32Blank;
+        l.blank = h40() ? 3 : 4;
+    }
+    return l;
 }
 
 namespace {
 
-// Where slot i of a line with n falls, in master clocks from its start. While the picture
-// is drawn (18 or 16 slots) there is one every 32 pixels and the rest come together in
-// horizontal blanking; in blanking they are spread evenly.
-uint64_t slotOffset(int i, int n) {
-    if (n == 18 || n == 16) {
-        const int inPicture = n == 18 ? 10 : 8;
-        if (i < inPicture) return static_cast<uint64_t>(2 * i + 1) * VdpMd::kActiveClocks / static_cast<uint64_t>(2 * inPicture);
-        const int k = i - inPicture, inBlank = n - inPicture;
-        return VdpMd::kActiveClocks + static_cast<uint64_t>(2 * k + 1) * (VdpMd::kMasterPerLine - VdpMd::kActiveClocks) /
-                                          static_cast<uint64_t>(2 * inBlank);
+// Where slot i of a line falls, in master clocks from its start: at the drawing
+// pattern's places, or spread evenly over its part.
+uint64_t slotOffset(int i, VdpMd::SlotLayout l) {
+    if (i < l.picture) {
+        if (l.pictureAt) return l.pictureAt[i];
+        return static_cast<uint64_t>(2 * i + 1) * VdpMd::kActiveClocks / static_cast<uint64_t>(2 * l.picture);
     }
-    return static_cast<uint64_t>(2 * i + 1) * VdpMd::kMasterPerLine / static_cast<uint64_t>(2 * n);
+    const int k = i - l.picture;
+    if (l.blankAt) return l.blankAt[k];
+    return VdpMd::kActiveClocks + static_cast<uint64_t>(2 * k + 1) * (VdpMd::kMasterPerLine - VdpMd::kActiveClocks) /
+                                      static_cast<uint64_t>(2 * l.blank);
 }
 
-// The first slot of n in a line starting at `start` that falls after `clock` (n if none).
-int firstSlotAfter(uint64_t start, int n, uint64_t clock) {
+// The first slot of a line starting at `start` that falls after `clock` (all of them if
+// none).
+int firstSlotAfter(uint64_t start, VdpMd::SlotLayout l, uint64_t clock) {
     if (clock < start) return 0;
     const uint64_t rel = clock - start;
-    int lo = 0, hi = n;
+    int lo = 0, hi = l.picture + l.blank;
     while (lo < hi) {
         const int mid = (lo + hi) / 2;
-        if (slotOffset(mid, n) <= rel) lo = mid + 1;
+        if (slotOffset(mid, l) <= rel) lo = mid + 1;
         else hi = mid;
     }
     return lo;
@@ -329,10 +366,10 @@ uint64_t VdpMd::slotAfter(uint64_t clock, uint64_t n) const {
     int line = slotLine_;
     uint64_t start = slotLineStart_;
     for (;;) {
-        const int per = slotsPerLine(line);
-        const int first = firstSlotAfter(start, per, clock);
-        const uint64_t here = static_cast<uint64_t>(per - first);
-        if (n <= here) return start + slotOffset(first + static_cast<int>(n) - 1, per);
+        const SlotLayout layout = slotLayout(line);
+        const int first = firstSlotAfter(start, layout, clock);
+        const uint64_t here = static_cast<uint64_t>(layout.picture + layout.blank - first);
+        if (n <= here) return start + slotOffset(first + static_cast<int>(n) - 1, layout);
         n -= here;
         start += kMasterPerLine;
         line = (line + 1) % linesPerFrame();
@@ -342,13 +379,16 @@ uint64_t VdpMd::slotAfter(uint64_t clock, uint64_t n) const {
 void VdpMd::sync(uint64_t clock) {
     if (clock == kUntimed || clock <= syncedTo_) return;
     while (busy()) {
-        const int per = slotsPerLine(slotLine_);
+        const SlotLayout layout = slotLayout(slotLine_);
+        const int per = layout.picture + layout.blank;
         const uint64_t lineEnd = slotLineStart_ + kMasterPerLine;
         const uint64_t limit = std::min(clock, lineEnd);
-        for (int i = firstSlotAfter(slotLineStart_, per, syncedTo_); i < per && busy(); ++i) {
-            const uint64_t at = slotLineStart_ + slotOffset(i, per);
+        for (int i = firstSlotAfter(slotLineStart_, layout, syncedTo_); i < per && busy(); ++i) {
+            const uint64_t at = slotLineStart_ + slotOffset(i, layout);
             if (at > limit) break;
+            slotClock_ = at;
             slot();
+            slotClock_ = kUntimed;
             syncedTo_ = at;
         }
         if (clock < lineEnd) break;
@@ -488,6 +528,7 @@ void VdpMd::startLine(int line, uint64_t clock) {
         slotLine_ = line;
     }
     vcounter_ = line;
+    cramWriteCount_ = 0;
     if (line == activeLines() + 1) z80Irq_ = false;  // the Z80's interrupt line is held for about one line
 }
 
@@ -726,9 +767,25 @@ void VdpMd::renderLine(int line) {
     f.lines[row].displayEnabled = displayEnabled();
 
     if (!displayEnabled()) {
-        const uint32_t c = color(backdropIndex, MdShade::Normal);
+        uint32_t c = color(backdropIndex, MdShade::Normal);
+        // The backdrop's writes during the picture: the line starts with the colour from
+        // before the first, and each one shows from its pixel on.
+        const uint64_t start = slotLineStart_;
+        int first = 0;
+        while (first < cramWriteCount_ &&
+               (cramWrites_[static_cast<size_t>(first)].clock < start || cramWrites_[static_cast<size_t>(first)].index != backdropIndex))
+            ++first;
+        if (first < cramWriteCount_) c = cramWrites_[static_cast<size_t>(first)].before;
         f.backdrop[row] = c;
+        int next = first;
         for (int x = 0; x < VideoFrameMd::kMaxWidth; ++x) {
+            for (; next < cramWriteCount_; ++next) {
+                const CramWrite& w = cramWrites_[static_cast<size_t>(next)];
+                if (w.clock < start || w.index != backdropIndex) continue;
+                const int at = left + static_cast<int>((w.clock - start) * static_cast<uint64_t>(width) / kActiveClocks);
+                if (at > x) break;
+                c = w.after;
+            }
             f.rgba[o + x] = c;
             f.info[o + x] = MdPixel{static_cast<uint8_t>(backdropIndex), MdLayer::Backdrop, false, MdShade::Normal, 0};
             f.planeA[o + x] = f.planeB[o + x] = f.sprites[o + x] = 0;

@@ -374,6 +374,27 @@ void testVdpFillScrollTable() {
     check(table, "VDP: DMA fills build a scroll table byte by byte");
 }
 
+void testVdpDirectColor() {
+    // With the display off the screen shows the backdrop colour as it is at each pixel:
+    // colours written to it during the line show from where they land on.
+    auto vdp = std::make_unique<VdpMd>();
+    vdp->reset();
+    vdp->writeControl(0x8104);  // display off
+    vdp->writeControl(0x8C81);  // H40
+    vdp->writeControl(0x8F00);
+    vdp->writeControl(0x8700);  // backdrop: colour 0
+    vdp->startLine(0, 0);
+    vdp->writeControl(0xC000, 10);
+    vdp->writeControl(0x0000, 20);
+    vdp->writeData(0x000E, 400);   // red, from about pixel 50
+    vdp->writeData(0x00E0, 1600);  // green, from about pixel 200
+    vdp->sync(VdpMd::kActiveClocks);
+    vdp->renderLine(0);
+    const auto& f = vdp->frame();
+    check(f.rgba[10] == 0xFF000000u && f.rgba[100] == 0xFFFF0000u && f.rgba[250] == 0xFF00FF00u,
+          "VDP: backdrop colours written during a line with the display off");
+}
+
 void testVdpHblankFlag() {
     // Status bit 2 follows horizontal blanking, so code that polls it to time its writes
     // gets past the loop instead of waiting for ever.
@@ -2909,6 +2930,7 @@ int main() {
     testPsg();
     testVdpPorts();
     testVdpHblankFlag();
+    testVdpDirectColor();
     testVdpFillScrollTable();
     testVdpSpriteLimit();
     testVdpWidescreen();
