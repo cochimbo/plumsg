@@ -264,7 +264,11 @@ void ScoreWindow::updateRows(const ScoreMusic& music) {
         ++h.total;
     }
     std::map<uint32_t, int> colors;
-    for (const Row& r : rows_) colors[r.fingerprint] = r.index;
+    std::map<uint32_t, bool> clefs;  // and in the clef it had: it does not change under the notes
+    for (const Row& r : rows_) {
+        colors[r.fingerprint] = r.index;
+        clefs[r.fingerprint] = r.treble;
+    }
     int next = 0;
     for (const auto& [fp, index] : colors) next = std::max(next, index + 1);
     rows_.clear();
@@ -282,7 +286,8 @@ void ScoreWindow::updateRows(const ScoreMusic& music) {
                 break;
             }
         }
-        r.treble = median >= 57;
+        auto clef = clefs.find(fp);
+        r.treble = clef != clefs.end() ? clef->second : median >= 57;
         auto c = colors.find(fp);
         r.index = c != colors.end() ? c->second : next++;
         rowOf[fp] = rows_.size();
@@ -552,8 +557,11 @@ void ScoreWindow::draw(const ScoreMusic* music, ScoreRequests& out) {
         d->PushClipRect(ImVec2(notesLeft - s * 2, y0 + 1), ImVec2(right, y0 + rowHeight - 1), true);
 
         // The figures in view.
-        const long long from = meter.at(timeAt(notesLeft)) - 2;
-        long long to = meter.at(timeAt(right)) + 2;
+        // From a bar line before the view to one after it, so that the figures do not
+        // change as the view moves: written from any bar line they come out the same.
+        auto barOf = [](long long k) { return k >= 0 ? k / notation::kBar : -((-k + notation::kBar - 1) / notation::kBar); };
+        const long long from = (barOf(meter.at(timeAt(notesLeft))) - 1) * notation::kBar;
+        long long to = (barOf(meter.at(timeAt(right))) + 2) * notation::kBar;
         to = std::min(to, meter.at(music->track ? music->length : music->now));
         std::vector<notation::Played> inView;
         const double fromTime = meter.time(from - notation::kBar), toTime = meter.time(to + notation::kBar);

@@ -2103,6 +2103,22 @@ void testNotation() {
     check(t.size() == 2 && t[0].tied && t[0].length == 4 && t[1].at == 16 && t[1].length == 4 && !t[1].tied &&
               t[0].notes == std::vector<int>{60, 67},
           "Notación: una nota que cruza la barra se liga, y las que empiezan juntas son un acorde");
+    // Written from any bar line, a passage comes out the same: the score does not change
+    // as it scrolls.
+    {
+        std::vector<Played> tune;
+        const double starts[] = {0.1, 0.6, 0.85, 1.6, 2.3, 2.45, 3.1, 4.4, 5.0, 5.2, 6.9};
+        for (int i = 0; i < 11; ++i) tune.push_back({starts[i], starts[i] + 0.2, 60 + i, i});
+        auto key = [](const std::vector<Figure>& figs, long long from) {
+            std::vector<std::tuple<long long, int, bool, bool>> out;
+            for (const Figure& x : figs)
+                if (x.at >= from) out.emplace_back(x.at, x.length, x.rest, x.tied);
+            return out;
+        };
+        check(key(transcribe(tune, q, 0, 64), 32) == key(transcribe(tune, q, 16, 64), 32) &&
+                  key(transcribe(tune, q, 0, 64), 32) == key(transcribe(tune, q, 32, 64), 32),
+              "Notación: las figuras no cambian según desde qué compás se escriban");
+    }
 }
 
 void testRoland() {
