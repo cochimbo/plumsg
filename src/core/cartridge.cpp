@@ -266,7 +266,8 @@ void Cartridge::setMasterSystemHeader(Region region, bool gameGear) {
     header_ = RomHeader{};
     header_.system = gameGear ? "SEGA GAME GEAR" : "SEGA MASTER SYSTEM";
     header_.japan = region == Region::JapanNtsc;
-    header_.usa = !header_.japan;
+    header_.europe = region == Region::EuropePal;
+    header_.usa = !header_.japan && !header_.europe;
     header_.hasSram = true;
 }
 

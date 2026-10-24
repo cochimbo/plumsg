@@ -80,6 +80,32 @@ ConsoleSystem detectSystemFromData(const std::vector<uint8_t>& d) {
 }
 
 Region smsRegion(const std::vector<uint8_t>& rom) {
+    // Games made only for European (50 Hz) Master Systems that hang or show nothing at
+    // 60 Hz, told by the CRC32 of the whole ROM: their header says "export" like the
+    // American ones do (the list Genesis Plus GX keeps of them).
+    static constexpr uint32_t kPalOnly[] = {
+        0x72420F38,  // The Addams Family
+        0x2D48C1D3,  // Back to the Future Part III
+        0x1CBB7BF1,  // Battlemaniacs (Brazil)
+        0x1B10A951,  // Bram Stoker's Dracula
+        0xC0E25D62,  // California Games II
+        0x45C50294,  // Jogos de Verão II (Brazil)
+        0xC9DBF936,  // Home Alone
+        0xA109A6FE,  // Power Strike II
+        0x0047B615,  // Predator 2
+        0xF42E145C,  // Quest for the Shaven Yak Starring Ren Hoek & Stimpy (Brazil)
+        0x9F951756,  // RoboCop 3
+        0xF8176918,  // Sensible Soccer
+        0x1575581D,  // Shadow of the Beast
+        0x96B3F29E,  // Sonic Blast (Brazil)
+        0x5B3B922C,  // Sonic the Hedgehog 2
+        0xD6F2BFCA,  // Sonic the Hedgehog 2 (revision 1)
+        0xCA1D3752,  // Space Harrier (50 Hz)
+        0x85CFC9C9,  // Taito Chase H.Q.
+        0x332A847D,  // NBA Jam (prototype)
+    };
+    const auto crc = static_cast<uint32_t>(mz_crc32(MZ_CRC32_INIT, rom.data(), rom.size()));
+    if (std::find(std::begin(kPalOnly), std::end(kPalOnly), crc) != std::end(kPalOnly)) return Region::EuropePal;
     for (size_t at : {0x7FF0, 0x3FF0, 0x1FF0})
         if (startsWith(rom, at, "TMR SEGA")) {
             const int code = rom[at + 0xF] >> 4;

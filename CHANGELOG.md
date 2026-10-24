@@ -3,6 +3,13 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## Unreleased
+
+- Master System: the games made only for European 50 Hz consoles (Back to the Future
+  Part III, Sonic 2, Sensible Soccer, RoboCop 3, Home Alone and others) start on a PAL
+  console instead of a black screen
+  ([#89](https://github.com/cochimbo/plumsg/issues/89)).
+
 ## 0.1.0-beta.4
 
 - The VDP writes through its 4-word FIFO in its access slots, with timed DMA:
