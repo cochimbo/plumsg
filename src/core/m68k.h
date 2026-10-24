@@ -31,7 +31,11 @@ public:
     void reset();
     // Executes one instruction, or takes a pending interrupt. Returns clock cycles used.
     int step();
-    // Interrupt priority level requested by the hardware, 0 (none) .. 7 (NMI).
+    // Interrupt priority level requested by the hardware, 0 (none) .. 7 (NMI). A new level
+    // is taken after one more instruction: the one under way when the line changed still
+    // finishes, and may read the flag that raised it (Mega-Lo-Mania/Tyrants waits on the
+    // VINT flag with the VINT on; Sesame Street Counting Cafe enables it and then sets
+    // up what its handler counts).
     void setIrqLevel(int level) { irqLevel_ = level & 7; }
     int irqLevel() const { return irqLevel_; }
     // Holds the program where it is now, running only its interrupts (song extraction:
@@ -74,6 +78,13 @@ public:
     template <class Ar>
     void state(Ar& ar) {
         ar(d, a, otherSp, pc, sr, stopped, halted, irqLevel_);
+    }
+    // A state without irqState() (older): its level counts as seen already.
+    void settleIrq() { seenIrqLevel_ = irqLevel_; }
+    // The level seen as the last instruction began (kept apart: older states lack it).
+    template <class Ar>
+    void irqState(Ar& ar) {
+        ar(seenIrqLevel_);
     }
 
 private:
@@ -143,6 +154,7 @@ private:
 
     M68kBus& bus_;
     int irqLevel_ = 0;
+    int seenIrqLevel_ = 0;
     int cycles_ = 0;
     uint32_t instrPc_ = 0;
     uint16_t ir_ = 0;

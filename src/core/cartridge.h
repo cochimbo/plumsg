@@ -150,6 +150,7 @@ private:
     RomHeader header_;
     uint32_t sramStart_ = 0, sramEnd_ = 0;
     bool sramPresent_ = false;
+    bool sramFixed_ = false;  // the RAM sits in a hole of the ROM: no switch needed
     bool sramMapped_ = true;   // 0xA130F1 bit 0 (ROMs over 2 MB start with ROM mapped)
     bool sramWritable_ = true;
     bool sramUsed_ = false;

@@ -79,6 +79,7 @@ int divsCycles(int32_t dividend, int16_t divisor) {
 }  // namespace
 
 void M68000::reset() {
+    seenIrqLevel_ = irqLevel_;
     halted = false;
     stopped = false;
     sr = 0x2700;
@@ -448,7 +449,9 @@ int M68000::step() {
     cycles_ = 0;
     try {
         const int mask = (sr >> 8) & 7;
-        if (irqLevel_ > mask || irqLevel_ == 7) {
+        const bool settled = irqLevel_ == seenIrqLevel_;
+        seenIrqLevel_ = irqLevel_;
+        if (settled && (irqLevel_ > mask || irqLevel_ == 7)) {
             const int level = irqLevel_;
             stopped = false;
             bus_.irqAcknowledge(level);
