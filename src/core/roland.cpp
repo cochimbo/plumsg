@@ -477,6 +477,13 @@ void RolandSound::setListening(uint32_t mutedVoices, std::set<uint32_t> silenced
 
 void RolandSound::updateChipChannels() {
     chipChannels_ = 0;
+    if (followOnly_) {
+        // Every voice but the ones muted or playing an instrument silenced.
+        for (int i = 0; i < kVoices; ++i)
+            if (!((mutedVoices_ >> i) & 1) && !silenced_.count(voices_[static_cast<size_t>(i)].fingerprint))
+                chipChannels_ |= 1u << i;
+        return;
+    }
     for (int i = 0; i < kVoices; ++i) {
         const Voice& v = voices_[static_cast<size_t>(i)];
         if (v.fingerprint && assignmentFor(v.fingerprint).original && !((mutedVoices_ >> i) & 1) &&
@@ -715,6 +722,10 @@ void RolandSound::emit(uint64_t clock, Ev type, int channel, int value, int extr
 }
 
 void RolandSound::beginFrame(uint64_t clock) {
+    // Back in time (a savestate, rewinding, the track played again): what the score
+    // has is no longer what came before.
+    if (clock < scoreClock_) score_.clear();
+    scoreClock_ = clock;
     frameStart_ = clock;
     takeTimbres();
 }
@@ -725,12 +736,13 @@ void RolandSound::skipFrame(uint64_t clock) {
         for (const Event& e : events_)
             if (e.type != Ev::NoteOn) apply(e);
     events_.clear();
-    frameStart_ = clock;
+    frameStart_ = scoreClock_ = clock;
     if (synth_->font) tsf_note_off_all(synth_->font);
 }
 
 void RolandSound::allNotesOff() {
     events_.clear();
+    for (int i = 0; i < kVoices; ++i) scoreEnd(i, scoreClock_);
     for (Voice& v : voices_) v.on = v.midi = false;
     // Every channel back to its defaults, in the synth and here; the program is sent
     // again with the next note.
@@ -778,8 +790,9 @@ void RolandSound::noteOn(int voice, uint32_t fingerprint, const Assignment& a, d
         v.fingerprint = fingerprint;
         updateChipChannels();
     }
-    const bool quiet = a.original || ((mutedVoices_ >> voice) & 1) || silenced_.count(fingerprint);
+    const bool quiet = followOnly_ || a.original || ((mutedVoices_ >> voice) & 1) || silenced_.count(fingerprint);
     v.drum = a.drum >= 0;
+    if (!v.drum && voice != kNoise && voice < kRhythmFirst) scoreStart(voice, static_cast<int>(std::lround(note)), clock);
     // The noise and the YM2413's drums only play drums.
     v.midi = !quiet && (v.drum || (a.program >= 0 && voice != kNoise && voice < kRhythmFirst));
     if (!v.midi) return;
@@ -819,9 +832,36 @@ void RolandSound::noteOff(int voice, uint64_t clock) {
             if (v.startNote - v.lowest >= 3) ++h.swept;
         }
     }
+    scoreEnd(voice, clock);
     // Drums ring out by themselves, as on a GM module.
     if (v.on && v.midi && !v.drum) emit(clock, Ev::NoteOff, voice, v.note);
     v.on = v.midi = false;
+}
+
+void RolandSound::scoreStart(int voice, int note, uint64_t clock) {
+    Voice& v = voices_[static_cast<size_t>(voice)];
+    if (note < 0 || note > 127) return;
+    v.scored = note;
+    while (score_.size() >= scoreLimit_ && !score_.empty()) score_.pop_front();
+    score_.push_back({voice, note, clock, 0, v.fingerprint});
+}
+
+void RolandSound::scoreEnd(int voice, uint64_t clock) {
+    Voice& v = voices_[static_cast<size_t>(voice)];
+    if (v.scored < 0) return;
+    v.scored = -1;
+    for (auto it = score_.rbegin(); it != score_.rend(); ++it)
+        if (it->voice == voice && it->end == 0) {
+            it->end = std::max(clock, it->start + 1);
+            break;
+        }
+}
+
+void RolandSound::setFollowOnly(bool on) {
+    if (on == followOnly_) return;
+    followOnly_ = on;
+    allNotesOff();
+    updateChipChannels();
 }
 
 void RolandSound::expression(int voice, double amplitude, uint64_t clock) {
@@ -837,6 +877,12 @@ void RolandSound::expression(int voice, double amplitude, uint64_t clock) {
 void RolandSound::pitchTo(int voice, double note, uint64_t clock) {
     Voice& v = voices_[static_cast<size_t>(voice)];
     if (note > 0) v.lowest = std::min(v.lowest, note);
+    // A slide or a new note without a key off: a note of its own in the score once it is
+    // clearly on another semitone (not for a vibrato).
+    if (v.scored >= 0 && note > 0 && std::fabs(note - v.scored) > 0.6) {
+        scoreEnd(voice, clock);
+        scoreStart(voice, static_cast<int>(std::lround(note)), clock);
+    }
     if (!v.midi || v.drum || note <= 0) return;
     note += v.octave;
     Channel& c = channels_[static_cast<size_t>(voice)];
@@ -1125,7 +1171,8 @@ void RolandSound::render(int16_t* out, int frames) {
 
 void RolandSound::endFrame(uint64_t clock, std::vector<int16_t>& out, size_t from, double rate) {
     Synth& s = *synth_;
-    if (!s.font) {
+    scoreClock_ = clock;
+    if (!s.font || followOnly_) {
         events_.clear();
         frameStart_ = clock;
         return;

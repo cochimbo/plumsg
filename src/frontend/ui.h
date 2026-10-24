@@ -18,6 +18,7 @@
 #include "imgui.h"
 #include "input.h"
 #include "instrument_editor.h"
+#include "score_view.h"
 #include "library.h"
 #include "settings.h"
 
@@ -57,6 +58,8 @@ struct UiActions {
     bool achievementsChanged = false; // RetroAchievements switched on or off, or hardcore
     int record = 0;                   // start or stop recording: 1 a GIF, 2 a video
     bool openRecordings = false;      // show the folder the recordings go to
+    ScoreRequests score;              // the Partitura's transport and switches (a game's play button is togglePause)
+    double musicSpeed = 1.0;          // the speed the Partitura asks the music to play at
 };
 
 // What the Estado menu shows for each savestate slot.
@@ -106,6 +109,7 @@ struct UiState {
     int recordingSeconds = 0;  // and for how long
     const FpsCounter* fps = nullptr;  // drawn over the game while settings.fpsCounter is on
     EditorView editor;
+    const ScoreMusic* score = nullptr;  // what the Partitura shows (null for nothing)
 };
 
 // Menu bar and option windows, drawn with Dear ImGui (OpenGL 3) on top of the game.
@@ -164,6 +168,9 @@ public:
     }
     // The instrument editor's window, drawn with the rest (not owned).
     void setEditor(InstrumentEditor* editor) { editor_ = editor; }
+    // The Partitura is open: the game's notes are followed even with its own sound.
+    bool scoreOpen() const { return score_.isOpen(); }
+    void openScore() { score_.setOpen(true); }
     // RetroAchievements' menu, windows and notices (not owned).
     void setAchievements(Achievements* achievements);
     void openAchievements() {
@@ -249,6 +256,7 @@ private:
     bool fontsDirty_ = false;
     CheatDatabase cheatDb_;
     InstrumentEditor* editor_ = nullptr;
+    ScoreWindow score_;
     std::unique_ptr<AchievementsUi> achievements_;
     std::string includedSoundfont_, soundfontFolder_;
     void drawSoundfontMenu(UiActions& out);

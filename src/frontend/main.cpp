@@ -9,6 +9,7 @@
 #include <ctime>
 #include <filesystem>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -395,6 +396,8 @@ struct CommandLine {
     int gameOptions = 0;          // --game-options [controls]: start with its Options for this game window open (2 on Controls)
     bool editor = false;          // --instruments: start with the instrument editor open
     std::string track;            // --track f.vgm: and this track in it
+    double seek = -1;             // --seek s: and at that second of it, playing
+    bool score = false;           // --score: start with the Partitura open
     // For launchers (LaunchBox, Playnite, frontends of arcade cabinets). These last only
     // for this session: the settings file keeps what it had.
     int fullscreen = -1;          // --fullscreen / --windowed
@@ -430,6 +433,8 @@ const char* const kHelp = N_(
     "  --game-options controls   ...en la pestaña de sus controles\n"
     "  --instruments          abrir el editor de instrumentos (del juego, si se da)\n"
     "  --track f.vgm          con --instruments: abrir esa música (.vgm o .vgz)\n"
+    "  --seek s               con --track: tocarla desde ese segundo\n"
+    "  --score                abrir la Partitura\n"
     "  --record f.avi         grabar la partida desde el principio, en vídeo (.avi) o GIF (.gif)\n"
     "  --screenshot f.png     guardar una captura tras --frames N fotogramas y salir\n\n"
     "La pantalla completa y la región dadas aquí valen solo para esta vez. Las opciones\n"
@@ -443,7 +448,7 @@ std::string optionName(const std::string& a) {
         {"--inclinacion", "--tilt"}, {"--giro", "--yaw"}, {"--menu-estados", "--states-menu"},
         {"--biblioteca", "--library"}, {"--descargar-caratulas", "--download-covers"}, {"--lista", "--list"},
         {"--buscar-caratula", "--find-cover"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
-        {"--opciones-juego", "--game-options"}, {"--instrumentos", "--instruments"}, {"--pista", "--track"},
+        {"--opciones-juego", "--game-options"}, {"--instrumentos", "--instruments"}, {"--pista", "--track"}, {"--partitura", "--score"},
         {"--filtro", "--filter"}, {"--reescalado", "--upscaling"}, {"--pantalla-completa", "--fullscreen"},
         {"--ventana", "--windowed"}, {"--estado", "--load-state"}, {"--alojar", "--host"}, {"--unirse", "--join"},
         {"--ayuda", "--help"}};
@@ -483,6 +488,8 @@ CommandLine parse(int argc, char** argv) {
         }
         else if (a == "--instruments") c.editor = true;
         else if (a == "--track") c.track = next();
+        else if (a == "--seek") c.seek = std::atof(next().c_str());
+        else if (a == "--score") c.score = true;
         else if (a == "--filter") {
             const std::string f = next();
             c.filter = f == "crt" ? 2 : f == "scanlines" ? 1 : 0;
@@ -682,15 +689,21 @@ int main(int argc, char** argv) {
         roland->setAssignments(InstrumentEditor::assignmentsFor(paths.sound, path));
         roland->setSoundEffects(InstrumentEditor::effectsFor(paths.sound, path), settings.effectsOriginal);
     };
+    // The game's instruments switched off in the Partitura, until another game loads.
+    std::set<uint32_t> gameSilenced;
     auto applySound = [&] {
         // A Mega CD disc's music is CD audio, already better than a SoundFont: there the
         // FM and PSG only play sound effects, which stay as they are. So for an MSU-MD
         // cartridge, which plays its music from CD tracks too.
         const bool on = settings.roland && !app->console.megaCd() && loadSoundfont();
+        // With the chips' own sound, the notes are still followed for the Partitura and
+        // to switch instruments off.
+        const bool follow = !on && !app->console.megaCd() && (ui->scoreOpen() || !gameSilenced.empty());
+        roland->setFollowOnly(follow);
         roland->setEffects(settings.reverb, settings.chorus);
         roland->setEqualizer(settings.equalizer);
-        roland->setTimbreMatching(settings.compareSound);
-        app->console.setRoland(on ? roland.get() : nullptr, settings.chipMix);
+        roland->setTimbreMatching(settings.compareSound && on);
+        app->console.setRoland(on || follow ? roland.get() : nullptr, follow ? 0 : settings.chipMix);
     };
     applySound();
     // Each option goes to the game's file if the game has its own value of it, else to plumsg.ini.
@@ -722,6 +735,8 @@ int main(int argc, char** argv) {
         game.applyTo(settings);
         applyControls();
         applyConsole();
+        gameSilenced.clear();
+        roland->setListening(0, {});
         applySound();
         applyInstruments(path);
     };
@@ -855,6 +870,14 @@ int main(int argc, char** argv) {
         editor.useSoundfont(*roland, settings.reverb, settings.chorus, settings.equalizer);
         editor.open(app->romLoaded ? app->romPath : std::string());
         if (!cmd.track.empty()) editor.openTrack(cmd.track);
+        if (cmd.seek >= 0 && editor.trackLoaded()) {
+            editor.seekTrack(cmd.seek);
+            editor.togglePlay();
+        }
+    }
+    if (cmd.score) {
+        ui->openScore();
+        applySound();
     }
     int loops = 0;
     bool downloadCovers = cmd.downloadCovers;
@@ -866,6 +889,7 @@ int main(int argc, char** argv) {
     bool running = true;
     bool paused = false;
     bool slowMotion = false;
+    double musicSpeed = 1.0;  // the Partitura's speed
     bool orbiting = false;  // dragging the pseudo-3D camera with the mouse
     bool padMenuWasOpen = false;  // the states menu, the library or the file browser, last frame
     int framesRun = 0;
@@ -1191,6 +1215,27 @@ int main(int argc, char** argv) {
         uiState.editor.recording = recording;
         uiState.editor.recordedSeconds = recorder.secondsAt(app->console.masterClocks());
         uiState.editor.soundfontReady = rolandFontOk;
+        // The Partitura: the editor's track while it has one open, else the game's notes.
+        ScoreMusic scoreMusic;
+        const bool trackScore = editor.isOpen() && editor.trackLoaded();
+        if (trackScore) {
+            scoreMusic.notes = &editor.trackScore();
+            scoreMusic.clockRate = editor.trackClock();
+            scoreMusic.now = editor.trackPosition();
+            scoreMusic.length = editor.trackLength();
+            scoreMusic.playing = editor.playing();
+            scoreMusic.track = true;
+            scoreMusic.sound = &editor.synth();
+            scoreMusic.silenced = &editor.silencedInstruments();
+        } else if (app->romLoaded && app->console.rolandSound()) {
+            scoreMusic.notes = &roland->score();
+            scoreMusic.now = static_cast<double>(roland->scoreClock()) / RolandSound::kScoreClock;
+            scoreMusic.playing = !paused;
+            scoreMusic.canSpeed = !hardcore() && !net;
+            scoreMusic.sound = roland.get();
+            scoreMusic.silenced = &gameSilenced;
+        }
+        uiState.score = scoreMusic.notes ? &scoreMusic : nullptr;
         uiState.disc = app->romLoaded && app->console.megaCd();
         uiState.hardcore = hardcore();
         uiState.recording = !video.active() ? 0 : video.format() == GameRecording::Format::Gif ? 1 : 2;
@@ -1242,6 +1287,17 @@ int main(int argc, char** argv) {
             SDL_OpenURL(("file:///" + paths.videos).c_str());
         }
         if (act.togglePause && !netBusy) paused = !paused;
+        musicSpeed = act.musicSpeed;
+        if (trackScore) {
+            if (act.score.togglePlay) editor.togglePlay();
+            if (act.score.stop) editor.stopTrack();
+            if (act.score.seek >= 0) editor.seekTrack(act.score.seek);
+            if (act.score.toggleSound) editor.toggleInstrument(act.score.toggleSound);
+        } else if (act.score.toggleSound) {
+            if (!gameSilenced.erase(act.score.toggleSound)) gameSilenced.insert(act.score.toggleSound);
+            roland->setListening(0, gameSilenced);
+            applySound();
+        }
         if (act.quit) running = false;
         if (act.fullscreenChanged) setFullscreen();
         if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight(), settings);
@@ -1375,7 +1431,9 @@ int main(int argc, char** argv) {
         // The instrument editor is playing: the game waits, and its track is heard.
         else if (editor.playing()) {
             std::vector<int16_t> samples;
-            editor.play(frameSeconds, audio->rate(), samples);
+            // At another speed the track plays more or less of itself in the same time:
+            // the synthesizer's notes keep their pitch, the chips' sound goes higher or lower.
+            editor.play(frameSeconds * musicSpeed, audio->rate() / musicSpeed, samples);
             audio->push(samples, settings.volume, settings.mute || capturing);
             pacer.reset();
         }
@@ -1403,9 +1461,11 @@ int main(int argc, char** argv) {
                 // Fast forward and slow motion run more or fewer frames per tick; the
                 // sound follows, higher or lower, because each frame's samples are made
                 // for 1/speed of a tick.
-                const double speed = fast ? settings.fastForward : slowMotion ? settings.slowMotion / 100.0 : 1.0;
+                const double scoreSpeed = hardcore() ? 1.0 : musicSpeed;  // the Partitura's x0.5 and x2
+                const double speed = fast ? settings.fastForward : slowMotion ? settings.slowMotion / 100.0 : scoreSpeed;
                 if (fast) uiState.speed = ">> x" + std::to_string(settings.fastForward);
                 else if (slowMotion) uiState.speed = trf("Cámara lenta %d%%", settings.slowMotion);
+                else if (scoreSpeed != 1.0) uiState.speed = scoreSpeed < 1 ? "x0.5" : "x2";
                 // Run-ahead: the last frame of the tick is followed by a few more with the
                 // same pads, whose picture is shown, and the console goes back. Not in fast
                 // forward, where a frame or two less of lag is not felt.

@@ -206,6 +206,7 @@ add_executable(plumsg WIN32
   src/frontend/settings.cpp
   src/frontend/game_options.cpp
   src/frontend/instrument_editor.cpp
+  src/frontend/score_view.cpp
   src/frontend/file_dialog.cpp
   src/frontend/ui.cpp
   src/frontend/library.cpp

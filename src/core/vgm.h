@@ -117,6 +117,8 @@ public:
     void restart();
     void seek(double seconds);
     double position() const { return static_cast<double>(position_) / 44100.0; }
+    // The clock its times are in (RolandSound's notes, for one): ticks per second.
+    double masterClock() const { return master_; }
     bool finished() const { return ended_; }
 
     // Plays `seconds` more, appending interleaved stereo samples at `rate` to out.

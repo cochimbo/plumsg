@@ -69,6 +69,21 @@ public:
     void useEqualizer(const std::array<int, RolandSound::kEqBands>& equalizer) { synth_.setEqualizer(equalizer); }
     void play(double seconds, double rate, std::vector<int16_t>& out);
 
+    // For the score: the open track's notes, all of them (in its player's clock), and
+    // where it is.
+    bool trackLoaded() const { return player_.loaded(); }
+    const RolandSound::Score& trackScore() const { return trackScore_; }
+    double trackClock() const { return player_.masterClock(); }
+    double trackPosition() const;
+    double trackLength() const { return player_.file().seconds(); }
+    const RolandSound& synth() const { return synth_; }
+    // Its transport, and the instruments switched off (not heard, in either sound).
+    void togglePlay();
+    void stopTrack();
+    void seekTrack(double seconds);
+    const std::set<uint32_t>& silencedInstruments() const { return silencedInstruments_; }
+    void toggleInstrument(uint32_t fingerprint);
+
     // Opens a .vgm or .vgz, or a .zip of them (a vgmrips pack: all its songs go in the
     // list); false (and the reason shown in the window) if it cannot. A file from
     // elsewhere is copied into the game's track folder, so it is there next time.
@@ -147,6 +162,8 @@ private:
     uint32_t selected_ = 0;
     uint32_t mutedVoices_ = 0, soloVoices_ = 0;  // RolandSound voice bits, and bit 10 the DAC
     uint32_t soloInstrument_ = 0;
+    std::set<uint32_t> silencedInstruments_;  // switched off, until another track opens
+    RolandSound::Score trackScore_;
     bool pendingSlide_ = false;  // the volume slider changed an instrument not yet saved
     std::string message_;
 };

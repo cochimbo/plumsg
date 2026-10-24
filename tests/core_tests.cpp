@@ -2128,6 +2128,29 @@ void testRoland() {
     roland.setListening(0, {});
     fm(0, 0x28, 0x00);
 
+    // The score: the notes at the chip's pitch, whatever they sound as, without drums.
+    {
+        const RolandSound::Score& score = roland.score();
+        const bool b3 = std::any_of(score.begin(), score.end(), [](const RolandSound::ScoreNote& n) { return n.note == 59 && n.voice == 0; });
+        const bool drums = std::any_of(score.begin(), score.end(), [](const RolandSound::ScoreNote& n) { return n.note == 38; });
+        const bool ended = std::all_of(score.begin(), score.end(), [](const RolandSound::ScoreNote& n) { return n.end > n.start; });
+        check(b3 && !drums && ended, "Roland: la partitura escribe el Si3 tal cual (octava, original o en silencio), sin la batería");
+        // Only following: no notes to the synth, every channel to the chips but an
+        // instrument switched off.
+        roland.setFollowOnly(true);
+        log.clear();
+        fm(0, 0x28, 0xF0);
+        check(log.empty() && (roland.chipChannels() & 1) && roland.score().back().end == 0,
+              "Roland: solo siguiendo, la nota va a la partitura y suena el chip");
+        roland.setListening(0, {fmPrint});
+        check(!(roland.chipChannels() & 1), "Roland: un instrumento apagado calla también en el chip");
+        roland.setListening(0, {});
+        fm(0, 0x28, 0x00);
+        roland.setFollowOnly(false);
+        roland.clearScore();
+        check(roland.score().empty(), "Roland: la partitura se vacía");
+    }
+
     // Sonic's driver sets the release rates to the fastest to cut a note: it is still
     // the same instrument, and what an old file chose under either old fingerprint holds.
     for (int op : {0x80, 0x84, 0x88, 0x8C}) fm(0, op, 0x0F);

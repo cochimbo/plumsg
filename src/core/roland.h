@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <memory>
 #include <set>
@@ -140,6 +141,33 @@ public:
     const std::map<uint32_t, Seen>& seen() const { return seen_; }
     void clearSeen() { seen_.clear(); }
 
+    // The notes played lately, for the score (Sonido > Partitura): each voice's notes at
+    // the chip's pitch, rounded, whatever they sound as (also those left original or
+    // muted). Drums are left out: they have no pitch to write.
+    struct ScoreNote {
+        int voice = 0;
+        int note = 60;           // MIDI note
+        uint64_t start = 0;      // master clock
+        uint64_t end = 0;        // 0 while it still sounds
+        uint32_t fingerprint = 0;
+    };
+    using Score = std::deque<ScoreNote>;
+    static constexpr size_t kScoreNotes = 4096;  // the oldest go beyond this
+    const Score& score() const { return score_; }
+    // How many notes it keeps (kScoreNotes unless changed): a whole track's, to write it all.
+    void setScoreLimit(size_t notes) { scoreLimit_ = notes; }
+    // The master clock the music has reached (the end of the last frame).
+    uint64_t scoreClock() const { return scoreClock_; }
+    static constexpr double kScoreClock = 53693175.0;  // its ticks per second
+    void clearScore() {
+        score_.clear();
+        scoreClock_ = 0;
+    }
+    // Only follows the music, for the score while the console's own sound is heard: no
+    // synth, every voice left to the chips.
+    void setFollowOnly(bool on);
+    bool followOnly() const { return followOnly_; }
+
     // Assignment files: one line per instrument, "fingerprint = what [octave volume]",
     // what being a program (0-127), "bateria N" or "original". Lines that make no sense
     // are skipped.
@@ -217,6 +245,7 @@ private:
         double amplitude = 1.0;  // at note on, for the expression after it
         uint64_t start = 0;      // the clock of the note on
         double startNote = 0, lowest = 0;  // the chip's pitch then, and its lowest since
+        int scored = -1;          // the score note it is playing, as a MIDI note (-1 none)
     };
     // An FM instrument's suggestion and what it comes from.
     struct Rule {
@@ -256,6 +285,8 @@ private:
     uint32_t fmFingerprint(int ch, const Ym2612& ym, std::array<uint8_t, 28>* ops, uint32_t* legacy) const;
     bool isSoundEffect(uint32_t fingerprint) const;
     void pitchTo(int voice, double note, uint64_t clock);
+    void scoreStart(int voice, int note, uint64_t clock);
+    void scoreEnd(int voice, uint64_t clock);
     void opllKey(int ch, const Ym2413& opll, uint64_t clock);
     double opllNoteOf(int ch, const Ym2413& opll) const;
     void opllRhythm(const Ym2413& opll, uint64_t clock);
@@ -286,6 +317,10 @@ private:
     int volume_ = 100;
     double chipClock_ = 53693175.0 / 7.0;
     std::vector<std::string>* log_ = nullptr;
+    Score score_;
+    size_t scoreLimit_ = kScoreNotes;
+    uint64_t scoreClock_ = 0;
+    bool followOnly_ = false;
 };
 
 }  // namespace plumsg

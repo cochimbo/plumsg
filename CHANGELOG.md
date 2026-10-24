@@ -5,6 +5,11 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
+- **Score** (Sound > Score): the music's notes on staves as it plays, one track per
+  instrument like GarageBand, each with its clef, sharps and ledger lines. Play/pause, stop,
+  x0.5/x1/x2 speed, a playhead to drag along the instrument editor's tracks, and a switch
+  to mute each instrument. It works with the original sound too. The instrument editor
+  gets a Hear column to switch instruments off as well.
 - Danny Sullivan's Indy Heat (prototype) no longer stays on a black screen
   ([#100](https://github.com/cochimbo/plumsg/issues/100)).
 - Trouble Shooter reads the pad right: Start and A work and C no longer pauses

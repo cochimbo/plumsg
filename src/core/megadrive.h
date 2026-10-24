@@ -103,6 +103,7 @@ public:
     // loading a savestate the caller decides whether what was playing goes on (a
     // netplay rollback, which replays the same music) or stops (RolandSound::allNotesOff).
     void setRoland(RolandSound* roland, int chipPercent);
+    const RolandSound* rolandSound() const { return roland_; }
     // Records the YM2612 and PSG music to a VGM from now on (not owned; null stops).
     void setVgmWriter(VgmWriter* writer);
     double masterClock() const { return pal() ? kMasterPal : kMasterNtsc; }

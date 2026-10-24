@@ -572,6 +572,15 @@ UiActions Ui::frame(const UiState& state) {
         out.stopRecording = r.stopRecording;
         out.assignmentsChanged = r.assignmentsChanged;
     }
+    if (score_.isOpen()) {
+        score_.draw(state.score, out.score);
+        if (!score_.isOpen()) out.soundChanged = true;  // closed: the game's notes need no following
+        if (out.score.togglePlay && state.score && !state.score->track) {
+            out.score.togglePlay = false;
+            out.togglePause = true;
+        }
+    }
+    out.musicSpeed = score_.speed();
     stateMenu_.slots = static_cast<int>(state.slots.size());
     if (stateMenu_.load >= 0) out.loadState = stateMenu_.load;
     if (stateMenu_.save >= 0) out.saveState = stateMenu_.save;
@@ -614,7 +623,7 @@ UiActions Ui::frame(const UiState& state) {
 void Ui::hideIdleCursor(const UiState& state) {
     const bool windowOpen = showControls_ || showVideo_ || showAbout_ || showCheats_ || showGameOptions_ || showLibrary_ ||
                             showCoverSearch_ || showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
-                            (editor_ && editor_->isOpen()) || (achievements_ && achievements_->windowOpen()) ||
+                            (editor_ && editor_->isOpen()) || score_.isOpen() || (achievements_ && achievements_->windowOpen()) ||
                             !error_.empty() || capture_.active ||
                             ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) || ImGui::GetIO().WantCaptureMouse;
     const bool playing = state.romLoaded && !state.paused;
@@ -907,6 +916,14 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
                           "y elige con qué instrumento General MIDI suena en el sintetizador."));
+    if (ImGui::MenuItem(tr("Partitura"), nullptr, score_.isOpen())) {
+        score_.setOpen(!score_.isOpen());
+        out.soundChanged = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Las notas de la música en pentagramas, un instrumento en cada uno, mientras suena:\n"
+                          "la del juego o la pista del Editor de instrumentos. Se puede pausar, cambiar la\n"
+                          "velocidad, moverse por ella y silenciar cada instrumento."));
 }
 
 // The synthesizer's equalizer, in the instrument editor: a slider per band, heard as it
