@@ -258,6 +258,7 @@ private:
     Region region_ = Region::Auto;
     Region effectiveRegion_ = Region::UsaNtsc;
     Region discRegion_ = Region::UsaNtsc;  // what the disc's security code is for
+    bool bootRomAsBios_ = false;           // the cartridge is a Mega CD BIOS: it runs as one
     uint64_t now_ = 0;         // master clock of whoever is running
     uint64_t lineStart_ = 0;
     int smsLine_ = 0;            // the Master System line being run

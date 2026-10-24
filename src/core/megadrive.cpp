@@ -35,6 +35,20 @@ MegaDrive::MegaDrive() {
     powerCycle();
 }
 
+namespace {
+
+// A Mega CD BIOS image, or a program made to stand in for one (KRIKzz's mcd-verificator):
+// "BOOT ROM" in the title and a "BR" serial. Loaded as a cartridge it goes in the Mega
+// CD in place of its BIOS, with no cartridge, and a .cue of the same name, if there is
+// one, in the tray.
+bool isMegaCdBootRom(const std::vector<uint8_t>& rom) {
+    if (rom.size() < 0x200) return false;
+    const std::string title(rom.begin() + 0x120, rom.begin() + 0x150), serial(rom.begin() + 0x180, rom.begin() + 0x183);
+    return title.find("BOOT ROM") != std::string::npos && serial == "BR ";
+}
+
+}  // namespace
+
 bool MegaDrive::loadRom(const std::string& path, std::string* error) {
     if (detectSystem(path) == ConsoleSystem::MegaCD) return loadDisc(path, error);
     Cartridge loaded;
@@ -51,7 +65,8 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
         if (!open->open(cue, &why))
             loadNotice_ = trf("No se pudo abrir %s (%s): el juego suena sin su música en CD.",
                               std::filesystem::u8path(cue).filename().u8string().c_str(), why.c_str());
-        else if (std::all_of(cdBios_.begin(), cdBios_.end(), [](const auto& b) { return b.size() != 0x20000; }))
+        else if (!isMegaCdBootRom(cart_.rom()) &&
+                 std::all_of(cdBios_.begin(), cdBios_.end(), [](const auto& b) { return b.size() != 0x20000; }))
             loadNotice_ = tr("La música en CD de este juego (MSU-MD) necesita una BIOS del Mega CD: elígela en Consola > "
                              "BIOS del Mega CD.");
         else
@@ -88,10 +103,12 @@ void MegaDrive::loadRomDataWithDisc(std::vector<uint8_t> rom, std::unique_ptr<Cd
 void MegaDrive::attachCd(std::unique_ptr<CdImage> disc, bool cartridge) {
     mcd_.reset();
     disc_ = std::move(disc);
-    if (disc_) {
+    bootRomAsBios_ = cartridge && isMegaCdBootRom(cart_.rom());
+    if (disc_ || bootRomAsBios_) {
         mcd_ = std::make_unique<MegaCd>();
-        mcd_->setCartridgeMode(cartridge);
+        mcd_->setCartridgeMode(cartridge && !bootRomAsBios_);
         mcd_->insert(disc_.get());
+        if (bootRomAsBios_) mcd_->setBios(cart_.rom());
     }
     romOriginal_.clear();
     ramCheats_.clear();
@@ -189,7 +206,7 @@ void MegaDrive::setRegion(Region r) {
 }
 
 void MegaDrive::applyRegion() {
-    if (mcd_ && !mcd_->cartridgeMode()) configureFor(discRegion_);
+    if (mcd_ && !mcd_->cartridgeMode() && !bootRomAsBios_) configureFor(discRegion_);
     else configureFor(region_ == Region::Auto ? (cart_.loaded() ? cart_.preferredRegion() : Region::UsaNtsc) : region_);
 }
 
@@ -220,7 +237,7 @@ void MegaDrive::configureFor(Region r) {
         mcd_->setMasterClock(master);
         mcd_->setSampleRate(mixer_.outputRate());
         const int slot = cdBiosSlot(r);
-        if (slot >= 0) mcd_->setBios(cdBios_[static_cast<size_t>(slot)]);
+        if (slot >= 0 && !bootRomAsBios_) mcd_->setBios(cdBios_[static_cast<size_t>(slot)]);
     }
     // Version register: bit 7 overseas, bit 6 PAL, bit 5 no expansion unit; version 0
     // (no TMSS).
@@ -673,6 +690,9 @@ uint8_t MegaDrive::read8(uint32_t addr) {
     }
     if (paprium_ && Paprium::inWindow(addr)) return paprium_->read8(addr);
     if (addr < 0x400000) return cart_.read8(addr);
+    // The cartridge slot of a Mega CD with no cartridge: no RAM cartridge either, whose
+    // size code (0x400001, 0-6) is how software tells.
+    if (addr < 0x800000 && mcd_) return 0xFF;
     if (addr >= 0xE00000) return ram_[addr & 0xFFFF];
     if (paprium_ && addr == 0xA14101) return tmss_;
     if (addr >= 0xC00000) {
@@ -698,6 +718,7 @@ uint16_t MegaDrive::read16(uint32_t addr) {
     }
     if (paprium_ && Paprium::inWindow(addr)) return paprium_->read16(addr);
     if (addr < 0x400000) return cart_.read16(addr);
+    if (addr < 0x800000 && mcd_) return 0xFFFF;
     if (addr >= 0xE00000) return static_cast<uint16_t>(ram_[addr & 0xFFFF] << 8 | ram_[(addr & 0xFFFF) + 1]);
     if (addr >= 0xC00000) return addr < 0xC00020 ? readVdp(addr) : 0xFFFF;
     if (addr < 0xA10000 && addr >= 0xA00000) {
