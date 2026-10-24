@@ -7,6 +7,10 @@ namespace {
 // About 1.5 ms of master clocks: after that long without TH changing, a 6-button pad
 // goes back to its first state.
 constexpr uint64_t kSixButtonTimeout = 80000;
+// About 7.5 us of master clocks: how long a TH pin let go while low still reads low.
+// Trouble Shooter switches TH to an input and reads A and Start right after, 140 clocks
+// later.
+constexpr uint64_t kThRiseTime = 400;
 
 }  // namespace
 
@@ -16,13 +20,20 @@ void Io::reset() {
     thCount_ = {0, 0};
     lastTh_ = {true, true};
     thTime_ = {0, 0};
+    thRelease_ = {kNotRising, kNotRising};
+}
+
+// TH reads as the value written when it is an output, else it floats high (after a
+// moment if it was low).
+bool Io::thLevel(int port, uint64_t now) const {
+    if (ctrl_[port] & 0x40) return (data_[port] & 0x40) != 0;
+    return thRelease_[port] == kNotRising || now < thRelease_[port] || now - thRelease_[port] >= kThRiseTime;
 }
 
 uint8_t Io::readPort(int port, uint64_t now) {
     if (port == 2) return static_cast<uint8_t>((data_[2] & ctrl_[2]) | (0x7F & ~ctrl_[2]));
     const PadState& p = pads_[port];
-    // TH reads as the value written when it is an output, else it floats high.
-    const bool th = (ctrl_[port] & 0x40) ? (data_[port] & 0x40) != 0 : true;
+    const bool th = thLevel(port, now);
     if (types_[port] == PadType::SixButton && now - thTime_[port] > kSixButtonTimeout) thCount_[port] = 0;
     const int count = types_[port] == PadType::SixButton ? thCount_[port] : 0;
 
@@ -62,10 +73,14 @@ uint8_t Io::read(uint32_t addr, uint64_t now) {
 void Io::write(uint32_t addr, uint8_t value, uint64_t now) {
     const int reg = (addr >> 1) & 0x0F;
     if (reg >= 1 && reg <= 3) data_[reg - 1] = value;
-    else if (reg >= 4 && reg <= 6) ctrl_[reg - 4] = value;
-    else return;
+    else if (reg >= 4 && reg <= 6) {
+        const int port = reg - 4;
+        if (port < 2 && (ctrl_[port] & 0x40) && !(value & 0x40))
+            thRelease_[port] = (data_[port] & 0x40) ? kNotRising : now;
+        ctrl_[port] = value;
+    } else return;
     for (int port = 0; port < 2; ++port) {
-        const bool th = (ctrl_[port] & 0x40) ? (data_[port] & 0x40) != 0 : true;
+        const bool th = thLevel(port, now);
         if (th == lastTh_[port]) continue;
         if (now - thTime_[port] > kSixButtonTimeout) thCount_[port] = 0;
         // The counter steps on each falling edge: after the third, TH low reads 0000 in

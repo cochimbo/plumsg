@@ -286,6 +286,13 @@ void testPads() {
     set(false);
     set(true);
     check(set(false) == 0x02, "3-button pad never shows the extra buttons");
+
+    // Trouble Shooter: TH written low, then made an input and read at once.
+    now += 200000;
+    io.write(0xA10003, 0x00, now);
+    io.write(0xA10009, 0x00, now + 84);
+    check((io.read(0xA10003, now + 224) & 0x3F) == 0x02, "TH let go while low still reads low for a moment");
+    check((io.read(0xA10003, now + 2000) & 0x7F) == 0x7E, "TH let go floats high after that");
 }
 
 void testPsg() {

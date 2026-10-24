@@ -17,7 +17,9 @@ enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1 };
 // The I/O chip: version register and the two controller ports (the third, the
 // modem/extension port, reads as nothing connected). Pads are read through the TH line:
 // a 3-button pad multiplexes its buttons on TH; a 6-button pad also counts TH pulses
-// and shows X/Y/Z/Mode on the fourth one, until TH rests for about 1.5 ms.
+// and shows X/Y/Z/Mode on the fourth one, until TH rests for about 1.5 ms. A TH pin
+// switched from output to input does not rise at once: its pull-up takes a few
+// microseconds to charge the line, and some games read the pad in that time.
 class Io {
 public:
     void reset();
@@ -35,9 +37,15 @@ public:
     void state(Ar& ar) {
         ar(data_, ctrl_, version_, thCount_, lastTh_, thTime_, types_);
     }
+    // When each port's TH was let go while low (kept apart: older states lack it).
+    template <class Ar>
+    void riseState(Ar& ar) {
+        ar(thRelease_);
+    }
 
 private:
     uint8_t readPort(int port, uint64_t now);
+    bool thLevel(int port, uint64_t now) const;
 
     std::array<uint8_t, 3> data_{};
     std::array<uint8_t, 3> ctrl_{};
@@ -45,6 +53,9 @@ private:
     std::array<uint8_t, 2> thCount_{};   // TH falling edges seen (6-button protocol), 0..4
     std::array<bool, 2> lastTh_{true, true};
     std::array<uint64_t, 2> thTime_{};
+    // The time TH became an input while driven low, or kNotRising.
+    std::array<uint64_t, 2> thRelease_{kNotRising, kNotRising};
+    static constexpr uint64_t kNotRising = ~uint64_t{0};
     std::array<PadType, 2> types_{PadType::SixButton, PadType::SixButton};
     std::array<PadState, 2> pads_{};
 };
