@@ -131,6 +131,7 @@ add_library(plumsg_core STATIC
   src/core/system.cpp
   src/core/sh2.cpp
   src/core/mars.cpp
+  src/core/paprium.cpp
   src/core/cd_image.cpp
   src/core/megacd.cpp
   src/core/netplay.cpp

@@ -3,6 +3,14 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## Unreleased
+
+- Paprium runs: the chip on its cartridge is emulated (it unpacks the graphics, builds
+  the sprites, scales the pictures in the menus, keeps the saves and plays the sound
+  effects), so the game gets past its "Vapor Ware" decoy to the NX terminal, the demos
+  and the levels ([#68](https://github.com/cochimbo/plumsg/issues/68)). Its music is
+  not in the ROM and is not played.
+
 ## 0.1.0-beta.3
 
 - **Score** (Sound > Score): the music's notes on staves as it plays, one track per

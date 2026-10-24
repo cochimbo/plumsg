@@ -1287,6 +1287,46 @@ void testMegaCd() {
 }
 
 // MSU-MD: a cartridge that boots with the Mega CD attached (mode 1) and plays CD tracks.
+// Paprium's chip, on a made-up ROM with its header: the status words, a block unpacked
+// and read out at 0xC000, and a save bank written and read back.
+void testPaprium() {
+    std::vector<uint8_t> rom(0x100000, 0);
+    std::memcpy(&rom[0x180], "GM T-574120", 11);
+    const uint8_t ra[12] = {'R', 'A', 0xF8, 0x20, 0x00, 0x20, 0x00, 0x00, 0x00, 0x20, 0xFF, 0xFF};
+    std::memcpy(&rom[0x1B0], ra, sizeof ra);
+    // Three literals, a run of four, a copy of the first three, the end.
+    const uint8_t packed[] = {0x80, 0x03, 'A', 'B', 'C', 0x44, 'Z', 0x83, 7, 0x00};
+    std::memcpy(&rom[0x20000], packed, sizeof packed);
+    rom[0x8000] = 0x12;
+    Cartridge cart;
+    cart.loadData(rom);
+    check(Paprium::detect(cart), "paprium: found by its header");
+    Paprium chip(cart);
+    chip.reset();
+    check(chip.read16(0x1FE4) == 0xFFBB && chip.read16(0x1FE6) == 0xBCFF && chip.read16(0x1FEA) == 0x7FFF,
+          "paprium: status words");
+    check(chip.read16(0x1560) == 0x4EF9 && chip.read16(0x1564) == 0x0100 && chip.read8(0x8000) == 0x12,
+          "paprium: RAM starts as the ROM, sent past the decoy");
+
+    chip.write16(0x1E10, 0);
+    chip.write16(0x1E12, 0x0002);
+    chip.write16(0x1E14, 0x0000);
+    chip.write16(0x1FEA, 0xDA02);
+    chip.read16(0xC000);
+    std::string out;
+    for (uint32_t i = 0; i < 10; ++i) out += static_cast<char>(chip.read8(0xC000 + i));
+    check(out == "ABCZZZZABC", "paprium: block unpacked and read out");
+
+    for (uint32_t i = 0; i < 0x780; ++i) chip.write8(0x3000 + i, static_cast<uint8_t>(i * 7));
+    chip.write16(0x1E12, 0x3000);
+    chip.write16(0x1FEA, 0xE002);
+    chip.write16(0x1E10, 0x5000);
+    chip.write16(0x1FEA, 0xDF02);
+    bool same = cart.hasSaveData() && cart.saveRamByte(0x780) == 0;
+    for (uint32_t i = 0; i < 0x780; ++i) same = same && chip.read8(0x5000 + i) == static_cast<uint8_t>(i * 7);
+    check(same, "paprium: a save bank written and read back");
+}
+
 void testMsuMd() {
     std::vector<uint8_t> bios(kMegaCdProgram, kMegaCdProgram + sizeof kMegaCdProgram);
     bios.resize(0x20000);
@@ -2837,6 +2877,7 @@ int main() {
     testCdImage();
     testMegaCd();
     testMsuMd();
+    testPaprium();
     testNetplay();
     testNotation();
     testRoland();
