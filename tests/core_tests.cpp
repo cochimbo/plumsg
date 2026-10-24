@@ -445,6 +445,43 @@ void testVdpSpriteLimit() {
           "VDP: past the 320 pixels without the limit, same status");
 }
 
+void testVdpSpriteMaskAfterDotOverflow() {
+    // A sprite at x = 0 masks the sprites after it once one at another x came first, or
+    // from the start when the line before ran out of sprite pixels (Nemesis' sprite
+    // masking test, "mask S1 on dot overflow").
+    auto run = [](bool overflowAbove) {
+        auto vdp = std::make_unique<VdpMd>();
+        vdp->reset();
+        vdp->writeControl(0x8144);  // display on, H32
+        vdp->writeControl(0x8578);  // sprite table at 0xF000
+        vdp->writeControl(0x8F02);
+        auto at = [&](uint32_t addr) {
+            vdp->writeControl(static_cast<uint16_t>(0x4000 | (addr & 0x3FFF)));
+            vdp->writeControl(static_cast<uint16_t>(addr >> 14));
+        };
+        at(0x20);  // tile 1: colour 1 everywhere
+        for (int i = 0; i < 16; ++i) vdp->writeData(0x1111);
+        at(0xF000);
+        int n = 0;
+        auto sprite = [&](int y, int cells, int x, bool last) {
+            vdp->writeData(static_cast<uint16_t>(128 + y));
+            vdp->writeData(static_cast<uint16_t>(((cells - 1) << 10) | (last ? 0 : n + 1)));
+            vdp->writeData(0x0001);
+            vdp->writeData(static_cast<uint16_t>(x));
+            ++n;
+        };
+        // Lines 10-17: 9 sprites of 32 pixels, past the 256 of H32 (or 7, within them).
+        for (int i = 0; i < (overflowAbove ? 9 : 7); ++i) sprite(10, 4, 128 + i * 8, false);
+        sprite(18, 1, 0, false);         // from line 18: the mask first,
+        sprite(18, 1, 128 + 100, true);  // then a sprite it hides or not
+        vdp->renderLine(17);
+        vdp->renderLine(18);
+        const auto& f = vdp->frame();
+        return f.sprites[18 * VideoFrameMd::kMaxWidth + 100] != 0;
+    };
+    check(!run(true) && run(false), "VDP: a sprite at x = 0 masks from the start after a line out of sprite pixels");
+}
+
 void testOverclock() {
     // A 68000 loop adding 1 to a long in RAM: addq.l #1,($FF0000).l; bra.s back. At 200%
     // it goes round about twice as often in the same frames.
@@ -2909,6 +2946,7 @@ int main() {
     testPsg();
     testVdpPorts();
     testVdpHblankFlag();
+    testVdpSpriteMaskAfterDotOverflow();
     testVdpFillScrollTable();
     testVdpSpriteLimit();
     testVdpWidescreen();

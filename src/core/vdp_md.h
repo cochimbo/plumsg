@@ -214,6 +214,7 @@ private:
     bool z80Irq_ = false;
     bool spriteOverflow_ = false;
     bool spriteCollision_ = false;
+    bool dotOverflow_ = false;  // the last line drawn ran out of sprite pixels (not part of the state)
     bool oddFrame_ = false;
     bool pal_ = false;
     uint64_t frameNumber_ = 0;
