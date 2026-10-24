@@ -192,7 +192,7 @@ void MegaDrive::setUpSms() {
         sms_ = std::make_unique<MasterSystem>(cart_, zram_, vdp_.frame(), gameGear);
         opll_ = std::make_unique<Ym2413>();
     }
-    if (wanted) cart_.setMasterSystemHeader(smsRegion(cart_.rom()), gameGear);
+    if (wanted) cart_.setMasterSystemHeader(smsRegion(cart_.rom(), gameGear), gameGear);
     if (!wanted) {
         sms_.reset();
         opll_.reset();

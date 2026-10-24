@@ -2764,6 +2764,9 @@ void testSmsPhase2() {
     check(sms.read(0x0000) == 5 && sms.read(0x4000) == 6 && sms.read(0x8000) == 15 && sms.read(0xA000) == 0x77 &&
               cart.saveRamByte(0) == 0x77,
           "Codemasters mapper: three slots and the RAM of Ernie Els Golf");
+    // Codemasters made their Master System games for Europe only (issue #74).
+    check(smsRegion(rom) == Region::EuropePal && smsRegion(rom, true) == Region::UsaNtsc,
+          "Codemasters: a European console for the Master System, not for the Game Gear");
 
     // The TMS9918's Graphics I mode with a sprite.
     MasterSystem tms(cart, ram, *frame);

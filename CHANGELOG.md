@@ -9,6 +9,10 @@ What each version brings, newest first. Installers are on the
   Part III, Sonic 2, Sensible Soccer, RoboCop 3, Home Alone and others) start on a PAL
   console instead of a black screen
   ([#89](https://github.com/cochimbo/plumsg/issues/89)).
+- Master System: the Codemasters games (Micro Machines, Cosmic Spacehead, the Dizzy
+  games) start on a PAL console too, as they were made for one: the top of the
+  picture of Micro Machines no longer flashes
+  ([#74](https://github.com/cochimbo/plumsg/issues/74)).
 
 ## 0.1.0-beta.4
 
