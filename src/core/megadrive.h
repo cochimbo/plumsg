@@ -215,6 +215,7 @@ private:
     void runFrameMd();
     std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
+    int smsPortCycle();
     // When a VDP port access happens: a second access in the same instruction comes after
     // the wait the first one caused.
     uint64_t vdpClock() const { return std::max(now_, vdpFreeAt_); }
@@ -259,6 +260,8 @@ private:
     Region discRegion_ = Region::UsaNtsc;  // what the disc's security code is for
     uint64_t now_ = 0;         // master clock of whoever is running
     uint64_t lineStart_ = 0;
+    int smsLine_ = 0;            // the Master System line being run
+    bool smsLineEarly_ = false;  // a port access has already started the next one
     uint64_t vdpFreeAt_ = 0;   // until when a VDP access made the CPU wait
     bool inZ80_ = false;       // the Z80 is running an instruction (its waits go on its clock)
     uint64_t m68kClock_ = 0;   // master clocks the 68000 has reached

@@ -42,7 +42,7 @@ public:
     // Ports, but for the PSG (0x40-0x7F written), which the console writes itself.
     // `cycle` is how far into the line the Z80 is, for the H counter.
     uint8_t in(uint8_t port, int cycle);
-    void out(uint8_t port, uint8_t value);
+    void out(uint8_t port, uint8_t value, int cycle = 0);
 
     // Mega Drive pads: B and A are button 1, C is button 2. Start is the pause button (on
     // the Game Gear, its START),
@@ -93,12 +93,17 @@ public:
             if (ar.atEnd()) return;
         }
         vdp_.gameGearState(ar);
+        if constexpr (Ar::kLoading) {
+            if (ar.atEnd()) return;
+        }
+        vdp_.timingState(ar);
     }
 
 private:
     uint8_t romByte(int bank, uint16_t offset) const;
     uint8_t portA() const;
     uint8_t portB() const;
+    uint8_t thLevels() const;
 
     Cartridge& cart_;
     std::array<uint8_t, 0x2000>& ram_;

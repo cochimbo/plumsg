@@ -48,6 +48,9 @@ public:
     bool iff2 = false;
     int im = 0;
     bool halted = false;
+    // How many T-states into the instruction its last port access came (for devices that
+    // care where in the instruction it happens). Not part of the state.
+    int ioCycle = 0;
 
     template <class Ar>
     void state(Ar& ar) {

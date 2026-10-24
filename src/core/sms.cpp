@@ -89,23 +89,38 @@ uint8_t MasterSystem::in(uint8_t port, int cycle) {
     // The ports are decoded by address lines 7, 6 and 0 only.
     switch (port & 0xC1) {
         case 0x40: return vdp_.vcounter();
-        case 0x41: return vdp_.hcounter(cycle);
+        case 0x41: return vdp_.hcounter();
         case 0x80: return vdp_.readData();
-        case 0x81: return vdp_.readStatus();
+        case 0x81: return vdp_.readStatus(cycle);
         case 0xC0: return portA();
         case 0xC1: return portB();
         default: return 0xFF;
     }
 }
 
-void MasterSystem::out(uint8_t port, uint8_t value) {
+void MasterSystem::out(uint8_t port, uint8_t value, int cycle) {
     switch (port & 0xC1) {
         case 0x00: memoryControl_ = value; break;
-        case 0x01: ioControl_ = value; break;
+        case 0x01: {
+            // A TH line going from low to high latches the H counter.
+            const uint8_t before = thLevels();
+            ioControl_ = value;
+            if (~before & thLevels()) vdp_.latchHcounter(cycle);
+            break;
+        }
         case 0x80: vdp_.writeData(value); break;
-        case 0x81: vdp_.writeControl(value); break;
+        case 0x81: vdp_.writeControl(value, cycle); break;
         default: break;
     }
+}
+
+// The TH lines of both ports as they are driven (bit 0 port A, bit 1 port B): an input
+// is pulled high.
+uint8_t MasterSystem::thLevels() const {
+    uint8_t v = 0;
+    if ((ioControl_ & 0x02) || (ioControl_ & 0x20)) v |= 1;
+    if ((ioControl_ & 0x08) || (ioControl_ & 0x80)) v |= 2;
+    return v;
 }
 
 // Both ports read active low.

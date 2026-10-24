@@ -573,12 +573,14 @@ int Z80::execMain(uint8_t op) {
                             return 10;
                         case 2: {
                             uint8_t n = fetch8();
+                            ioCycle = 8;
                             bus_.out(static_cast<uint16_t>(n | (A() << 8)), A());
                             wz = static_cast<uint16_t>(((n + 1) & 0xFF) | (A() << 8));
                             return 11;
                         }
                         case 3: {
                             uint16_t port = static_cast<uint16_t>(fetch8() | (A() << 8));
+                            ioCycle = 8;
                             A() = bus_.in(port);
                             wz = static_cast<uint16_t>(port + 1);
                             return 11;
@@ -730,6 +732,7 @@ int Z80::blockOp(int y, int z) {
             return 16;
         }
         case 2: {  // INI / IND / INIR / INDR
+            ioCycle = 10;
             uint8_t v = bus_.in(bc.w);
             write8(hl.w, v);
             wz = static_cast<uint16_t>(bc.w + dir);
@@ -750,6 +753,7 @@ int Z80::blockOp(int y, int z) {
         default: {  // OUTI / OUTD / OTIR / OTDR
             uint8_t v = read8(hl.w);
             --bc.b.h;
+            ioCycle = 13;
             bus_.out(bc.w, v);
             hl.w = static_cast<uint16_t>(hl.w + dir);
             wz = static_cast<uint16_t>(bc.w + dir);
@@ -781,6 +785,7 @@ int Z80::execED() {
 
     switch (z) {
         case 0: {
+            ioCycle = 9;
             uint8_t v = bus_.in(bc.w);
             wz = static_cast<uint16_t>(bc.w + 1);
             if (y != 6) *reg8(y, false) = v;
@@ -788,6 +793,7 @@ int Z80::execED() {
             return 12;
         }
         case 1:
+            ioCycle = 9;
             bus_.out(bc.w, y == 6 ? 0 : *reg8(y, false));
             wz = static_cast<uint16_t>(bc.w + 1);
             return 12;

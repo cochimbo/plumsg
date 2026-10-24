@@ -19,6 +19,8 @@ void VdpSms::reset() {
     addr_ = 0;
     latch_ = 0;
     readBuffer_ = 0;
+    hcLatch_ = 0;
+    hscrollHeld_ = false;
     line_ = 0;
     lineCounter_ = 0xFF;
     frameIrq_ = lineIrq_ = false;
@@ -69,16 +71,26 @@ void VdpSms::writeData(uint8_t value) {
     addr_ = (addr_ + 1) & 0x3FFF;
 }
 
-uint8_t VdpSms::readStatus() {
+uint8_t VdpSms::readStatus(int cycle) {
+    // The frame flag shows a little before the interrupt reaches the CPU: a read in
+    // between finds it already.
+    const int sinceFrameLine = (line_ - (activeLines() + 1)) * kCyclesPerLine + cycle;
+    if (!frameRaised_ && sinceFrameLine >= kFrameFlagDelay && sinceFrameLine < kCyclesPerLine) {
+        frameRaised_ = true;
+        frameIrq_ = true;
+    }
+    const bool collision = spriteCollision_ && cycle >= collisionAt_;
     const uint8_t value = static_cast<uint8_t>((frameIrq_ ? 0x80 : 0) | (spriteOverflow_ ? 0x40 : 0) |
-                                               (spriteCollision_ ? 0x20 : 0) | 0x1F);
-    frameIrq_ = lineIrq_ = false;
-    spriteOverflow_ = spriteCollision_ = false;
+                                               (collision ? 0x20 : 0) | 0x1F);
+    frameIrq_ = false;
+    lineIrq_ = false;
+    spriteOverflow_ = false;
+    if (collision) spriteCollision_ = false;
     pendingControl_ = false;
     return value;
 }
 
-void VdpSms::writeControl(uint8_t value) {
+void VdpSms::writeControl(uint8_t value, int cycle) {
     if (!pendingControl_) {
         latch_ = value;
         addr_ = static_cast<uint16_t>((addr_ & 0x3F00) | value);
@@ -93,6 +105,12 @@ void VdpSms::writeControl(uint8_t value) {
         readBuffer_ = vram_[addr_];
         addr_ = (addr_ + 1) & 0x3FFF;
     } else if (code_ == 2) {
+        // The X scroll of the next line is taken just before it starts: a later write
+        // waits for the line after.
+        if ((value & 0x0F) == 8 && cycle >= kCyclesPerLine - kHscrollLatchLead && !hscrollHeld_) {
+            heldHscroll_ = regs_[8];
+            hscrollHeld_ = true;
+        }
         regs_[value & 0x0F] = latch_;
     }
 }
@@ -122,9 +140,11 @@ uint8_t VdpSms::vcounter() const {
     return static_cast<uint8_t>(v);
 }
 
-uint8_t VdpSms::hcounter(int cycle) const {
-    // 342 pixels in 228 cycles, counted in pairs; it skips from 0x93 to 0xE9.
-    int h = cycle * 3 / 4;
+uint8_t VdpSms::hcounterAt(int cycle) {
+    // 342 pixels in 228 cycles, counted in pairs; it skips from 0x93 to 0xE9. A line
+    // here starts where the V counter changes, at 0xF4.
+    const int c = (cycle + 212) % kCyclesPerLine;
+    int h = (c * 3 + 2) / 4;
     if (h > 0x93) h += 0x55;
     return static_cast<uint8_t>(h);
 }
@@ -161,11 +181,22 @@ void VdpSms::startLine(int line, bool draw) {
         frame_.interlaced = false;
         frame_.aspectLines = gameGear_ ? kGgHeight : 224;
     }
-    if (line < active && (draw || (regs_[1] & 0x40))) {  // the sprite flags need the line even unseen
+    collisionAt_ = 0;  // a collision found on the last line shows by now
+    if (line < active && (draw || (regs_[1] & 0x40) || mode4())) {  // the sprite flags need the line even unseen
         if (mode4()) renderLine(line);
         else renderLineTms(line);
         if (gameGear_) cropGameGear(line);
+    } else if (mode4()) {
+        // In the borders it still finds collisions, but sets no overflow.
+        const bool overflow = spriteOverflow_;
+        spriteLine(vcounter(), nullptr, nullptr);
+        spriteOverflow_ = overflow;
     }
+    hscrollHeld_ = false;
+}
+
+void VdpSms::runLineCounter(int line) {
+    const int active = activeLines();
     // The line counter runs on the active lines and the one after them, and is reloaded
     // on every other line.
     if (line <= active) {
@@ -178,7 +209,11 @@ void VdpSms::startLine(int line, bool draw) {
     } else {
         lineCounter_ = regs_[10];
     }
-    if (line == active + 1) frameIrq_ = true;
+}
+
+void VdpSms::raiseFrameInterrupt(int line) {
+    if (line == activeLines() + 1 && !frameRaised_) frameIrq_ = true;
+    frameRaised_ = line == activeLines() + 1;
 }
 
 void VdpSms::endFrame() {
@@ -195,6 +230,7 @@ void VdpSms::renderLine(int line) {
     f.lines[line].displayEnabled = display;
 
     if (!display) {
+        spriteLine(line, nullptr, nullptr);
         f.backdrop[line] = backdrop;
         for (int x = 0; x < VideoFrameMd::kMaxWidth; ++x) {
             f.rgba[o + x] = x < 256 ? backdrop : 0;
@@ -205,63 +241,15 @@ void VdpSms::renderLine(int line) {
         return;
     }
 
-    // Sprites: the first eight on the line are drawn (all of them without the limit);
-    // a ninth sets the overflow flag, and two opaque pixels of the first eight meeting
-    // set the collision flag. Earlier sprites are in front.
     std::array<uint8_t, 256> spriteColor{};  // 0 = none, else 16..31
     std::array<uint8_t, 256> spriteNumber{};
-    {
-        const int active = activeLines();
-        const uint16_t sat = static_cast<uint16_t>((regs_[5] & 0x7E) << 7);
-        const bool tall = (regs_[1] & 0x02) != 0;
-        const int zoom = (regs_[1] & 0x01) ? 2 : 1;
-        const int height = (tall ? 16 : 8) * zoom;
-        int found = 0;
-        for (int i = 0; i < 64; ++i) {
-            const uint8_t y = vram_[(sat + i) & 0x3FFF];
-            if (active == 192 && y == 0xD0) break;
-            const int row = (line - y - 1) & 0xFF;
-            if (row >= height) continue;
-            if (++found > 8) {
-                spriteOverflow_ = true;
-                if (!unlimitedSprites_) break;
-            }
-            int x = vram_[(sat + 0x80 + i * 2) & 0x3FFF];
-            int n = vram_[(sat + 0x81 + i * 2) & 0x3FFF];
-            if (regs_[0] & 0x08) x -= 8;
-            if (regs_[6] & 0x04) n |= 0x100;
-            if (tall) n &= ~1;
-            int r = row / zoom;
-            if (r >= 8) {
-                ++n;
-                r -= 8;
-            }
-            const int base = n * 32 + r * 4;
-            const uint8_t p0 = vram_[base & 0x3FFF], p1 = vram_[(base + 1) & 0x3FFF], p2 = vram_[(base + 2) & 0x3FFF],
-                          p3 = vram_[(base + 3) & 0x3FFF];
-            for (int px = 0; px < 8; ++px) {
-                const int bit = 7 - px;
-                const int c = ((p0 >> bit) & 1) | ((p1 >> bit) & 1) << 1 | ((p2 >> bit) & 1) << 2 | ((p3 >> bit) & 1) << 3;
-                if (c == 0) continue;
-                for (int zx = 0; zx < zoom; ++zx) {
-                    const int sx = x + px * zoom + zx;
-                    if (sx < 0 || sx >= 256) continue;
-                    if (spriteColor[static_cast<size_t>(sx)]) {
-                        if (found <= 8) spriteCollision_ = true;
-                        continue;
-                    }
-                    spriteColor[static_cast<size_t>(sx)] = static_cast<uint8_t>(16 + c);
-                    spriteNumber[static_cast<size_t>(sx)] = static_cast<uint8_t>(i);
-                }
-            }
-        }
-    }
+    spriteLine(line, spriteColor.data(), spriteNumber.data());
 
     // Background, mixed with the sprites. Colour 0 of the background is drawn (it is not
     // the backdrop register's colour), but for the 3D view it counts as the sky.
     const int active = activeLines();
     const uint16_t names = nameTableBase();
-    const int hscroll = ((regs_[0] & 0x40) && line < 16) ? 0 : regs_[8];
+    const int hscroll = ((regs_[0] & 0x40) && line < 16) ? 0 : hscrollHeld_ ? heldHscroll_ : regs_[8];
     const bool maskLeft = (regs_[0] & 0x20) != 0;
     f.backdrop[line] = colors_[0];
     f.lines[line].hscrollA = f.lines[line].hscrollB = static_cast<int16_t>(hscroll);
@@ -311,6 +299,68 @@ void VdpSms::renderLine(int line) {
     for (int x = 256; x < VideoFrameMd::kMaxWidth; ++x) {
         f.rgba[o + x] = f.planeA[o + x] = f.planeB[o + x] = f.sprites[o + x] = 0;
         f.info[o + x] = f.planeAInfo[o + x] = f.planeBInfo[o + x] = f.spriteInfo[o + x] = MdPixel{};
+    }
+}
+
+// Sprites: the first eight on the line are drawn (all of them without the limit); a
+// ninth sets the overflow flag, and two opaque pixels of the first eight meeting set the
+// collision flag. Earlier sprites are in front. `line` is the V counter's value, and the
+// VDP looks for sprites on every line, the borders too, and with the display off; it
+// draws them, and finds collisions, only with the display on. Without `color` it only
+// looks. (Lines in the borders set no overflow: startLine undoes it.)
+void VdpSms::spriteLine(int line, uint8_t* color, uint8_t* number) {
+    const int active = activeLines();
+    const uint16_t sat = static_cast<uint16_t>((regs_[5] & 0x7E) << 7);
+    const bool tall = (regs_[1] & 0x02) != 0;
+    const int zoom = (regs_[1] & 0x01) ? 2 : 1;
+    const int height = (tall ? 16 : 8) * zoom;
+    std::array<uint8_t, 256> taken{};
+    int found = 0, collision = 256;
+    for (int i = 0; i < 64; ++i) {
+        const uint8_t y = vram_[(sat + i) & 0x3FFF];
+        if (active == 192 && y == 0xD0) break;
+        const int row = (line - y - 1) & 0xFF;
+        if (row >= height) continue;
+        if (++found > 8) {
+            spriteOverflow_ = true;
+            if (!unlimitedSprites_ || !color) break;
+        }
+        if (!(regs_[1] & 0x40)) continue;
+        int x = vram_[(sat + 0x80 + i * 2) & 0x3FFF];
+        int n = vram_[(sat + 0x81 + i * 2) & 0x3FFF];
+        if (regs_[0] & 0x08) x -= 8;
+        if (regs_[6] & 0x04) n |= 0x100;
+        if (tall) n &= ~1;
+        int r = row / zoom;
+        if (r >= 8) {
+            ++n;
+            r -= 8;
+        }
+        const int base = n * 32 + r * 4;
+        const uint8_t p0 = vram_[base & 0x3FFF], p1 = vram_[(base + 1) & 0x3FFF], p2 = vram_[(base + 2) & 0x3FFF],
+                      p3 = vram_[(base + 3) & 0x3FFF];
+        for (int px = 0; px < 8; ++px) {
+            const int bit = 7 - px;
+            const int c = ((p0 >> bit) & 1) | ((p1 >> bit) & 1) << 1 | ((p2 >> bit) & 1) << 2 | ((p3 >> bit) & 1) << 3;
+            if (c == 0) continue;
+            for (int zx = 0; zx < zoom; ++zx) {
+                const int sx = x + px * zoom + zx;
+                if (sx < 0 || sx >= 256) continue;
+                if (taken[static_cast<size_t>(sx)]) {
+                    if (found <= 8) collision = std::min(collision, sx);
+                    continue;
+                }
+                taken[static_cast<size_t>(sx)] = 1;
+                if (!color) continue;
+                color[sx] = static_cast<uint8_t>(16 + c);
+                number[sx] = static_cast<uint8_t>(i);
+            }
+        }
+    }
+    // The flag goes up as the beam reaches the pixel.
+    if (collision < 256 && !spriteCollision_) {
+        spriteCollision_ = true;
+        collisionAt_ = collision * 2 / 3 + kCollisionDelay;
     }
 }
 

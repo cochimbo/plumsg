@@ -100,7 +100,8 @@ Output
                         --extract-songs lists them) are sound effects, left original
   --vgm FILE            the run's YM2612 and PSG music as a VGM (.vgz: compressed)
   --save-state FILE     a savestate after the last frame
-  --dump-ram FILE       the 68000's work RAM (64 KB) after the last frame
+  --dump-ram FILE       the 68000's work RAM (64 KB) after the last frame (a Master
+                        System game: its 8 KB of RAM)
   --hash-log FILE       one line per frame: frame, picture hash, sound hash
   --json FILE           the summary as JSON (- for standard output)
   --quiet               no summary on standard output
@@ -678,7 +679,9 @@ int main(int argc, char** argv) {
         return false;
     };
     auto dumpRam = [&](const std::string& path) {
-        if (writeFile(path, md.workRam().data(), md.workRam().size())) return true;
+        const bool ok = md.masterSystem() ? writeFile(path, md.z80Ram().data(), md.z80Ram().size())
+                                          : writeFile(path, md.workRam().data(), md.workRam().size());
+        if (ok) return true;
         std::fprintf(stderr, "cannot write %s\n", path.c_str());
         return false;
     };
