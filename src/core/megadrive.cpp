@@ -603,7 +603,7 @@ uint8_t MegaDrive::read8(uint32_t addr) {
     }
     if (addr < 0xA10000 && addr >= 0xA00000) return readZ80Area(addr);
     if (addr >= 0xA10000 && addr < 0xA10020) return io_.read(addr | 1, now_);
-    if (addr == 0xA11100) return z80BusReq_ && !z80Reset_ ? 0x00 : 0x01;
+    if (addr == 0xA11100) return static_cast<uint8_t>((openBus() >> 8 & 0xFE) | (z80BusReq_ && !z80Reset_ ? 0x00 : 0x01));
     return 0x00;
 }
 
@@ -628,7 +628,16 @@ uint16_t MegaDrive::read16(uint32_t addr) {
         const uint8_t b = io_.read(addr | 1, now_);
         return static_cast<uint16_t>(b << 8 | b);
     }
-    if (addr == 0xA11100) return z80BusReq_ && !z80Reset_ ? 0x0000 : 0x0100;
+    if (addr == 0xA11100) return static_cast<uint16_t>((openBus() & 0xFEFF) | (z80BusReq_ && !z80Reset_ ? 0x0000 : 0x0100));
+    return 0x0000;
+}
+
+// The bits of a register the hardware leaves undriven read whatever was last on the data
+// bus: the 68000's prefetch of the word after the instruction. Games that test BUSACK with
+// TST.B instead of BTST #0 (Indy Heat) only get past their wait through those bits.
+uint16_t MegaDrive::openBus() {
+    const uint32_t pc = cpu_.pc & 0xFFFFFE;
+    if (pc < 0x400000 || pc >= 0xE00000) return read16(pc);
     return 0x0000;
 }
 
