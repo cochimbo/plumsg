@@ -464,11 +464,15 @@ uint16_t VdpMd::readHV(int lineClock) const {
 
 void VdpMd::startLine(int line, uint64_t clock) {
     if (clock != kUntimed) {
-        // The clock going back is a reset or a state loaded: what was waiting is done now.
-        if (clock >= syncedTo_) sync(clock);
-        else drain();
+        if (clock >= syncedTo_ || clock + kMasterPerLine <= syncedTo_) {
+            // The clock going back is a reset or a state loaded: what was waiting is done now.
+            if (clock >= syncedTo_) sync(clock);
+            else drain();
+            slotLineStart_ = syncedTo_ = clock;
+        }
+        // Otherwise a write that waited past the end of the last line has already taken
+        // this line's first slots, and they stay taken.
         slotLine_ = line;
-        slotLineStart_ = syncedTo_ = clock;
     }
     vcounter_ = line;
     const int active = activeLines();

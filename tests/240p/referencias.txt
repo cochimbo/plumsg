@@ -28,7 +28,7 @@ sangrado fc40adc5
 scroll-rejilla d054ef45
 scroll 22bd8bf2
 sincro-audio 96a707d5
-sombra a235ec1e
+sombra efdd11d3
 sonido 30f97b0f
 sprite-rayado 201f4751
 tablero 0d2b9dc5
