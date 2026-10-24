@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "miniz.h"
+#include "sms.h"
 
 namespace plumsg {
 
@@ -79,7 +80,7 @@ ConsoleSystem detectSystemFromData(const std::vector<uint8_t>& d) {
     return ConsoleSystem::MegaDrive;
 }
 
-Region smsRegion(const std::vector<uint8_t>& rom) {
+Region smsRegion(const std::vector<uint8_t>& rom, bool gameGear) {
     // Games made only for European (50 Hz) Master Systems that hang or show nothing at
     // 60 Hz, told by the CRC32 of the whole ROM: their header says "export" like the
     // American ones do (the list Genesis Plus GX keeps of them).
@@ -106,6 +107,11 @@ Region smsRegion(const std::vector<uint8_t>& rom) {
     };
     const auto crc = static_cast<uint32_t>(mz_crc32(MZ_CRC32_INIT, rom.data(), rom.size()));
     if (std::find(std::begin(kPalOnly), std::end(kPalOnly), crc) != std::end(kPalOnly)) return Region::EuropePal;
+    // Codemasters made their Master System games for Europe only, and they have no Sega
+    // header to say so. At 60 Hz the frame's work does not always fit in the shorter
+    // vertical blank: Micro Machines then turns the display on a couple of lines late
+    // every fourth frame, and the top of the picture flashes (issue #74).
+    if (!gameGear && isCodemasters(rom)) return Region::EuropePal;
     for (size_t at : {0x7FF0, 0x3FF0, 0x1FF0})
         if (startsWith(rom, at, "TMR SEGA")) {
             const int code = rom[at + 0xF] >> 4;
