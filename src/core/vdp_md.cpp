@@ -292,6 +292,21 @@ uint64_t VdpMd::slotsToDrain() const {
     return slots;
 }
 
+namespace {
+
+// The external access slots of a drawn line, in master clocks from its start (Kabuto's
+// hardware notes: H40 `Hssss AsaaBsbb ((A~aaBSbb)*3 AraaBSbb)*5 ~~ s*23 ~ s*11`, an
+// access every 16 clocks; H32 `... *4 ~~ s*13 ~ s*13 ~`, every 20). The picture part
+// has three every 32 (H40) or 24 (H32) pixels; the blanking after it, those that fall
+// while the next line's sprites are fetched.
+constexpr uint16_t kH40Picture[] = {24,   152,  280,  536,  664,  792,  1048, 1176,
+                                    1304, 1560, 1688, 1816, 2072, 2200, 2328};
+constexpr uint16_t kH40Blank[] = {2568, 2584, 2968};
+constexpr uint16_t kH32Picture[] = {30, 190, 350, 670, 830, 990, 1310, 1470, 1630, 1950, 2110, 2270};
+constexpr uint16_t kH32Blank[] = {2570, 2590, 2870, 3150};
+
+}  // namespace
+
 VdpMd::SlotLayout VdpMd::slotLayout(int line) const {
     // The picture part of a line has the drawing pattern when the line is drawn; its
     // horizontal blanking, when the next one is (it fetches for that line). Otherwise
@@ -304,16 +319,29 @@ VdpMd::SlotLayout VdpMd::slotLayout(int line) const {
     const bool refreshGaps = dmaMode_ == kDmaTransfer && ((code_ & 0x0F) == 3 || (code_ & 0x0F) == 5);
     const int even = (h40() ? 205 : 167) - (refreshGaps ? 7 : 0);
     const int evenPicture = even * kActiveClocks / kMasterPerLine;
-    return SlotLayout{drawn ? (h40() ? 10 : 8) : evenPicture, nextDrawn ? 8 : even - evenPicture};
+    SlotLayout l{evenPicture, even - evenPicture, nullptr, nullptr};
+    if (drawn) {
+        l.pictureAt = h40() ? kH40Picture : kH32Picture;
+        l.picture = h40() ? 15 : 12;
+    }
+    if (nextDrawn) {
+        l.blankAt = h40() ? kH40Blank : kH32Blank;
+        l.blank = h40() ? 3 : 4;
+    }
+    return l;
 }
 
 namespace {
 
-// Where slot i of a line falls, in master clocks from its start: those of each part are
-// spread evenly over it (while the picture is drawn, one every 32 pixels).
+// Where slot i of a line falls, in master clocks from its start: at the drawing
+// pattern's places, or spread evenly over its part.
 uint64_t slotOffset(int i, VdpMd::SlotLayout l) {
-    if (i < l.picture) return static_cast<uint64_t>(2 * i + 1) * VdpMd::kActiveClocks / static_cast<uint64_t>(2 * l.picture);
+    if (i < l.picture) {
+        if (l.pictureAt) return l.pictureAt[i];
+        return static_cast<uint64_t>(2 * i + 1) * VdpMd::kActiveClocks / static_cast<uint64_t>(2 * l.picture);
+    }
     const int k = i - l.picture;
+    if (l.blankAt) return l.blankAt[k];
     return VdpMd::kActiveClocks + static_cast<uint64_t>(2 * k + 1) * (VdpMd::kMasterPerLine - VdpMd::kActiveClocks) /
                                       static_cast<uint64_t>(2 * l.blank);
 }

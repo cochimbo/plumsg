@@ -16,7 +16,7 @@ namespace plumsg {
 // without them, as an option) and masking, priorities, shadow/highlight, H32/H40,
 // V28/V30 and interlace mode 2.
 // Writes go through the console's 4-word FIFO and reach memory in the VDP's access
-// slots (18 a line in H40, 16 in H32 while drawing; about 205/167 in blanking), a VRAM
+// slots (18 a line in H40, 16 in H32 while drawing, where the hardware has them; about 205/167 in blanking), a VRAM
 // word taking two of them. DMA runs through the same slots: a 68000 DMA feeds the FIFO
 // and holds the CPU until its last word is in; fill and copy run on their own while the
 // CPU goes on. The port calls that take a master clock run it in time; the ones without
@@ -31,9 +31,12 @@ public:
     // clocks from the start of the line. Lines are drawn and HINT fires here.
     static constexpr int kActiveClocks = 2560;
     // The access slots of a line: how many fall in its picture part (before
-    // kActiveClocks) and how many in its horizontal blanking.
+    // kActiveClocks) and how many in its horizontal blanking, and where (master clocks
+    // from the start of the line; none: spread evenly over the part).
     struct SlotLayout {
         int picture, blank;
+        const uint16_t* pictureAt;
+        const uint16_t* blankAt;
     };
     // Where the V counter moves on to the line's number (before, it still shows the
     // previous one), and VBlank starts and ends. testpico's HBlank tests, which read the
