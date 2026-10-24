@@ -193,6 +193,24 @@ void Cartridge::loadData(std::vector<uint8_t> rom) {
     rom_ = std::move(rom);
     path_.clear();
     crc_ = static_cast<uint32_t>(mz_crc32(MZ_CRC32_INIT, rom_.data(), rom_.size()));
+    // QuackShot (Rev A): 512 KB whose header says it ends at 0x13FFFF. Its second
+    // 256 KB chip answers at 0x100000, where the game checksums it and reads from.
+    if (rom_.size() == 0x80000 && be32(rom_, 0x1A4) == 0x13FFFF) {
+        const std::vector<uint8_t> second(rom_.begin() + 0x40000, rom_.end());
+        rom_.resize(0x100000, 0xFF);
+        rom_.insert(rom_.end(), second.begin(), second.end());
+    }
+    // Triple Play 96 and Gold Edition: 3 MB whose header says it ends at 0x3FFFFF, with
+    // battery RAM at 0x200000. The last MB answers at 0x300000, past the RAM, which is
+    // always there.
+    sramFixed_ = false;
+    if (rom_.size() == 0x300000 && be32(rom_, 0x1A4) == 0x3FFFFF && rom_[0x1B0] == 'R' && rom_[0x1B1] == 'A' &&
+        (be32(rom_, 0x1B4) & ~1u) == 0x200000) {
+        const std::vector<uint8_t> last(rom_.begin() + 0x200000, rom_.end());
+        rom_.resize(0x300000, 0xFF);
+        rom_.insert(rom_.end(), last.begin(), last.end());
+        sramFixed_ = true;
+    }
 
     header_ = RomHeader{};
     header_.system = field(rom_, 0x100, 16);
@@ -261,7 +279,7 @@ Region Cartridge::preferredRegion() const {
 
 void Cartridge::reset() {
     // Over 2 MB the SRAM shares its addresses with ROM and starts switched off.
-    sramMapped_ = rom_.size() <= sramStart_ || !sramPresent_;
+    sramMapped_ = rom_.size() <= sramStart_ || !sramPresent_ || sramFixed_;
     sramWritable_ = true;
     for (int i = 0; i < 8; ++i) banks_[i] = static_cast<uint8_t>(i);
     eeprom_.reset();
@@ -340,7 +358,7 @@ void Cartridge::write16(uint32_t addr, uint16_t value) {
 void Cartridge::writeTimeRegister(uint32_t addr, uint8_t value) {
     addr &= 0xFF;
     if (addr == 0xF1) {
-        sramMapped_ = (value & 1) != 0 || rom_.size() <= sramStart_;
+        sramMapped_ = (value & 1) != 0 || rom_.size() <= sramStart_ || sramFixed_;
         sramWritable_ = (value & 2) == 0;
     } else if (mapper_ && addr >= 0xF3 && (addr & 1)) {
         banks_[(addr - 0xF1) >> 1] = value & 0x3F;

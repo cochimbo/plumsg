@@ -897,6 +897,12 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         mcd_->state(w);
         block("MCD ", w.data());
     }
+    {  // after M68K and MCD, which settle it for older states
+        StateWriter w;
+        cpu_.irqState(w);
+        if (mcd_) mcd_->sub().irqState(w);
+        block("IRQS", w.data());
+    }
     if (sms_) {
         StateWriter w;
         sms_->state(w);
@@ -1006,11 +1012,16 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         StateReader b(data.data(), data.size());
         if (id == fourcc("M68K")) {
             cpu_.state(b);
+            cpu_.settleIrq();
             cpu_.forgetRoutine();
         } else if (id == fourcc("Z80 ")) z80_.state(b);
         else if (id == fourcc("VDP ")) vdp_.state(b);
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);
+        else if (id == fourcc("IRQS")) {
+            cpu_.irqState(b);
+            if (mcd_) mcd_->sub().irqState(b);
+        }
         else if (id == fourcc("IO  ")) io_.state(b);
         else if (id == fourcc("IOTH")) io_.riseState(b);
         else if (id == fourcc("CART")) cart_.state(b);
@@ -1028,7 +1039,10 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
             cacheFromBoot = id == fourcc("32X2");
         }
         else if (id == fourcc("MCD ")) {
-            if (mcd_) mcd_->state(b);
+            if (mcd_) {
+                mcd_->state(b);
+                mcd_->sub().settleIrq();
+            }
         }
         else if (id == fourcc("SMS ")) {
             if (sms_) sms_->state(b);

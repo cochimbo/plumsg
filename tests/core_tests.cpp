@@ -514,6 +514,52 @@ void testBusAckOpenBus() {
     check(md.workRam()[0] == 1, "BUSACK: the bits besides bit 0 read the open bus (Indy Heat)");
 }
 
+void testVintFlagWait() {
+    // Mega-Lo-Mania (Tyrants) turns the VINT on and then polls the VDP status for its flag:
+    // only the instruction under way when the VINT comes can read it, before the 68000
+    // takes the interrupt (whose acknowledge clears it). Then it writes 1 to $FF0000.
+    std::vector<uint8_t> rom(0x400, 0);
+    const uint8_t vectors[] = {0x00, 0xFF, 0x80, 0x00, 0x00, 0x00, 0x02, 0x00};
+    const uint8_t code[] = {0x33, 0xFC, 0x81, 0x64, 0x00, 0xC0, 0x00, 0x04,   // move.w #$8164,$C00004
+                            0x46, 0xFC, 0x25, 0x00,                           // move #$2500,sr
+                            0x30, 0x39, 0x00, 0xC0, 0x00, 0x04,               // move.w $C00004,d0
+                            0x08, 0x00, 0x00, 0x07, 0x67, 0xF4,               // btst #7,d0; beq.s back
+                            0x13, 0xFC, 0x00, 0x01, 0x00, 0xFF, 0x00, 0x00,   // move.b #1,$FF0000
+                            0x60, 0xFE};
+    std::copy(std::begin(vectors), std::end(vectors), rom.begin());
+    rom[0x7A] = 0x03;  // VINT at 0x300: rte
+    rom[0x300] = 0x4E;
+    rom[0x301] = 0x73;
+    std::copy(std::begin(code), std::end(code), rom.begin() + 0x200);
+    MegaDrive md;
+    md.loadRomData(rom);
+    for (int i = 0; i < 10; ++i) md.runFrame();
+    check(md.workRam()[0] == 1, "68000: the instruction under way when the VINT comes reads its flag (Mega-Lo-Mania)");
+}
+
+void testSplitRoms() {
+    // QuackShot (Rev A): 512 KB, its header ending at 0x13FFFF; the second 256 KB at 0x100000.
+    std::vector<uint8_t> rom(0x80000, 0x11);
+    std::fill(rom.begin() + 0x40000, rom.end(), 0x22);
+    rom[0x1A4] = 0x00, rom[0x1A5] = 0x13, rom[0x1A6] = 0xFF, rom[0x1A7] = 0xFF;
+    Cartridge quack;
+    quack.loadData(rom);
+    check(quack.read8(0x100000) == 0x22 && quack.read8(0x13FFFF) == 0x22 && quack.read8(0x3FFFF) == 0x11,
+          "QuackShot: the second ROM chip answers at 0x100000");
+
+    // Triple Play: 3 MB ending at 0x3FFFFF with RAM at 0x200001; the last MB at 0x300000.
+    rom.assign(0x300000, 0x11);
+    std::fill(rom.begin() + 0x200000, rom.end(), 0x33);
+    rom[0x1A4] = 0x00, rom[0x1A5] = 0x3F, rom[0x1A6] = 0xFF, rom[0x1A7] = 0xFF;
+    const uint8_t ram[] = {'R', 'A', 0xF8, 0x20, 0x00, 0x20, 0x00, 0x01, 0x00, 0x20, 0xFF, 0xFF};
+    std::copy(std::begin(ram), std::end(ram), rom.begin() + 0x1B0);
+    Cartridge triple;
+    triple.loadData(rom);
+    triple.write8(0x200001, 0x5A);
+    check(triple.read8(0x300000) == 0x33 && triple.read8(0x3FFFFF) == 0x33 && triple.read8(0x200001) == 0x5A,
+          "Triple Play: the last MB at 0x300000, the RAM at 0x200000 without switching it on");
+}
+
 void testVdpWidescreen() {
     // 16:9 adds 53 columns on each side in H40 (42 in H32), drawn from the plane and the
     // sprites past the edges. The console's own 320 columns stay as they were. Each side
@@ -2680,6 +2726,8 @@ int main() {
     testVdpWidescreen();
     testOverclock();
     testBusAckOpenBus();
+    testVintFlagWait();
+    testSplitRoms();
     testTestRom();
     testStates();
     testRewindBuffer();
