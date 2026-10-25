@@ -202,6 +202,7 @@ private:
     void writeZ80Area(uint32_t addr, uint8_t value);
     void writeBusControl(uint32_t addr, bool set);
     bool z80Running() const { return !z80BusReq_ && !z80Reset_; }
+    void waitForDmaBus();
     bool z80BusFree() const { return z80BusReq_ || z80Reset_; }
     void runUntil(uint64_t clock);
     void syncSound();  // brings PSG and YM2612 up to now_
@@ -258,6 +259,8 @@ private:
     uint16_t z80Bank_ = 0;
     bool z80BusReq_ = false;
     bool z80Reset_ = true;
+    // Till when a DMA from 68000 memory holds the 68000's bus: the Z80's bank waits for it.
+    uint64_t dmaBusUntil_ = 0;
 
     Region region_ = Region::Auto;
     Region effectiveRegion_ = Region::UsaNtsc;
