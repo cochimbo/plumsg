@@ -126,11 +126,19 @@ public:
            unusedVblank, unusedBusyLines, pal_, frameNumber_);
         if constexpr (Ar::kLoading) {
             cacheColors();
+            reloadSatCache();  // the sprite table cache's own block, if any, comes after
             // A state without the FIFO's own block: nothing is waiting, and the slots
             // line up again with the next line.
             clearFifo();
         }
     }
+    // The sprite table cache, in a block of its own. A state without it takes it from VRAM.
+    template <class Ar>
+    void satState(Ar& ar) {
+        ar(satCache_);
+    }
+    void reloadSatCache();
+    const std::array<uint8_t, 512>& satCache() const { return satCache_; }
     // The FIFO, the DMA under way and the slot clock, in a block of their own.
     template <class Ar>
     void fifoState(Ar& ar) {
@@ -171,6 +179,8 @@ private:
     int entrySlots(const FifoEntry& e) const { return (e.code & 0x0F) == 1 ? 2 : 1; }
     void cacheColors();
     uint32_t color(int index, MdShade shade) const;
+    // A byte into VRAM; `addr` keeps A16, which the sprite table cache compares too.
+    void writeVram(uint32_t addr, uint8_t value);
 
     // Line rendering helpers.
     struct Cell {
@@ -185,6 +195,11 @@ private:
     void drawSprites(int line, int left, int right, LineCells& out, std::array<uint8_t, VideoFrameMd::kMaxWidth>& number);
 
     std::array<uint8_t, 0x10000> vram_{};
+    // The VDP keeps its own copy of the first four bytes (Y, size, link) of each sprite in
+    // the table, taken from VRAM writes to the table's address (A16 and register 5's bit 7
+    // included), and draws sprites with it: moving the table or writing it at another
+    // address leaves the copy as it was (misc_test's "VDP spr/VRAM match with reg $8580").
+    std::array<uint8_t, 512> satCache_{};
     std::array<uint16_t, 64> cram_{};
     std::array<uint16_t, 40> vsram_{};
     std::array<uint8_t, 24> regs_{};

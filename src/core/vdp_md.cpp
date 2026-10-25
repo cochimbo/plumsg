@@ -14,6 +14,7 @@ VdpMd::VdpMd() : frame_(std::make_unique<VideoFrameMd>()) { reset(); }
 
 void VdpMd::reset() {
     vram_.fill(0);
+    satCache_.fill(0);
     cram_.fill(0);
     vsram_.fill(0);
     regs_.fill(0);
@@ -190,13 +191,13 @@ void VdpMd::storeWord(uint8_t code, uint32_t addr, uint16_t value) {
                 vram_[(addr & 0x7FFC) | ((addr >> 1) & 0x8000) | (((addr >> 1) & 1) ^ 1)] = static_cast<uint8_t>(value);
                 break;
             }
-            const uint32_t a = addr & 0xFFFF;
+            const uint32_t a = addr & 0x1FFFF;
             if (a & 1) {
-                vram_[a & ~1u] = static_cast<uint8_t>(value);
-                vram_[a | 1] = static_cast<uint8_t>(value >> 8);
+                writeVram(a & ~1u, static_cast<uint8_t>(value));
+                writeVram(a | 1, static_cast<uint8_t>(value >> 8));
             } else {
-                vram_[a] = static_cast<uint8_t>(value >> 8);
-                vram_[a + 1] = static_cast<uint8_t>(value);
+                writeVram(a, static_cast<uint8_t>(value >> 8));
+                writeVram(a + 1, static_cast<uint8_t>(value));
             }
             break;
         }
@@ -223,6 +224,20 @@ void VdpMd::storeWord(uint8_t code, uint32_t addr, uint16_t value) {
         }
         default: break;  // a read target, or none: the word is lost
     }
+}
+
+void VdpMd::writeVram(uint32_t addr, uint8_t value) {
+    vram_[addr & 0xFFFF] = value;
+    // H40 tables start at a multiple of $400 (register 5's bit 0 is ignored), H32 at $200.
+    const uint32_t mask = h40() ? 0x1FC00 : 0x1FE00;
+    if ((addr & mask) == ((static_cast<uint32_t>(regs_[5]) << 9) & mask) && !(addr & 4))
+        satCache_[((addr >> 1) & (h40() ? 0x1FCu : 0xFCu)) | (addr & 3)] = value;  // by sprite number
+}
+
+void VdpMd::reloadSatCache() {
+    const uint32_t base = (static_cast<uint32_t>(regs_[5]) << 9) & (h40() ? 0xFC00u : 0xFE00u);
+    for (uint32_t i = 0; i < 128; ++i)
+        for (uint32_t b = 0; b < 4; ++b) satCache_[i * 4 + b] = vram_[(base + i * 8 + b) & 0xFFFF];
 }
 
 void VdpMd::slot() {
@@ -256,7 +271,7 @@ void VdpMd::slot() {
         const int target = code_ & 0x0F;
         // The high byte goes to the other byte of the word at the address: filling from
         // an odd address writes the high bytes of the words, from an even one the low.
-        if (target == 1) vram_[(addr_ ^ 1) & 0xFFFF] = static_cast<uint8_t>(fillValue_ >> 8);
+        if (target == 1) writeVram((addr_ ^ 1) & 0x1FFFF, static_cast<uint8_t>(fillValue_ >> 8));
         else if (target == 3 || target == 5) storeWord(code_, addr_, fifoData_[fifoNext_]);
         addr_ = (addr_ + regs_[15]) & 0x1FFFF;
         if (--dmaLeft_ == 0) finishDma();
@@ -269,7 +284,7 @@ void VdpMd::slot() {
             return;
         }
         copyRead_ = false;
-        vram_[(addr_ ^ 1) & 0xFFFF] = copyByte_;
+        writeVram((addr_ ^ 1) & 0x1FFFF, copyByte_);
         dmaSource_ = (dmaSource_ + 1) & 0xFFFF;
         addr_ = (addr_ + regs_[15]) & 0x1FFFF;
         if (--dmaLeft_ == 0) finishDma();
@@ -680,9 +695,11 @@ void VdpMd::drawSprites(int line, int left, int right, LineCells& out, std::arra
     int link = 0;
     for (int n = 0; n < maxSprites; ++n) {
         const uint32_t a = (satb + static_cast<uint32_t>(link) * 8) & 0xFFFF;
-        const int sy = (vram_[a] << 8 | vram_[(a + 1) & 0xFFFF]) & (im2 ? 0x3FF : 0x1FF);
-        const uint8_t size = vram_[(a + 2) & 0xFFFF];
-        const int next = vram_[(a + 3) & 0xFFFF] & 0x7F;
+        // Y, size and link from the VDP's own copy; pattern and X from VRAM.
+        const uint8_t* cached = &satCache_[static_cast<size_t>(link) * 4];
+        const int sy = (cached[0] << 8 | cached[1]) & (im2 ? 0x3FF : 0x1FF);
+        const uint8_t size = cached[2];
+        const int next = cached[3] & 0x7F;
         const int hcells = ((size >> 2) & 3) + 1, vcells = (size & 3) + 1;
         if (yLine >= sy && yLine < sy + vcells * tileRows) {
             if (count == maxPerLine && hwCount < 0) {

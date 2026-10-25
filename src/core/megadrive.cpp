@@ -984,6 +984,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         block("VDPF", w.data());
     }
     {
+        StateWriter w;
+        vdp_.satState(w);
+        block("SATC", w.data());
+    }
+    {
         std::vector<uint8_t> chip;
         ym_.saveState(chip);
         StateWriter w;
@@ -1200,6 +1205,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         } else if (id == fourcc("Z80 ")) z80_.state(b);
         else if (id == fourcc("VDP ")) vdp_.state(b);
         else if (id == fourcc("VDPF")) vdp_.fifoState(b);
+        else if (id == fourcc("SATC")) vdp_.satState(b);
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);
         else if (id == fourcc("RFSH")) b(refreshClocks_);

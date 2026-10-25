@@ -375,6 +375,30 @@ void testVdpPorts() {
     check(filled && vdp.vram()[0x1020] == 0 && vdp.vram()[0x1021] == 0x77, "VDP: DMA fill");
 }
 
+void testVdpSatCache() {
+    // misc_test's "VDP spr/VRAM match with reg $8580": the VDP's copy of the sprite table
+    // takes only writes to the table's own address, A16 and register 5's bit 7 included.
+    VdpMd vdp;
+    vdp.reset();
+    vdp.writeControl(0x8104);  // mode 5, H32
+    vdp.writeControl(0x8F02);
+    vdp.writeControl(0x8588);  // table at $11000
+    vdp.writeControl(0x5000);  // VRAM write at $1000 (A16 clear)
+    vdp.writeControl(0x0000);
+    vdp.writeData(0x0104);
+    vdp.writeData(0x0201);
+    const bool missed = vdp.vram()[0x1000] == 0x01 && vdp.satCache()[0] == 0 && vdp.satCache()[3] == 0;
+    vdp.writeControl(0x5000);  // VRAM write at $11000: the same VRAM, and the copy
+    vdp.writeControl(0x0004);
+    vdp.writeData(0x0104);
+    vdp.writeData(0x0201);
+    check(missed && vdp.satCache()[0] == 0x01 && vdp.satCache()[1] == 0x04 && vdp.satCache()[3] == 0x01,
+          "VDP: the sprite table cache takes writes to the table's address with A16 (misc_test)");
+    // Moving the table leaves the copy as it was.
+    vdp.writeControl(0x8508);
+    check(vdp.satCache()[0] == 0x01, "VDP: moving the sprite table keeps the cache");
+}
+
 void testVdpFillScrollTable() {
     // Contra Hard Corps builds its line scroll table with two fills of auto-increment 4:
     // one from the even address of each entry, which sets the low bytes, and one from the
@@ -3216,6 +3240,7 @@ int main() {
     testVdpHblankFlag();
     testVdpSpriteMaskAfterDotOverflow();
     testVdpDirectColor();
+    testVdpSatCache();
     testVdpFillScrollTable();
     testVdpSpriteLimit();
     testVdpWidescreen();
