@@ -258,6 +258,13 @@ void testEeprom() {
     const uint8_t r = s.readByte(false);
     s.stop();
     check(ww.hasEeprom() && ww.saveRam().size() == 128 && acks && r == 0xC3, "EEPROM: X24C01 write and read");
+
+    // Dodge Danpei joins its serial's words with _: "GM_00004076-00".
+    const char danpei[] = "GM_00004076-00";
+    std::copy(danpei, danpei + 14, rom.begin() + 0x180);
+    Cartridge dd;
+    dd.loadData(rom);
+    check(dd.hasEeprom(), "EEPROM: found by a serial written with _ (Dodge Danpei)");
 }
 
 void testPads() {

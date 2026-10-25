@@ -149,10 +149,12 @@ const EepromConfig* eepromFor(const std::string& serial) {
     for (const EepromGame& g : kEepromGames) {
         const std::string s(g.serial);
         const size_t at = serial.find(s);
-        // A whole word of the serial ("GM T-50176 -00"), not part of a longer one.
+        // A whole word of the serial ("GM T-50176 -00"), not part of a longer one. Some
+        // join the words with _ instead: Dodge Danpei says "GM_00004076-00".
         if (at == std::string::npos) continue;
         const size_t end = at + s.size();
-        if ((at == 0 || serial[at - 1] == ' ') && (end == serial.size() || serial[end] == ' ' || serial[end] == '-'))
+        const auto gap = [](char c) { return c == ' ' || c == '_'; };
+        if ((at == 0 || gap(serial[at - 1])) && (end == serial.size() || gap(serial[end]) || serial[end] == '-'))
             return &g.config;
     }
     return nullptr;
