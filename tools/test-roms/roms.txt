@@ -1,0 +1,24 @@
+# The test ROMs people sent in the issues, for the "Test ROMs" workflow.
+#
+# One per line: name | issue | download | frames | script
+#   name      what the run is called (and its folder in the results)
+#   issue     where it came from
+#   download  a .zip (every ROM inside is run, each as name/file) or a ROM
+#   frames    how many frames to run; a screenshot every 300 and one at the end
+#   script    plumsg-headless --do lines, separated by ";" (can be empty); testpico
+#             asks for the reset button after its last test (32x rstprep)
+#
+# Homebrew games are not here: only programs made to test an emulator.
+
+testpico         | #69  | https://github.com/user-attachments/files/33813869/testpico-30a5783-dirty.zip | 2400 | 1500 reset
+VDPFIFOTesting   | #90  | https://github.com/user-attachments/files/33850742/VDPFIFOTesting.zip         | 1800 |
+SMSVDPTest       | #72  | https://github.com/user-attachments/files/33814234/SMSVDPTest-SMS-1.31.zip    | 1800 |
+VDPTEST_GG       | #76  | https://github.com/user-attachments/files/33848789/VDPTEST_GG.zip             | 1800 |
+dmabmp1          | #95  | https://github.com/user-attachments/files/33851484/dmabmp1.zip                | 600  |
+dmabmp4          | #95  | https://github.com/user-attachments/files/33851483/dmabmp4.zip                | 600  |
+SpriteMasking    | #101 | https://github.com/user-attachments/files/33852101/SpriteMaskingTestRom.zip   | 900  |
+itest            | #111 | https://github.com/user-attachments/files/33902937/itest.zip                  | 1800 |
+m68k_opcode_sizes| #111 | https://github.com/user-attachments/files/33902935/m68k_opcode_sizes.zip      | 1800 |
+softcheck        | #117 | https://github.com/user-attachments/files/33903222/softcheck.zip              | 1800 |
+misc_test        | #137 | https://github.com/user-attachments/files/33920760/misc_test.zip              | 1800 |
+misc_test.2      | #137 | https://github.com/user-attachments/files/33920761/misc_test.2.zip            | 1800 |

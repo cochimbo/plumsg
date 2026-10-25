@@ -306,7 +306,7 @@ void MegaDrive::reset() {
     ym_.setClockPosition(0);
     psgBuffer_.clear();
     if (mars_) {
-        mars_->reset();
+        mars_->resetButton();  // after powerOn() (a power cycle) there is nothing to do
         mars_->rebaseClock();
         mars_->samples().clear();
     }

@@ -1062,6 +1062,51 @@ void testMars() {
     check(frameHash(md.frame()) == a && md.mars()->comm()[0] == 0x4D5F, "32X: el estado guarda y recupera la 32X");
 }
 
+// The reset button with a 32X: the adapter stays on, so the 68000 starts again from the
+// vector ROM (at 0x880200, the game's hot start), and the SH-2s are not reset but get
+// the VRES interrupt (the master's handler writes "RE" in the last communication word).
+void testMarsResetButton() {
+    std::vector<uint8_t> program(0x200, 0);
+    auto put16 = [&](uint32_t a, std::initializer_list<uint16_t> words) {
+        for (uint16_t w : words) {
+            program[a] = static_cast<uint8_t>(w >> 8);
+            program[a + 1] = static_cast<uint8_t>(w);
+            a += 2;
+        }
+    };
+    auto put32 = [&](uint32_t a, uint32_t v) { put16(a, {static_cast<uint16_t>(v >> 16), static_cast<uint16_t>(v)}); };
+    put16(0x100, {0xE000, 0x400E, 0xAFFE, 0x0009});  // master: mov #0,r0; ldc r0,sr; bra *
+    put16(0x140, {0xAFFE, 0x0009});                  // slave: bra *
+    put32(0x11C, 0x06000180);                         // VRES: vector 71
+    put16(0x180, {0xD102,                             // mov.l #$2000402e,r1
+                  0xD003,                             // mov.l #'RE',r0
+                  0x2101,                             // mov.w r0,@r1
+                  0xAFFE, 0x0009});                   // bra *
+    put32(0x18C, 0x2000402E);
+    put32(0x190, 0x5245);
+    std::vector<uint8_t> rom = marsRom(program.data(), program.size(), 0x06000100, 0x06000140);
+    static constexpr uint16_t kHotStart[] = {0x33FC, 0x4854, 0x00A1, 0x512A,  // move.w #'HT',$a1512a
+                                             0x60FE};                         // bra.s *
+    for (size_t i = 0; i < std::size(kHotStart); ++i) {
+        rom[0x200 + i * 2] = static_cast<uint8_t>(kHotStart[i] >> 8);
+        rom[0x201 + i * 2] = static_cast<uint8_t>(kHotStart[i]);
+    }
+
+    MegaDrive md;
+    md.loadRomData(rom);
+    for (int i = 0; i < 6; ++i) md.runFrame();
+    const auto& comm = md.mars()->comm();
+    check(comm[2] == 0x535F && comm[5] == 0 && comm[7] == 0, "32X reset: arranca en frío");
+    md.reset();
+    for (int i = 0; i < 2; ++i) md.runFrame();
+    uint16_t a15100 = 0;
+    md.mars()->read68k(0xA15100, a15100);
+    check((a15100 & 3) == 3, "32X reset: el adaptador sigue encendido y las SH-2 en marcha (ADEN, RES)");
+    check(comm[5] == 0x4854, "32X reset: el 68000 vuelve a empezar desde la ROM de vectores (0x880200)");
+    check(comm[7] == 0x5245, "32X reset: la SH-2 maestra recibe la interrupción VRES");
+    check(comm[2] == 0x535F, "32X reset: las palabras de comunicación se mantienen");
+}
+
 // The C program in tests/mars, compiled for the SH-2: both CPUs run the same checks
 // (libgcc's division, 64-bit and floating point arithmetic, jump tables...) and must
 // get what this machine gets; then VBlank interrupts, packed pixels through the
@@ -3097,6 +3142,7 @@ int main() {
     testSmsSongExtract();
     testSh2();
     testMars();
+    testMarsResetButton();
     testMarsProgram();
     testCdImage();
     testMegaCd();
