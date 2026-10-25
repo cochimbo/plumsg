@@ -694,9 +694,12 @@ void VdpMd::drawSprites(int line, int left, int right, LineCells& out, std::arra
     int count = 0, hwCount = -1;
     int link = 0;
     for (int n = 0; n < maxSprites; ++n) {
-        const uint32_t a = (satb + static_cast<uint32_t>(link) * 8) & 0xFFFF;
+        // H32's table is 64 sprites: a link past them wraps round to the first ones
+        // (misc_test's "VDP sprites over 64 in H32 mode").
+        const int entry = wide ? link : link & 63;
+        const uint32_t a = (satb + static_cast<uint32_t>(entry) * 8) & 0xFFFF;
         // Y, size and link from the VDP's own copy; pattern and X from VRAM.
-        const uint8_t* cached = &satCache_[static_cast<size_t>(link) * 4];
+        const uint8_t* cached = &satCache_[static_cast<size_t>(entry) * 4];
         const int sy = (cached[0] << 8 | cached[1]) & (im2 ? 0x3FF : 0x1FF);
         const uint8_t size = cached[2];
         const int next = cached[3] & 0x7F;
@@ -709,9 +712,9 @@ void VdpMd::drawSprites(int line, int left, int right, LineCells& out, std::arra
             }
             const uint16_t attr = static_cast<uint16_t>(vram_[(a + 4) & 0xFFFF] << 8 | vram_[(a + 5) & 0xFFFF]);
             const int sx = (vram_[(a + 6) & 0xFFFF] << 8 | vram_[(a + 7) & 0xFFFF]) & 0x1FF;
-            found[count++] = {link, sx, sy, hcells, vcells, attr};
+            found[count++] = {entry, sx, sy, hcells, vcells, attr};
         }
-        if (next == 0 || next >= maxSprites) break;
+        if (next == 0 || (wide && next >= maxSprites)) break;
         link = next;
     }
     if (hwCount < 0) hwCount = count;
