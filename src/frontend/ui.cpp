@@ -124,6 +124,10 @@ constexpr const char* kOverclockTip =
        "cuando hay mucho en pantalla. Cuanto más alto, más pide al ordenador. Algún juego puede ir\n"
        "demasiado rápido o fallar: si pasa, desactívalo para ese juego. En una partida en red manda\n"
        "el del anfitrión, y en modo hardcore se queda desactivado.");
+constexpr const char* kNoPadTip =
+    N_("Como si no hubiera nada enchufado en el segundo puerto. Algunos juegos lo miran: ESPN\n"
+       "Sunday Night NFL pone entonces al ordenador de jugador 2 en vez de esperar al mando 2\n"
+       "(por ejemplo, en el sorteo de la moneda). En una partida en red el mando 2 se enchufa.");
 
 // The combo for the overclock; `percent` takes the chosen value.
 bool overclockCombo(const char* label, int& percent) {
@@ -778,12 +782,18 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         for (int port = 0; port < 2; ++port) {
             ImGui::SeparatorText(port == 0 ? tr("Mando 1") : tr("Mando 2"));
             ImGui::PushID(port);
-            for (PadType t : {PadType::ThreeButton, PadType::SixButton})
-                if (ImGui::MenuItem(t == PadType::ThreeButton ? tr("3 botones") : tr("6 botones"), nullptr,
-                                    settings_.padType[static_cast<size_t>(port)] == t)) {
+            for (PadType t : {PadType::ThreeButton, PadType::SixButton, PadType::None}) {
+                if (t == PadType::None && port == 0) continue;
+                const char* name = t == PadType::ThreeButton ? tr("3 botones")
+                                   : t == PadType::SixButton ? tr("6 botones")
+                                                             : tr("Sin mando");
+                if (ImGui::MenuItem(name, nullptr, settings_.padType[static_cast<size_t>(port)] == t)) {
                     settings_.padType[static_cast<size_t>(port)] = t;
                     out.consoleChanged = out.settingsChanged = true;
                 }
+                if (t == PadType::None && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip("%s", tr(kNoPadTip));
+            }
             ImGui::PopID();
         }
         ImGui::EndDisabled();
@@ -3178,15 +3188,17 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
                 edited = true;
             }
         } else if (key == "pads") {
-            static const char* names[] = {N_("3 botones"), N_("6 botones")};
+            // In PadType's order.
+            static const char* names[] = {N_("3 botones"), N_("6 botones"), N_("Sin mando")};
             for (size_t port = 0; port < 2; ++port) {
                 if (port) ImGui::SameLine();
-                int i = s.padType[port] == PadType::ThreeButton ? 0 : 1;
+                int i = static_cast<int>(s.padType[port]);
                 ImGui::SetNextItemWidth(110);
-                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names, 2)) {
-                    s.padType[port] = i == 0 ? PadType::ThreeButton : PadType::SixButton;
+                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names, port ? 3 : 2)) {
+                    s.padType[port] = static_cast<PadType>(i);
                     edited = true;
                 }
+                if (port && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr(kNoPadTip));
             }
         } else if (key == "overclock") {
             edited |= overclockCombo(tr(opt.label), s.overclock);

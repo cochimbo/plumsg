@@ -58,6 +58,7 @@ Running
   --frames N            frames to run (default 600); frames are numbered from 0
   --region jp|us|eu     force the console's region (default: what the game says)
   --six-button          6-button pads instead of 3-button ones
+  --no-pad2             nothing plugged into the second port (the script's p2 buttons do nothing)
   --no-sprite-limit     draw every sprite on a line (the option against flicker)
   --widescreen W:H      draw the picture W:H wide (16:9, 16:10) instead of 4:3
   --widescreen L,R      or with L more columns on the left and R on the right (up to 56)
@@ -469,7 +470,7 @@ int main(int argc, char** argv) {
     bool netHost = false;
     std::string netJoin;
     int wideLeft = 0, wideRight = 0;
-    bool sixButton = false, noSpriteLimit = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
+    bool sixButton = false, noPad2 = false, noSpriteLimit = false, quiet = false, haveExpectHash = false, haveExpectAudio = false;
     uint32_t expectHash = 0, expectAudio = 0;
     Region region = Region::Auto;
 
@@ -509,6 +510,7 @@ int main(int argc, char** argv) {
             else missing = true;
         } else if (a == "--pal") region = Region::EuropePal;
         else if (a == "--six-button") sixButton = true;
+        else if (a == "--no-pad2") noPad2 = true;
         else if (a == "--no-sprite-limit") noSpriteLimit = true;
         else if (a == "--widescreen") {
             const std::string v = next();
@@ -614,6 +616,7 @@ int main(int argc, char** argv) {
     MegaDrive md;
     md.setRegion(region);
     for (int p = 0; p < 2; ++p) md.setPadType(p, sixButton ? PadType::SixButton : PadType::ThreeButton);
+    if (noPad2 && !netplay) md.setPadType(1, PadType::None);  // the guest plays on pad 2
     md.vdp().setUnlimitedSprites(noSpriteLimit);
     md.vdp().setWidescreen(wideLeft, wideRight);
     md.setOverclock(static_cast<int>(overclock));

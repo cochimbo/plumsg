@@ -31,7 +31,10 @@ bool Io::thLevel(int port, uint64_t now) const {
 }
 
 uint8_t Io::readPort(int port, uint64_t now) {
-    if (port == 2) return static_cast<uint8_t>((data_[2] & ctrl_[2]) | (0x7F & ~ctrl_[2]));
+    // An empty port: its pins float high, and a pad's TH-low reading (left and right
+    // low) never shows up.
+    if (port == 2 || types_[port] == PadType::None)
+        return static_cast<uint8_t>((data_[port] & ctrl_[port]) | (0x7F & ~ctrl_[port]));
     const PadState& p = pads_[port];
     const bool th = thLevel(port, now);
     if (types_[port] == PadType::SixButton && now - thTime_[port] > kSixButtonTimeout) thCount_[port] = 0;

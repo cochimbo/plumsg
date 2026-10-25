@@ -608,6 +608,15 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
+msgid ""
+"Como si no hubiera nada enchufado en el segundo puerto. Algunos juegos lo miran: ESPN\n"
+"Sunday Night NFL pone entonces al ordenador de jugador 2 en vez de esperar al mando 2\n"
+"(por ejemplo, en el sorteo de la moneda). En una partida en red el mando 2 se enchufa."
+msgstr ""
+"Como se não houvesse nada ligado na segunda porta. Alguns jogos verificam: ESPN\n"
+"Sunday Night NFL põe então o computador como jogador 2 em vez de esperar pelo comando 2\n"
+"(no sorteio da moeda, por exemplo). Num jogo em rede o comando 2 fica ligado."
+
 msgid "Conectando con %s"
 msgstr "Conectando a %s"
 
@@ -2432,6 +2441,9 @@ msgstr "Sem limite de sprites"
 
 msgid "Sin límite de sprites (sin parpadeo)"
 msgstr "Sem limite de sprites (sem cintilação)"
+
+msgid "Sin mando"
+msgstr "Sem comando"
 
 msgid ""
 "Sin marcar, la cámara mira de frente y la imagen se ve como en 2D;\n"

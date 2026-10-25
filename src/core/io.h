@@ -12,7 +12,9 @@ struct PadState {
     bool x = false, y = false, z = false, mode = false;
 };
 
-enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1 };
+// None: nothing plugged in. Some games look: ESPN Sunday Night NFL makes player 2 the
+// computer when the second port is empty, and waits for pad 2 at the coin toss if not.
+enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1, None = 2 };
 
 // The I/O chip: version register and the two controller ports (the third, the
 // modem/extension port, reads as nothing connected). Pads are read through the TH line:
