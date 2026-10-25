@@ -80,6 +80,7 @@ int divsCycles(int32_t dividend, int16_t divisor) {
 
 void M68000::reset() {
     seenIrqLevel_ = irqLevel_;
+    prefetchKept_ = false;
     halted = false;
     stopped = false;
     sr = 0x2700;
@@ -115,6 +116,7 @@ uint32_t M68000::read32(uint32_t addr) {
 
 void M68000::write16(uint32_t addr, uint16_t v) {
     if (addr & 1) throw AddressError{addr, false, false};
+    keepPrefetch(addr);
     bus_.write16(addr & 0xFFFFFF, v);
 }
 
@@ -477,7 +479,13 @@ int M68000::step() {
         const bool trace = (sr & 0x8000) != 0;
         instrPc_ = pc;
         faultPcAdjust_ = 0;
-        ir_ = fetch16();
+        if (prefetchKept_ && pc == prefetchAt_) {
+            ir_ = prefetched_;
+            pc += 2;
+        } else {
+            ir_ = fetch16();
+        }
+        prefetchKept_ = false;
         execute(ir_);
         if (trace) {
             exception(9, pc);
