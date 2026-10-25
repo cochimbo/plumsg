@@ -595,6 +595,19 @@ void testBusAckOpenBus() {
     check(md.workRam()[0] == 1, "BUSACK: the bits besides bit 0 read the open bus (Indy Heat)");
 }
 
+void testZ80ResetKeepsRegisters() {
+    // misc_test: the Z80's /RESET leaves its registers alone (only power sets them).
+    MegaDrive md;
+    md.loadRomData(testrom::build());
+    md.z80().sp = 0x1234;
+    md.z80().bc.w = 0x5678;
+    md.z80().pc = 0x100;
+    md.z80().reset();
+    check(md.z80().sp == 0x1234 && md.z80().bc.w == 0x5678 && md.z80().pc == 0, "Z80: /RESET keeps the registers (misc_test)");
+    md.z80().powerOn();
+    check(md.z80().sp == 0xFFFF && md.z80().bc.w == 0xFFFF, "Z80: power sets them to $FFFF");
+}
+
 void testVintFlagWait() {
     // Mega-Lo-Mania (Tyrants) turns the VINT on and then polls the VDP status for its flag:
     // only the instruction under way when the VINT comes can read it, before the 68000
@@ -3178,6 +3191,7 @@ int main() {
     testVdpWidescreen();
     testOverclock();
     testBusAckOpenBus();
+    testZ80ResetKeepsRegisters();
     testVintFlagWait();
     testSplitRoms();
     testTestRom();
