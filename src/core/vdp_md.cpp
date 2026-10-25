@@ -141,8 +141,9 @@ int VdpMd::startDma(uint64_t clock) {
     regs_[22] = static_cast<uint8_t>(end >> 9);
     const int perWord = (code_ & 0x0F) == 1 ? 2 : 1;
     const uint32_t queued = queueCount_;
+    const bool instant = instantDma_ && dmaSource_ < 0x10000;
     refill();
-    if (clock == kUntimed) {
+    if (clock == kUntimed || instant) {
         drain();
         return 0;
     }

@@ -49,6 +49,8 @@ public:
     void setDmaReader(std::function<uint16_t(uint32_t)> reader) { dmaRead_ = std::move(reader); }
     void setPal(bool pal) { pal_ = pal; }
     bool pal() const { return pal_; }
+    // 68000 DMA from the first 64 KB (a cartridge chip's RAM) done at once, the CPU not held.
+    void setInstantDma(bool on) { instantDma_ = on; }
 
     void reset();
 
@@ -225,6 +227,7 @@ private:
     bool dotOverflow_ = false;  // the last line drawn ran out of sprite pixels (not part of the state)
     bool oddFrame_ = false;
     bool pal_ = false;
+    bool instantDma_ = false;
     uint64_t frameNumber_ = 0;
     bool unlimitedSprites_ = false;
     int wideLeft_ = 0, wideRight_ = 0;
