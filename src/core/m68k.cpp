@@ -365,6 +365,9 @@ uint8_t M68000::sbcd(uint8_t src, uint8_t dst) {
 }
 
 void M68000::exception(int vector, uint32_t returnPc) {
+    // An instruction that could not be run is not traced: m68k_opcode_sizes sets T with
+    // ORI #$F000,SR and expects the line F word after it to give only its own exception.
+    if (vector == 4 || vector == 8 || vector == 10 || vector == 11) untraced_ = true;
     const uint16_t old = sr;
     setSr(static_cast<uint16_t>((sr | 0x2000) & ~0x8000));
     push32(returnPc);
@@ -479,6 +482,7 @@ int M68000::step() {
         const bool trace = (sr & 0x8000) != 0;
         instrPc_ = pc;
         faultPcAdjust_ = 0;
+        untraced_ = false;
         if (prefetchKept_ && pc == prefetchAt_) {
             ir_ = prefetched_;
             pc += 2;
@@ -487,7 +491,7 @@ int M68000::step() {
         }
         prefetchKept_ = false;
         execute(ir_);
-        if (trace) {
+        if (trace && !untraced_) {
             exception(9, pc);
             cycles_ += 34;
         }

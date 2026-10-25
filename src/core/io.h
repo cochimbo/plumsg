@@ -17,7 +17,8 @@ struct PadState {
 enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1, None = 2 };
 
 // The I/O chip: version register and the two controller ports (the third, the
-// modem/extension port, reads as nothing connected). Pads are read through the TH line:
+// modem/extension port, reads as nothing connected), and each port's serial registers,
+// which keep what is written though nothing is ever sent or received. Pads are read through the TH line:
 // a 3-button pad multiplexes its buttons on TH; a 6-button pad also counts TH pulses
 // and shows X/Y/Z/Mode on the fourth one, until TH rests for about 1.5 ms. A TH pin
 // switched from output to input does not rise at once: its pull-up takes a few
@@ -44,6 +45,11 @@ public:
     void riseState(Ar& ar) {
         ar(thRelease_);
     }
+    // The serial registers (kept apart too).
+    template <class Ar>
+    void serialState(Ar& ar) {
+        ar(txData_, serialCtrl_);
+    }
 
 private:
     uint8_t readPort(int port, uint64_t now);
@@ -60,6 +66,8 @@ private:
     static constexpr uint64_t kNotRising = ~uint64_t{0};
     std::array<PadType, 2> types_{PadType::SixButton, PadType::SixButton};
     std::array<PadState, 2> pads_{};
+    std::array<uint8_t, 3> txData_{0xFF, 0xFF, 0xFF};
+    std::array<uint8_t, 3> serialCtrl_{};  // bits 3-7; 0-2 are status (nothing received)
 };
 
 }  // namespace plumsg

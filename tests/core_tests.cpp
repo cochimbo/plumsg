@@ -315,6 +315,14 @@ void testPads() {
     io.setPadType(0, PadType::None);
     io.write(0xA10009, 0x40, now);
     check(set(true) == 0x3F && set(false) == 0x3F, "empty port: TH low reads no pad (ESPN NFL looks)");
+
+    // softcheck's I/O port test: the serial registers keep what is written (S-Ctrl's
+    // low three bits are status), RxData has nothing.
+    io.write(0xA1000F, 0x5A, now);
+    io.write(0xA10019, 0xFF, now);
+    check(io.read(0xA1000F, now) == 0x5A && io.read(0xA10019, now) == 0xF8 && io.read(0xA10011, now) == 0x00 &&
+              io.read(0xA1001B, now) == 0xFF,
+          "I/O: serial TxData and S-Ctrl read back what was written (softcheck)");
 }
 
 void testPsg() {
@@ -614,6 +622,28 @@ void testPrefetch() {
     md.runFrame();
     check(md.workRam()[0] == 1 && md.workRam()[0x28] == 0x72 && md.workRam()[0x29] == 0x00,
           "68000: an instruction written over right after being fetched runs as it was (misc_test)");
+}
+
+void testTraceSkipsIllegal() {
+    // m68k_opcode_sizes turns tracing on with ori.w #$8000,sr and then runs a line F word:
+    // an instruction that cannot be run takes only its own exception, not a trace after it.
+    std::vector<uint8_t> rom(0x400, 0);
+    const uint8_t vectors[] = {0x00, 0xFF, 0x80, 0x00, 0x00, 0x00, 0x02, 0x00};
+    const uint8_t code[] = {0x00, 0x7C, 0x80, 0x00,  // ori.w #$8000,sr
+                            0xF0, 0x00};             // line F
+    const uint8_t lineF[] = {0x13, 0xFC, 0x00, 0x01, 0x00, 0xFF, 0x00, 0x00, 0x60, 0xFE};  // move.b #1,$FF0000
+    const uint8_t trace[] = {0x13, 0xFC, 0x00, 0x01, 0x00, 0xFF, 0x00, 0x01, 0x60, 0xFE};  // move.b #1,$FF0001
+    std::copy(std::begin(vectors), std::end(vectors), rom.begin());
+    rom[0x26] = 0x03;  // trace at 0x310
+    rom[0x27] = 0x10;
+    rom[0x2E] = 0x03;  // line F at 0x300
+    std::copy(std::begin(code), std::end(code), rom.begin() + 0x200);
+    std::copy(std::begin(lineF), std::end(lineF), rom.begin() + 0x300);
+    std::copy(std::begin(trace), std::end(trace), rom.begin() + 0x310);
+    MegaDrive md;
+    md.loadRomData(rom);
+    md.runFrame();
+    check(md.workRam()[0] == 1 && md.workRam()[1] == 0, "68000: a line F word under trace is not traced (m68k_opcode_sizes)");
 }
 
 void testVintFlagWait() {
@@ -3200,6 +3230,7 @@ int main() {
     testOverclock();
     testBusAckOpenBus();
     testPrefetch();
+    testTraceSkipsIllegal();
     testVintFlagWait();
     testSplitRoms();
     testTestRom();

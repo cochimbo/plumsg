@@ -181,6 +181,8 @@ private:
     bool prefetchKept_ = false;  // prefetched_ is the word at pc, from before a write over it
     uint16_t prefetched_ = 0;
     uint32_t prefetchAt_ = 0;
+    // The instruction was not run (illegal, line A/F, privilege violation): no trace after it.
+    bool untraced_ = false;
 };
 
 }  // namespace plumsg
