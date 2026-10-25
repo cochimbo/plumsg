@@ -284,6 +284,7 @@ void MegaDrive::powerCycle() {
     if (mcd_) mcd_->powerOn();
     if (svp_) svp_->powerOn();
     if (sms_) sms_->powerOn();
+    z80_.powerOn();
     reset();
 }
 
@@ -680,7 +681,13 @@ bool MegaDrive::watchWrite(uint32_t addr, uint8_t value, bool m68k) {
 
 void MegaDrive::writeBusControl(uint32_t addr, bool set) {
     if ((addr & 0xFFFF00) == 0xA11100) {
-        if (set && !z80BusReq_) z80Clock_ = std::max(z80Clock_, now_);
+        if (set && !z80BusReq_) {
+            z80Clock_ = std::max(z80Clock_, now_);
+            // A running Z80 lets go at the end of the machine cycle under way: till then
+            // BUSACK still reads 1 and its RAM is not the 68000's (misc_test's "Z80
+            // BUSREQ delay flag" and "delay RAM read").
+            z80BusGrantAt_ = z80Reset_ ? now_ : std::min(z80Clock_, now_ + kZ80BusGrantDelay);
+        }
         if (!set && z80BusReq_) z80Clock_ = std::max(z80Clock_, now_);
         z80BusReq_ = set;
     } else if ((addr & 0xFFFF00) == 0xA11200) {
@@ -725,7 +732,7 @@ uint8_t MegaDrive::read8(uint32_t addr) {
     }
     if (addr < 0xA10000 && addr >= 0xA00000) return readZ80Area(addr);
     if (addr >= 0xA10000 && addr < 0xA10020) return io_.read(addr | 1, now_);
-    if (addr == 0xA11100) return static_cast<uint8_t>((openBus() >> 8 & 0xFE) | (z80BusReq_ && !z80Reset_ ? 0x00 : 0x01));
+    if (addr == 0xA11100) return static_cast<uint8_t>((openBus() >> 8 & 0xFE) | (z80BusAcked() ? 0x00 : 0x01));
     return 0x00;
 }
 
@@ -756,7 +763,7 @@ uint16_t MegaDrive::read16(uint32_t addr) {
         const uint8_t b = io_.read(addr | 1, now_);
         return static_cast<uint16_t>(b << 8 | b);
     }
-    if (addr == 0xA11100) return static_cast<uint16_t>((openBus() & 0xFEFF) | (z80BusReq_ && !z80Reset_ ? 0x0000 : 0x0100));
+    if (addr == 0xA11100) return static_cast<uint16_t>((openBus() & 0xFEFF) | (z80BusAcked() ? 0x0000 : 0x0100));
     return 0x0000;
 }
 
@@ -903,6 +910,8 @@ uint8_t MegaDrive::read(uint16_t addr) {
         waitForDmaBus();
         z80Clock_ += kZ80BankDelay;
         if (a >= 0xA00000 && a < 0xA10000) return 0xFF;  // the Z80 cannot see itself
+        // Nor read the 68000's RAM, only write it (misc_test's "Z80 write-only to M68K RAM").
+        if (a >= 0xE00000) return 0xFF;
         return read8(a);
     }
     if (addr >= 0x7F00 && addr < 0x7F20) {
@@ -1010,8 +1019,8 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
     }
     {
         StateWriter w;
-        w(dmaBusUntil_);
-        block("DMAB", w.data());
+        w(z80BusGrantAt_);
+        block("ZBGA", w.data());
     }
     {
         StateWriter w;
@@ -1022,6 +1031,16 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         StateWriter w;
         io_.riseState(w);
         block("IOTH", w.data());
+    }
+    {
+        StateWriter w;
+        w(dmaBusUntil_);
+        block("DMAB", w.data());
+    }
+    {
+        StateWriter w;
+        io_.serialState(w);
+        block("IOSR", w.data());
     }
     if (overclock_ != 100) {
         StateWriter w;
@@ -1175,8 +1194,9 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     bool cacheFromBoot = false;  // the state comes from a version whose boot turns the 32X's cache on
     uint16_t overclock = 100;  // states without the block are from a console at its speed
     std::vector<uint8_t> thumbnail, addOnState;
+    dmaBusUntil_ = 0;  // states without the block: no DMA holds the bus
     refreshClocks_ = 0;  // states without the block are from before the refresh
-    dmaBusUntil_ = 0;
+    z80BusGrantAt_ = 0;  // nor the bus grant delay
     while (ok && !r.atEnd()) {
         uint32_t id = 0, size = 0;
         r(id, size);
@@ -1200,13 +1220,15 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);
         else if (id == fourcc("RFSH")) b(refreshClocks_);
-        else if (id == fourcc("DMAB")) b(dmaBusUntil_);
+        else if (id == fourcc("ZBGA")) b(z80BusGrantAt_);
         else if (id == fourcc("IRQS")) {
             cpu_.irqState(b);
             if (mcd_) mcd_->sub().irqState(b);
         }
         else if (id == fourcc("IO  ")) io_.state(b);
         else if (id == fourcc("IOTH")) io_.riseState(b);
+        else if (id == fourcc("DMAB")) b(dmaBusUntil_);
+        else if (id == fourcc("IOSR")) io_.serialState(b);
         else if (id == fourcc("CART")) cart_.state(b);
         else if (id == fourcc("EEPR")) cart_.eepromState(b);
         else if (id == fourcc("THMB")) thumbnail = data;
