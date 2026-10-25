@@ -5,11 +5,12 @@
 #   issue     where it came from
 #   download  a .zip (every ROM inside is run, each as name/file) or a ROM
 #   frames    how many frames to run; a screenshot every 300 and one at the end
-#   script    plumsg-headless --do lines, separated by ";" (can be empty)
+#   script    plumsg-headless --do lines, separated by ";" (can be empty); testpico
+#             asks for the reset button after its last test (32x rstprep)
 #
 # Homebrew games are not here: only programs made to test an emulator.
 
-testpico         | #69  | https://github.com/user-attachments/files/33813869/testpico-30a5783-dirty.zip | 1800 |
+testpico         | #69  | https://github.com/user-attachments/files/33813869/testpico-30a5783-dirty.zip | 2400 | 1500 reset
 VDPFIFOTesting   | #90  | https://github.com/user-attachments/files/33850742/VDPFIFOTesting.zip         | 1800 |
 SMSVDPTest       | #72  | https://github.com/user-attachments/files/33814234/SMSVDPTest-SMS-1.31.zip    | 1800 |
 VDPTEST_GG       | #76  | https://github.com/user-attachments/files/33848789/VDPTEST_GG.zip             | 1800 |
