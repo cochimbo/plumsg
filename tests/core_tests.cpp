@@ -81,6 +81,14 @@ void testHeader() {
     check(cart.header().japan && cart.header().usa && cart.header().europe, "header: regions JUE");
     check(cart.preferredRegion() == Region::UsaNtsc, "header: USA preferred when every region is listed");
     check(cart.read16(4) == 0x0000 && cart.read16(6) == 0x0200, "reset vector read big-endian");
+
+    // Another World (Europe) spells its region out.
+    std::vector<uint8_t> rom = testrom::build();
+    std::memcpy(&rom[0x1F0], "EUROPE          ", 16);
+    cart.loadData(rom);
+    check(cart.header().europe && !cart.header().usa && !cart.header().japan &&
+              cart.preferredRegion() == Region::EuropePal,
+          "header: \"EUROPE\" is Europe only");
 }
 
 void testSmd() {
