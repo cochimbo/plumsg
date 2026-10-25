@@ -45,6 +45,8 @@ public:
     // Master clocks the Z80 waits, on average, for the 68000's bus: through the bank
     // window, and to reach the VDP (testpico's "time z80 bank rom" and "time z80 vdp").
     static constexpr int kZ80BankDelay = 49;
+    // At most about a machine cycle (7 Z80 clocks) between BUSREQ and the Z80 letting go.
+    static constexpr uint64_t kZ80BusGrantDelay = 105;
     static constexpr int kZ80VdpDelay = 38;
 
     MegaDrive();
@@ -202,7 +204,9 @@ private:
     void writeZ80Area(uint32_t addr, uint8_t value);
     void writeBusControl(uint32_t addr, bool set);
     bool z80Running() const { return !z80BusReq_ && !z80Reset_; }
-    bool z80BusFree() const { return z80BusReq_ || z80Reset_; }
+    // The bus is the 68000's once the Z80 lets it go, a moment after the request.
+    bool z80BusAcked() const { return z80BusReq_ && !z80Reset_ && now_ >= z80BusGrantAt_; }
+    bool z80BusFree() const { return z80Reset_ || (z80BusReq_ && now_ >= z80BusGrantAt_); }
     void runUntil(uint64_t clock);
     void syncSound();  // brings PSG and YM2612 up to now_
     void updateIrq() { cpu_.setIrqLevel(vdp_.irqLevel()); }
@@ -258,6 +262,7 @@ private:
     uint16_t z80Bank_ = 0;
     bool z80BusReq_ = false;
     bool z80Reset_ = true;
+    uint64_t z80BusGrantAt_ = 0;  // when a running Z80 lets go of its bus after BUSREQ
 
     Region region_ = Region::Auto;
     Region effectiveRegion_ = Region::UsaNtsc;
