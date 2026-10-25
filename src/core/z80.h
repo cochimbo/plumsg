@@ -27,6 +27,7 @@ public:
 
     explicit Z80(Z80Bus& bus);
 
+    void powerOn();  // the registers as switched on, then reset()
     void reset();
 
     // Executes one instruction (or accepts a pending interrupt). Returns T-states used.

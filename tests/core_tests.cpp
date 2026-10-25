@@ -624,6 +624,19 @@ void testPrefetch() {
           "68000: an instruction written over right after being fetched runs as it was (misc_test)");
 }
 
+void testZ80ResetKeepsRegisters() {
+    // misc_test: the Z80's /RESET leaves its registers alone (only power sets them).
+    MegaDrive md;
+    md.loadRomData(testrom::build());
+    md.z80().sp = 0x1234;
+    md.z80().bc.w = 0x5678;
+    md.z80().pc = 0x100;
+    md.z80().reset();
+    check(md.z80().sp == 0x1234 && md.z80().bc.w == 0x5678 && md.z80().pc == 0, "Z80: /RESET keeps the registers (misc_test)");
+    md.z80().powerOn();
+    check(md.z80().sp == 0xFFFF && md.z80().bc.w == 0xFFFF, "Z80: power sets them to $FFFF");
+}
+
 void testTraceSkipsIllegal() {
     // m68k_opcode_sizes turns tracing on with ori.w #$8000,sr and then runs a line F word:
     // an instruction that cannot be run takes only its own exception, not a trace after it.
@@ -3230,6 +3243,7 @@ int main() {
     testOverclock();
     testBusAckOpenBus();
     testPrefetch();
+    testZ80ResetKeepsRegisters();
     testTraceSkipsIllegal();
     testVintFlagWait();
     testSplitRoms();

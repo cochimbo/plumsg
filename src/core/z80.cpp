@@ -36,13 +36,19 @@ const auto& sz53p = kTables.sz53p;
 
 }  // namespace
 
-Z80::Z80(Z80Bus& bus) : bus_(bus) { reset(); }
+Z80::Z80(Z80Bus& bus) : bus_(bus) { powerOn(); }
 
-void Z80::reset() {
+void Z80::powerOn() {
     af.w = bc.w = de.w = hl.w = 0xFFFF;
     af2.w = bc2.w = de2.w = hl2.w = 0xFFFF;
     ix.w = iy.w = 0xFFFF;
     sp = 0xFFFF;
+    reset();
+}
+
+// The /RESET line leaves the registers as they were (misc_test's "Z80 no clear regs on
+// Z80RES"): only PC, I, R, the interrupt flip-flops and the mode start over.
+void Z80::reset() {
     pc = 0;
     wz = 0;
     i = r = 0;
