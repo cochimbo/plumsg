@@ -81,6 +81,7 @@ public:
         if (sms_) sms_->setPads(p1, p2);
     }
     void setPadType(int port, PadType t) { io_.setPadType(port, t); }
+    PadType padType(int port) const { return io_.padType(port); }
 
     // Replaces the active cheats. ROM patches are applied now and undone by the next
     // call (or by loading another ROM); RAM writes are made at the start of every frame.

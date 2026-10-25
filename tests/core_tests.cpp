@@ -303,6 +303,11 @@ void testPads() {
     io.write(0xA10009, 0x00, now + 84);
     check((io.read(0xA10003, now + 224) & 0x3F) == 0x02, "TH let go while low still reads low for a moment");
     check((io.read(0xA10003, now + 2000) & 0x7F) == 0x7E, "TH let go floats high after that");
+
+    // Nothing in the port: TH low reads all high, not a pad's left and right held low.
+    io.setPadType(0, PadType::None);
+    io.write(0xA10009, 0x40, now);
+    check(set(true) == 0x3F && set(false) == 0x3F, "empty port: TH low reads no pad (ESPN NFL looks)");
 }
 
 void testPsg() {

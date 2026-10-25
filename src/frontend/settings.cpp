@@ -125,7 +125,9 @@ void Settings::parse(std::istream& in, Settings& s) {
                 for (int i = 0; i < 4; ++i)
                     if (iniName(lower(value)) == kRegionNames[i]) s.region = static_cast<Region>(i);
             } else if (key == "pad1" || key == "pad2") {
-                s.padType[key == "pad1" ? 0 : 1] = value == "3" ? PadType::ThreeButton : PadType::SixButton;
+                PadType t = value == "3" ? PadType::ThreeButton : PadType::SixButton;
+                if (value == "0" && key == "pad2") t = PadType::None;  // pad 1 is always there
+                s.padType[key == "pad1" ? 0 : 1] = t;
             } else if (key == "fm_master_system") {
                 s.smsFm = yes(value);
             } else if (key == "overclock") {
@@ -233,10 +235,10 @@ void Settings::write(std::ostream& out) const {
         << "# those of its SoundFont family, and keeping the closest.\n"
         << "compare_sound = " << flag(compareSound) << "\n"
         << "\n[console]\n"
-        << "# region: auto (the ROM's), japan, usa or europe. pad1/pad2: 3 or 6 buttons.\n"
+        << "# region: auto (the ROM's), japan, usa or europe. pad1/pad2: 3 or 6 buttons; pad2 = 0: nothing plugged in.\n"
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"
         << "pad1 = " << (padType[0] == PadType::ThreeButton ? 3 : 6) << "\n"
-        << "pad2 = " << (padType[1] == PadType::ThreeButton ? 3 : 6) << "\n"
+        << "pad2 = " << (padType[1] == PadType::ThreeButton ? 3 : padType[1] == PadType::None ? 0 : 6) << "\n"
         << "# fm_master_system: yes, the Master System FM unit outside Japan too.\n"
         << "fm_master_system = " << flag(smsFm) << "\n"
         << "# overclock: processor (68000) speed in percent, from 100 (the console's) to 400.\n"

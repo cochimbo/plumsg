@@ -1003,6 +1003,7 @@ int main(int argc, char** argv) {
         net.reset();
         netSocket.reset();
         if (app->romLoaded) app->applyCheats();
+        app->console.setPadType(1, settings.padType[1]);
         rewind.clear();
         if (error) ui->showError(why);
         else if (!why.empty()) ui->notify(why);
@@ -1027,6 +1028,8 @@ int main(int argc, char** argv) {
         netPhase = net->phase();
         // ROM cheats change the cartridge, which the savestate the guest gets does not carry.
         app->console.setCheats({});
+        // The guest plays on pad 2: it has to be plugged in (the guest gets the host's types).
+        if (app->console.padType(1) == PadType::None) app->console.setPadType(1, PadType::SixButton);
         paused = slowMotion = false;
         ui->notify(host ? trf("Esperando al otro jugador en el puerto %d", settings.netPort)
                         : trf("Conectando con %s", settings.netAddress.c_str()));
