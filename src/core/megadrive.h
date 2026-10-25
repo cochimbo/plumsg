@@ -17,6 +17,7 @@
 #include "mars.h"
 #include "megacd.h"
 #include "paprium.h"
+#include "svp.h"
 #include "psg.h"
 #include "roland.h"
 #include "sms.h"
@@ -211,6 +212,7 @@ private:
     void setUpMars();             // adds or removes the 32X to suit the cartridge
     void setUpSms();              // switches to Master System mode for its cartridges, or back
     void setUpPaprium();          // adds Paprium's chip for its cartridge
+    void setUpSvp();              // adds Virtua Racing's SVP chip for its cartridge
     void runFrameSms();
     void runFrameMd();
     std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
@@ -241,6 +243,7 @@ private:
     std::unique_ptr<MegaCd> mcd_;
     std::unique_ptr<MasterSystem> sms_;
     std::unique_ptr<Paprium> paprium_;
+    std::unique_ptr<Svp> svp_;
     uint8_t tmss_ = 1;  // what Paprium reads back from 0xA14101
     std::unique_ptr<Ym2413> opll_;  // the Master System's FM unit, with sms_
     bool smsFmAlways_ = false;

@@ -143,6 +143,7 @@ add_library(plumsg_core STATIC
   src/core/sh2.cpp
   src/core/mars.cpp
   src/core/paprium.cpp
+  src/core/svp.cpp
   src/core/music_track.cpp
   src/core/cd_image.cpp
   src/core/megacd.cpp
