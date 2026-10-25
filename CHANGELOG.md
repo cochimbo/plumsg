@@ -3,7 +3,7 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## Unreleased
+## 0.1.0-beta.5
 
 - Master System: the games made only for European 50 Hz consoles (Back to the Future
   Part III, Sonic 2, Sensible Soccer, RoboCop 3, Home Alone and others) start on a PAL
@@ -16,6 +16,8 @@ What each version brings, newest first. Installers are on the
   games) start on a PAL console too, as they were made for one: the top of the
   picture of Micro Machines no longer flashes
   ([#74](https://github.com/cochimbo/plumsg/issues/74)).
+- The "Opciones de este juego" tab draws each option's control again, instead of
+  an empty box next to its name.
 
 ## 0.1.0-beta.4
 
