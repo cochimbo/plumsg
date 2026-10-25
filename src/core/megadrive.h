@@ -200,6 +200,8 @@ private:
 
     uint16_t readVdp(uint32_t addr);
     void writeVdp(uint32_t addr, uint16_t value, bool byte);
+    uint8_t readIo(uint32_t addr);
+    void writeIo(uint32_t addr, uint8_t value);
     uint8_t readZ80Area(uint32_t addr);
     void writeZ80Area(uint32_t addr, uint8_t value);
     void writeBusControl(uint32_t addr, bool set);
@@ -282,6 +284,7 @@ private:
     uint64_t psgClock_ = 0;
     int psgRemainder_ = 0;     // master clocks not yet worth a PSG cycle
     int refreshClocks_ = 0;    // master clocks the 68000 has run since the last refresh
+    int freeAccesses_ = 0;     // VDP and I/O accesses in the 68000's instruction under way
     static constexpr int kRefreshEvery = 126 * 7;  // 126 cycles running, then
     static constexpr int kRefreshStall = 2 * 7;    // 2 waiting
     int overclock_ = 100;      // the 68000's speed, percent of the real one

@@ -353,11 +353,17 @@ void MegaDrive::runUntil(uint64_t clock) {
                                                       : std::max<uint64_t>(1, (cycles * 700 + overclock_ / 2) / overclock_);
             m68kClock_ += clocks;
             // The DRAM refresh holds the 68000 off its bus for 2 of every 128 cycles
-            // (testpico's "time loop" counts them).
+            // (testpico's "time loop" counts them), unless it comes while the 68000 is
+            // on the VDP or the I/O ports, which are not on that bus: those accesses are
+            // taken as the instruction's last before the fetch of the next one
+            // (misc_test's "M68K ROM speed" 1 and 4).
             refreshClocks_ += static_cast<int>(clocks);
+            const int freeFrom = 4 * 7, freeTo = std::min(static_cast<int>(clocks), freeFrom + freeAccesses_ * 4 * 7);
+            freeAccesses_ = 0;
             while (refreshClocks_ >= kRefreshEvery) {
                 refreshClocks_ -= kRefreshEvery;
-                m68kClock_ += kRefreshStall;
+                // refreshClocks_ is now how long before the instruction's end it came.
+                if (refreshClocks_ < freeFrom || refreshClocks_ >= freeTo) m68kClock_ += kRefreshStall;
             }
         } else if (z80Running()) {
             now_ = z80Clock_;
@@ -602,6 +608,7 @@ void MegaDrive::irqAcknowledge(int level) {
 // 68000 memory map
 
 uint16_t MegaDrive::readVdp(uint32_t addr) {
+    if (!inZ80_) ++freeAccesses_;
     const uint64_t t = vdpClock();
     switch (addr & 0x1F) {
         case 0x00: case 0x02: {
@@ -626,6 +633,7 @@ void MegaDrive::writeVdp(uint32_t addr, uint16_t value, bool byte) {
         if (!byte || (addr & 1)) psgWrite(static_cast<uint8_t>(value));
         return;
     }
+    if (!inZ80_) ++freeAccesses_;
     // Byte writes reach the VDP with the byte on both halves of the bus.
     if (byte) value = static_cast<uint16_t>((value & 0xFF) << 8 | (value & 0xFF));
     const uint64_t t = vdpClock();
@@ -638,6 +646,16 @@ void MegaDrive::writeVdp(uint32_t addr, uint16_t value, bool byte) {
     m68kClock_ += static_cast<uint64_t>(stall);
     vdpFreeAt_ = t + static_cast<uint64_t>(stall);
     updateIrq();
+}
+
+uint8_t MegaDrive::readIo(uint32_t addr) {
+    if (!inZ80_) ++freeAccesses_;
+    return io_.read(addr | 1, now_);
+}
+
+void MegaDrive::writeIo(uint32_t addr, uint8_t value) {
+    if (!inZ80_) ++freeAccesses_;
+    io_.write(addr | 1, value, now_);
 }
 
 uint8_t MegaDrive::readZ80Area(uint32_t addr) {
@@ -731,7 +749,7 @@ uint8_t MegaDrive::read8(uint32_t addr) {
         return static_cast<uint8_t>((addr & 1) ? w : w >> 8);
     }
     if (addr < 0xA10000 && addr >= 0xA00000) return readZ80Area(addr);
-    if (addr >= 0xA10000 && addr < 0xA10020) return io_.read(addr | 1, now_);
+    if (addr >= 0xA10000 && addr < 0xA10020) return readIo(addr);
     if (addr == 0xA11100) return static_cast<uint8_t>((openBus() >> 8 & 0xFE) | (z80BusAcked() ? 0x00 : 0x01));
     return 0x00;
 }
@@ -760,7 +778,7 @@ uint16_t MegaDrive::read16(uint32_t addr) {
         return static_cast<uint16_t>(b << 8 | b);
     }
     if (addr >= 0xA10000 && addr < 0xA10020) {
-        const uint8_t b = io_.read(addr | 1, now_);
+        const uint8_t b = readIo(addr);
         return static_cast<uint16_t>(b << 8 | b);
     }
     if (addr == 0xA11100) return static_cast<uint16_t>((openBus() & 0xFEFF) | (z80BusAcked() ? 0x0000 : 0x0100));
@@ -793,7 +811,7 @@ void MegaDrive::write8(uint32_t addr, uint8_t value) {
     } else if (addr >= 0xA00000 && addr < 0xA10000) {
         writeZ80Area(addr, value);
     } else if (addr >= 0xA10000 && addr < 0xA10020) {
-        io_.write(addr | 1, value, now_);
+        writeIo(addr, value);
     } else if (addr == 0xA11100 || addr == 0xA11200) {
         writeBusControl(addr, (value & 1) != 0);
     } else if (paprium_ && (addr == 0xA14101 || (addr >= 0xA130F2 && addr < 0xA13100))) {
@@ -827,7 +845,7 @@ void MegaDrive::write16(uint32_t addr, uint16_t value) {
     } else if (addr >= 0xA00000 && addr < 0xA10000) {
         writeZ80Area(addr, static_cast<uint8_t>(value >> 8));  // only the high byte arrives
     } else if (addr >= 0xA10000 && addr < 0xA10020) {
-        io_.write(addr | 1, static_cast<uint8_t>(value), now_);
+        writeIo(addr, static_cast<uint8_t>(value));
     } else if (addr == 0xA11100 || addr == 0xA11200) {
         writeBusControl(addr, (value & 0x0100) != 0);
     } else if (paprium_ && (addr == 0xA14100 || (addr >= 0xA130F2 && addr < 0xA13100))) {
