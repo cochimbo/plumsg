@@ -428,7 +428,6 @@ void Mars::startLine(int line, int activeLines) {
         vdp_.latchDotshift = vdp_.dotshift;
     }
     vdp_.hblank = false;
-    for (auto& q : irq_) q.active[kHint] = false;
     if (line == activeLines) {
         vdp_.vblank = true;
         for (auto& q : irq_) q.active[kVint] = true;
@@ -440,13 +439,16 @@ void Mars::startLine(int line, int activeLines) {
     updateIrls();
 }
 
+// HINT stays pending until the SH-2 clears it (0x18), and only comes for a CPU that has
+// it enabled (BC Racers hangs after the reset button without it). VINT, as testpico's
+// "32x irq vint" shows, is there for the whole of VBlank whatever the mask, and goes
+// when VBlank ends.
 void Mars::startHblank(int, int) {
     vdp_.hblank = true;
-    for (auto& q : irq_) q.active[kHint] = false;
     if (!vdp_.vblank || io_.hintVblank) {
         if (io_.hcounter++ >= io_.hperiod) {
             io_.hcounter = 0;
-            for (auto& q : irq_) q.active[kHint] = true;
+            for (auto& q : irq_) q.active[kHint] |= q.enable[kHint];
         }
     }
     updateIrls();
