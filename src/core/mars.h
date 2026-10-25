@@ -28,12 +28,19 @@ public:
     explicit Mars(Cartridge& cart);
 
     void powerOn();  // clears memory and starts the boot sequence again
-    void reset();    // the console's reset button
+    void reset();        // everything but memory as it powers on (powerOn() does it)
+    void resetButton();  // the console's reset button: the SH-2s get the VRES interrupt
 
     // Runs both SH-2s (and the PWM) up to `masterClock` of the console.
     void runUntil(uint64_t masterClock);
-    // Starts the clocks again from 0 (the console does it with its own at each reset).
-    void rebaseClock() { masterTicks_ = sh2Ticks_[0] = sh2Ticks_[1] = pwmTicks_ = now_ = 0; }
+    // Starts the clocks again from 0 (the console does it with its own at each reset);
+    // what was due later stays as far ahead, for the SH-2s run on through a reset.
+    void rebaseClock() {
+        const uint64_t base = masterTicks_;
+        for (uint64_t* t : {&sh2Ticks_[0], &sh2Ticks_[1], &pwmTicks_, &pwm_.nextTick, &vdp_.fillEnd})
+            *t = *t > base ? *t - base : 0;
+        masterTicks_ = now_ = 0;
+    }
 
     // 68000 side. `read68k` returns false when the address is not the 32X's and the
     // console should answer normally. `upper` and `lower` say which bytes are accessed.

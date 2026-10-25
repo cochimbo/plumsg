@@ -160,6 +160,16 @@ void Mars::reset() {
     updateIrls();
 }
 
+// The reset button resets the 68000 only. The adapter keeps its registers (ADEN, RES,
+// the banks, the communication words), so the 68000 starts again from the vector ROM,
+// and the SH-2s keep running: each gets the VRES interrupt, whose handler in the game
+// goes back to the boot ROM to wait for the 68000 again.
+void Mars::resetButton() {
+    if (!io_.adapterReset) return;  // the SH-2s are still held in reset
+    for (auto& q : irq_) q.active[kVres] = true;
+    updateIrls();
+}
+
 void Mars::bootSh2s() {
     master_.reset();
     slave_.reset();
