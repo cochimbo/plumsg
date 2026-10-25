@@ -1008,6 +1008,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
     }
     {
         StateWriter w;
+        cpu_.prefetchState(w);
+        block("PFCH", w.data());
+    }
+    {
+        StateWriter w;
         w(z80BusGrantAt_);
         block("ZBGA", w.data());
     }
@@ -1179,6 +1184,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     uint16_t overclock = 100;  // states without the block are from a console at its speed
     std::vector<uint8_t> thumbnail, addOnState;
     refreshClocks_ = 0;  // states without the block are from before the refresh
+    cpu_.dropPrefetch();
     z80BusGrantAt_ = 0;  // nor the bus grant delay
     while (ok && !r.atEnd()) {
         uint32_t id = 0, size = 0;
@@ -1203,6 +1209,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("PSG ")) psg_.state(b);
         else if (id == fourcc("BUS ")) busState(b);
         else if (id == fourcc("RFSH")) b(refreshClocks_);
+        else if (id == fourcc("PFCH")) cpu_.prefetchState(b);
         else if (id == fourcc("ZBGA")) b(z80BusGrantAt_);
         else if (id == fourcc("IRQS")) {
             cpu_.irqState(b);

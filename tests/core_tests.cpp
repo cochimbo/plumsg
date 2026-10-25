@@ -603,6 +603,27 @@ void testBusAckOpenBus() {
     check(md.workRam()[0] == 1, "BUSACK: the bits besides bit 0 read the open bus (Indy Heat)");
 }
 
+void testPrefetch() {
+    // misc_test's "M68K prefetch": code in RAM rewrites the instruction right after the one
+    // writing, which the 68000 has fetched already, so the old one (moveq #1,d1) runs.
+    std::vector<uint8_t> rom(0x400, 0);
+    const uint8_t vectors[] = {0x00, 0xFF, 0x80, 0x00, 0x00, 0x00, 0x02, 0x00};
+    const uint8_t code[] = {0x41, 0xF9, 0x00, 0xFF, 0x00, 0x2C,              // lea $FF002C,a0
+                            0x21, 0x3C, 0x72, 0x01, 0x4E, 0x75,              // move.l #$72014E75,-(a0)
+                            0x21, 0x3C, 0x30, 0xBC, 0x72, 0x00,              // move.l #$30BC7200,-(a0)
+                            0x21, 0x3C, 0x41, 0xFA, 0x00, 0x06,              // move.l #$41FA0006,-(a0)
+                            0x4E, 0x90,                                      // jsr (a0)
+                            0x13, 0xC1, 0x00, 0xFF, 0x00, 0x00,              // move.b d1,$FF0000
+                            0x60, 0xFE};
+    std::copy(std::begin(vectors), std::end(vectors), rom.begin());
+    std::copy(std::begin(code), std::end(code), rom.begin() + 0x200);
+    MegaDrive md;
+    md.loadRomData(rom);
+    md.runFrame();
+    check(md.workRam()[0] == 1 && md.workRam()[0x28] == 0x72 && md.workRam()[0x29] == 0x00,
+          "68000: an instruction written over right after being fetched runs as it was (misc_test)");
+}
+
 void testZ80ResetKeepsRegisters() {
     // misc_test: the Z80's /RESET leaves its registers alone (only power sets them).
     MegaDrive md;
@@ -3221,6 +3242,7 @@ int main() {
     testVdpWidescreen();
     testOverclock();
     testBusAckOpenBus();
+    testPrefetch();
     testZ80ResetKeepsRegisters();
     testTraceSkipsIllegal();
     testVintFlagWait();

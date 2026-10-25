@@ -22,7 +22,8 @@ public:
 
 // Motorola 68000 interpreter: every instruction, addressing mode and exception, with
 // instruction-level cycle counts (including the operand-dependent MULU/MULS/DIVU/DIVS).
-// It does not model the prefetch queue or timing inside an instruction.
+// It does not model the prefetch queue or timing inside an instruction, beyond keeping the
+// word after an instruction as it was before that instruction wrote over it.
 class M68000 {
 public:
     explicit M68000(M68kBus& bus) : bus_(bus) {}
@@ -86,6 +87,12 @@ public:
     void irqState(Ar& ar) {
         ar(seenIrqLevel_);
     }
+    // The kept prefetch word (also apart).
+    template <class Ar>
+    void prefetchState(Ar& ar) {
+        ar(prefetchKept_, prefetched_, prefetchAt_);
+    }
+    void dropPrefetch() { prefetchKept_ = false; }
 
 private:
     // What callRoutine() puts back.
@@ -109,7 +116,19 @@ private:
     uint8_t read8(uint32_t addr) { return bus_.read8(addr & 0xFFFFFF); }
     uint16_t read16(uint32_t addr, bool instruction = false);
     uint32_t read32(uint32_t addr);
-    void write8(uint32_t addr, uint8_t v) { bus_.write8(addr & 0xFFFFFF, v); }
+    void write8(uint32_t addr, uint8_t v) {
+        keepPrefetch(addr);
+        bus_.write8(addr & 0xFFFFFF, v);
+    }
+    // The word after the instruction has been fetched before it writes: a write over it
+    // changes memory but not the next instruction (misc_test's "M68K prefetch").
+    void keepPrefetch(uint32_t addr) {
+        if (((addr ^ pc) & 0xFFFFFE) == 0 && !prefetchKept_) {
+            prefetched_ = bus_.read16(pc & 0xFFFFFE);
+            prefetchAt_ = pc;
+            prefetchKept_ = true;
+        }
+    }
     void write16(uint32_t addr, uint16_t v);
     void write32(uint32_t addr, uint32_t v);
     uint16_t fetch16();
@@ -159,6 +178,9 @@ private:
     uint32_t instrPc_ = 0;
     uint16_t ir_ = 0;
     int faultPcAdjust_ = 0;
+    bool prefetchKept_ = false;  // prefetched_ is the word at pc, from before a write over it
+    uint16_t prefetched_ = 0;
+    uint32_t prefetchAt_ = 0;
     // The instruction was not run (illegal, line A/F, privilege violation): no trace after it.
     bool untraced_ = false;
 };
