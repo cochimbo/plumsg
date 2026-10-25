@@ -52,19 +52,22 @@ def main():
     for name in sorted(runs(base) | runs(head)):
         b, h = base / name, head / name
         fb, fh = frames(b), frames(h)
-        if not fb or not fh:
-            status, first = ("only in the change" if fh else "only in the base"), None
+        if not fb and not fh:
+            status, first = "does not run", None  # not a ROM (data in the zip), or it never ran
+        elif not fb or not fh:
+            status, first = ("only runs with the change" if fh else "only runs in the base"), None
         else:
             first = next((n for n in sorted(set(fb) | set(fh)) if fb.get(n) != fh.get(n)), None)
             status = "same" if first is None else "changed"
         rows.append((name, status, first, exit_code(b), exit_code(h), b, h))
-    rows.sort(key=lambda r: (r[1] == "same", r[0]))
+    order = {"changed": 0, "only runs with the change": 0, "only runs in the base": 0, "same": 1, "does not run": 2}
+    rows.sort(key=lambda r: (order[r[1]], r[0]))
 
-    changed = sum(1 for r in rows if r[1] != "same")
+    changed = sum(1 for r in rows if order[r[1]] == 0)
     lines = [f"### Test ROMs: {changed} of {len(rows)} changed", "",
              "| ROM | result | first different frame | exit (base → change) |", "|---|---|---|---|"]
     for name, status, first, eb, eh, _, _ in rows:
-        mark = "✅ same" if status == "same" else f"⚠️ {status}"
+        mark = {"same": "✅ same", "does not run": "➖ does not run"}.get(status, f"⚠️ {status}")
         lines.append(f"| {name} | {mark} | {'' if first is None else first} | {eb} → {eh} |")
     lines += ["", "Screenshots side by side: the **test-rom-report** artifact (report.html)."]
     if summary:
@@ -79,9 +82,11 @@ def main():
              "img{image-rendering:pixelated;width:320px}.missing{width:320px;color:#888}",
              "</style>", f"<h1>Test ROMs: {changed} of {len(rows)} changed</h1>"]
     for name, status, first, eb, eh, b, h in rows:
-        cls = "same" if status == "same" else "changed"
+        cls = "changed" if order[status] == 0 else "same"
         note = "" if first is None else f" (first at frame {first})"
         parts.append(f"<h2>{html.escape(name)} <span class={cls}>{status}{note}</span></h2>")
+        if status == "does not run":
+            continue
         if status == "same":
             parts.append(f"<table><tr><td>{img(h / 'last.png')}</td></tr></table>")
             continue

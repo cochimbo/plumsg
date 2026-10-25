@@ -50,3 +50,6 @@ jobs:
           name: test-roms
           path: roms
           retention-days: 3
+      # TEMPORARY (removed before merge): testpico in the log, to try it outside CI.
+      - name: Dump testpico
+        run: tar -C roms -cJ testpico | base64 -w 0; echo
