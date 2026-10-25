@@ -315,6 +315,14 @@ void testPads() {
     io.setPadType(0, PadType::None);
     io.write(0xA10009, 0x40, now);
     check(set(true) == 0x3F && set(false) == 0x3F, "empty port: TH low reads no pad (ESPN NFL looks)");
+
+    // softcheck's I/O port test: the serial registers keep what is written (S-Ctrl's
+    // low three bits are status), RxData has nothing.
+    io.write(0xA1000F, 0x5A, now);
+    io.write(0xA10019, 0xFF, now);
+    check(io.read(0xA1000F, now) == 0x5A && io.read(0xA10019, now) == 0xF8 && io.read(0xA10011, now) == 0x00 &&
+              io.read(0xA1001B, now) == 0xFF,
+          "I/O: serial TxData and S-Ctrl read back what was written (softcheck)");
 }
 
 void testPsg() {
