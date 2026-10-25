@@ -21,6 +21,8 @@ void Io::reset() {
     lastTh_ = {true, true};
     thTime_ = {0, 0};
     thRelease_ = {kNotRising, kNotRising};
+    txData_ = {0xFF, 0xFF, 0xFF};
+    serialCtrl_ = {0, 0, 0};
 }
 
 // TH reads as the value written when it is an output, else it floats high (after a
@@ -69,12 +71,18 @@ uint8_t Io::read(uint32_t addr, uint64_t now) {
         case 4: return ctrl_[0];
         case 5: return ctrl_[1];
         case 6: return ctrl_[2];
-        default: return 0xFF;  // serial registers: nothing connected
+        // Serial, three registers a port: TxData, RxData (nothing received), S-Ctrl.
+        // Sega's softcheck writes and reads them back in its I/O port test.
+        case 7: case 10: case 13: return txData_[(((addr >> 1) & 0x0F) - 7) / 3];
+        case 9: case 12: case 15: return serialCtrl_[(((addr >> 1) & 0x0F) - 9) / 3];
+        default: return 0x00;
     }
 }
 
 void Io::write(uint32_t addr, uint8_t value, uint64_t now) {
     const int reg = (addr >> 1) & 0x0F;
+    if (reg == 7 || reg == 10 || reg == 13) txData_[(reg - 7) / 3] = value;
+    else if (reg == 9 || reg == 12 || reg == 15) serialCtrl_[(reg - 9) / 3] = value & 0xF8;
     if (reg >= 1 && reg <= 3) data_[reg - 1] = value;
     else if (reg >= 4 && reg <= 6) {
         const int port = reg - 4;
