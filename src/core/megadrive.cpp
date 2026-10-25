@@ -29,6 +29,7 @@ MegaDrive::MegaDrive() {
     vdp_.setDmaReader([this](uint32_t addr) {
         uint16_t w = 0;
         if (mcd_ && mcd_->dmaRead(addr & 0xFFFFFE, w)) return w;
+        if (svp_ && svp_->dmaRead(addr & 0xFFFFFE, w)) return w;
         return read16(addr & 0xFFFFFE);
     });
     applyRegion();
@@ -115,6 +116,7 @@ void MegaDrive::attachCd(std::unique_ptr<CdImage> disc, bool cartridge) {
     setUpMars();
     setUpSms();
     setUpPaprium();
+    setUpSvp();
     applyRegion();
     powerCycle();
 }
@@ -186,6 +188,11 @@ void MegaDrive::setUpPaprium() {
     // takes in a frame: done in the VDP's time the game runs at half speed with enemies on
     // screen. DMA from the chip's RAM finishes at once instead.
     vdp_.setInstantDma(paprium_ != nullptr);
+}
+
+void MegaDrive::setUpSvp() {
+    svp_.reset();
+    if (!sms_ && !disc_ && Svp::detect(cart_)) svp_ = std::make_unique<Svp>(cart_);
 }
 
 void MegaDrive::setUpSms() {
@@ -275,6 +282,7 @@ void MegaDrive::powerCycle() {
     vdp_.reset();
     if (mars_) mars_->powerOn();
     if (mcd_) mcd_->powerOn();
+    if (svp_) svp_->powerOn();
     if (sms_) sms_->powerOn();
     reset();
 }
@@ -315,6 +323,7 @@ void MegaDrive::reset() {
         mcd_->rebaseClock();
         mcd_->samples().clear();
     }
+    if (svp_) svp_->reset();
     cpu_.setIrqLevel(0);
     cpu_.reset();
     if (sms_) {
@@ -335,6 +344,7 @@ void MegaDrive::runUntil(uint64_t clock) {
             // The SH-2s catch up first, so the 68000 never sees them behind it.
             if (mars_) mars_->runUntil(m68kClock_);
             if (mcd_) mcd_->runUntil(m68kClock_);
+            if (svp_) svp_->runUntil(m68kClock_);
             now_ = m68kClock_;
             const uint64_t cycles = static_cast<uint64_t>(cpu_.step());
             // Overclocked, each cycle takes fewer master clocks (rounded, never 0).
@@ -361,6 +371,7 @@ void MegaDrive::runUntil(uint64_t clock) {
     now_ = clock;
     if (mars_) mars_->runUntil(clock);
     if (mcd_) mcd_->runUntil(clock);
+    if (svp_) svp_->runUntil(clock);
 }
 
 void MegaDrive::syncSound() {
@@ -694,6 +705,10 @@ uint8_t MegaDrive::read8(uint32_t addr) {
         if (mcd_->read68k(addr, w)) return static_cast<uint8_t>((addr & 1) ? w : w >> 8);
     }
     if (paprium_ && Paprium::inWindow(addr)) return paprium_->read8(addr);
+    if (svp_) {
+        uint16_t w = 0;
+        if (svp_->read68k(addr & ~1u, w)) return static_cast<uint8_t>((addr & 1) ? w : w >> 8);
+    }
     if (addr < 0x400000) return cart_.read8(addr);
     // The cartridge slot of a Mega CD with no cartridge: no RAM cartridge either, whose
     // size code (0x400001, 0-6) is how software tells.
@@ -722,6 +737,10 @@ uint16_t MegaDrive::read16(uint32_t addr) {
         if (mcd_->read68k(addr, w)) return w;
     }
     if (paprium_ && Paprium::inWindow(addr)) return paprium_->read16(addr);
+    if (svp_) {
+        uint16_t w = 0;
+        if (svp_->read68k(addr, w)) return w;
+    }
     if (addr < 0x400000) return cart_.read16(addr);
     if (addr < 0x800000 && mcd_) return 0xFFFF;
     if (addr >= 0xE00000) return static_cast<uint16_t>(ram_[addr & 0xFFFF] << 8 | ram_[(addr & 0xFFFF) + 1]);
@@ -751,6 +770,7 @@ void MegaDrive::write8(uint32_t addr, uint8_t value) {
     addr &= 0xFFFFFF;
     if (mars_ && mars_->write68k(addr, static_cast<uint16_t>(value << 8 | value), !(addr & 1), (addr & 1) != 0)) return;
     if (mcd_ && mcd_->write68k(addr & ~1u, static_cast<uint16_t>(value << 8 | value), !(addr & 1), (addr & 1) != 0)) return;
+    if (svp_ && svp_->write68k(addr & ~1u, static_cast<uint16_t>(value << 8 | value), !(addr & 1), (addr & 1) != 0)) return;
     if (addr >= 0xE00000) {
         if (watching_ && !watchWrite(0xFF0000 | addr, value, true)) return;
         ram_[addr & 0xFFFF] = value;
@@ -777,6 +797,7 @@ void MegaDrive::write16(uint32_t addr, uint16_t value) {
     addr &= 0xFFFFFE;
     if (mars_ && mars_->write68k(addr, value, true, true)) return;
     if (mcd_ && mcd_->write68k(addr, value, true, true)) return;
+    if (svp_ && svp_->write68k(addr, value, true, true)) return;
     if (addr >= 0xE00000) {
         if (watching_) {
             if (watchWrite(0xFF0000 | addr, static_cast<uint8_t>(value >> 8), true))
@@ -1033,6 +1054,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         paprium_->state(w);
         block("PAPR", w.data());
     }
+    if (svp_) {
+        StateWriter w;
+        svp_->state(w);
+        block("SVP ", w.data());
+    }
     {  // after M68K and MCD, which settle it for older states
         StateWriter w;
         cpu_.irqState(w);
@@ -1182,6 +1208,9 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         }
         else if (id == fourcc("PAPR")) {
             if (paprium_) paprium_->state(b);
+        }
+        else if (id == fourcc("SVP ")) {
+            if (svp_) svp_->state(b);
         }
         else if (id == fourcc("MCD ")) {
             if (mcd_) {

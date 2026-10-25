@@ -1425,6 +1425,49 @@ void testVdpInstantDma() {
 
 // Paprium's chip, on a made-up ROM with its header: the status words, a block unpacked
 // and read out at 0xC000, and a save bank written and read back.
+void testSvp() {
+    // A cartridge with the SVP's "SV" and a DSP program at word 0x400.
+    std::vector<uint8_t> rom(0x100000, 0);
+    rom[0x1C8] = 'S';
+    rom[0x1C9] = 'V';
+    const uint16_t program[] = {
+        0x0830, 0x1234,                  // ldi A, 1234h
+        0x8800, 0x0001,                  // add A, 1
+        0x00B3,                          // ld XST, A: to the 68000
+        0x08E0, 0x0010, 0x08E0, 0x0818,  // PMC: DRAM word 10h, step 1
+        0x00C0,                          // ld PM4, -: PM4 writes there
+        0x00C3, 0x00C3,                  // ld PM4, A twice
+        0x0810, 0x0003, 0x0820, 0xFFFC,  // ldi X, 3; ldi Y, -4
+        0x0037,                          // ld A, P: A = X * Y * 2
+        0x00CF,                          // ld PM4, AL
+        0x4C00, 0x0412,                  // bra here
+    };
+    for (size_t i = 0; i < std::size(program); ++i) {
+        rom[0x800 + i * 2] = static_cast<uint8_t>(program[i] >> 8);
+        rom[0x801 + i * 2] = static_cast<uint8_t>(program[i]);
+    }
+    Cartridge cart;
+    cart.loadData(rom);
+    check(Svp::detect(cart), "svp: found by its header");
+    Svp svp(cart);
+    svp.powerOn();
+    svp.runUntil(1000);
+    check(svp.pc() == 0x412, "svp: the program ran to its loop");
+    uint16_t v = 0;
+    check(svp.read68k(0xA15004, v) && (v & 1), "svp: status says the DSP wrote XST");
+    check(svp.read68k(0xA15004, v) && !(v & 1), "svp: reading the status takes that bit");
+    check(svp.read68k(0xA15000, v) && v == 0x1235, "svp: XST holds the word");
+    uint16_t a = 0, b = 0, c = 0;
+    svp.read68k(0x300020, a);
+    svp.read68k(0x300022, b);
+    svp.read68k(0x300024, c);
+    check(a == 0x1235 && b == 0x1235 && c == 0xFFE8, "svp: PM4 writes DRAM, stepping; P = X * Y * 2");
+    check(svp.dmaRead(0x300022, v) && v == 0x1235 && svp.dmaRead(0x300026, v) && v == 0xFFE8,
+          "svp: a VDP DMA reads one word behind");
+    svp.write68k(0x300026, 0xAB00, true, false);
+    check(svp.dram()[0x13] == 0xAB00, "svp: the 68000 writes DRAM");
+}
+
 void testPaprium() {
     std::vector<uint8_t> rom(0x100000, 0);
     std::memcpy(&rom[0x180], "GM T-574120", 11);
@@ -3149,6 +3192,7 @@ int main() {
     testMegaCdBootRom();
     testMsuMd();
     testPaprium();
+    testSvp();
     testVdpInstantDma();
     testNetplay();
     testNotation();
