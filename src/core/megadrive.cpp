@@ -631,7 +631,10 @@ void MegaDrive::writeVdp(uint32_t addr, uint16_t value, bool byte) {
     const uint64_t t = vdpClock();
     int stall = 0;
     if (port < 0x04) stall = vdp_.writeData(value, t);
-    else if (port < 0x08) stall = vdp_.writeControl(value, t);
+    else if (port < 0x08) {
+        stall = vdp_.writeControl(value, t);
+        if (stall > 0) dmaBusUntil_ = t + static_cast<uint64_t>(stall);  // only a DMA stalls here
+    }
     m68kClock_ += static_cast<uint64_t>(stall);
     vdpFreeAt_ = t + static_cast<uint64_t>(stall);
     updateIrq();
@@ -888,6 +891,12 @@ void MegaDrive::out(uint16_t port, uint8_t value) {
     z80_.setIrqLine(sms_->vdp().irq());  // an interrupt enable may have changed
 }
 
+// A DMA from 68000 memory keeps that bus till it ends: the Z80 going through its bank
+// waits (misc_test's "Z80 halt when read ROM while DMA").
+void MegaDrive::waitForDmaBus() {
+    if (inZ80_ && z80Clock_ < dmaBusUntil_) z80Clock_ = dmaBusUntil_;
+}
+
 uint8_t MegaDrive::read(uint16_t addr) {
     if (sms_) return sms_->read(addr);
     if (addr < 0x4000) return zram_[addr & 0x1FFF];
@@ -898,6 +907,7 @@ uint8_t MegaDrive::read(uint16_t addr) {
     if (addr >= 0x8000) {
         // The banked window onto the 68000's address space.
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);
+        waitForDmaBus();
         z80Clock_ += kZ80BankDelay;
         if (a >= 0xA00000 && a < 0xA10000) return 0xFF;  // the Z80 cannot see itself
         // Nor read the 68000's RAM, only write it (misc_test's "Z80 write-only to M68K RAM").
@@ -938,6 +948,7 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
         z80Clock_ += kZ80VdpDelay;
         if ((addr & 0x1F) >= 0x10) psgWrite(value);
     } else if (addr >= 0x8000) {
+        waitForDmaBus();
         z80Clock_ += kZ80BankDelay;
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);
         if (a < 0xA00000 || a >= 0xA10000) write8(a, value);
@@ -1025,6 +1036,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         StateWriter w;
         io_.riseState(w);
         block("IOTH", w.data());
+    }
+    {
+        StateWriter w;
+        w(dmaBusUntil_);
+        block("DMAB", w.data());
     }
     {
         StateWriter w;
@@ -1183,6 +1199,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     bool cacheFromBoot = false;  // the state comes from a version whose boot turns the 32X's cache on
     uint16_t overclock = 100;  // states without the block are from a console at its speed
     std::vector<uint8_t> thumbnail, addOnState;
+    dmaBusUntil_ = 0;  // states without the block: no DMA holds the bus
     refreshClocks_ = 0;  // states without the block are from before the refresh
     cpu_.dropPrefetch();
     z80BusGrantAt_ = 0;  // nor the bus grant delay
@@ -1217,6 +1234,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         }
         else if (id == fourcc("IO  ")) io_.state(b);
         else if (id == fourcc("IOTH")) io_.riseState(b);
+        else if (id == fourcc("DMAB")) b(dmaBusUntil_);
         else if (id == fourcc("IOSR")) io_.serialState(b);
         else if (id == fourcc("CART")) cart_.state(b);
         else if (id == fourcc("EEPR")) cart_.eepromState(b);
