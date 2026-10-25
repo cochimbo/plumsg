@@ -155,6 +155,8 @@ private:
     std::array<uint64_t, 2> sh2Ticks_{};  // where each SH-2 has got to
     uint64_t pwmTicks_ = 0;
     uint64_t now_ = 0;  // the time of the access being made, for the fill timer
+    bool cmdPending_ = false;  // a CMD interrupt the 68000 wrote, not yet on the lines
+    void runCpus(uint64_t masterClock);
 
     struct Io {
         bool adapterEnable = false, adapterReset = false;

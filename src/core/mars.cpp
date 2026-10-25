@@ -229,6 +229,17 @@ void Mars::updateIrl(int c) {
 // Scheduling
 
 void Mars::runUntil(uint64_t masterClock) {
+    runCpus(masterClock);
+    // A 68000 write to A15102 reaches the SH-2s' interrupt lines when its bus cycle ends,
+    // after the time up to its next instruction: one that reads the register back finds
+    // the bit still set (testpico's "32x irq cmd").
+    if (cmdPending_) {
+        cmdPending_ = false;
+        updateIrls();
+    }
+}
+
+void Mars::runCpus(uint64_t masterClock) {
     const uint64_t target = masterClock * 3;
     if (target <= masterTicks_) return;
     masterTicks_ = target;
@@ -744,7 +755,7 @@ bool Mars::write68k(uint32_t addr, uint16_t v, bool upper, bool lower) {
             if (lower) {
                 irq_[0].active[kCmd] = v & 1;
                 irq_[1].active[kCmd] = v & 2;
-                updateIrls();
+                cmdPending_ = true;
             }
             return true;
         case 0x04:
