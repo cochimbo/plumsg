@@ -159,6 +159,8 @@ private:
     uint32_t instrPc_ = 0;
     uint16_t ir_ = 0;
     int faultPcAdjust_ = 0;
+    // The instruction was not run (illegal, line A/F, privilege violation): no trace after it.
+    bool untraced_ = false;
 };
 
 }  // namespace plumsg
