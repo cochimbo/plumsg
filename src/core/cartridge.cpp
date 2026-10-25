@@ -218,11 +218,16 @@ void Cartridge::loadData(std::vector<uint8_t> rom) {
     if (header_.title.empty()) header_.title = field(rom_, 0x120, 48);
     header_.serial = field(rom_, 0x180, 14);
     // Region: letters J/U/E, or one hex digit (bit 0 Japan, bit 2 USA, bit 3 Europe).
+    // Some spell it out: Another World (Europe) says "EUROPE", which is not E and U.
     const std::string regions = field(rom_, 0x1F0, 3);
-    for (char c : regions) {
-        if (c == 'J') header_.japan = true;
-        else if (c == 'U') header_.usa = true;
-        else if (c == 'E') header_.europe = true;
+    if (regions == "EUR") {
+        header_.europe = true;
+    } else {
+        for (char c : regions) {
+            if (c == 'J') header_.japan = true;
+            else if (c == 'U') header_.usa = true;
+            else if (c == 'E') header_.europe = true;
+        }
     }
     if (!header_.japan && !header_.usa && !header_.europe && !regions.empty()) {
         const char c = static_cast<char>(std::toupper(static_cast<unsigned char>(regions[0])));
