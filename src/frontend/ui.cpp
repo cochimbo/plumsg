@@ -15,6 +15,7 @@
 #include "game_options.h"
 #include "languages.h"
 #include "library_names.h"
+#include "theme.h"
 #include "icon_png.h"
 #include "logo_png.h"
 #include "../core/i18n.h"
@@ -252,30 +253,29 @@ void Ui::buildFonts() {
     fontRanges_.clear();
     builder.BuildRanges(&fontRanges_);
 #ifdef _WIN32
-    const char* const mainFont = "C:\\Windows\\Fonts\\segoeui.ttf";
     // Japanese, Chinese, Korean and symbols, in that order: the first one with a character gives it.
     const char* const fallbacks[] = {"C:\\Windows\\Fonts\\YuGothM.ttc", "C:\\Windows\\Fonts\\meiryo.ttc",
                                      "C:\\Windows\\Fonts\\msgothic.ttc", "C:\\Windows\\Fonts\\msyh.ttc",
                                      "C:\\Windows\\Fonts\\malgun.ttf", "C:\\Windows\\Fonts\\seguisym.ttf"};
 #else
-    const char* const mainFont = nullptr;  // the built-in font
     const char* const fallbacks[] = {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
                                      "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
                                      "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
                                      "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"};
 #endif
-    float size = 13.0f;
-    if (mainFont && fileExists(mainFont)) {
-        size = 18.0f;
-        io.Fonts->AddFontFromFileTTF(mainFont, size, nullptr, fontRanges_.Data);
-    } else {
-        io.Fonts->AddFontDefault();
-    }
-    if (fontExtra_.empty()) return;
-    ImFontConfig merge;
-    merge.MergeMode = true;
-    for (const char* path : fallbacks)
-        if (fileExists(path)) io.Fonts->AddFontFromFileTTF(path, size, &merge, fontRanges_.Data);
+    const float size = 18.0f;
+    // The theme's two fonts, each with the other scripts merged into it.
+    auto merge = [&] {
+        if (fontExtra_.empty()) return;
+        ImFontConfig cfg;
+        cfg.MergeMode = true;
+        for (const char* path : fallbacks)
+            if (fileExists(path)) io.Fonts->AddFontFromFileTTF(path, size, &cfg, fontRanges_.Data);
+    };
+    theme::addBodyFont(size, fontRanges_.Data);
+    merge();
+    theme::addTitleFont(size, fontRanges_.Data);
+    merge();
 }
 
 // Asks for the characters of `text` (UTF-8) that the font does not have yet; the atlas
@@ -303,7 +303,7 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;  // window layout is not worth a second settings file
     ImGui::StyleColorsDark();
-    ImGui::GetStyle().WindowRounding = 4.0f;
+    theme::apply();
     buildFonts();
     ImGui_ImplSDL2_InitForOpenGL(window_, context);
     ImGui_ImplOpenGL3_Init("#version 330 core");
@@ -636,6 +636,7 @@ void Ui::hideIdleCursor(const UiState& state) {
 }
 
 void Ui::render() {
+    theme::decorateWindows();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
@@ -1386,7 +1387,7 @@ void Ui::drawStateMenu(const UiState& state, UiActions& out) {
         ImGui::EndTabBar();
     }
     stateMenu_.tabChanged = false;
-    ImGui::TextDisabled("%s", tr("L1 / R1 (o Q / E): cambiar de pestaña   B / Esc: cerrar"));
+    theme::hint(tr("L1 / R1 (o Q / E): cambiar de pestaña   B / Esc: cerrar"));
     if (stateMenu_.tab == 0) drawStateSlots(state);
     else drawStateOptions(stateMenu_.tab, state, out);
     ImGui::End();
@@ -1394,7 +1395,7 @@ void Ui::drawStateMenu(const UiState& state, UiActions& out) {
 
 void Ui::drawStateSlots(const UiState& state) {
     if (!state.romLoaded) ImGui::TextDisabled("%s", tr("Abre una ROM para guardar estados."));
-    ImGui::TextDisabled("%s", tr("A / Intro: cargar   Y / Espacio: guardar"));
+    theme::hint(tr("A / Intro: cargar   Y / Espacio: guardar"));
     ImGui::Separator();
     ImGui::BeginChild("ranuras");
     const float thumbH = 56.0f;
@@ -1577,8 +1578,8 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
     const int count = static_cast<int>(options.size());
     stateMenu_.options = count;
     stateMenu_.option = std::clamp(stateMenu_.option, 0, std::max(0, count - 1));
-    ImGui::TextDisabled("%s", tab == StateMenu::kTabs - 1 ? tr("Arriba / abajo: elegir   A / Intro: hacerlo")
-                                                          : tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
+    theme::hint(tab == StateMenu::kTabs - 1 ? tr("Arriba / abajo: elegir   A / Intro: hacerlo")
+                                            : tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
     ImGui::Separator();
 
     // The pad's and the keyboard's changes, and the mouse's below, all to one option.
@@ -2189,8 +2190,8 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.selectedGame = visible[static_cast<size_t>(libraryView_.selected)];
     if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text(tr("%d juegos. %s"), static_cast<int>(visible.size()), library_.downloadStatus().c_str());
-    ImGui::TextDisabled("%s", tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-                        "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"));
+    theme::hint(tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
+                   "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"));
     ImGui::Separator();
 
     if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd, .iso) en estas carpetas."));
@@ -2289,6 +2290,8 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
     const int cols = std::max(1, static_cast<int>((avail + style.ItemSpacing.x) / (card.x + style.ItemSpacing.x)));
     libraryView_.columns = cols;
     ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImRect inner = ImGui::GetCurrentWindow()->InnerRect;
+    theme::boxGrid(inner.Min, inner.Max);
     for (int n = 0; n < static_cast<int>(visible.size()); ++n) {
         const Library::Game& g = games[visible[static_cast<size_t>(n)]];
         if (n % cols) ImGui::SameLine();
@@ -2312,7 +2315,8 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
             const ImVec2 a(box.x + (coverW - w) * 0.5f, box.y + (coverH - h));
             draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h));
         } else {
-            draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(40, 44, 56, 255), 4.0f);
+            draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(0x15, 0x15, 0x17, 255));
+            draw->AddRect(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(0x44, 0x44, 0x4B, 255));
             const char* label = g.cover == Library::Cover::Pending ? "..." : systemName(g.system);
             const ImVec2 size = ImGui::CalcTextSize(label);
             draw->AddText(ImVec2(box.x + (coverW - size.x) * 0.5f, box.y + (coverH - size.y) * 0.5f),
@@ -2331,10 +2335,14 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
             draw->AddText(ImVec2(b0.x + 4, b0.y + 2), IM_COL32(255, 255, 255, 255), badge);
         }
         if (selected)
-            draw->AddRect(ImVec2(pos.x + 2, pos.y + 2), ImVec2(pos.x + card.x - 2, pos.y + card.y - 2),
-                          ImGui::GetColorU32(ImGuiCol_NavCursor), 6.0f, 0, 3.0f);
-        // Two lines of title, cut to the card's width; the tags in grey after it.
+            draw->AddRect(ImVec2(pos.x + 1, pos.y + 1), ImVec2(pos.x + card.x - 1, pos.y + card.y - 1),
+                          ImGui::GetColorU32(ImGuiCol_NavCursor), 0.0f, 0, 3.0f);
+        // Two lines of title, cut to the card's width, on a plate so the grid behind
+        // does not cross them; the tags in grey after it.
         const ImVec4 clip(pos.x + 4, pos.y, pos.x + card.x - 4, pos.y + card.y);
+        if (!selected && !ImGui::IsItemHovered())
+            draw->AddRectFilled(ImVec2(box.x - 2, box.y + coverH + 2), ImVec2(box.x + coverW + 2, pos.y + card.y - 4),
+                                IM_COL32(0x05, 0x05, 0x06, 235));
         draw->AddText(nullptr, 0.0f, ImVec2(pos.x + 6, box.y + coverH + 4), ImGui::GetColorU32(ImGuiCol_Text),
                       g.title.c_str(), nullptr, coverW, &clip);
         ImGui::PopID();
@@ -2434,9 +2442,11 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     ImDrawList* draw = ImGui::GetWindowDrawList();
 
     needGlyphs(g.title);
+    ImGui::PushFont(theme::fonts().title);
     ImGui::SetWindowFontScale(1.25f);
     ImGui::TextWrapped("%s", g.title.c_str());
     ImGui::SetWindowFontScale(1.0f);
+    ImGui::PopFont();
     ImGui::TextDisabled("%s%s%s", systemName(g.system), g.tags.empty() ? "" : " · ", g.tags.c_str());
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g.path.c_str());
 
@@ -2456,14 +2466,15 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     } else {
         const ImVec2 a = ImGui::GetCursorScreenPos();
         const float h = std::min(width * 1.4f, coverMax);
-        draw->AddRectFilled(a, ImVec2(a.x + width, a.y + h), IM_COL32(40, 44, 56, 255), 4.0f);
+        draw->AddRectFilled(a, ImVec2(a.x + width, a.y + h), IM_COL32(0x26, 0x26, 0x2A, 255));
+        draw->AddRect(a, ImVec2(a.x + width, a.y + h), IM_COL32(0x44, 0x44, 0x4B, 255));
         const char* label = g.cover == Library::Cover::Pending ? "..." : tr("Sin carátula");
         const ImVec2 size = ImGui::CalcTextSize(label);
         draw->AddText(ImVec2(a.x + (width - size.x) * 0.5f, a.y + (h - size.y) * 0.5f), IM_COL32(140, 146, 160, 255), label);
         ImGui::Dummy(ImVec2(width, h));
     }
     ImGui::Spacing();
-    if (ImGui::Button(tr("Jugar"), ImVec2(-1.0f, 0.0f))) libraryView_.load = n;
+    if (theme::primaryButton(tr("Jugar"))) libraryView_.load = n;
 
     // libretro-database's data, the lines it has.
     ImGui::Spacing();

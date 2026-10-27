@@ -610,7 +610,9 @@ Own code under the [MIT License](LICENSE). Libraries: SDL2 (zlib), Dear ImGui (M
 `src/render/anime4k_shaders.h`, generated with `tools/anime4k.py`), the xBR shader written
 following Hyllian's xbr-lv2 (MIT), libchdr (BSD-3-Clause, for `.chd` files), TinySoundFont
 (MIT, in `third_party/tsf`), rcheevos (MIT, for RetroAchievements), minimp3 (CC0, in
-`third_party/minimp3`) and stb_vorbis (public domain or MIT, in `third_party/stb`). The included
+`third_party/minimp3`) and stb_vorbis (public domain or MIT, in `third_party/stb`). The
+interface's typeface is Chakra Petch (SIL Open Font License 1.1, in
+`src/frontend/assets/fonts` with its license). The included
 SoundFont is GeneralUser GS by S. Christian Collins, with its own free license
 (`soundfonts\GeneralUser-GS-LICENSE.txt` in the installation). The 32X and Mega CD were
 written using Sega's documentation and [ares](https://github.com/ares-emulator/ares)
