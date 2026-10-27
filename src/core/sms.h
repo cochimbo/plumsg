@@ -2,6 +2,8 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "cartridge.h"
 #include "io.h"
@@ -32,6 +34,9 @@ namespace plumsg {
 // Codemasters cartridges have a header of their own at 0x7FE0 whose checksum word is
 // followed by its complement.
 bool isCodemasters(const std::vector<uint8_t>& rom);
+// A dump of the console's own BIOS, told by its file name ("[BIOS] Alex Kidd in Miracle
+// World (USA, Europe, Brazil) (En).sms", "bios13.sms").
+bool isMasterSystemBiosFile(const std::string& path);
 
 class MasterSystem {
 public:
@@ -39,6 +44,13 @@ public:
     bool gameGear() const { return gameGear_; }
 
     void powerOn();  // clears the VDP and the mapper
+    // The ROM is the console's BIOS, not a cartridge: port 0x3E switches it off (bit 3),
+    // and with it off nothing answers in the slots, as no cartridge, card or expansion is
+    // plugged in. A BIOS looks in the slots for a game that way, and without it finds
+    // itself there and starts itself again and again (issue #136); with it, it finds
+    // nothing and runs the game it has inside, or tells to put one in.
+    void setBios(bool on) { bios_ = on; }
+    bool bios() const { return bios_; }
     void reset();
 
     uint8_t read(uint16_t addr) const;
@@ -114,6 +126,7 @@ private:
     VdpSms vdp_;
     std::array<uint8_t, 4> mapper_{0, 0, 1, 2};
     bool codemasters_ = false;
+    bool bios_ = false;
     bool gameGear_ = false;
     uint8_t ioControl_ = 0xFF;    // port 0x3F
     uint8_t memoryControl_ = 0;   // port 0x3E
