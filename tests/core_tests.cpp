@@ -3110,6 +3110,99 @@ void testGameGear() {
     check(!md.isGameGear() && md.frame().width == 256 && md.frame().aspectLines == 224, "Game Gear: back to a Master System");
 }
 
+// What some Game Gear cartridges need beyond the test program: the link port read back
+// (Primal Rage, issue #78), the EEPROM of World Series Baseball (issue #77), and the
+// sprite size taken a line ahead (Madou Monogatari I, issue #82).
+void testGameGearCartridges() {
+    namespace st = smstestrom;
+    std::array<uint8_t, 0x2000> ram{};
+    auto frame = std::make_unique<VideoFrameMd>();
+    Cartridge cart;
+    cart.loadData(st::build(true));
+    MasterSystem gg(cart, ram, *frame, true);
+    gg.powerOn();
+    const uint8_t idle = gg.in(0x01, 0);
+    gg.out(0x02, 0x00);  // all outputs
+    gg.out(0x01, 0x22);
+    const uint8_t back = gg.in(0x01, 0);
+    gg.out(0x02, 0x0F);  // the low half inputs again
+    check(idle == 0x7F && back == 0x22 && gg.in(0x01, 0) == 0x2F && gg.in(0x02, 0) == 0x0F && gg.in(0x04, 0) == 0xFF,
+          "Game Gear: the link port reads back its outputs, its inputs high");
+    gg.out(0x3F, 0x55);
+    gg.out(0x01, 0x00);
+    gg.out(0x05, 0x00);
+    check(gg.in(0x01, 0) == 0x0F, "Game Gear: the link port has its own registers, not 0x3E/0x3F's");
+
+    check(!gg.eeprom(), "Game Gear: no EEPROM on an ordinary cartridge");
+    Cartridge wsbCart;
+    wsbCart.loadData(withCrc32(st::build(true), 0xBB38CFD7));
+    MasterSystem wsb(wsbCart, ram, *frame, true);
+    wsb.powerOn();
+    check(wsb.eeprom(), "Game Gear: World Series Baseball has its EEPROM");
+    uint8_t lines = 0;
+    auto put = [&](uint8_t v) {
+        lines = v;
+        wsb.write(0x8000, v);
+    };
+    auto clockBit = [&](int bit) {
+        put(static_cast<uint8_t>(0x04 | (bit & 1)));
+        put(static_cast<uint8_t>(0x06 | (bit & 1)));
+        put(static_cast<uint8_t>(0x04 | (bit & 1)));
+    };
+    auto command = [&](int bits, int count) {
+        put(0x00);
+        clockBit(1);  // start
+        for (int i = count - 1; i >= 0; --i) clockBit(bits >> i);
+    };
+    const uint8_t romByte = wsb.read(0x8000);
+    wsb.write(0xFFFC, 0x08);
+    command(0x30, 8);  // EWEN
+    command(0x45, 8);  // WRITE word 5
+    for (int i = 15; i >= 0; --i) clockBit(0xBEEF >> i);
+    command(0x85, 8);  // READ word 5
+    uint16_t word = 0;
+    for (int i = 0; i < 16; ++i) {
+        clockBit(0);
+        word = static_cast<uint16_t>(word << 1 | (wsb.read(0x8000) & 1));
+    }
+    put(0x00);
+    wsb.write(0xFFFC, 0x00);
+    check(word == 0xBEEF && wsbCart.saveRamByte(10) == 0xEF && wsbCart.saveRamByte(11) == 0xBE && wsbCart.hasSaveData() &&
+              wsb.read(0x8000) == romByte && lines == 0,
+          "Game Gear: the 93C46 EEPROM written and read back, kept in the save RAM");
+
+    // A sprite on lines 9-16 (8 high); the size goes to 8x16 late in line 16: line 17
+    // still has no sprite, as it was looked for with the old size.
+    MasterSystem vdp(cart, ram, *frame, false);
+    vdp.powerOn();
+    auto reg = [&](int r, int v, int cycle = 0) {
+        vdp.out(0xBF, static_cast<uint8_t>(v), cycle);
+        vdp.out(0xBF, static_cast<uint8_t>(0x80 | r), cycle);
+    };
+    auto vram = [&](int addr, std::initializer_list<int> bytes) {
+        vdp.out(0xBF, static_cast<uint8_t>(addr));
+        vdp.out(0xBF, static_cast<uint8_t>(0x40 | addr >> 8));
+        for (int b : bytes) vdp.out(0xBE, static_cast<uint8_t>(b));
+    };
+    reg(0, 0x04);
+    reg(1, 0x40);
+    reg(5, 0x7F);  // sprites at 0x3F00
+    reg(6, 0x00);
+    for (int t = 0; t < 2; ++t)
+        for (int row = 0; row < 8; ++row) vram(t * 32 + row * 4, {0xFF, 0, 0, 0});  // tiles 0 and 1: colour 1
+    vram(0x3F00, {8, 0xD0});
+    vram(0x3F80, {40, 1});
+    vram(0xC000 + 17, {0x3F});  // sprite colour 1: white
+    for (int line = 0; line < 17; ++line) vdp.vdp().startLine(line, true);
+    reg(1, 0x42, VdpSms::kCyclesPerLine - 4);
+    vdp.vdp().startLine(17, true);
+    vdp.vdp().startLine(18, true);
+    check(frame->info[16 * VideoFrameMd::kMaxWidth + 42].layer == MdLayer::Sprite &&
+              frame->info[17 * VideoFrameMd::kMaxWidth + 42].layer != MdLayer::Sprite &&
+              frame->info[18 * VideoFrameMd::kMaxWidth + 42].layer == MdLayer::Sprite,
+          "SMS VDP: a sprite size changed late in a line is for the line after the next");
+}
+
 void testSmsCheats() {
     CheatPatch p;
     std::string error;
@@ -3316,6 +3409,7 @@ int main() {
     testSmsMapper();
     testSmsPhase2();
     testGameGear();
+    testGameGearCartridges();
     testSmsCheats();
     testSmsVgm();
     testSmsRoland();

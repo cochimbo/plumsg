@@ -21,6 +21,7 @@ void VdpSms::reset() {
     readBuffer_ = 0;
     hcLatch_ = 0;
     hscrollHeld_ = false;
+    spriteSizeHeld_ = false;
     line_ = 0;
     lineCounter_ = 0xFF;
     frameIrq_ = lineIrq_ = false;
@@ -111,6 +112,10 @@ void VdpSms::writeControl(uint8_t value, int cycle) {
             heldHscroll_ = regs_[8];
             hscrollHeld_ = true;
         }
+        if ((value & 0x0F) == 1 && cycle >= kSpriteSizeLatchAt && !spriteSizeHeld_) {
+            heldSpriteSize_ = regs_[1];
+            spriteSizeHeld_ = true;
+        }
         regs_[value & 0x0F] = latch_;
     }
 }
@@ -193,6 +198,7 @@ void VdpSms::startLine(int line, bool draw) {
         spriteOverflow_ = overflow;
     }
     hscrollHeld_ = false;
+    spriteSizeHeld_ = false;
 }
 
 void VdpSms::runLineCounter(int line) {
@@ -311,8 +317,9 @@ void VdpSms::renderLine(int line) {
 void VdpSms::spriteLine(int line, uint8_t* color, uint8_t* number) {
     const int active = activeLines();
     const uint16_t sat = static_cast<uint16_t>((regs_[5] & 0x7E) << 7);
-    const bool tall = (regs_[1] & 0x02) != 0;
-    const int zoom = (regs_[1] & 0x01) ? 2 : 1;
+    const uint8_t size = spriteSizeHeld_ ? heldSpriteSize_ : regs_[1];
+    const bool tall = (size & 0x02) != 0;
+    const int zoom = (size & 0x01) ? 2 : 1;
     const int height = (tall ? 16 : 8) * zoom;
     std::array<uint8_t, 256> taken{};
     int found = 0, collision = 256;
