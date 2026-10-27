@@ -3,6 +3,30 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 0.1.0-beta.6
+
+- **Virtua Racing** runs: the SVP chip on its cartridge (the SSP1601 DSP and its memory
+  controller) is emulated.
+- Master System: a BIOS dump loaded as a game ("[BIOS] Alex Kidd in Miracle World...")
+  no longer stays on the Sega logo: it finds the slots empty and runs the game it has
+  inside ([#136](https://github.com/cochimbo/plumsg/issues/136)).
+- 32X: the reset button resets only the 68000, as on the console, and the SH-2s go back
+  to their boot ROM; BC Racers starts again after a reset. testpico passes all its 57
+  tests ([#69](https://github.com/cochimbo/plumsg/issues/69)).
+- misc_test passes 23 of its 28 checks: the 68000's prefetch and DRAM
+  refresh, the Z80's reset, bus request and waits during DMA, and the VDP's sprite
+  table cache ([#137](https://github.com/cochimbo/plumsg/issues/137)). Sega's softcheck
+  says OK to every test ([#117](https://github.com/cochimbo/plumsg/issues/117)), and
+  m68k_opcode_sizes gets both checksums right
+  ([#111](https://github.com/cochimbo/plumsg/issues/111)).
+- Another World (Europe) starts on a PAL console: the top of the picture no longer goes
+  blank when it flips pages.
+- Honoo no Toukyuuji Dodge Danpei finds its EEPROM and gets past the SEGA logo
+  ([#115](https://github.com/cochimbo/plumsg/issues/115)).
+- Pad 2 can be unplugged ("Sin mando"), for games such as ESPN Sunday Night NFL that make
+  player 2 the computer only with the second port empty
+  ([#93](https://github.com/cochimbo/plumsg/issues/93)).
+
 ## 0.1.0-beta.5
 
 - Master System: the games made only for European 50 Hz consoles (Back to the Future

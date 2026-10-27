@@ -1,11 +1,21 @@
 #include "sms.h"
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+
 namespace plumsg {
 
 bool isCodemasters(const std::vector<uint8_t>& rom) {
     if (rom.size() < 0x8000) return false;
     const unsigned sum = rom[0x7FE6] | rom[0x7FE7] << 8, inverse = rom[0x7FE8] | rom[0x7FE9] << 8;
     return sum != 0 && sum + inverse == 0x10000;
+}
+
+bool isMasterSystemBiosFile(const std::string& path) {
+    std::string name = std::filesystem::u8path(path).filename().u8string();
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+    return name.find("bios") != std::string::npos;
 }
 
 MasterSystem::MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame, bool gameGear)
@@ -44,6 +54,7 @@ uint8_t MasterSystem::read(uint16_t addr) const {
         }
         return ram_[addr & 0x1FFF];
     }
+    if (bios_ && (memoryControl_ & 0x08) && addr < 0xC000) return 0xFF;
     if (addr < 0x0400) return cart_.rom()[addr];
     if (addr < 0x4000) return romByte(mapper_[1], addr);
     if (addr < 0x8000) return romByte(mapper_[2], addr & 0x3FFF);

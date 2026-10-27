@@ -2995,6 +2995,31 @@ void testSmsPhase2() {
     check(smsRegion(rom) == Region::EuropePal && smsRegion(rom, true) == Region::UsaNtsc,
           "Codemasters: a European console for the Master System, not for the Game Gear");
 
+    // A BIOS loaded as the game switches itself off through port 0x3E to look in the
+    // slots, and finds nothing there (issue #136).
+    check(isMasterSystemBiosFile("roms/[BIOS] Alex Kidd in Miracle World (USA, Europe, Brazil) (En).sms") &&
+              isMasterSystemBiosFile("BIOS13.SMS") && !isMasterSystemBiosFile("roms/Alex Kidd in Miracle World.sms"),
+          "Master System BIOS: told by its file name");
+    std::vector<uint8_t> biosRom(0x20000);
+    for (size_t i = 0; i < biosRom.size(); ++i) biosRom[i] = static_cast<uint8_t>(0x10 + i / 0x4000);
+    Cartridge biosCart;
+    biosCart.loadData(biosRom);
+    MasterSystem bios(biosCart, ram, *frame);
+    bios.powerOn();
+    bios.setBios(true);
+    bios.write(0xFFFE, 3);
+    ram[0] = 0x5A;
+    const bool biosOn = bios.read(0x0000) == 0x10 && bios.read(0x7FF0) == 0x13;
+    bios.out(0x3E, 0xAB);  // cartridge on, BIOS off
+    const bool slotsEmpty = bios.read(0x0000) == 0xFF && bios.read(0x7FF0) == 0xFF && bios.read(0xBFFF) == 0xFF &&
+                            bios.read(0xC000) == 0x5A;
+    bios.out(0x3E, 0xE3);  // BIOS on again
+    check(biosOn && slotsEmpty && bios.read(0x7FF0) == 0x13, "Master System BIOS: switched off, the slots are empty");
+    MasterSystem game(biosCart, ram, *frame);
+    game.powerOn();
+    game.out(0x3E, 0xAB);
+    check(game.read(0x0000) == 0x10, "Master System: a cartridge stays on whatever port 0x3E says of the BIOS");
+
     // The TMS9918's Graphics I mode with a sprite.
     MasterSystem tms(cart, ram, *frame);
     tms.powerOn();
