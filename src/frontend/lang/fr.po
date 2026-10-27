@@ -970,6 +970,9 @@ msgstr "Le port %d est occupé (un autre plumsg héberge-t-il ?)."
 msgid "El puerto de \"%s\" no es válido."
 msgstr "Le port de \"%s\" n'est pas valide."
 
+msgid "El tamaño de las carátulas: más pequeñas caben más en cada fila."
+msgstr "La taille des jaquettes : plus petites, il en tient plus par ligne."
+
 msgid ""
 "El tempo y dónde empiezan los compases (4/4) se adivinan por cuándo empiezan las notas.\n"
 "Si las figuras salen el doble o la mitad de largas, quítalo y pon el tempo a mano."
@@ -1239,6 +1242,9 @@ msgstr "GIF enregistré dans %s"
 
 msgid "Gaita"
 msgstr "Cornemuse"
+
+msgid "General"
+msgstr "Général"
 
 msgid "GeneralUser GS (incluido)"
 msgstr "GeneralUser GS (inclus)"
@@ -1771,6 +1777,9 @@ msgstr "Aucun jeu ne correspond à la recherche."
 msgid "Ningún truco tiene ese nombre."
 msgstr "Aucun code n'a ce nom."
 
+msgid "No"
+msgstr "Non"
+
 msgid "No es un archivo VGM."
 msgstr "Ce n'est pas un fichier VGM."
 
@@ -1960,8 +1969,8 @@ msgstr "Options de ce jeu..."
 msgid "Opciones propias de %s"
 msgstr "Options propres à %s"
 
-msgid "Opciones propias de %s. Marca una opción para que este juego use su propio valor; las que no marques siguen a las generales."
-msgstr "Options propres à %s. Cochez une option pour que ce jeu utilise sa propre valeur ; celles que vous ne cochez pas suivent les générales."
+msgid "Opciones propias de %s. Pon una opción en Propio para que este juego use su propio valor; las que dejes en General siguen a las generales."
+msgstr "Options propres à %s. Mettez une option sur Propre pour que ce jeu utilise sa propre valeur ; celles laissées sur Général suivent les options générales."
 
 msgid "Opción desconocida: %s"
 msgstr "Option inconnue : %s"
@@ -2145,6 +2154,9 @@ msgstr "Essai du numéro %d"
 
 msgid "Profundidad"
 msgstr "Profondeur"
+
+msgid "Propio"
+msgstr "Propre"
 
 msgid "Propio de este juego"
 msgstr "Propre à ce jeu"
@@ -2545,6 +2557,9 @@ msgstr "Remonter"
 msgid "Suena como"
 msgstr "Sonne comme"
 
+msgid "Sí"
+msgstr "Oui"
+
 msgid "Sí, todo a las sugerencias"
 msgstr "Oui, tout aux suggestions"
 
@@ -2556,6 +2571,9 @@ msgstr "Jeu de plateau"
 
 msgid "Taiko"
 msgstr "Taiko"
+
+msgid "Tamaño"
+msgstr "Taille"
 
 msgid "Tamaño:"
 msgstr "Taille :"
