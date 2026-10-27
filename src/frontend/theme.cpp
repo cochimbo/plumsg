@@ -1,5 +1,6 @@
 #include "theme.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -206,6 +207,26 @@ bool primaryButton(const char* label, float width) {
     d->AddLine(pts[0], pts[1], IM_COL32(255, 255, 255, 60));
     d->AddText(gFonts.title ? gFonts.title : ImGui::GetFont(), size, ImVec2(a.x + (w - t.x) * 0.5f, a.y + (h - t.y) * 0.5f),
                IM_COL32_WHITE, label, end);
+    return pressed;
+}
+
+bool switchButton(const char* id, bool* on, const char* onLabel, const char* offLabel) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float w = std::max(ImGui::CalcTextSize(onLabel).x, ImGui::CalcTextSize(offLabel).x) + style.FramePadding.x * 2;
+    ImGui::AlignTextToFramePadding();  // text after it on the line sits as next to a frame
+    const ImVec2 a = ImGui::GetCursorScreenPos(), size(w, ImGui::GetFrameHeight());
+    const bool pressed = ImGui::InvisibleButton(id, size);
+    if (pressed) *on = !*on;
+    const bool hovered = ImGui::IsItemHovered();
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const ImVec2 b(a.x + size.x, a.y + size.y);
+    if (*on) d->AddRectFilled(a, b, hovered ? kRedLit : kRed);
+    else d->AddRectFilled(a, b, ImGui::GetColorU32(hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg));
+    d->AddRect(a, b, *on ? kRedDim : ImGui::GetColorU32(ImGuiCol_Border));
+    const char* label = *on ? onLabel : offLabel;
+    const ImVec2 t = ImGui::CalcTextSize(label);
+    d->AddText(ImVec2(a.x + (size.x - t.x) * 0.5f, a.y + (size.y - t.y) * 0.5f),
+               *on ? IM_COL32_WHITE : ImGui::GetColorU32(ImGuiCol_TextDisabled), label);
     return pressed;
 }
 

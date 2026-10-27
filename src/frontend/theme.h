@@ -30,6 +30,10 @@ void decorateWindows();
 // (-1 for all the room left).
 bool primaryButton(const char* label, float width = -1.0f);
 
+// A two-way switch drawn as one plate: `on` lit red with `onLabel`, off dark with
+// `offLabel`. Clicking it flips `*on` and returns true.
+bool switchButton(const char* id, bool* on, const char* onLabel, const char* offLabel);
+
 // The white grid on black of the Master System's boxes, over `min`-`max` of the current
 // window, moving with its scroll. Before the items drawn on it.
 void boxGrid(ImVec2 min, ImVec2 max);

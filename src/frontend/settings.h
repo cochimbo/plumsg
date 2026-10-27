@@ -78,6 +78,8 @@ struct Settings {
     int librarySystem = -1;       // the library's tab: -1 every console, else a ConsoleSystem
     bool libraryList = false;     // the library as a list (title, console, year...) instead of a grid of covers
     bool libraryDetails = true;   // the panel on the right with the chosen game's cover, data and description
+    static constexpr int kMinCoverWidth = 90, kMaxCoverWidth = 300;
+    int libraryCoverWidth = 150;  // the width of the grid's covers, in pixels: smaller ones fit more to a row
     static constexpr int kLibrarySorts = 5;
     int librarySort = 0;          // what the games are sorted by: 0 title, 1 console, 2 year, 3 genre, 4 developer
     // The Mega CD's BIOS for each region (Japan, USA, Europe); plumsg does not include them.

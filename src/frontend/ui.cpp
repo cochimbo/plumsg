@@ -131,6 +131,16 @@ constexpr const char* kNoPadTip =
        "(por ejemplo, en el sorteo de la moneda). En una partida en red el mando 2 se enchufa.");
 
 // The combo for the overclock; `percent` takes the chosen value.
+// An on/off option as a "Sí" / "No" list, so a row of the game's options has no second
+// box next to the one that says whether the game has its own value.
+bool yesNo(const char* label, bool& value) {
+    static const char* const names[] = {N_("No"), N_("Sí")};
+    int i = value ? 1 : 0;
+    if (!comboTr(label, &i, names, 2)) return false;
+    value = i == 1;
+    return true;
+}
+
 bool overclockCombo(const char* label, int& percent) {
     int i = 0;
     for (int k = 0; k < static_cast<int>(std::size(kOverclocks)); ++k)
@@ -2190,6 +2200,18 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.selectedGame = visible[static_cast<size_t>(libraryView_.selected)];
     if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text(tr("%d juegos. %s"), static_cast<int>(visible.size()), library_.downloadStatus().c_str());
+    // The covers' size, at the right end of that line: smaller ones fit more to a row.
+    if (!settings_.libraryList) {
+        const char* label = tr("Tamaño");
+        const float sliderW = 160.0f;
+        const float w = sliderW + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(label).x;
+        ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - w));
+        ImGui::SetNextItemWidth(sliderW);
+        ImGui::SliderInt(label, &settings_.libraryCoverWidth, Settings::kMinCoverWidth, Settings::kMaxCoverWidth, "",
+                         ImGuiSliderFlags_AlwaysClamp);
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("El tamaño de las carátulas: más pequeñas caben más en cada fila."));
+    }
     theme::hint(tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
                    "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"));
     ImGui::Separator();
@@ -2282,7 +2304,7 @@ void Ui::libraryItem(bool clicked, int n) {
 
 void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
     const auto& games = library_.games();
-    const float coverW = 150.0f, coverH = 210.0f;
+    const float coverW = static_cast<float>(settings_.libraryCoverWidth), coverH = std::round(coverW * 1.4f);
     const ImGuiStyle& style = ImGui::GetStyle();
     const float textH = ImGui::GetTextLineHeight() * 2 + 4;
     const ImVec2 card(coverW + 12, coverH + textH + 12);
@@ -3074,8 +3096,8 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
         ImGui::End();
         return;
     }
-    ImGui::TextWrapped(tr("Opciones propias de %s. Marca una opción para que este juego use su propio valor; "
-                       "las que no marques siguen a las generales."), v.game.c_str());
+    ImGui::TextWrapped(tr("Opciones propias de %s. Pon una opción en Propio para que este juego use su propio valor; "
+                       "las que dejes en General siguen a las generales."), v.game.c_str());
     if (v.loaded && state.netPlaying) ImGui::TextDisabled("%s", tr("En una partida en red no se pueden cambiar."));
     ImGui::BeginDisabled(v.loaded && state.netPlaying);
     if (ImGui::BeginTabBar("opciones_juego")) {
@@ -3094,8 +3116,8 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
     ImGui::End();
 }
 
-// The Ajustes tab: each option has a box; ticked, the game has its own value (edited
-// here); unticked, it follows the general one (shown greyed).
+// The Ajustes tab: each option has a switch; on ("Propio"), the game has its own value
+// (edited here); off ("General"), it follows the general one (shown greyed).
 void Ui::drawGameSettings(const UiState& state, UiActions& out) {
     const GameOptionsView& v = state.gameOptions;
     Settings& s = *v.values;
@@ -3110,7 +3132,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
         ImGui::PushID(opt.key);
         bool mine = own.count(key) != 0;
         bool edited = false;
-        if (ImGui::Checkbox("##propio", &mine)) {
+        if (theme::switchButton("##propio", &mine, tr("Propio"), tr("General"))) {
             if (mine) own.insert(key);
             else {
                 own.erase(key);
@@ -3139,7 +3161,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
                 edited = true;
             }
         } else if (key == "smooth") {
-            edited |= ImGui::Checkbox(tr("Suavizar píxeles"), &s.render.smooth);
+            edited |= yesNo(tr("Suavizar píxeles"), s.render.smooth);
         } else if (key == "filter") {
             static const char* names[] = {N_("Ninguno"), N_("Scanlines"), "CRT"};
             int i = static_cast<int>(s.render.filter);
@@ -3159,9 +3181,9 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             if (ImGui::SliderFloat(tr(opt.label), &strength, 0.0f, 100.0f, "%.0f %%")) s.render.filterStrength = strength / 100.0f;
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "square_pixels") {
-            edited |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &s.render.squarePixels);
+            edited |= yesNo(tr("Píxeles cuadrados (sin estirar a 4:3)"), s.render.squarePixels);
         } else if (key == "no_sprite_limit") {
-            edited |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &s.unlimitedSprites);
+            edited |= yesNo(tr("Sin límite de sprites (sin parpadeo)"), s.unlimitedSprites);
         } else if (key == "widescreen") {
             ImGui::TextUnformatted(tr(opt.label));
             edited |= widescreenControls(s.wideLeft, s.wideRight);
@@ -3173,7 +3195,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             ImGui::SliderInt(tr(opt.label), &s.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "mute") {
-            edited |= ImGui::Checkbox(tr("Silenciar"), &s.mute);
+            edited |= yesNo(tr("Silenciar"), s.mute);
         } else if (key == "mode") {
             int i = s.roland ? 1 : 0;
             static const char* names[] = {N_("Original (YM2612 y PSG)"), N_("Sintetizador (SoundFont)")};
@@ -3191,7 +3213,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             ImGui::SliderInt(tr(opt.label), &amount, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "effects") {
-            edited |= ImGui::Checkbox(tr("Efectos de sonido originales"), &s.effectsOriginal);
+            edited |= yesNo(tr("Efectos de sonido originales"), s.effectsOriginal);
         } else if (key == "region") {
             int i = static_cast<int>(s.region);
             if (comboTr(tr(opt.label), &i, kRegionNames, 4)) {
