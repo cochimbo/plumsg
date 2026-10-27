@@ -31,9 +31,17 @@ namespace plumsg {
 // Game Gear's colours and screen, port 0x00 has the START button and the region, ports
 // 0x01-0x05 the link cable (nothing plugged in), and there is one pad and no pause
 // button. The PSG's stereo (port 0x06) the console handles, as it has the PSG.
+//
+// 93C46 EEPROM (World Series Baseball, World Series Baseball '95, Majors Pro Baseball,
+// told by their CRC): these Game Gear cartridges save to a serial EEPROM of 64 words.
+// 0xFFFC bit 3 puts its lines at 0x8000 instead of the cartridge RAM (bit 7 resets
+// it): written, bit 0 is the data in, bit 1 the clock and bit 2 the chip select; read,
+// bit 0 is the data out. Its 128 bytes are the first ones of the cartridge's save RAM.
 // Codemasters cartridges have a header of their own at 0x7FE0 whose checksum word is
 // followed by its complement.
 bool isCodemasters(const std::vector<uint8_t>& rom);
+// The Game Gear cartridges with the 93C46 EEPROM, by the CRC of their ROM.
+bool hasGameGearEeprom(uint32_t romCrc);
 // A dump of the console's own BIOS, told by its file name ("[BIOS] Alex Kidd in Miracle
 // World (USA, Europe, Brazil) (En).sms", "bios13.sms").
 bool isMasterSystemBiosFile(const std::string& path);
@@ -94,6 +102,7 @@ public:
     // banks of the three slots in [1..3] and its RAM switch in [0].
     const std::array<uint8_t, 4>& mapper() const { return mapper_; }
     bool codemasters() const { return codemasters_; }
+    bool eeprom() const { return eepromPresent_; }
 
     template <class Ar>
     void state(Ar& ar) {
@@ -113,9 +122,35 @@ public:
             if (ar.atEnd()) return;
         }
         vdp_.timingState(ar);
+        // Added with the Game Gear's link port and EEPROM.
+        if constexpr (Ar::kLoading) {
+            link_ = kLinkReset;
+            eeprom_ = Eeprom{};
+            if (ar.atEnd()) return;
+        }
+        ar(link_, eeprom_.enabled, eeprom_.cs, eeprom_.clk, eeprom_.data, eeprom_.writeEnable, eeprom_.state,
+           eeprom_.opcode, eeprom_.cycles, eeprom_.buffer);
     }
 
 private:
+    // The Game Gear's link port registers, ports 0x01-0x05 (index 0 unused): parallel
+    // data, its direction (1 = input) with the NMI enable in bit 7, the serial data out
+    // and in, and the serial control. Nothing is plugged in: the inputs read high and
+    // no byte ever comes.
+    static constexpr std::array<uint8_t, 6> kLinkReset{0xFF, 0x7F, 0xFF, 0x00, 0xFF, 0x00};
+    struct Eeprom {
+        enum State : uint8_t { WaitStart, Opcode, Write, Read, Standby };
+        bool enabled = false;  // 0xFFFC bit 3
+        bool cs = false, clk = false, data = true, writeEnable = false;
+        uint8_t state = WaitStart;
+        uint8_t opcode = 0, cycles = 0;
+        uint16_t buffer = 0;
+    };
+    void eepromWrite(uint8_t value);
+    uint8_t eepromRead() const;
+    uint16_t eepromWord(int index) const;
+    void setEepromWord(int index, uint16_t value);
+
     uint8_t romByte(int bank, uint16_t offset) const;
     uint8_t portA() const;
     uint8_t portB() const;
@@ -126,6 +161,9 @@ private:
     VdpSms vdp_;
     std::array<uint8_t, 4> mapper_{0, 0, 1, 2};
     bool codemasters_ = false;
+    bool eepromPresent_ = false;
+    Eeprom eeprom_;
+    std::array<uint8_t, 6> link_ = kLinkReset;
     bool bios_ = false;
     bool gameGear_ = false;
     uint8_t ioControl_ = 0xFF;    // port 0x3F

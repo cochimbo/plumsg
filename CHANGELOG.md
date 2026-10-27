@@ -5,6 +5,13 @@ What each version brings, newest first. Installers are on the
 
 ## 0.1.0-beta.6
 
+- Game Gear: World Series Baseball saves to the EEPROM on its cartridge and no longer
+  stays black ([#77](https://github.com/cochimbo/plumsg/issues/77)); Primal Rage gets
+  past its title screen, as the link port now reads back what the game writes to it
+  ([#78](https://github.com/cochimbo/plumsg/issues/78)); and the last line of the
+  pictures in Madou Monogatari I is no longer garbled: a change of sprite size at the
+  end of a line waits a line, as on the console
+  ([#82](https://github.com/cochimbo/plumsg/issues/82)).
 - **Virtua Racing** runs: the SVP chip on its cartridge (the SSP1601 DSP and its memory
   controller) is emulated.
 - Master System: a BIOS dump loaded as a game ("[BIOS] Alex Kidd in Miracle World...")
