@@ -147,7 +147,11 @@ void Settings::parse(std::istream& in, Settings& s) {
                 if (!value.empty() && std::find(s.libraryFolders.begin(), s.libraryFolders.end(), value) == s.libraryFolders.end())
                     s.libraryFolders.push_back(value);
             } else if (key == "open_at_start") s.libraryAtStart = yes(value);
-            else if (key == "view") s.libraryList = iniName(lower(value)) == "list";
+            else if (key == "view") {
+                const std::string view = iniName(lower(value));
+                s.libraryList = view == "list";
+                s.libraryBoxes = view == "boxes";
+            }
             else if (key == "details") s.libraryDetails = yes(value);
             else if (key == "cover_width")
                 s.libraryCoverWidth = std::clamp(std::atoi(value.c_str()), Settings::kMinCoverWidth, Settings::kMaxCoverWidth);
@@ -264,12 +268,12 @@ void Settings::write(std::ostream& out) const {
         << "\n[library]\n"
         << "# folder: where your games are (one line per folder). open_at_start: show the library when\n"
         << "# plumsg opens without a game. system: the chosen tab (all, megadrive, 32x, megacd, mastersystem\n"
-        << "# or gamegear). view: grid or list. details: the right-hand panel with the chosen game's data.\n"
+        << "# or gamegear). view: grid, list or boxes. details: the right-hand panel with the chosen game's data.\n"
         << "# sort: title, console, year, genre or developer. cover_width: the grid's covers, in pixels.\n";
     for (const auto& f : libraryFolders) out << "folder = " << f << "\n";
     out << "open_at_start = " << flag(libraryAtStart) << "\n"
         << "system = " << (librarySystem >= 0 && librarySystem < kSystemCount ? kSystemKeys[librarySystem] : "all") << "\n"
-        << "view = " << (libraryList ? "list" : "grid") << "\n"
+        << "view = " << (libraryBoxes ? "boxes" : libraryList ? "list" : "grid") << "\n"
         << "details = " << flag(libraryDetails) << "\n"
         << "cover_width = " << libraryCoverWidth << "\n"
         << "sort = " << kLibrarySortKeys[std::clamp(librarySort, 0, kLibrarySorts - 1)] << "\n"

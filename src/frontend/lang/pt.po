@@ -511,6 +511,9 @@ msgstr "Caixa de música"
 msgid "Caja eléctrica"
 msgstr "Caixa elétrica"
 
+msgid "Cajas 3D"
+msgstr "Caixas 3D"
+
 msgid "Cambia de vista con V o con Select en el mando."
 msgstr "Troque de visualização com V ou com Select no controle."
 
@@ -607,6 +610,12 @@ msgstr "Claves"
 
 msgid "Clavinet"
 msgstr "Clavinet"
+
+msgid "Clic en el cartucho o A: jugar   Clic en otro sitio o B: cerrar la caja"
+msgstr "Clique no cartucho ou A: jogar   Clique em outro lugar ou B: fechar a caixa"
+
+msgid "Clic o A: abrir la caja   Rueda o flechas: otro juego"
+msgstr "Clique ou A: abrir a caixa   Roda ou setas: outro jogo"
 
 msgid ""
 "Como si no hubiera nada enchufado en el segundo puerto. Algunos juegos lo miran: ESPN\n"
@@ -1059,6 +1068,9 @@ msgstr "Enviando a partida ao outro jogador..."
 msgid "Error del servidor: %s"
 msgstr "Erro do servidor: %s"
 
+msgid "Esa imagen no es una portada completa (contraportada, lomo y portada): se usa como portada."
+msgstr "Essa imagem não é uma capa completa (contracapa, lombada e frente): é usada como capa."
+
 msgid "Esc  mostrar u ocultar la barra de menús"
 msgstr "Esc  mostrar ou ocultar a barra de menus"
 
@@ -1202,10 +1214,10 @@ msgstr "Setas  direcional;  A S D  botões A B C;  Q W E  botões X Y Z"
 
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"
+"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
 msgstr ""
 "Setas ou direcional: escolher   A ou Enter: jogar   X, botão direito ou tecla de menu: truques, opções e instrumentos\n"
-"B ou Esc: fechar   L / R ou Page Up / Page Down: console   Select ou V: grade ou lista"
+"B ou Esc: fechar   L / R ou Page Up / Page Down: console   Select ou V: grade, lista ou caixas 3D"
 
 msgid "Fondo arco"
 msgstr "Fundo arco"
@@ -1561,6 +1573,9 @@ msgstr ""
 
 msgid "La#"
 msgstr "Lá#"
+
+msgid "Las cajas de los juegos en 3D: ábrelas y lleva el cartucho a la consola para jugar."
+msgstr "As caixas dos jogos em 3D: abra uma e leve o cartucho ao console para jogar."
 
 msgid "Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip."
 msgstr "As músicas dos discos de Mega CD são faixas de áudio do disco, não estão no chip."
@@ -2136,6 +2151,9 @@ msgstr "Pela internet: abra (redirecione) a porta UDP %d do seu roteador para es
 
 msgid "Por título"
 msgstr "Por título"
+
+msgid "Portada completa..."
+msgstr "Capa completa..."
 
 msgid "Posición del contador"
 msgstr "Posição do contador"
@@ -2994,6 +3012,7 @@ msgid ""
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
 "  --find-cover           con --library: buscar la carátula del primer juego\n"
 "  --list                 con --library: verla como lista en vez de cuadrícula\n"
+"  --boxes                con --library: verla como cajas 3D\n"
 "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
 "  --achievements         abrir la ventana de RetroAchievements\n"
 "  --game-options         abrir las opciones propias del juego\n"
@@ -3025,6 +3044,7 @@ msgstr ""
 "  --bios                 abrir a janela das BIOS do Mega CD\n"
 "  --find-cover           com --library: procurar a capa do primeiro jogo\n"
 "  --list                 com --library: vê-la como lista em vez de grade\n"
+"  --boxes                com --library: vê-la como caixas 3D\n"
 "  --cheats               abrir os truques do jogo, com suas listas da internet\n"
 "  --achievements         abrir a janela do RetroAchievements\n"
 "  --game-options         abrir as opções próprias do jogo\n"

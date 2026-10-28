@@ -24,6 +24,8 @@
 
 namespace plumsg {
 
+class BoxShelf;
+
 // What the user asked for this frame; main() carries it out.
 struct UiActions {
     std::string load;            // ROM to open
@@ -139,11 +141,14 @@ public:
     // The game library: a grid of covers that the pad (or the keyboard) can drive.
     void toggleLibrary();
     bool libraryOpen() const { return showLibrary_; }
+    // For screenshots: the library's 3D view holding still at that step (see BoxShelf::pose).
+    void poseBoxes(int step) { boxesPose_ = step; }
     void openBios() { showBios_ = true; }
     // "Buscar carátula..." for the library's game `game`.
     void openCoverSearch(size_t game);
-    // A PNG or JPEG of the user's as the game's cover, for when none is found online.
-    void chooseCoverImage(size_t game);
+    // A PNG or JPEG of the user's as the game's cover, for when none is found online; or
+    // (`sleeve`) the whole sleeve, back, spine and front side by side, for its 3D box.
+    void chooseCoverImage(size_t game, bool sleeve = false);
     void useCoverImage(const std::string& file);
     bool coverSearchBusy() const { return showCoverSearch_ && (coverSearch_.autoPreview || library_.coverSearch().busy); }
     // The Trucos window, for the game main() handed it.
@@ -219,9 +224,11 @@ private:
     void drawLibraryFolders(UiActions& out);
     void drawLibraryGrid(const std::vector<size_t>& visible);
     void drawLibraryList(const std::vector<size_t>& visible);
+    void drawLibraryBoxes(const std::vector<size_t>& visible);
     void drawLibraryDetails(const std::vector<size_t>& visible);
     void libraryItem(bool clicked, int n);
-    void setLibraryList(bool list);
+    // 0 the grid, 1 the list, 2 the 3D boxes.
+    void setLibraryView(int view);
     void buildFonts();
     void needGlyphs(const std::string& text);
     void drawCoverSearch();
@@ -250,6 +257,8 @@ private:
     Input& input_;
     FileBrowser browser_;
     Library library_;
+    std::unique_ptr<BoxShelf> shelf_;  // the library's 3D view, made the first time it is shown
+    int boxesPose_ = 0;
     GameInfo gameInfo_;
     std::set<ImWchar> fontExtra_;  // characters beyond the base ranges that texts have needed
     ImVector<ImWchar> fontRanges_;  // the atlas's ranges, alive until it is built
@@ -283,6 +292,7 @@ private:
     BrowseFor browseFor_ = BrowseFor::Game;
     int biosSlot_ = 0;  // the region whose BIOS is being chosen
     std::string coverImageFor_;  // the game (its path) whose cover image is being chosen
+    bool coverImageSleeve_ = false;  // and it is meant to be the whole sleeve
     std::string biosStatus_;
     std::map<std::string, BiosInfo> biosChecked_;  // what each chosen file looks like, read once
     bool openRequested_ = false;
@@ -316,8 +326,9 @@ private:
         bool tabChanged = false;  // the console tab was changed with the pad or the keyboard
         // The menu of one game (right click, X on the pad or the menu key): its index in
         // the filtered list, the item chosen with the pad or the keys, and a request to open it.
-        // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula, Carátula desde imagen
-        static constexpr int kItems = 6;
+        // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula, Carátula desde imagen,
+        // Portada completa
+        static constexpr int kItems = 7;
         int menuGame = -1;
         int menuItem = 0;
         bool openMenu = false;

@@ -3,6 +3,20 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## Unreleased
+
+- **The library's 3D boxes** ("Cajas 3D", next to Cuadrícula and Lista): the games'
+  cases stand in a row with their covers. A click (or A) on the one in the middle opens
+  its lid, showing the manual and the cartridge (the disc on the Mega CD); a click on the
+  cartridge takes it out and into the console, which rises from the floor, its power
+  light comes on and the game starts. A click anywhere else closes the box. The
+  cartridges and consoles are built from their real measurements: the Mega Drive and
+  Master System of the first model, the Game Gear, the 32X in the Mega Drive's slot and
+  the first Mega-CD under it, with its tray.
+- "Portada completa..." in a game's menu takes a whole sleeve (back, spine and front side
+  by side, as The Cover Project has them): the 3D box wears all of it, and the grid and
+  the details panel show its front.
+
 ## 0.1.0-beta.7
 
 - **A look of its own**: the interface takes its style from the console, black ribbed

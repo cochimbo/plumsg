@@ -389,6 +389,7 @@ struct CommandLine {
     bool fps = false;        // --fps: with the FPS counter on
     bool downloadCovers = false;  // --download-covers: fetch the library's missing covers
     bool libraryList = false;     // --list: with --library, show it as a list
+    int libraryBoxes = -1;        // --boxes [1|2|3]: with --library, show its 3D boxes (and hold one open at that step)
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
     bool coverSearch = false;     // --find-cover: with --library, look for the first game's cover
     bool cheats = false;          // --cheats: start with the game's Cheats window open
@@ -427,6 +428,7 @@ const char* const kHelp = N_(
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
     "  --find-cover           con --library: buscar la carátula del primer juego\n"
     "  --list                 con --library: verla como lista en vez de cuadrícula\n"
+    "  --boxes                con --library: verla como cajas 3D\n"
     "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
     "  --achievements         abrir la ventana de RetroAchievements\n"
     "  --game-options         abrir las opciones propias del juego\n"
@@ -475,6 +477,11 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--library") c.library.push_back(next());
         else if (a == "--download-covers") c.downloadCovers = true;
         else if (a == "--list") c.libraryList = true;
+        else if (a == "--boxes") {
+            // Undocumented steps, for screenshots: 1 the box open, 2 its cartridge on the way, 3 in the console.
+            c.libraryBoxes = 0;
+            if (i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '3' && !argv[i + 1][1]) c.libraryBoxes = argv[++i][0] - '0';
+        }
         else if (a == "--bios") c.bios = true;
         else if (a == "--find-cover") c.coverSearch = true;
         else if (a == "--cheats") c.cheats = true;
@@ -861,6 +868,10 @@ int main(int argc, char** argv) {
     bool openStateMenu = cmd.stateMenu;
     if (!cmd.library.empty()) settings.libraryFolders = cmd.library;
     if (cmd.libraryList) settings.libraryList = true;
+    if (cmd.libraryBoxes >= 0) {
+        settings.libraryBoxes = true;
+        ui->poseBoxes(cmd.libraryBoxes);
+    }
     if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolders.empty()))
         ui->toggleLibrary();
     if (cmd.bios) ui->openBios();

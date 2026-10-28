@@ -39,8 +39,10 @@ constexpr GLenum BLEND = 0x0BE2;
 constexpr GLenum SCISSOR_TEST = 0x0C11;
 constexpr GLenum TEXTURE_2D = 0x0DE1;
 constexpr GLenum UNSIGNED_BYTE = 0x1401;
+constexpr GLenum UNSIGNED_INT = 0x1405;
 constexpr GLenum FLOAT = 0x1406;
 constexpr GLenum HALF_FLOAT = 0x140B;
+constexpr GLenum DEPTH_COMPONENT = 0x1902;
 constexpr GLenum RGBA = 0x1908;
 constexpr GLenum VERSION = 0x1F02;
 constexpr GLenum NEAREST = 0x2600;
@@ -52,6 +54,7 @@ constexpr GLenum TEXTURE_WRAP_T = 0x2803;
 constexpr GLenum RGBA8 = 0x8058;
 constexpr GLenum BGRA = 0x80E1;
 constexpr GLenum CLAMP_TO_EDGE = 0x812F;
+constexpr GLenum DEPTH_COMPONENT24 = 0x81A6;
 constexpr GLenum UNSIGNED_INT_8_8_8_8_REV = 0x8367;
 constexpr GLenum TEXTURE0 = 0x84C0;
 constexpr GLenum RGBA16F = 0x881A;
@@ -63,6 +66,7 @@ constexpr GLenum COMPILE_STATUS = 0x8B81;
 constexpr GLenum LINK_STATUS = 0x8B82;
 constexpr GLenum FRAMEBUFFER_COMPLETE = 0x8CD5;
 constexpr GLenum COLOR_ATTACHMENT0 = 0x8CE0;
+constexpr GLenum DEPTH_ATTACHMENT = 0x8D00;
 constexpr GLenum FRAMEBUFFER = 0x8D40;
 
 #define PLUMSG_GL_FUNCTIONS(X)                                                                         \
@@ -115,6 +119,7 @@ constexpr GLenum FRAMEBUFFER = 0x8D40;
     X(void, Uniform1i, (GLint, GLint))                                                                 \
     X(void, Uniform2f, (GLint, GLfloat, GLfloat))                                                      \
     X(void, Uniform2i, (GLint, GLint, GLint))                                                          \
+    X(void, Uniform3f, (GLint, GLfloat, GLfloat, GLfloat))                                             \
     X(void, Uniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat))                                    \
     X(void, UniformMatrix4fv, (GLint, GLsizei, GLboolean, const GLfloat*))                             \
     X(void, UseProgram, (GLuint))                                                                      \

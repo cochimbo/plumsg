@@ -511,6 +511,9 @@ msgstr "Music box"
 msgid "Caja eléctrica"
 msgstr "Electric snare"
 
+msgid "Cajas 3D"
+msgstr "3D boxes"
+
 msgid "Cambia de vista con V o con Select en el mando."
 msgstr "Switch views with V or with Select on the pad."
 
@@ -607,6 +610,12 @@ msgstr "Claves"
 
 msgid "Clavinet"
 msgstr "Clavinet"
+
+msgid "Clic en el cartucho o A: jugar   Clic en otro sitio o B: cerrar la caja"
+msgstr "Click the cartridge or A: play   Click elsewhere or B: close the box"
+
+msgid "Clic o A: abrir la caja   Rueda o flechas: otro juego"
+msgstr "Click or A: open the box   Wheel or arrows: another game"
 
 msgid ""
 "Como si no hubiera nada enchufado en el segundo puerto. Algunos juegos lo miran: ESPN\n"
@@ -1059,6 +1068,9 @@ msgstr "Sending the game to the other player..."
 msgid "Error del servidor: %s"
 msgstr "Server error: %s"
 
+msgid "Esa imagen no es una portada completa (contraportada, lomo y portada): se usa como portada."
+msgstr "That image is not a full sleeve (back, spine and front): it is used as the cover."
+
 msgid "Esc  mostrar u ocultar la barra de menús"
 msgstr "Esc  show or hide the menu bar"
 
@@ -1202,10 +1214,10 @@ msgstr "Arrows  d-pad;  A S D  buttons A B C;  Q W E  buttons X Y Z"
 
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"
+"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
 msgstr ""
 "Arrows or d-pad: choose   A or Enter: play   X, right button or menu key: cheats, options and instruments\n"
-"B or Esc: close   L / R or Page Up / Page Down: console   Select or V: grid or list"
+"B or Esc: close   L / R or Page Up / Page Down: console   Select or V: grid, list or 3D boxes"
 
 msgid "Fondo arco"
 msgstr "Pad bowed"
@@ -1561,6 +1573,9 @@ msgstr ""
 
 msgid "La#"
 msgstr "A#"
+
+msgid "Las cajas de los juegos en 3D: ábrelas y lleva el cartucho a la consola para jugar."
+msgstr "The games' boxes in 3D: open one and take the cartridge to the console to play."
 
 msgid "Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip."
 msgstr "The songs of Mega CD discs are audio tracks on the disc, not in the chip."
@@ -2136,6 +2151,9 @@ msgstr "Over the internet: open (forward) UDP port %d on your router to this com
 
 msgid "Por título"
 msgstr "By title"
+
+msgid "Portada completa..."
+msgstr "Full sleeve..."
 
 msgid "Posición del contador"
 msgstr "Counter position"
@@ -2994,6 +3012,7 @@ msgid ""
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
 "  --find-cover           con --library: buscar la carátula del primer juego\n"
 "  --list                 con --library: verla como lista en vez de cuadrícula\n"
+"  --boxes                con --library: verla como cajas 3D\n"
 "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
 "  --achievements         abrir la ventana de RetroAchievements\n"
 "  --game-options         abrir las opciones propias del juego\n"
@@ -3025,6 +3044,7 @@ msgstr ""
 "  --bios                 open the Mega CD BIOS window\n"
 "  --find-cover           with --library: find the cover of the first game\n"
 "  --list                 with --library: show it as a list instead of a grid\n"
+"  --boxes                with --library: show it as 3D boxes\n"
 "  --cheats               open the game's cheats, with their internet lists\n"
 "  --achievements         open the RetroAchievements window\n"
 "  --game-options         open the game's own options\n"

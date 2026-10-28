@@ -511,6 +511,9 @@ msgstr "Boîte à musique"
 msgid "Caja eléctrica"
 msgstr "Caisse claire électrique"
 
+msgid "Cajas 3D"
+msgstr "Boîtes 3D"
+
 msgid "Cambia de vista con V o con Select en el mando."
 msgstr "Changez de vue avec V ou avec Select sur la manette."
 
@@ -607,6 +610,12 @@ msgstr "Claves"
 
 msgid "Clavinet"
 msgstr "Clavinet"
+
+msgid "Clic en el cartucho o A: jugar   Clic en otro sitio o B: cerrar la caja"
+msgstr "Clic sur la cartouche ou A : jouer   Clic ailleurs ou B : fermer la boîte"
+
+msgid "Clic o A: abrir la caja   Rueda o flechas: otro juego"
+msgstr "Clic ou A : ouvrir la boîte   Molette ou flèches : un autre jeu"
 
 msgid ""
 "Como si no hubiera nada enchufado en el segundo puerto. Algunos juegos lo miran: ESPN\n"
@@ -1059,6 +1068,9 @@ msgstr "Envoi de la partie à l'autre joueur..."
 msgid "Error del servidor: %s"
 msgstr "Erreur du serveur : %s"
 
+msgid "Esa imagen no es una portada completa (contraportada, lomo y portada): se usa como portada."
+msgstr "Cette image n'est pas une jaquette complète (dos, tranche et face) : elle sert de jaquette."
+
 msgid "Esc  mostrar u ocultar la barra de menús"
 msgstr "Échap  afficher ou masquer la barre de menus"
 
@@ -1202,10 +1214,10 @@ msgstr "Flèches  croix;  A S D  boutons A B C ;  Q W E  boutons X Y Z"
 
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"
+"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
 msgstr ""
 "Flèches ou croix : choisir   A ou Entrée : jouer   X, bouton droit ou touche menu : codes, options et instruments\n"
-"B ou Échap : fermer   L / R ou Page préc. / Page suiv. : console   Select ou V : grille ou liste"
+"B ou Échap : fermer   L / R ou Page préc. / Page suiv. : console   Select ou V : grille, liste ou boîtes 3D"
 
 msgid "Fondo arco"
 msgstr "Nappe archet"
@@ -1561,6 +1573,9 @@ msgstr ""
 
 msgid "La#"
 msgstr "La#"
+
+msgid "Las cajas de los juegos en 3D: ábrelas y lleva el cartucho a la consola para jugar."
+msgstr "Les boîtes des jeux en 3D : ouvrez-en une et portez la cartouche à la console pour jouer."
 
 msgid "Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip."
 msgstr "Les morceaux des disques Mega CD sont des pistes audio du disque, pas dans la puce."
@@ -2136,6 +2151,9 @@ msgstr "Par internet : ouvrez (redirigez) le port UDP %d de votre box vers cet o
 
 msgid "Por título"
 msgstr "Par titre"
+
+msgid "Portada completa..."
+msgstr "Jaquette complète..."
 
 msgid "Posición del contador"
 msgstr "Position du compteur"
@@ -2994,6 +3012,7 @@ msgid ""
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
 "  --find-cover           con --library: buscar la carátula del primer juego\n"
 "  --list                 con --library: verla como lista en vez de cuadrícula\n"
+"  --boxes                con --library: verla como cajas 3D\n"
 "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
 "  --achievements         abrir la ventana de RetroAchievements\n"
 "  --game-options         abrir las opciones propias del juego\n"
@@ -3025,6 +3044,7 @@ msgstr ""
 "  --bios                 ouvrir la fenêtre des BIOS du Mega CD\n"
 "  --find-cover           avec --library : chercher la jaquette du premier jeu\n"
 "  --list                 avec --library : l'afficher en liste au lieu d'une grille\n"
+"  --boxes                avec --library : l'afficher en boîtes 3D\n"
 "  --cheats               ouvrir les codes du jeu, avec leurs listes d'internet\n"
 "  --achievements         ouvrir la fenêtre de RetroAchievements\n"
 "  --game-options         ouvrir les options propres au jeu\n"
