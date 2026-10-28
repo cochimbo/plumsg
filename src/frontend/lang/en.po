@@ -1134,6 +1134,9 @@ msgstr "Stretch"
 msgid "Estrategia"
 msgstr "Strategy"
 
+msgid "Etiqueta del cartucho..."
+msgstr "Cartridge label..."
+
 msgid "Europa (Mega-CD)"
 msgstr "Europe (Mega-CD)"
 

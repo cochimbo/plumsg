@@ -1,10 +1,13 @@
 #pragma once
 
 #include <array>
+#include <string>
 #include <vector>
 
 #include "../core/system.h"
+#include "console_models.h"
 #include "gl.h"
+#include "gltf_model.h"
 
 namespace plumsg {
 
@@ -25,6 +28,9 @@ public:
         unsigned int texture = 0;
         int width = 0, height = 0;
         ConsoleSystem system = ConsoleSystem::MegaDrive;
+        // The cartridge's label (the disc's on the Mega CD); without one the cover's front.
+        unsigned int label = 0;
+        int labelWidth = 0, labelHeight = 0;
     };
     // What the mouse is over.
     enum class Target { None, Box, Cartridge };
@@ -34,6 +40,23 @@ public:
 
     BoxShelf();
     ~BoxShelf();
+
+    // Draws `model` (a glTF model of the console) in place of the built-in one. It is
+    // scaled to `width` (its real width, 13.5 cm = 1), turned `turn` degrees around its
+    // vertical axis first, and stood on the floor centred; `slot` is the top of the middle
+    // of its cartridge slot (from the middle of its footprint, same units), and `led`, if
+    // given, the middle of its power light, which lights up there, tilted `ledTilt`
+    // degrees towards the front.
+    void setConsoleModel(ConsoleModel which, const GltfModel& model, float width, float turn, const float slot[3],
+                         const float* led = nullptr, float ledTilt = 0);
+    // Draws the Mega Drive's cartridges with `model` (a glTF model of one, front towards
+    // +z, top up), stretched to their real size; `labelArea` and `pictureArea` (u0, v0, u1,
+    // v1) are where its texture has the label and the picture in it, which a game's label
+    // scan or cover replaces.
+    void setCartridgeModel(const GltfModel& model, const float labelArea[4], const float pictureArea[4]);
+    // Loads the consoles' models that plumsg knows how to place (megadrive.glb), from the
+    // first of `folders` that has each. Those it cannot read keep the built-in model.
+    void loadConsoleModels(const std::vector<std::string>& folders);
     BoxShelf(const BoxShelf&) = delete;
     BoxShelf& operator=(const BoxShelf&) = delete;
 
@@ -79,11 +102,16 @@ private:
         std::array<float, 4> texRect{0, 0, 1, 1};  // the part of it shown (u0, v0, u1, v1)
         bool cylinder = false;
         int mesh = -1;        // a console or a cartridge's shell instead (meshFirst_)
+        int custom = -1;      // or a console's own model (custom_), or the cartridge's (kCartCustom)
+        unsigned int label = 0;  // on a cartridge's own model: the game's label, over its own
+        std::array<float, 4> labelRect{0, 0, 1, 1};  // the part of `label` shown
+        bool labelWhole = false;  // a scan of the whole label (else art for its picture)
         float glow = 0;       // lights itself (the console's power light)
         float shine = 0.4f;   // how glossy
         bool reflect = true;  // seen in the floor
         int box = -1;         // the item whose box this is part of, for clicks
         bool cartridge = false;
+        bool hidden = false;  // only there for clicks
     };
 
     void build(const std::vector<Item>& items, int selected);
@@ -97,6 +125,7 @@ private:
     // The part under (x, y), or nullptr.
     const Part* pick(float x, float y) const;
     void ensureTarget(int width, int height);
+    void vertexArray(const std::vector<float>& vertices, gl::GLuint* vao, gl::GLuint* vbo);
 
     gl::GLuint program_ = 0;
     gl::GLuint vao_ = 0, vbo_ = 0;
@@ -104,6 +133,22 @@ private:
     // The consoles (ConsoleModel), then a cartridge's shell for each ConsoleSystem.
     static constexpr int kCartMeshes = 6, kMeshes = kCartMeshes + kSystemCount;
     int meshFirst_[kMeshes] = {}, meshCount_[kMeshes] = {};
+    // Models given with setConsoleModel, by ConsoleModel.
+    struct Custom {
+        gl::GLuint vao = 0, vbo = 0;
+        std::vector<GltfModel::Batch> batches;
+        std::vector<gl::GLuint> textures;
+        Mat4 fit{};      // from the file's space to the console's place on the floor
+        float slot[3] = {0, 0, 0};
+        bool hasLed = false;
+        float led[3] = {0, 0, 0}, ledTilt = 0;
+        // A cartridge's: where its label is in its texture, all of it and its picture.
+        float labelArea[4] = {0, 0, 0, 0}, pictureArea[4] = {0, 0, 0, 0};
+    };
+    // The consoles' (by ConsoleModel), then the Mega Drive cartridge's.
+    static constexpr int kCartCustom = static_cast<int>(ConsoleModel::Count);
+    Custom custom_[kCartCustom + 1];
+    void upload(Custom& c, const GltfModel& model);
     gl::GLuint fbo_ = 0, colour_ = 0, depth_ = 0;
     int width_ = 0, height_ = 0;
 

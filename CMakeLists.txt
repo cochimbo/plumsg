@@ -237,6 +237,7 @@ add_executable(plumsg WIN32
   src/render/gl_renderers.cpp
   src/render/box_shelf.cpp
   src/render/console_models.cpp
+  src/render/gltf_model.cpp
   src/render/upscale.cpp
 )
 # The plum icon of plumsg.exe (Explorer, taskbar, shortcuts).
@@ -244,7 +245,7 @@ if(WIN32)
   target_sources(plumsg PRIVATE src/frontend/plumsg.rc)
 endif()
 # stb_image (public domain / MIT, vendored) decodes the library's PNG and JPEG covers.
-target_include_directories(plumsg PRIVATE third_party/stb)
+target_include_directories(plumsg PRIVATE third_party/stb third_party/cgltf)
 
 # The PLUMSG logo, the plum icon and the interface's fonts, built into the executable as
 # byte arrays (logo_png.h, chakra_petch_regular_ttf.h...).
@@ -314,6 +315,9 @@ if(WIN32 AND TARGET SDL2::SDL2)
   add_custom_command(TARGET plumsg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> $<TARGET_FILE_DIR:plumsg>)
 endif()
+# And the 3D view's console models, which it looks for in models/ beside the executable.
+add_custom_command(TARGET plumsg POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/assets/models $<TARGET_FILE_DIR:plumsg>/models)
 endif()  # PLUMSG_BUILD_FRONTEND
 
 if(PLUMSG_BUILD_TESTS)

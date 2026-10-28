@@ -286,6 +286,19 @@ bool Library::useCover(size_t game) {
     return saveCover(game, previewImage_, &search_.status);
 }
 
+bool Library::labelFromFile(size_t game, const std::string& file, std::string* error) {
+    std::vector<uint8_t> image;
+    if (!readAll(fs::u8path(file), image)) {
+        *error = trf("No se pudo leer %s", file.c_str());
+        return false;
+    }
+    if (!isImage(image)) {
+        *error = trf("%s no es una imagen PNG o JPEG", fs::u8path(file).filename().u8string().c_str());
+        return false;
+    }
+    return saveCover(game, image, error, true);
+}
+
 bool Library::coverFromFile(size_t game, const std::string& file, std::string* error) {
     std::vector<uint8_t> image;
     if (!readAll(fs::u8path(file), image)) {
@@ -300,10 +313,11 @@ bool Library::coverFromFile(size_t game, const std::string& file, std::string* e
     return saveCover(game, image, error);
 }
 
-bool Library::saveCover(size_t game, const std::vector<uint8_t>& image, std::string* error) {
+bool Library::saveCover(size_t game, const std::vector<uint8_t>& image, std::string* error, bool label) {
     if (game >= games_.size()) return false;
     Game& g = games_[game];
-    const std::string target = systemCovers(g.system);
+    std::string target = systemCovers(g.system);
+    if (!target.empty() && label) target = (fs::u8path(target) / "etiquetas").u8string() + static_cast<char>(fs::path::preferred_separator);
     if (target.empty()) return false;
     std::error_code ec;
     fs::create_directories(fs::u8path(target), ec);
@@ -378,6 +392,9 @@ void Library::update() {
             g.cover = Cover::Missing;
             continue;
         }
+        if (!r.label.empty()) g.label = uploadTexture(g.label, r.label, r.labelWidth, r.labelHeight);
+        g.labelWidth = r.labelWidth;
+        g.labelHeight = r.labelHeight;
         if (g.texture) gl::DeleteTextures(1, &g.texture);
         gl::GenTextures(1, &g.texture);
         gl::BindTexture(gl::TEXTURE_2D, g.texture);
@@ -398,12 +415,17 @@ void Library::clearTextures() {
         search_.preview = 0;
         search_.previewName.clear();
     }
-    for (Game& g : games_)
+    for (Game& g : games_) {
+        if (g.label) {
+            gl::DeleteTextures(1, &g.label);
+            g.label = 0;
+        }
         if (g.texture) {
             gl::DeleteTextures(1, &g.texture);
             g.texture = 0;
             if (g.cover == Cover::Ready) g.cover = Cover::Unknown;
         }
+    }
 }
 
 bool Library::findLocal(const Job& job, std::string* coverPath) const {
@@ -424,6 +446,25 @@ bool Library::findLocal(const Job& job, std::string* coverPath) const {
             }
         }
     }
+    return false;
+}
+
+bool Library::findLabel(const Job& job, std::string* labelPath) const {
+    std::error_code ec;
+    const fs::path dir = fs::u8path(job.path).parent_path();
+    const fs::path stem = fs::u8path(job.stem);
+    std::vector<fs::path> folders;
+    if (!systemCovers(job.system).empty()) folders.push_back(fs::u8path(systemCovers(job.system)) / "etiquetas");
+    for (const char* sub : {"etiquetas", "labels", "Named_Labels"}) folders.push_back(dir / fs::u8path(sub));
+    for (const auto& f : folders)
+        for (const char* ext : {".png", ".jpg", ".jpeg"}) {
+            fs::path p = f / stem;
+            p += ext;
+            if (fs::is_regular_file(p, ec)) {
+                *labelPath = p.u8string();
+                return true;
+            }
+        }
     return false;
 }
 
@@ -530,13 +571,17 @@ void Library::work() {
             job = std::move(jobs_.front());
             jobs_.pop_front();
         }
-        Result r{job.index, job.generation, false, {}, 0, 0};
+        Result r{job.index, job.generation, false, {}, 0, 0, {}, 0, 0};
         std::string cover;
         bool found = findLocal(job, &cover);
         bool fetched = false;
         if (!found && job.download) found = fetched = fetch(job, &cover);
         std::vector<uint8_t> data;
         if (found) r.found = readAll(fs::u8path(cover), data) && decode(data, r.pixels, &r.width, &r.height);
+        std::string label;
+        if (r.found && findLabel(job, &label) && readAll(fs::u8path(label), data) &&
+            !decode(data, r.label, &r.labelWidth, &r.labelHeight))
+            r.label.clear(), r.labelWidth = r.labelHeight = 0;
         std::lock_guard<std::mutex> lock(mutex_);
         if (job.download) {
             if (fetched) ++downloaded_;

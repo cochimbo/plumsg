@@ -2273,7 +2273,8 @@ void Ui::drawLibrary(UiActions& out) {
             ImGui::Separator();
             static const char* items[LibraryView::kItems] = {N_("Jugar"), N_("Trucos..."), N_("Opciones de este juego..."),
                                                              N_("Editor de instrumentos..."), N_("Buscar carátula..."),
-                                                             N_("Carátula desde imagen..."), N_("Portada completa...")};
+                                                             N_("Carátula desde imagen..."), N_("Portada completa..."),
+                                                             N_("Etiqueta del cartucho...")};
             int picked = libraryView_.menuAction;
             for (int i = 0; i < LibraryView::kItems; ++i)
                 if (ImGui::Selectable(tr(items[i]), libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
@@ -2288,7 +2289,8 @@ void Ui::drawLibrary(UiActions& out) {
                     break;
                 case 4: openCoverSearch(visible[static_cast<size_t>(n)]); break;
                 case 5: chooseCoverImage(visible[static_cast<size_t>(n)]); break;
-                case 6: chooseCoverImage(visible[static_cast<size_t>(n)], true); break;
+                case 6: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Sleeve); break;
+                case 7: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Label); break;
                 default: break;
             }
             if (picked >= 0) {
@@ -2405,7 +2407,10 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
     libraryView_.columns = 1;
     const ImVec2 size = ImGui::GetContentRegionAvail();
     if (visible.empty() || size.x < 16 || size.y < 16) return;
-    if (!shelf_) shelf_ = std::make_unique<BoxShelf>();
+    if (!shelf_) {
+        shelf_ = std::make_unique<BoxShelf>();
+        shelf_->loadConsoleModels(modelFolders_);
+    }
     if (boxesPose_) {
         shelf_->pose(boxesPose_);
         boxesPose_ = 0;
@@ -2415,7 +2420,7 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
     items.reserve(visible.size());
     for (size_t i : visible) {
         const Library::Game& g = games[i];
-        items.push_back({g.texture, g.width, g.height, g.system});
+        items.push_back({g.texture, g.width, g.height, g.system, g.label, g.labelWidth, g.labelHeight});
     }
     // Drawn at twice the window's pixels and shrunk, for smooth edges.
     const ImGuiIO& io = ImGui::GetIO();
@@ -2663,11 +2668,11 @@ void Ui::startCoverSearch() {
     library_.searchCovers(library_.games()[coverSearch_.game].system, coverSearch_.query);
 }
 
-void Ui::chooseCoverImage(size_t game, bool sleeve) {
+void Ui::chooseCoverImage(size_t game, CoverImage kind) {
     const auto& games = library_.games();
     if (game >= games.size()) return;
     coverImageFor_ = games[game].path;
-    coverImageSleeve_ = sleeve;
+    coverImageKind_ = kind;
     const std::string start = coverImageFor_.substr(0, coverImageFor_.find_last_of("/\\"));
     std::string chosen;
     browseFor_ = BrowseFor::CoverImage;
@@ -2685,12 +2690,13 @@ void Ui::useCoverImage(const std::string& file) {
     for (size_t i = 0; i < games.size(); ++i)
         if (games[i].path == coverImageFor_) {
             std::string error;
-            if (!library_.coverFromFile(i, file, &error)) {
+            const bool label = coverImageKind_ == CoverImage::Label;
+            if (!(label ? library_.labelFromFile(i, file, &error) : library_.coverFromFile(i, file, &error))) {
                 if (!error.empty()) showError(error);
                 break;
             }
             // A whole sleeve is told apart by its shape: much wider than tall.
-            if (coverImageSleeve_) {
+            if (coverImageKind_ == CoverImage::Sleeve) {
                 int w = 0, h = 0, channels = 0;
                 std::ifstream in(std::filesystem::u8path(file), std::ios::binary);
                 const std::vector<unsigned char> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());

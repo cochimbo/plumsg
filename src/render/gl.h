@@ -47,6 +47,7 @@ constexpr GLenum RGBA = 0x1908;
 constexpr GLenum VERSION = 0x1F02;
 constexpr GLenum NEAREST = 0x2600;
 constexpr GLenum LINEAR = 0x2601;
+constexpr GLenum LINEAR_MIPMAP_LINEAR = 0x2703;
 constexpr GLenum TEXTURE_MAG_FILTER = 0x2800;
 constexpr GLenum TEXTURE_MIN_FILTER = 0x2801;
 constexpr GLenum TEXTURE_WRAP_S = 0x2802;
@@ -71,6 +72,7 @@ constexpr GLenum FRAMEBUFFER = 0x8D40;
 
 #define PLUMSG_GL_FUNCTIONS(X)                                                                         \
     X(void, ActiveTexture, (GLenum))                                                                   \
+    X(void, GenerateMipmap, (GLenum))                                                                  \
     X(void, AttachShader, (GLuint, GLuint))                                                            \
     X(void, BindBuffer, (GLenum, GLuint))                                                              \
     X(void, BindFramebuffer, (GLenum, GLuint))                                                         \

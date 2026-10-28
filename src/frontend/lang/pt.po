@@ -1134,6 +1134,9 @@ msgstr "Esticar"
 msgid "Estrategia"
 msgstr "Estratégia"
 
+msgid "Etiqueta del cartucho..."
+msgstr "Etiqueta do cartucho..."
+
 msgid "Europa (Mega-CD)"
 msgstr "Europa (Mega-CD)"
 

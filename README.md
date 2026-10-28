@@ -609,12 +609,18 @@ Own code under the [MIT License](LICENSE). Libraries: SDL2 (zlib), Dear ImGui (M
 `third_party/stb`), ymfm (BSD-3-Clause), the Anime4K network weights (MIT, by bloc97, in
 `src/render/anime4k_shaders.h`, generated with `tools/anime4k.py`), the xBR shader written
 following Hyllian's xbr-lv2 (MIT), libchdr (BSD-3-Clause, for `.chd` files), TinySoundFont
-(MIT, in `third_party/tsf`), rcheevos (MIT, for RetroAchievements), minimp3 (CC0, in
+(MIT, in `third_party/tsf`), cgltf (MIT, in `third_party/cgltf`), rcheevos (MIT, for RetroAchievements), minimp3 (CC0, in
 `third_party/minimp3`) and stb_vorbis (public domain or MIT, in `third_party/stb`). The
 interface's typeface is Chakra Petch (SIL Open Font License 1.1, in
 `src/frontend/assets/fonts` with its license). The included
 SoundFont is GeneralUser GS by S. Christian Collins, with its own free license
-(`soundfonts\GeneralUser-GS-LICENSE.txt` in the installation). The 32X and Mega CD were
+(`soundfonts\GeneralUser-GS-LICENSE.txt` in the installation). The 3D library's Mega
+Drive is ["Sega Mega Drive"](https://sketchfab.com/3d-models/sega-mega-drive-47cf3eae9fc3423db22aba119a6a37d5)
+by synthetic worlds (mesh and textures by Jon Blenky), under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with smaller textures
+(`assets/models/CREDITS.txt`), and its cartridge
+["Sonic 2 Mega Drive Cartridge"](https://sketchfab.com/3d-models/sonic-2-mega-drive-cartridge-4c453f8527384c718f652a9f04067119)
+by Naser, also CC BY 4.0. The 32X and Mega CD were
 written using Sega's documentation and [ares](https://github.com/ares-emulator/ares)
 (ISC) code as a reference. The 240p Test Suite in `tests/240p/` is GPL v2 and its SGDK
 library LGPL v3, with their source next to it. Cover art and screenshots come from

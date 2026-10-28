@@ -41,6 +41,9 @@ public:
         Cover cover = Cover::Unknown;
         unsigned int texture = 0;
         int width = 0, height = 0;
+        // The cartridge's label (or the disc's), for the 3D boxes: 0 if there is none.
+        unsigned int label = 0;
+        int labelWidth = 0, labelHeight = 0;
     };
 
     Library();
@@ -84,6 +87,10 @@ public:
     // window) as `game`'s cover, copied to the covers folder like a downloaded one.
     // False, with the reason in *error, if it is not an image or cannot be saved.
     bool coverFromFile(size_t game, const std::string& file, std::string* error);
+    // Uses an image of the user's as the label on `game`'s cartridge (or its disc), saved
+    // in the covers folder's "etiquetas" folder, where labels are looked for first; then
+    // in an "etiquetas", "labels" or "Named_Labels" folder next to the game.
+    bool labelFromFile(size_t game, const std::string& file, std::string* error);
     // Forgets the search and frees the preview.
     void endCoverSearch();
     const CoverSearch& coverSearch() const { return search_; }
@@ -106,6 +113,8 @@ private:
         bool found;
         std::vector<uint32_t> pixels;
         int width, height;
+        std::vector<uint32_t> label;
+        int labelWidth = 0, labelHeight = 0;
     };
 
     // One request to the search thread; a newer one replaces it if it has not started.
@@ -131,11 +140,12 @@ private:
     bool loadCoverIndex(ConsoleSystem s, std::string* error);
     void askSearch(SearchTask task);
     bool findLocal(const Job& job, std::string* coverPath) const;
+    bool findLabel(const Job& job, std::string* labelPath) const;
     bool fetch(const Job& job, std::string* coverPath);
     void queue(Job job);
     // Saves a PNG or JPEG as `game`'s cover, replacing any other one of its in the covers
     // folder, and loads it again.
-    bool saveCover(size_t game, const std::vector<uint8_t>& image, std::string* error);
+    bool saveCover(size_t game, const std::vector<uint8_t>& image, std::string* error, bool label = false);
 
     std::string systemCovers(ConsoleSystem s) const;
 

@@ -12,7 +12,13 @@ What each version brings, newest first. Installers are on the
   light comes on and the game starts. A click anywhere else closes the box. The
   cartridges and consoles are built from their real measurements: the Mega Drive and
   Master System of the first model, the Game Gear, the 32X in the Mega Drive's slot and
-  the first Mega-CD under it, with its tray.
+  the first Mega-CD under it, with its tray. The Mega Drive is a real 3D model, "Sega
+  Mega Drive" by synthetic worlds (Jon Blenky, CC BY 4.0), and so is its cartridge,
+  "Sonic 2 Mega Drive Cartridge" by Naser (CC BY 4.0), wearing each game's label; a .glb of your own with the
+  same name in the "models" folder next to plumsg.ini takes its place.
+- "Etiqueta del cartucho..." in a game's menu puts a scan of its cartridge label on the
+  3D cartridge; labels in an "etiquetas" (or "labels", "Named_Labels") folder next to
+  the ROMs are found by the game's name.
 - "Portada completa..." in a game's menu takes a whole sleeve (back, spine and front side
   by side, as The Cover Project has them): the 3D box wears all of it, and the grid and
   the details panel show its front.

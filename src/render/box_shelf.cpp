@@ -59,6 +59,12 @@ void main() {
 // with the distance below it.
 constexpr const char* kFragment = R"(#version 330 core
 uniform sampler2D uImage;
+uniform sampler2D uNormals;
+uniform int uHasNormals;
+uniform sampler2D uLabel;
+uniform int uHasLabel;
+uniform vec4 uLabelArea;
+uniform vec4 uLabelRect;
 uniform vec3 uColour;
 uniform int uTexFaces;
 uniform vec4 uTexRect;
@@ -81,9 +87,26 @@ void main() {
         outColor = vec4(mix(uColour, uBackground, smoothstep(1.0, 6.5, r)), 0.84);
         return;
     }
+    // What is still under the floor (the console rising) reflects nothing.
+    if (uMirror == 1 && vWorld.y > uFloorY) discard;
     bool textured = ((uTexFaces >> vFace) & 1) != 0;
-    vec3 base = textured ? texture(uImage, mix(uTexRect.xy, uTexRect.zw, vUv)).rgb : uColour * vColour;
+    vec3 base = textured ? texture(uImage, mix(uTexRect.xy, uTexRect.zw, vUv)).rgb * vColour : uColour * vColour;
+    // A game's label printed over a cartridge model's own.
+    if (uHasLabel == 1 && all(greaterThanEqual(vUv, uLabelArea.xy)) && all(lessThanEqual(vUv, uLabelArea.zw))) {
+        vec2 t = (vUv - uLabelArea.xy) / (uLabelArea.zw - uLabelArea.xy);
+        base = texture(uLabel, mix(uLabelRect.xy, uLabelRect.zw, vec2(t.x, 1.0 - t.y))).rgb;
+    }
     vec3 n = normalize(vNormal);
+    // A model's normal map, in a frame made from how its texture runs across the screen.
+    if (uHasNormals == 1) {
+        vec3 dp1 = dFdx(vWorld), dp2 = dFdy(vWorld);
+        vec2 duv1 = dFdx(vUv), duv2 = dFdy(vUv);
+        vec3 a = cross(dp2, n), b = cross(n, dp1);
+        vec3 t = a * duv1.x + b * duv2.x, bt = a * duv1.y + b * duv2.y;
+        float k = inversesqrt(max(max(dot(t, t), dot(bt, bt)), 1e-20));
+        vec3 m = texture(uNormals, vUv).xyz * 2.0 - 1.0;
+        n = normalize(mat3(t * k, -bt * k, n) * m);
+    }
     vec3 l = normalize(vec3(-0.35, 0.8, 0.6));
     vec3 v = normalize(uEye - vWorld);
     float diffuse = max(dot(n, l), 0.0);
@@ -219,10 +242,14 @@ BoxShelf::BoxShelf() {
         meshCount_[m] = static_cast<int>(v.size()) / kFloats - meshFirst_[m];
     }
 
-    gl::GenVertexArrays(1, &vao_);
-    gl::BindVertexArray(vao_);
-    gl::GenBuffers(1, &vbo_);
-    gl::BindBuffer(gl::ARRAY_BUFFER, vbo_);
+    vertexArray(v, &vao_, &vbo_);
+}
+
+void BoxShelf::vertexArray(const std::vector<float>& v, gl::GLuint* vao, gl::GLuint* vbo) {
+    gl::GenVertexArrays(1, vao);
+    gl::BindVertexArray(*vao);
+    gl::GenBuffers(1, vbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, *vbo);
     gl::BufferData(gl::ARRAY_BUFFER, static_cast<gl::GLsizeiptr>(v.size() * sizeof(float)), v.data(), gl::STATIC_DRAW);
     const int stride = kFloats * sizeof(float);
     const int sizes[5] = {3, 3, 2, 1, 3};
@@ -234,7 +261,109 @@ BoxShelf::BoxShelf() {
     gl::BindVertexArray(0);
 }
 
+void BoxShelf::upload(Custom& c, const GltfModel& model) {
+    if (c.vao) gl::DeleteVertexArrays(1, &c.vao);
+    if (c.vbo) gl::DeleteBuffers(1, &c.vbo);
+    if (!c.textures.empty()) gl::DeleteTextures(static_cast<gl::GLsizei>(c.textures.size()), c.textures.data());
+    c = Custom();
+    vertexArray(model.vertices, &c.vao, &c.vbo);
+    c.batches = model.batches;
+    for (const GltfModel::Image& im : model.images) {
+        gl::GLuint t = 0;
+        gl::GenTextures(1, &t);
+        gl::BindTexture(gl::TEXTURE_2D, t);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR);
+        gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8, im.width, im.height, 0, gl::RGBA, gl::UNSIGNED_BYTE, im.pixels.data());
+        gl::GenerateMipmap(gl::TEXTURE_2D);
+        c.textures.push_back(t);
+    }
+}
+
+void BoxShelf::setConsoleModel(ConsoleModel which, const GltfModel& model, float width, float turn, const float slot[3],
+                               const float* led, float ledTilt) {
+    Custom& c = custom_[static_cast<int>(which)];
+    upload(c, model);
+    // Turned, its width measured across; then scaled, centred and stood on the floor.
+    const float cx = (model.min[0] + model.max[0]) / 2, cz = (model.min[2] + model.max[2]) / 2;
+    const float a = turn * kRad;
+    const float across = std::fabs(std::cos(a)) * (model.max[0] - model.min[0]) + std::fabs(std::sin(a)) * (model.max[2] - model.min[2]);
+    const float k = across > 0 ? width / across : 1;
+    c.fit = scale(k, k, k) * rotateY(turn) * translate(-cx, -model.min[1], -cz);
+    std::copy(slot, slot + 3, c.slot);
+    if (led) {
+        c.hasLed = true;
+        std::copy(led, led + 3, c.led);
+        c.ledTilt = ledTilt;
+    }
+}
+
+namespace {
+
+// The models that come with plumsg (or the user's own of the same consoles): how they are
+// turned and where their slots are, once standing centred on the floor.
+struct ModelFile {
+    ConsoleModel model;
+    const char* file;
+    float width, turn;  // 13.5 cm = 1
+    float slot[3];
+    float led[3], ledTilt;
+};
+// The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the dome,
+// its power light on the plate in front of it.
+const ModelFile kModelFiles[] = {
+    {ConsoleModel::MegaDrive, "megadrive.glb", 278.0f / 135.0f, 0.0f, {0.206f, 0.43f, -0.306f}, {0.206f, 0.415f, 0.42f}, 12.9f},
+};
+
+// The Mega Drive cartridge by Naser, CC BY 4.0: where its texture has the label (which a
+// scan replaces) and the picture and title above the "MEGA DRIVE" band of its European
+// label (which a cover replaces).
+constexpr const char* kCartridgeFile = "megadrive-cartridge.glb";
+const float kCartridgeLabel[4] = {0.125f, 0.617f, 0.623f, 0.967f};
+const float kCartridgePicture[4] = {0.125f, 0.662f, 0.623f, 0.967f};
+
+}  // namespace
+
+void BoxShelf::loadConsoleModels(const std::vector<std::string>& folders) {
+    for (const std::string& folder : folders) {
+        GltfModel model;
+        std::string error;
+        if (!loadGltf(folder + kCartridgeFile, model, &error)) continue;
+        setCartridgeModel(model, kCartridgeLabel, kCartridgePicture);
+        break;
+    }
+    for (const ModelFile& m : kModelFiles) {
+        for (const std::string& folder : folders) {
+            GltfModel model;
+            std::string error;
+            if (!loadGltf(folder + m.file, model, &error)) continue;
+            setConsoleModel(m.model, model, m.width, m.turn, m.slot, m.led, m.ledTilt);
+            break;
+        }
+    }
+}
+
+void BoxShelf::setCartridgeModel(const GltfModel& model, const float labelArea[4], const float pictureArea[4]) {
+    Custom& c = custom_[kCartCustom];
+    upload(c, model);
+    // Centred and stretched to the cartridge's real size.
+    const CartridgeShape shape = cartridgeShape(ConsoleSystem::MegaDrive);
+    float size[3], mid[3];
+    for (int i = 0; i < 3; ++i) {
+        size[i] = std::max(model.max[i] - model.min[i], 1e-6f);
+        mid[i] = (model.min[i] + model.max[i]) / 2;
+    }
+    c.fit = scale(shape.w / size[0], shape.h / size[1], shape.d / size[2]) * translate(-mid[0], -mid[1], -mid[2]);
+    std::copy(labelArea, labelArea + 4, c.labelArea);
+    std::copy(pictureArea, pictureArea + 4, c.pictureArea);
+}
+
 BoxShelf::~BoxShelf() {
+    for (Custom& c : custom_) {
+        if (c.vao) gl::DeleteVertexArrays(1, &c.vao);
+        if (c.vbo) gl::DeleteBuffers(1, &c.vbo);
+        if (!c.textures.empty()) gl::DeleteTextures(static_cast<gl::GLsizei>(c.textures.size()), c.textures.data());
+    }
     if (fbo_) gl::DeleteFramebuffers(1, &fbo_);
     if (colour_) gl::DeleteTextures(1, &colour_);
     if (depth_) gl::DeleteTextures(1, &depth_);
@@ -349,7 +478,7 @@ const BoxShelf::Part* BoxShelf::pick(float x, float y) const {
     const Part* best = nullptr;
     float bestT = 1e30f;
     for (const Part& p : parts_) {
-        if (p.box < 0 && !p.cartridge) continue;
+        if ((p.box < 0 && !p.cartridge) || (p.cartridge && p.custom >= 0)) continue;
         const Mat4 inv = affineInverse(p.model);
         const float o[3] = {inv[0] * eye_.x + inv[4] * eye_.y + inv[8] * eye_.z + inv[12],
                             inv[1] * eye_.x + inv[5] * eye_.y + inv[9] * eye_.z + inv[13],
@@ -444,15 +573,17 @@ Sleeve sleeve(int width, int height) {
 void BoxShelf::addCartridge(const Item& item, const Mat4& place) {
     Part p;
     p.cartridge = true;
-    p.texRect = sleeve(item.width, item.height).front;
+    // Its own label, or else the cover's front.
+    const unsigned int art = item.label ? item.label : item.texture;
+    p.texRect = item.label ? std::array<float, 4>{0, 0, 1, 1} : sleeve(item.width, item.height).front;
     if (item.system == ConsoleSystem::MegaCD) {
         // A 12 cm disc, 1.2 mm thick, its label printed with the cover; the hole in the middle.
         p.model = place * scale(0.889f, 0.889f, 0.009f);
         p.colour = {0.78f, 0.79f, 0.84f};
         p.shine = 1.0f;
         p.cylinder = true;
-        p.texture = item.texture;
-        p.texFaces = item.texture ? 1 << 4 : 0;
+        p.texture = art;
+        p.texFaces = art ? 1 << 4 : 0;
         parts_.push_back(p);
         p.model = place * scale(0.111f, 0.111f, 0.0095f);
         p.colour = {kBackground[0], kBackground[1], kBackground[2]};
@@ -462,6 +593,35 @@ void BoxShelf::addCartridge(const Item& item, const Mat4& place) {
         return;
     }
     const CartridgeShape c = cartridgeShape(item.system);
+    // A Mega Drive cartridge's own model, with the game's label over the one it has.
+    const Custom& own = custom_[kCartCustom];
+    if (item.system == ConsoleSystem::MegaDrive && own.vao) {
+        p.model = place * own.fit;
+        p.colour = {1, 1, 1};
+        p.shine = 0.35f;
+        p.custom = kCartCustom;
+        p.label = art;
+        p.labelRect = p.texRect;
+        p.labelWhole = item.label != 0;
+        // A cover's middle, cut to the picture's shape (about 95 x 53 mm on the cartridge).
+        if (!p.labelWhole && item.width > 0 && item.height > 0) {
+            std::array<float, 4>& r = p.labelRect;
+            const float w = (r[2] - r[0]) * static_cast<float>(item.width);
+            const float h = std::min(w / 1.8f / static_cast<float>(item.height), r[3] - r[1]);
+            const float mid = r[1] + (r[3] - r[1]) * 0.45f;
+            r[1] = std::clamp(mid - h / 2, r[1], r[3] - h);
+            r[3] = r[1] + h;
+        }
+        p.texRect = {0, 0, 1, 1};
+        p.reflect = true;
+        parts_.push_back(p);
+        Part hit;
+        hit.model = place * scale(c.w, c.h, c.d);
+        hit.cartridge = true;
+        hit.hidden = true;
+        parts_.push_back(hit);
+        return;
+    }
     p.model = place;
     p.colour = {1, 1, 1};
     p.shine = 0.35f;
@@ -470,10 +630,10 @@ void BoxShelf::addCartridge(const Item& item, const Mat4& place) {
     // The label (the cover) in its recess.
     p.mesh = -1;
     p.model = place * translate(0, c.labelY, c.d / 2 + 0.0025f) * scale(c.labelW, c.labelH, 0.001f);
-    p.colour = item.texture ? Vec3{1, 1, 1} : Vec3{0.75f, 0.72f, 0.66f};
+    p.colour = art ? Vec3{1, 1, 1} : Vec3{0.75f, 0.72f, 0.66f};
     p.shine = 0.15f;
-    p.texture = item.texture;
-    p.texFaces = item.texture ? 1 << 4 : 0;
+    p.texture = art;
+    p.texFaces = art ? 1 << 4 : 0;
     parts_.push_back(p);
 }
 
@@ -529,13 +689,34 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
     using L = ConsoleLayout;
     const ConsoleSystem s = item.system;
     const Mat4 base = translate(0, kFloorY + rise, kConsoleZ);
+    // The console's own model when it was given one, else the built-in.
     auto mesh = [&](ConsoleModel m, const Mat4& at) {
         Part p;
-        p.model = base * at;
         p.colour = {1, 1, 1};
         p.shine = 0.45f;
-        p.mesh = static_cast<int>(m);
+        const Custom& c = custom_[static_cast<int>(m)];
+        if (c.vao) {
+            p.model = base * at * c.fit;
+            p.custom = static_cast<int>(m);
+        } else {
+            p.model = base * at;
+            p.mesh = static_cast<int>(m);
+        }
         parts_.push_back(p);
+        // Its own power light, lit (the model shows it off).
+        if (c.vao && c.hasLed && light > 0) {
+            Part l;
+            l.model = base * at * translate(c.led[0], c.led[1], c.led[2]) * rotateX(c.ledTilt - 90) * scale(0.022f, 0.022f, 0.002f);
+            l.colour = {1.0f, 0.12f, 0.08f};
+            l.glow = 1.6f;
+            l.cylinder = true;
+            parts_.push_back(l);
+        }
+    };
+    // Where its slot is: the given model's, or the built-in's.
+    auto slotOf = [&](ConsoleModel m, float x, float y, float z) {
+        const Custom& c = custom_[static_cast<int>(m)];
+        return c.vao ? Vec3{c.slot[0], c.slot[1], c.slot[2]} : Vec3{x, y, z};
     };
     // The power light: dark red, lit once the game is in.
     auto led = [&](const float* at, bool front) {
@@ -578,15 +759,20 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
             mesh(ConsoleModel::MegaCDTray, translate(L::kTrayX, L::kTrayY, z));
             return translate(L::kTrayX, kFloorY + L::kTrayY + 0.006f, kConsoleZ + z) * rotateX(-90);
         }
-        case ConsoleSystem::Mega32X:
+        case ConsoleSystem::Mega32X: {
             mesh(ConsoleModel::MegaDrive, identity());
-            mesh(ConsoleModel::Mega32X, translate(L::kMdSlotX, L::kMdSlotY, L::kMdSlotZ));
-            led(L::kMdLed, false);
-            return translate(L::kMdSlotX, kFloorY + L::kMdSlotY + L::k32xSlotY + c.h / 2 - c.insert, kConsoleZ + L::kMdSlotZ);
-        default:
+            const Vec3 md = slotOf(ConsoleModel::MegaDrive, L::kMdSlotX, L::kMdSlotY, L::kMdSlotZ);
+            mesh(ConsoleModel::Mega32X, translate(md.x, md.y, md.z));
+            if (!custom_[static_cast<int>(ConsoleModel::MegaDrive)].vao) led(L::kMdLed, false);
+            const Vec3 x = slotOf(ConsoleModel::Mega32X, 0, L::k32xSlotY, 0);
+            return translate(md.x + x.x, kFloorY + md.y + x.y + c.h / 2 - c.insert, kConsoleZ + md.z + x.z);
+        }
+        default: {
             mesh(ConsoleModel::MegaDrive, identity());
-            led(L::kMdLed, false);
-            return translate(L::kMdSlotX, kFloorY + L::kMdSlotY + c.h / 2 - c.insert, kConsoleZ + L::kMdSlotZ);
+            if (!custom_[static_cast<int>(ConsoleModel::MegaDrive)].vao) led(L::kMdLed, false);
+            const Vec3 md = slotOf(ConsoleModel::MegaDrive, L::kMdSlotX, L::kMdSlotY, L::kMdSlotZ);
+            return translate(md.x, kFloorY + md.y + c.h / 2 - c.insert, kConsoleZ + md.z);
+        }
     }
 }
 
@@ -713,6 +899,12 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     gl::BindVertexArray(vao_);
     gl::ActiveTexture(gl::TEXTURE0);
     gl::Uniform1i(gl::GetUniformLocation(program_, "uImage"), 0);
+    gl::Uniform1i(gl::GetUniformLocation(program_, "uNormals"), 1);
+    gl::Uniform1i(gl::GetUniformLocation(program_, "uLabel"), 2);
+    const gl::GLint uHasLabel = gl::GetUniformLocation(program_, "uHasLabel");
+    const gl::GLint uLabelArea = gl::GetUniformLocation(program_, "uLabelArea");
+    const gl::GLint uLabelRect = gl::GetUniformLocation(program_, "uLabelRect");
+    const gl::GLint uHasNormals = gl::GetUniformLocation(program_, "uHasNormals");
     gl::UniformMatrix4fv(gl::GetUniformLocation(program_, "uViewProj"), 1, gl::FALSE_, viewProj_.data());
     gl::Uniform3f(gl::GetUniformLocation(program_, "uEye"), eye_.x, eye_.y, eye_.z);
     gl::Uniform1f(gl::GetUniformLocation(program_, "uFloorY"), kFloorY);
@@ -733,7 +925,36 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
         gl::Uniform1f(uGlow, p.glow);
         gl::Uniform1f(uShine, p.shine);
         if (p.texFaces) gl::BindTexture(gl::TEXTURE_2D, p.texture);
-        if (p.mesh >= 0) gl::DrawArrays(gl::TRIANGLES, meshFirst_[p.mesh], meshCount_[p.mesh]);
+        if (p.hidden) return;
+        if (p.custom >= 0) {
+            const Custom& c = custom_[p.custom];
+            if (p.label) {
+                const float* area = p.labelWhole ? c.labelArea : c.pictureArea;
+                gl::Uniform1i(uHasLabel, 1);
+                gl::Uniform4f(uLabelArea, area[0], area[1], area[2], area[3]);
+                gl::Uniform4f(uLabelRect, p.labelRect[0], p.labelRect[1], p.labelRect[2], p.labelRect[3]);
+                gl::ActiveTexture(gl::TEXTURE0 + 2);
+                gl::BindTexture(gl::TEXTURE_2D, p.label);
+                gl::ActiveTexture(gl::TEXTURE0);
+            }
+            gl::BindVertexArray(c.vao);
+            const int images = static_cast<int>(c.textures.size());
+            for (const GltfModel::Batch& b : c.batches) {
+                const bool textured = b.image >= 0 && b.image < images, bumped = b.normals >= 0 && b.normals < images;
+                gl::Uniform1i(uTexFaces, textured ? 1 << kGltfFace : 0);
+                if (textured) gl::BindTexture(gl::TEXTURE_2D, c.textures[static_cast<size_t>(b.image)]);
+                gl::Uniform1i(uHasNormals, bumped ? 1 : 0);
+                if (bumped) {
+                    gl::ActiveTexture(gl::TEXTURE0 + 1);
+                    gl::BindTexture(gl::TEXTURE_2D, c.textures[static_cast<size_t>(b.normals)]);
+                    gl::ActiveTexture(gl::TEXTURE0);
+                }
+                gl::DrawArrays(gl::TRIANGLES, b.first, b.count);
+            }
+            gl::Uniform1i(uHasNormals, 0);
+            gl::Uniform1i(uHasLabel, 0);
+            gl::BindVertexArray(vao_);
+        } else if (p.mesh >= 0) gl::DrawArrays(gl::TRIANGLES, meshFirst_[p.mesh], meshCount_[p.mesh]);
         else if (p.cylinder) gl::DrawArrays(gl::TRIANGLES, cylinderFirst_, cylinderCount_);
         else gl::DrawArrays(gl::TRIANGLES, cubeFirst_, cubeCount_);
     };

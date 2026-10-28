@@ -147,8 +147,10 @@ public:
     // "Buscar carátula..." for the library's game `game`.
     void openCoverSearch(size_t game);
     // A PNG or JPEG of the user's as the game's cover, for when none is found online; or
-    // (`sleeve`) the whole sleeve, back, spine and front side by side, for its 3D box.
-    void chooseCoverImage(size_t game, bool sleeve = false);
+    // the whole sleeve (back, spine and front side by side) or the cartridge's label, for
+    // its 3D box.
+    enum class CoverImage { Front, Sleeve, Label };
+    void chooseCoverImage(size_t game, CoverImage kind = CoverImage::Front);
     void useCoverImage(const std::string& file);
     bool coverSearchBusy() const { return showCoverSearch_ && (coverSearch_.autoPreview || library_.coverSearch().busy); }
     // The Trucos window, for the game main() handed it.
@@ -187,6 +189,8 @@ public:
     // Where the SoundFonts to choose from are: the one that comes with plumsg, and the
     // user's folder (created if missing), listed in Sonido > SoundFont.
     void setSoundfonts(std::string included, std::string folder);
+    // Where the 3D view's console models are, the user's first: each folder ends in a slash.
+    void setModelFolders(std::vector<std::string> folders) { modelFolders_ = std::move(folders); }
     // The states menu: a list of the slots that the pad (or the keyboard) can drive.
     void toggleStateMenu();
     bool stateMenuOpen() const { return stateMenu_.open; }
@@ -268,6 +272,7 @@ private:
     ScoreWindow score_;
     std::unique_ptr<AchievementsUi> achievements_;
     std::string includedSoundfont_, soundfontFolder_;
+    std::vector<std::string> modelFolders_;
     void drawSoundfontMenu(UiActions& out);
     void drawSoundfontCombo(UiActions& out, bool labelled = true);
     void drawEqualizer(UiActions& out);
@@ -292,7 +297,7 @@ private:
     BrowseFor browseFor_ = BrowseFor::Game;
     int biosSlot_ = 0;  // the region whose BIOS is being chosen
     std::string coverImageFor_;  // the game (its path) whose cover image is being chosen
-    bool coverImageSleeve_ = false;  // and it is meant to be the whole sleeve
+    CoverImage coverImageKind_ = CoverImage::Front;  // and what it is meant to be
     std::string biosStatus_;
     std::map<std::string, BiosInfo> biosChecked_;  // what each chosen file looks like, read once
     bool openRequested_ = false;
@@ -327,8 +332,8 @@ private:
         // The menu of one game (right click, X on the pad or the menu key): its index in
         // the filtered list, the item chosen with the pad or the keys, and a request to open it.
         // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula, Carátula desde imagen,
-        // Portada completa
-        static constexpr int kItems = 7;
+        // Portada completa, Etiqueta del cartucho
+        static constexpr int kItems = 8;
         int menuGame = -1;
         int menuItem = 0;
         bool openMenu = false;

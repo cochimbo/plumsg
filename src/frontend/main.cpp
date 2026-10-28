@@ -83,6 +83,8 @@ struct Paths {
     std::string soundfont; // the SoundFont that comes with plumsg, next to the executable
     std::string sound;     // the instrument editor's folder: assignments and recordings
     std::string videos;    // folder for the games' video and GIF recordings
+    std::string models;    // the 3D view's console models that come with plumsg, next to the executable
+    std::string myModels;  // the user's own, which take their place
 };
 
 const char* const kSoundfont = "soundfonts/GeneralUser-GS.sf2";
@@ -96,17 +98,17 @@ Paths findPaths() {
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
             return {portable, base + "states/", base + "profiles/", base + "cheats/", base + "covers/", base + "game-info/",
-                    base + kSoundfont, base + "sound/", base + "recordings/"};
+                    base + kSoundfont, base + "sound/", base + "recordings/", base + "models/", base + "models/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
         return {dir + "plumsg.ini", dir + "states/", dir + "profiles/", dir + "cheats/", dir + "covers/", dir + "game-info/",
-                base + kSoundfont, dir + "sound/", dir + "recordings/"};
+                base + kSoundfont, dir + "sound/", dir + "recordings/", base + "models/", dir + "models/"};
     }
     return {base + "plumsg.ini", base + "states/", base + "profiles/", base + "cheats/", base + "covers/", base + "game-info/",
-            base + kSoundfont, base + "sound/", base + "recordings/"};
+            base + kSoundfont, base + "sound/", base + "recordings/", base + "models/", base + "models/"};
 }
 
 // Up to 0.0.31 the folders and some files next to plumsg.ini had Spanish names. Renames
@@ -681,6 +683,8 @@ int main(int argc, char** argv) {
     InstrumentEditor editor(paths.sound);
     ui->setEditor(&editor);
     ui->setSoundfonts(paths.soundfont, paths.sound + "soundfonts/");
+    ui->setModelFolders(paths.myModels == paths.models ? std::vector<std::string>{paths.models}
+                                                       : std::vector<std::string>{paths.myModels, paths.models});
     auto loadSoundfont = [&] {
         const std::string path = settings.soundfont.empty() ? paths.soundfont : settings.soundfont;
         if (path == rolandFont) return rolandFontOk;
