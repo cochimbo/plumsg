@@ -3,8 +3,15 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## 0.1.0-beta.6
+## 0.1.0-beta.7
 
+- **A look of its own**: the interface takes its style from the console, black ribbed
+  plastic with the red of its "16-BIT" and chrome italic lettering, in the Chakra Petch
+  font. Window title bars, the "Jugar" button, the pad's buttons in the controls help
+  and the grid behind the library's covers match it.
+- "Opciones de este juego": each option has a General / Propio switch, and the on/off
+  ones a "Sí" / "No" list, instead of two boxes on a row.
+- The library's grid has a "Tamaño" slider to make the covers smaller or bigger.
 - Game Gear: World Series Baseball saves to the EEPROM on its cartridge and no longer
   stays black ([#77](https://github.com/cochimbo/plumsg/issues/77)); Primal Rage gets
   past its title screen, as the link port now reads back what the game writes to it
@@ -12,6 +19,9 @@ What each version brings, newest first. Installers are on the
   pictures in Madou Monogatari I is no longer garbled: a change of sprite size at the
   end of a line waits a line, as on the console
   ([#82](https://github.com/cochimbo/plumsg/issues/82)).
+
+## 0.1.0-beta.6
+
 - **Virtua Racing** runs: the SVP chip on its cartridge (the SSP1601 DSP and its memory
   controller) is emulated.
 - Master System: a BIOS dump loaded as a game ("[BIOS] Alex Kidd in Miracle World...")
