@@ -38,6 +38,7 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr int kCoverHeight = 280;  // covers are shrunk to this many pixels tall
+constexpr int kSleeveHeight = 720;  // but a whole sleeve (back, spine and front) to this, for the 3D boxes
 constexpr int kMaxDepth = 3;       // subfolders scanned below the library folder
 
 // The libretro-thumbnails box art of each console, on libretro's server and in its
@@ -88,8 +89,8 @@ bool isImage(const std::vector<uint8_t>& d) {
     return (d.size() > 8 && std::equal(png, png + 4, d.begin())) || (d.size() > 3 && d[0] == 0xFF && d[1] == 0xD8);
 }
 
-// Decodes a PNG or JPEG and shrinks it to kCoverHeight lines (box filter), as 0xAABBGGRR
-// in memory order R, G, B, A.
+// Decodes a PNG or JPEG and shrinks it to kCoverHeight lines (kSleeveHeight if it is much
+// wider than tall, a whole sleeve) with a box filter, as 0xAABBGGRR in memory order R, G, B, A.
 bool decode(const std::vector<uint8_t>& data, std::vector<uint32_t>& pixels, int* width, int* height) {
     int w = 0, h = 0, n = 0;
     stbi_uc* rgba = stbi_load_from_memory(data.data(), static_cast<int>(data.size()), &w, &h, &n, 4);
@@ -97,7 +98,7 @@ bool decode(const std::vector<uint8_t>& data, std::vector<uint32_t>& pixels, int
         if (rgba) stbi_image_free(rgba);
         return false;
     }
-    const int oh = std::min(h, kCoverHeight);
+    const int oh = std::min(h, w >= h * 6 / 5 ? kSleeveHeight : kCoverHeight);
     const int ow = std::max(1, static_cast<int>(static_cast<long long>(w) * oh / h));
     pixels.assign(static_cast<size_t>(ow) * oh, 0);
     for (int y = 0; y < oh; ++y) {
