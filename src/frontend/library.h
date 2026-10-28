@@ -91,6 +91,10 @@ public:
     // in the covers folder's "etiquetas" folder, where labels are looked for first; then
     // in an "etiquetas", "labels" or "Named_Labels" folder next to the game.
     bool labelFromFile(size_t game, const std::string& file, std::string* error);
+    // Uses images downloaded for the game at `path` (ScreenScraper's): a cover (or a whole
+    // sleeve) and a label, either may be empty. Unless `replace`, only where the game has
+    // none, or a sleeve where it only has a front.
+    void useDownloaded(const std::string& path, const std::vector<uint8_t>& cover, const std::vector<uint8_t>& label, bool replace);
     // Forgets the search and frees the preview.
     void endCoverSearch();
     const CoverSearch& coverSearch() const { return search_; }

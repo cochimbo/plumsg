@@ -15,7 +15,7 @@ namespace plumsg {
 
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
 // the [teclado] / [mando] sections, under [interfaz], [video], [audio], [consola],
-// [velocidad], [estados], [biblioteca], [bios], [red], [logros] and [recientes].
+// [velocidad], [estados], [biblioteca], [bios], [red], [logros], [screenscraper] and [recientes].
 // Ready-made widths for the widescreen: the columns on each side (at 320 pixels a line,
 // VdpMd::wideColumnsFor) that make the picture that aspect, and its name.
 struct Widescreen {
@@ -97,6 +97,12 @@ struct Settings {
     std::string raUser;
     std::string raToken;
     bool raHardcore = false;
+    // ScreenScraper (screenscraper.fr), for the library's media: the user's account, a
+    // developer account if plumsg was built without one, and the kinds of media to
+    // download (SsKind ids with commas; empty: the usual ones).
+    std::string ssUser, ssPassword;
+    std::string ssDevId, ssDevPassword;
+    std::string ssMedia;
 
     void addRecent(const std::string& path);
     void removeRecent(const std::string& path);

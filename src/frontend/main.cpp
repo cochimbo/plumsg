@@ -394,6 +394,7 @@ struct CommandLine {
     int libraryBoxes = -1;        // --boxes [1-4]: with --library, show its 3D boxes (and hold one open at that step)
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
     bool coverSearch = false;     // --find-cover: with --library, look for the first game's cover
+    int media = 0;                // --media [search|all]: with --library, the first game's ScreenScraper media (1 downloaded, 2 searched for, 3 every game's)
     bool cheats = false;          // --cheats: start with the game's Cheats window open
     bool achievements = false;    // --achievements: start with the RetroAchievements window open
     int gameOptions = 0;          // --game-options [controls]: start with its Options for this game window open (2 on Controls)
@@ -451,7 +452,7 @@ std::string optionName(const std::string& a) {
         {"--captura", "--screenshot"}, {"--grabar", "--record"}, {"--cuadros", "--frames"}, {"--vista", "--view"},
         {"--inclinacion", "--tilt"}, {"--giro", "--yaw"}, {"--menu-estados", "--states-menu"},
         {"--biblioteca", "--library"}, {"--descargar-caratulas", "--download-covers"}, {"--lista", "--list"},
-        {"--buscar-caratula", "--find-cover"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
+        {"--buscar-caratula", "--find-cover"}, {"--medios", "--media"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
         {"--opciones-juego", "--game-options"}, {"--instrumentos", "--instruments"}, {"--pista", "--track"}, {"--partitura", "--score"},
         {"--filtro", "--filter"}, {"--reescalado", "--upscaling"}, {"--pantalla-completa", "--fullscreen"},
         {"--ventana", "--windowed"}, {"--estado", "--load-state"}, {"--alojar", "--host"}, {"--unirse", "--join"},
@@ -486,6 +487,12 @@ CommandLine parse(int argc, char** argv) {
         }
         else if (a == "--bios") c.bios = true;
         else if (a == "--find-cover") c.coverSearch = true;
+        else if (a == "--media") {
+            c.media = 1;
+            const std::string mode = i + 1 < argc ? argv[i + 1] : "";
+            if (mode == "search" || mode == "buscar") c.media = 2, ++i;
+            else if (mode == "all" || mode == "todos") c.media = 3, ++i;
+        }
         else if (a == "--cheats") c.cheats = true;
         else if (a == "--achievements") c.achievements = true;
         else if (a == "--game-options") {
@@ -642,6 +649,7 @@ int main(int argc, char** argv) {
     app->cheatsDir = paths.cheats;
     ui->library().setCoversFolder(paths.covers);
     ui->gameInfo().setFolder(paths.info);
+    ui->scraper().setFolder(paths.info + "screenscraper/");
     auto audio = std::make_unique<Audio>();
     // RetroAchievements: a screenshot run shows its windows but never logs in.
     Achievements achievements([](const std::string& url, const std::string& post, const std::string& agent,
@@ -897,6 +905,7 @@ int main(int argc, char** argv) {
     int loops = 0;
     bool downloadCovers = cmd.downloadCovers;
     bool coverSearch = cmd.coverSearch;
+    int media = cmd.media;
     bool sizedForMenu = false;
 
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -1569,11 +1578,16 @@ int main(int argc, char** argv) {
             coverSearch = false;
             loops = 0;
         }
+        if (media && ui->libraryOpen() && ui->library().pending() == 0 && loops > 3) {
+            ui->startMedia(0, media);
+            media = 0;
+            loops = 0;
+        }
         // A screenshot waits a few frames for the window and the popups to settle, and a
         // library one for its covers.
         const bool libraryReady =
-            loops > 3 && (!ui->libraryOpen() || (!downloadCovers && !coverSearch && ui->library().pending() == 0 && loops > 20)) &&
-            !ui->coverSearchBusy() && !ui->cheatsBusy() && !ui->libraryInfoBusy();
+            loops > 3 && (!ui->libraryOpen() || (!downloadCovers && !coverSearch && !media && ui->library().pending() == 0 && loops > 20)) &&
+            !ui->coverSearchBusy() && !ui->mediaBusy() && !ui->cheatsBusy() && !ui->libraryInfoBusy();
         if (capturing && libraryReady &&
             (framesRun >= cmd.frames || !app->romLoaded || ui->libraryOpen() ||
              (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {
