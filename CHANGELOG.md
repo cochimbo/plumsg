@@ -5,17 +5,19 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
-- **The library's 3D boxes** ("Cajas 3D", next to Cuadrícula and Lista): the games'
-  cases stand in a row with their covers. A click (or A) on the one in the middle opens
-  its lid, showing the manual and the cartridge (the disc on the Mega CD); a click on the
-  cartridge takes it out and into the console, which rises from the floor, its power
-  light comes on and the game starts. A click anywhere else closes the box. The
-  cartridges and consoles are built from their real measurements: the Mega Drive and
-  Master System of the first model, the Game Gear, the 32X in the Mega Drive's slot and
-  the first Mega-CD under it, with its tray. The Mega Drive is a real 3D model, "Sega
-  Mega Drive" by synthetic worlds (Jon Blenky, CC BY 4.0), and so is its cartridge,
-  "Sonic 2 Mega Drive Cartridge" by Naser (CC BY 4.0), wearing each game's label; a .glb of your own with the
-  same name in the "models" folder next to plumsg.ini takes its place.
+- **The library's 3D shelf** ("Cajas 3D", next to Cuadrícula and Lista): the games'
+  cases stand on a shelf with their spines out; the wheel zooms out to see it all and
+  dragging moves along it. A click (or A) takes a box out, and dragging turns it to see
+  its back; a second click opens its lid and brings out the cartridge (the disc on the
+  Mega CD), which dragging turns too; a third puts it into the console, which rises from
+  the floor, its power light comes on and the game starts. A click anywhere else puts
+  things back a step. The cartridges and consoles are built from their real
+  measurements: the Mega Drive and Master System of the first model, the Game Gear, the
+  32X in the Mega Drive's slot and the first Mega-CD under it, with its tray. The Mega
+  Drive is a real 3D model, "Sega Mega Drive" by synthetic worlds (Jon Blenky, CC BY
+  4.0), and so is its cartridge, "Sonic 2 Mega Drive Cartridge" by Naser (CC BY 4.0),
+  wearing each game's label; a .glb of your own with the same name in the "models"
+  folder next to plumsg.ini takes its place.
 - "Etiqueta del cartucho..." in a game's menu puts a scan of its cartridge label on the
   3D cartridge; labels in an "etiquetas" (or "labels", "Named_Labels") folder next to
   the ROMs are found by the game's name.

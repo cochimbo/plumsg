@@ -18,6 +18,9 @@ constexpr float kFloorY = -kBoxH / 2;   // the boxes stand on the floor
 constexpr float kConsoleZ = 1.6f;       // the console sits on the floor in front of them
 constexpr float kLidOpen = 165.0f;      // degrees, all the way open
 constexpr float kFov = 34.0f;           // degrees, top to bottom
+// The shelf behind: the boxes' middle, their spacing, and its boards.
+constexpr float kShelfZ = -1.6f, kSpacing = kBoxD + 0.012f;
+constexpr float kBoard = 0.045f, kPlinth = 0.09f, kSide = 0.05f, kRowH = kBoxH + 0.1f + kBoard;
 const float kBackground[3] = {0.035f, 0.037f, 0.045f};
 
 // Each vertex: position, normal, texture coordinates, the face it belongs to and its colour.
@@ -75,6 +78,7 @@ uniform int uMirror;
 uniform int uFloor;
 uniform float uFloorY;
 uniform vec3 uBackground;
+uniform vec4 uFloorFade;  // where the floor is brightest (x, z) and how far it fades out
 in vec3 vWorld;
 in vec3 vNormal;
 in vec2 vUv;
@@ -83,8 +87,8 @@ flat in int vFace;
 out vec4 outColor;
 void main() {
     if (uFloor == 1) {
-        float r = length(vWorld.xz - vec2(0.0, 0.8));
-        outColor = vec4(mix(uColour, uBackground, smoothstep(1.0, 6.5, r)), 0.84);
+        float r = length(vWorld.xz - uFloorFade.xy);
+        outColor = vec4(mix(uColour, uBackground, smoothstep(uFloorFade.z, uFloorFade.w, r)), 0.84);
         return;
     }
     // What is still under the floor (the console rising) reflects nothing.
@@ -400,18 +404,19 @@ void BoxShelf::ensureTarget(int width, int height) {
 
 void BoxShelf::reset() {
     state_ = State::Browse;
-    open_ = eject_ = light_ = 0;
+    take_ = open_ = eject_ = light_ = 0;
+    boxYaw_ = boxPitch_ = cartYaw_ = cartPitch_ = 0;
     launch_ = launched_ = false;
-    scrolled_ = false;
     frozen_ = false;
 }
 
 void BoxShelf::pose(int step) {
     reset();
     if (step <= 0) return;
-    open_ = 1;
-    state_ = step == 1 ? State::Open : step == 2 ? State::Ejecting : State::Inserted;
-    eject_ = step == 2 ? 0.6f : 1.0f;
+    take_ = 1;
+    open_ = step >= 2 ? 1.0f : 0.0f;
+    state_ = step == 1 ? State::Held : step == 2 ? State::Open : step == 3 ? State::Ejecting : State::Inserted;
+    eject_ = step == 3 ? 0.6f : step == 4 ? 1.0f : 0.0f;
     frozen_ = true;
 }
 
@@ -419,10 +424,9 @@ void BoxShelf::activate() {
     if (count_ == 0) return;
     switch (state_) {
         case State::Browse:
-        case State::Closing:
-            state_ = State::Opening;
-            scroll_ = static_cast<float>(selected_);
-            break;
+        case State::Returning: state_ = State::Taking; break;
+        case State::Held:
+        case State::Closing: state_ = State::Opening; break;
         case State::Open:
             state_ = State::Ejecting;
             eject_ = 0;
@@ -434,9 +438,24 @@ void BoxShelf::activate() {
 bool BoxShelf::back() {
     switch (state_) {
         case State::Browse: return false;
+        case State::Taking:
+        case State::Held: state_ = State::Returning; return true;
         case State::Opening:
         case State::Open: state_ = State::Closing; return true;
         default: return true;  // on its way into the console
+    }
+}
+
+BoxShelf::Stage BoxShelf::stage() const {
+    switch (state_) {
+        case State::Browse:
+        case State::Returning: return Stage::Shelf;
+        case State::Taking:
+        case State::Held:
+        case State::Closing: return Stage::Box;
+        case State::Opening:
+        case State::Open: return Stage::Cartridge;
+        default: return Stage::Console;
     }
 }
 
@@ -451,12 +470,16 @@ int BoxShelf::click(float x, float y) {
     switch (state_) {
         case State::Browse:
             if (!p || p->box < 0) return -1;
-            if (p->box == selected_) activate();
-            else return p->box;
+            selected_ = p->box;
+            state_ = State::Taking;
+            return p->box;
+        case State::Held:
+            if (p && p->box == selected_) activate();
+            else back();
             return -1;
         case State::Open:
             if (p && p->cartridge) activate();
-            else state_ = State::Closing;
+            else back();
             return -1;
         default: return -1;
     }
@@ -464,9 +487,38 @@ int BoxShelf::click(float x, float y) {
 
 BoxShelf::Target BoxShelf::hover(float x, float y) {
     const Part* p = pick(x, y);
-    if (state_ == State::Open) return p && p->cartridge ? Target::Cartridge : Target::Box;
-    if (state_ == State::Browse && p && p->box >= 0) return Target::Box;
-    return Target::None;
+    switch (state_) {
+        case State::Browse: return p && p->box >= 0 ? Target::Box : Target::None;
+        case State::Held: return p && p->box == selected_ ? Target::Box : Target::None;
+        case State::Open: return p && p->cartridge ? Target::Cartridge : Target::None;
+        default: return Target::None;
+    }
+}
+
+void BoxShelf::drag(float dx, float dy) {
+    switch (state_) {
+        case State::Held:
+            boxYaw_ += dx * 360;
+            boxPitch_ = std::clamp(boxPitch_ + dy * 180, -60.0f, 60.0f);
+            break;
+        case State::Open:
+            cartYaw_ += dx * 360;
+            cartPitch_ = std::clamp(cartPitch_ + dy * 180, -60.0f, 60.0f);
+            break;
+        case State::Browse: {
+            // The shelf follows the pointer, as far as the picture is wide at its distance.
+            const float across = 2 * distance_ * tanHalf_;
+            pan_.x -= dx * across * aspect_;
+            pan_.y += dy * across;
+            break;
+        }
+        default: break;
+    }
+}
+
+void BoxShelf::zoom(float steps) {
+    if (state_ != State::Browse) return;
+    distance_ *= std::pow(0.85f, steps);  // the most is set by render, once it knows the shelf
 }
 
 const BoxShelf::Part* BoxShelf::pick(float x, float y) const {
@@ -509,10 +561,10 @@ const BoxShelf::Part* BoxShelf::pick(float x, float y) const {
 }
 
 void BoxShelf::camera(Vec3* eye, Vec3* target) const {
-    const bool ejecting = state_ == State::Ejecting || state_ == State::Inserted;
-    const float o = ejecting ? 1.0f : smooth(open_);
-    const float e = state_ == State::Inserted ? 1.0f : ejecting ? smooth(eject_ / 0.45f) : 0.0f;
-    // Browsing, the box open, and the console: each framed for its size.
+    const float a = smooth(take_), o = smooth(open_);
+    const float e = state_ == State::Inserted ? 1.0f : state_ == State::Ejecting ? smooth(eject_ / 0.45f) : 0.0f;
+    const float x = stageX_;
+    // The shelf, the box out, its cartridge out and the console: each framed for its size.
     Vec3 consoleEye{0.3f, 0.9f, 4.9f}, consoleTarget{0.1f, -0.35f, 1.5f};
     switch (system_) {
         case ConsoleSystem::Mega32X: consoleEye = {0.35f, 1.3f, 5.5f}, consoleTarget = {0.1f, -0.05f, 1.4f}; break;
@@ -521,19 +573,54 @@ void BoxShelf::camera(Vec3* eye, Vec3* target) const {
         case ConsoleSystem::GameGear: consoleEye = {0.15f, 0.5f, 4.3f}, consoleTarget = {0.0f, -0.12f, 1.6f}; break;
         default: break;
     }
-    const Vec3 eyes[3] = {{0, 0.25f, 3.6f}, {-0.45f, 0.25f, 3.5f}, consoleEye};
-    const Vec3 targets[3] = {{0, -0.05f, 0}, {-0.45f, 0.0f, 0}, consoleTarget};
-    auto mix = [&](const Vec3 (&k)[3]) {
-        const Vec3 a{lerp(k[0].x, k[1].x, o), lerp(k[0].y, k[1].y, o), lerp(k[0].z, k[1].z, o)};
-        return Vec3{lerp(a.x, k[2].x, e), lerp(a.y, k[2].y, e), lerp(a.z, k[2].z, e)};
-    };
-    *eye = mix(eyes);
-    *target = mix(targets);
-    // A narrow view steps back to keep it all in.
+    const Vec3 shelfTarget = look_, shelfEye{look_.x, look_.y + distance_ * 0.1f, look_.z + distance_};
+    Vec3 eyes[3] = {{x, 0.3f, 3.4f}, {x - 0.2f, 0.35f, 3.6f}, {x + consoleEye.x, consoleEye.y, consoleEye.z}};
+    const Vec3 targets[3] = {{x, 0.05f, 0}, {x - 0.2f, 0.0f, 0.3f}, {x + consoleTarget.x, consoleTarget.y, consoleTarget.z}};
+    // A narrow view steps back from the box and the console to keep them in.
     const float back = std::max(1.0f, 1.6f / aspect_);
-    eye->x = target->x + (eye->x - target->x) * back;
-    eye->y = target->y + (eye->y - target->y) * back;
-    eye->z = target->z + (eye->z - target->z) * back;
+    for (int i = 0; i < 3; ++i)
+        eyes[i] = {targets[i].x + (eyes[i].x - targets[i].x) * back, targets[i].y + (eyes[i].y - targets[i].y) * back,
+                   targets[i].z + (eyes[i].z - targets[i].z) * back};
+    auto mix = [&](const Vec3& shelf, const Vec3 (&k)[3]) {
+        const Vec3 b{lerp(k[0].x, k[1].x, o), lerp(k[0].y, k[1].y, o), lerp(k[0].z, k[1].z, o)};
+        const Vec3 c{lerp(b.x, k[2].x, e), lerp(b.y, k[2].y, e), lerp(b.z, k[2].z, e)};
+        return Vec3{lerp(shelf.x, c.x, a), lerp(shelf.y, c.y, a), lerp(shelf.z, c.z, a)};
+    };
+    *eye = mix(shelfEye, eyes);
+    *target = mix(shelfTarget, targets);
+}
+
+void BoxShelf::shelfSize(float* width, float* height, float* bottom) const {
+    *width = static_cast<float>(columns_) * kSpacing + 2 * kSide + 0.06f;
+    *height = kPlinth + static_cast<float>(rows_) * kRowH + kBoard;
+    *bottom = kFloorY;
+}
+
+BoxShelf::Vec3 BoxShelf::shelfSpot(int index) const {
+    const int c = index % columns_, r = index / columns_;
+    return {(static_cast<float>(c) - static_cast<float>(columns_ - 1) / 2) * kSpacing,
+            kFloorY + kPlinth + static_cast<float>(rows_ - 1 - r) * kRowH + kBoxH / 2 + 0.002f, kShelfZ};
+}
+
+BoxShelf::Mat4 BoxShelf::heldBox() const {
+    // Out of the shelf towards the viewer, then over to the front, turning to show its
+    // cover; aside to the left once its cartridge is out.
+    const Vec3 s = shelfSpot(selected_);
+    const float t1 = smooth(take_ / 0.4f), t2 = smooth((take_ - 0.3f) / 0.7f);
+    const Vec3 out{s.x, s.y, kShelfZ + 1.1f}, front{stageX_ - 0.35f * smooth(open_), 0.1f, 0};
+    const Vec3 a{lerp(s.x, out.x, t1), lerp(s.y, out.y, t1), lerp(s.z, out.z, t1)};
+    const Vec3 p{lerp(a.x, front.x, t2), lerp(a.y, front.y, t2), lerp(a.z, front.z, t2)};
+    return translate(p.x, p.y, p.z) * rotateY(90 * (1 - t2) + boxYaw_) * rotateX(boxPitch_);
+}
+
+BoxShelf::Mat4 BoxShelf::heldCartridge() const {
+    // Lifted out of the box and up in front of it, facing the viewer.
+    const Mat4 in = cartridgeInBox(heldBox(), system_);
+    const float s = smooth((open_ - 0.35f) / 0.65f);
+    if (s <= 0) return in;
+    const Vec3 out{stageX_ + 0.45f, 0.1f, 1.3f};
+    const Vec3 p{lerp(in[12], out.x, s), lerp(in[13], out.y, s) + std::sin(s * kPi) * 0.25f, lerp(in[14], out.z, s)};
+    return translate(p.x, p.y, p.z) * rotateY(cartYaw_ * s) * rotateX(cartPitch_ * s);
 }
 
 BoxShelf::Mat4 BoxShelf::cartridgeInBox(const Mat4& box, ConsoleSystem s) const {
@@ -681,14 +768,12 @@ void BoxShelf::addBox(const std::vector<Item>& items, int index, const Mat4& pla
     parts_.back().texRect = cover.front;
     add(translate(0, 0, -kBoxD / 2 + kWall + 0.003f) * scale(kBoxW - 2 * kWall, kBoxH - 2 * kWall, 0.006f),
         {0.11f, 0.11f, 0.13f}, 0.3f);
-    if (index == selected_ && (state_ == State::Ejecting || state_ == State::Inserted)) return;
-    addCartridge(item, cartridgeInBox(place, item.system));
 }
 
 BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, float tray) {
     using L = ConsoleLayout;
     const ConsoleSystem s = item.system;
-    const Mat4 base = translate(0, kFloorY + rise, kConsoleZ);
+    const Mat4 base = translate(stageX_, kFloorY + rise, kConsoleZ);
     // The console's own model when it was given one, else the built-in.
     auto mesh = [&](ConsoleModel m, const Mat4& at) {
         Part p;
@@ -776,36 +861,75 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
     }
 }
 
+void BoxShelf::addShelfBox(const Item& item, int index, const Mat4& place) {
+    // Closed, only its spine shows: the sleeve's, or the edge of the cover next to it.
+    Part p;
+    p.model = place * scale(kBoxW, kBoxH, kBoxD);
+    p.colour = {0.045f, 0.045f, 0.055f};
+    p.shine = 0.6f;
+    p.box = index;
+    if (item.texture) {
+        const Sleeve cover = sleeve(item.width, item.height);
+        p.texture = item.texture;
+        p.texFaces = 1 << 1;
+        if (cover.spine[2] > cover.spine[0]) p.texRect = cover.spine;
+        else p.texRect = {cover.front[0], cover.front[1], cover.front[0] + (cover.front[2] - cover.front[0]) * kBoxD / kBoxW,
+                          cover.front[3]};
+    }
+    parts_.push_back(p);
+}
+
+void BoxShelf::addShelf() {
+    // Dark wood: a board under each row and over the top one, the sides and the back.
+    float w, h, bottom;
+    shelfSize(&w, &h, &bottom);
+    const float depth = kBoxW + 0.12f, z = kShelfZ - 0.03f;
+    auto board = [&](float x, float y, float zz, float sx, float sy, float sz, Vec3 colour) {
+        Part p;
+        p.model = translate(x, y, zz) * scale(sx, sy, sz);
+        p.colour = colour;
+        p.shine = 0.25f;
+        parts_.push_back(p);
+    };
+    const Vec3 wood{0.17f, 0.1f, 0.06f}, inside{0.11f, 0.065f, 0.04f};
+    board(0, bottom + kPlinth / 2, z, w, kPlinth, depth, wood);
+    for (int r = 1; r <= rows_; ++r)
+        board(0, bottom + kPlinth + static_cast<float>(r) * kRowH - kBoard / 2, z, w, kBoard, depth, wood);
+    board(-w / 2 + kSide / 2, bottom + h / 2, z, kSide, h, depth, wood);
+    board(w / 2 - kSide / 2, bottom + h / 2, z, kSide, h, depth, wood);
+    board(0, bottom + h / 2, z - depth / 2 + 0.01f, w - 2 * kSide, h, 0.02f, inside);
+}
+
 void BoxShelf::build(const std::vector<Item>& items, int selected) {
     parts_.clear();
-    const bool ejecting = state_ == State::Ejecting || state_ == State::Inserted;
-    const float spread = ejecting ? 1.0f : smooth(open_);
-    // The row: the chosen box in the middle, the others turned towards it, further aside
-    // while one is open so its lid has room.
-    const int first = std::max(0, static_cast<int>(std::floor(scroll_)) - 9);
-    const int last = std::min(count_ - 1, static_cast<int>(std::ceil(scroll_)) + 9);
-    Mat4 chosen = identity();
-    for (int i = first; i <= last; ++i) {
-        const float d = static_cast<float>(i) - scroll_;
-        const float f = std::clamp(d, -1.0f, 1.0f);
-        float x = f * 1.0f + (d - f) * 0.42f;
-        if (i != selected) x += (d < 0 ? -1.5f : 1.3f) * spread;
-        const Mat4 place = translate(x, 0, -std::fabs(f) * 0.5f) * rotateY(-f * 62.0f);
-        if (i == selected) chosen = place;
-        addBox(items, i, place, i == selected ? smooth(open_) : 0.0f);
+    addShelf();
+    for (int i = 0; i < count_; ++i) {
+        if (i == selected && state_ != State::Browse) continue;
+        Vec3 s = shelfSpot(i);
+        if (i == pulled_) s.z += 0.14f * smooth(pull_);
+        addShelfBox(items[static_cast<size_t>(i)], i, translate(s.x, s.y, s.z) * rotateY(90));
     }
-    if (!ejecting || selected < 0 || selected >= count_) return;
+    if (state_ == State::Browse || selected < 0 || selected >= count_) return;
+    const Item& item = items[static_cast<size_t>(selected)];
+    const Mat4 box = heldBox();
+    const float lid = smooth(open_ / 0.6f);
+    addBox(items, selected, box, lid);
+    const bool ejecting = state_ == State::Ejecting || state_ == State::Inserted;
+    if (!ejecting) {
+        if (lid > 0.001f) addCartridge(item, heldCartridge());
+        return;
+    }
     // The console comes up through the floor while the cartridge leaves the box.
     const float light = state_ == State::Inserted ? 1.0f : 0.0f;
     const float t = state_ == State::Inserted ? 1.0f : eject_;
     const float rise = -1.6f * (1 - smooth(t / 0.3f));
     // The Mega-CD's tray opens for the disc and closes with it.
     const float tray = smooth((t - 0.1f) / 0.2f) * (1 - smooth((t - 0.84f) / 0.14f));
-    const Mat4 inConsole = addConsole(items[static_cast<size_t>(selected)], light, rise, tray);
-    // The cartridge's way: out of the box towards the viewer, over to above the slot in
-    // an arc, then down into it. A disc turns to lie flat on the way.
-    const Mat4 start = cartridgeInBox(chosen, system_);
-    const Vec3 p0{start[12], start[13], start[14]}, p1{p0.x, p0.y + 0.1f, p0.z + 0.75f};
+    const Mat4 inConsole = translate(stageX_, 0, 0) * addConsole(item, light, rise, tray);
+    // The cartridge's way: up from where it was held, over to above the slot in an arc,
+    // then down into it. A disc turns to lie flat on the way.
+    const Mat4 start = heldCartridge();
+    const Vec3 p0{start[12], start[13], start[14]}, p1{p0.x, p0.y + 0.15f, p0.z};
     const float above = system_ == ConsoleSystem::MegaCD ? 0.3f : cartridgeShape(system_).insert + 0.12f;
     const Vec3 p3{inConsole[12], inConsole[13], inConsole[14]}, p2{p3.x, p3.y + above, p3.z};
     Vec3 p;
@@ -821,31 +945,42 @@ void BoxShelf::build(const std::vector<Item>& items, int selected) {
         p = {p3.x, lerp(p2.y, p3.y, s), p3.z};
     }
     const float turn = system_ == ConsoleSystem::MegaCD ? -90.0f * smooth((t - 0.25f) / 0.5f) : 0.0f;
-    addCartridge(items[static_cast<size_t>(selected)], translate(p.x, p.y, p.z) * rotateX(turn));
+    addCartridge(item, translate(p.x, p.y, p.z) * rotateY(cartYaw_) * rotateX(cartPitch_ + turn));
 }
 
 unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int width, int height, float dt) {
     if (!program_ || width <= 0 || height <= 0) return 0;
     dt = std::clamp(dt, 0.0f, 0.1f);
     count_ = static_cast<int>(items.size());
-    if (selected != selected_ && state_ != State::Browse && state_ != State::Closing && !frozen_) reset();
+    if (selected != selected_ && state_ != State::Browse && !frozen_) reset();
+    if (selected != selected_) pan_ = {};  // chosen with the keys: the camera goes to it
     selected_ = std::clamp(selected, 0, std::max(0, count_ - 1));
     if (count_ > 0) system_ = items[static_cast<size_t>(selected_)].system;
     else state_ = State::Browse;
-    const float goal = static_cast<float>(selected_);
-    if (!scrolled_) scroll_ = goal;
-    scrolled_ = true;
-    scroll_ += (goal - scroll_) * (1 - std::exp(-12 * dt));
-    if (std::fabs(goal - scroll_) < 0.001f) scroll_ = goal;
+    // The shelf about half again as wide as tall, but never fewer than 8 boxes a row.
+    const float n = static_cast<float>(std::max(1, count_));
+    columns_ = std::clamp(static_cast<int>(std::lround(std::sqrt(n * kRowH * 1.6f / kSpacing))), std::min(count_, 8), std::max(1, count_));
+    columns_ = std::max(1, columns_);
+    rows_ = std::max(1, (count_ + columns_ - 1) / columns_);
+    if (state_ == State::Browse) stageX_ = shelfSpot(selected_).x;
+    if (pulled_ != selected_) pulled_ = selected_, pull_ = 0;
+    pull_ = std::min(1.0f, pull_ + dt / 0.25f);
     switch (frozen_ ? State::Browse : state_) {
+        case State::Taking:
+            take_ = std::min(1.0f, take_ + dt / 0.9f);
+            if (take_ >= 1) state_ = State::Held;
+            break;
+        case State::Returning:
+            take_ = std::max(0.0f, take_ - dt / 0.7f);
+            if (take_ <= 0) state_ = State::Browse;
+            break;
         case State::Opening:
-            scroll_ = goal;
-            open_ = std::min(1.0f, open_ + dt / 0.7f);
+            open_ = std::min(1.0f, open_ + dt / 0.9f);
             if (open_ >= 1) state_ = State::Open;
             break;
         case State::Closing:
-            open_ = std::max(0.0f, open_ - dt / 0.5f);
-            if (open_ <= 0) state_ = State::Browse;
+            open_ = std::max(0.0f, open_ - dt / 0.7f);
+            if (open_ <= 0) state_ = State::Held;
             break;
         case State::Ejecting:
             eject_ = std::min(1.0f, eject_ + dt / 2.2f);
@@ -860,10 +995,35 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
             break;
         default: break;
     }
+    // What is no longer held turns back to face the viewer.
+    auto settle = [&](float& yaw, float& pitch) {
+        yaw = std::remainder(yaw, 360.0f);
+        const float k = std::exp(-7 * dt);
+        yaw *= k;
+        pitch *= k;
+    };
+    if (state_ != State::Held && !frozen_) settle(boxYaw_, boxPitch_);
+    if (state_ != State::Open && !frozen_) settle(cartYaw_, cartPitch_);
 
     ensureTarget(width, height);
     aspect_ = static_cast<float>(width) / static_cast<float>(height);
     tanHalf_ = std::tan(kFov * kRad / 2);
+    // The shelf's camera: on the chosen box (and as far as it was dragged), going over to
+    // the whole shelf as it steps back, no further than to see all of it.
+    float w, h, bottom;
+    shelfSize(&w, &h, &bottom);
+    const float fit = std::max(w / aspect_, h) / (2 * tanHalf_) * 1.08f + 0.6f;
+    const float nearest = 1.6f;
+    distance_ = std::clamp(distance_, nearest, std::max(fit, 3.0f));
+    const Vec3 spot = shelfSpot(selected_), middle{0, bottom + h / 2, kShelfZ};
+    const float all = smooth((distance_ - nearest) / std::max(0.01f, std::max(fit, 3.0f) - nearest));
+    Vec3 goal{lerp(spot.x + pan_.x, middle.x, all), lerp(spot.y + pan_.y, middle.y, all), kShelfZ + 0.5f};
+    goal.x = std::clamp(goal.x, -w / 2, w / 2);
+    goal.y = std::clamp(goal.y, bottom + 0.5f, bottom + std::max(h - 0.5f, 0.5f));
+    if (!placed_) look_ = goal;
+    placed_ = true;
+    const float follow = 1 - std::exp(-10 * dt);
+    look_ = {look_.x + (goal.x - look_.x) * follow, look_.y + (goal.y - look_.y) * follow, goal.z};
     build(items, selected_);
     Vec3 target;
     camera(&eye_, &target);
@@ -883,7 +1043,7 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     view[12] = -(right_.x * eye_.x + right_.y * eye_.y + right_.z * eye_.z);
     view[13] = -(up_.x * eye_.x + up_.y * eye_.y + up_.z * eye_.z);
     view[14] = forward_.x * eye_.x + forward_.y * eye_.y + forward_.z * eye_.z;
-    viewProj_ = perspective(kFov * kRad, aspect_, 0.1f, 60.0f) * view;
+    viewProj_ = perspective(kFov * kRad, aspect_, 0.1f, 150.0f) * view;
 
     gl::BindFramebuffer(gl::FRAMEBUFFER, fbo_);
     gl::Viewport(0, 0, width, height);
@@ -917,6 +1077,10 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     const gl::GLint uMirror = gl::GetUniformLocation(program_, "uMirror");
     const gl::GLint uFloor = gl::GetUniformLocation(program_, "uFloor");
     gl::Uniform3f(gl::GetUniformLocation(program_, "uBackground"), kBackground[0], kBackground[1], kBackground[2]);
+    // The floor lit around what is looked at, further the further back the camera is.
+    const float reach = std::max(1.0f, std::sqrt((target.x - eye_.x) * (target.x - eye_.x) + (target.y - eye_.y) * (target.y - eye_.y) +
+                                                 (target.z - eye_.z) * (target.z - eye_.z)) / 3.6f);
+    gl::Uniform4f(gl::GetUniformLocation(program_, "uFloorFade"), target.x, target.z + 0.8f, 1.0f * reach, 6.5f * reach);
     auto drawPart = [&](const Part& p) {
         gl::UniformMatrix4fv(uModel, 1, gl::FALSE_, p.model.data());
         gl::Uniform3f(uColour, p.colour.x, p.colour.y, p.colour.z);
@@ -968,7 +1132,7 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     gl::Enable(gl::BLEND);
     gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
     Part floor;
-    floor.model = translate(0, kFloorY - 0.005f, 0) * scale(40.0f, 0.01f, 40.0f);
+    floor.model = translate(target.x, kFloorY - 0.005f, 0) * scale(120.0f, 0.01f, 120.0f);
     floor.colour = {0.1f, 0.1f, 0.115f};
     drawPart(floor);
     gl::Disable(gl::BLEND);

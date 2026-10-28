@@ -261,6 +261,7 @@ private:
     Input& input_;
     FileBrowser browser_;
     Library library_;
+    bool boxesDragged_ = false;  // the press on the 3D view has moved: no click when it ends
     std::unique_ptr<BoxShelf> shelf_;  // the library's 3D view, made the first time it is shown
     int boxesPose_ = 0;
     GameInfo gameInfo_;

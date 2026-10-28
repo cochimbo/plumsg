@@ -391,7 +391,7 @@ struct CommandLine {
     bool fps = false;        // --fps: with the FPS counter on
     bool downloadCovers = false;  // --download-covers: fetch the library's missing covers
     bool libraryList = false;     // --list: with --library, show it as a list
-    int libraryBoxes = -1;        // --boxes [1|2|3]: with --library, show its 3D boxes (and hold one open at that step)
+    int libraryBoxes = -1;        // --boxes [1-4]: with --library, show its 3D boxes (and hold one open at that step)
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
     bool coverSearch = false;     // --find-cover: with --library, look for the first game's cover
     bool cheats = false;          // --cheats: start with the game's Cheats window open
@@ -480,9 +480,9 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--download-covers") c.downloadCovers = true;
         else if (a == "--list") c.libraryList = true;
         else if (a == "--boxes") {
-            // Undocumented steps, for screenshots: 1 the box open, 2 its cartridge on the way, 3 in the console.
+            // Undocumented steps, for screenshots: 1 the box out, 2 its cartridge out, 3 on the way, 4 in the console.
             c.libraryBoxes = 0;
-            if (i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '3' && !argv[i + 1][1]) c.libraryBoxes = argv[++i][0] - '0';
+            if (i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '4' && !argv[i + 1][1]) c.libraryBoxes = argv[++i][0] - '0';
         }
         else if (a == "--bios") c.bios = true;
         else if (a == "--find-cover") c.coverSearch = true;

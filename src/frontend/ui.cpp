@@ -2400,11 +2400,10 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
     }
 }
 
-// The games' boxes in 3D: a click (or A) on the one in the middle opens it, and then a
-// click on its cartridge takes it to the console to play the game; anywhere else closes it.
-// A click on a box at the side, the wheel or the arrows choose another.
+// The games' boxes on a shelf in 3D: a click (or A) takes one out, a second its cartridge
+// and a third puts that into the console to play; dragging turns what is out, or moves
+// along the shelf, and the wheel zooms.
 void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
-    libraryView_.columns = 1;
     const ImVec2 size = ImGui::GetContentRegionAvail();
     if (visible.empty() || size.x < 16 || size.y < 16) return;
     if (!shelf_) {
@@ -2433,25 +2432,35 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
     ImDrawList* draw = ImGui::GetWindowDrawList();
     draw->AddImage(static_cast<ImTextureID>(texture), pos, end, ImVec2(0, 1), ImVec2(1, 0));
     const int count = static_cast<int>(visible.size());
+    libraryView_.columns = shelf_->columns();
+    // A press that moves is a drag; one that lets go where it was, a click.
+    const ImVec2 m = ImGui::GetMousePos();
+    const float x = (m.x - pos.x) / size.x, y = (m.y - pos.y) / size.y;
+    if (ImGui::IsItemActivated()) boxesDragged_ = false;
+    if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+        boxesDragged_ = true;
+        shelf_->drag(io.MouseDelta.x / size.x, io.MouseDelta.y / size.y);
+    }
+    if (ImGui::IsItemDeactivated() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !boxesDragged_ && ImGui::IsItemHovered()) {
+        const int n = shelf_->click(x, y);
+        if (n >= 0) libraryView_.selected = n;
+    }
     if (ImGui::IsItemHovered()) {
-        const ImVec2 m = ImGui::GetMousePos();
-        const float x = (m.x - pos.x) / size.x, y = (m.y - pos.y) / size.y;
-        if (shelf_->hover(x, y) != BoxShelf::Target::None) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-            const int n = shelf_->click(x, y);
-            if (n >= 0) libraryView_.selected = n;
-        }
-        if (io.MouseWheel != 0 && !shelf_->busy())
-            libraryView_.selected = std::clamp(libraryView_.selected + (io.MouseWheel > 0 ? -1 : 1), 0, count - 1);
+        if (!ImGui::IsItemActive() && shelf_->hover(x, y) != BoxShelf::Target::None) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (io.MouseWheel != 0) shelf_->zoom(io.MouseWheel);
     }
     libraryItem(false, libraryView_.selected);  // the right button opens the game's menu
     if (shelf_->takeLaunch()) libraryView_.load = libraryView_.selected;
     // The chosen game's name under the boxes, and what to do next.
     if (libraryView_.selected >= 0 && libraryView_.selected < count) {
         const Library::Game& g = games[visible[static_cast<size_t>(libraryView_.selected)]];
-        const char* hint = shelf_->boxOpen() ? tr("Clic en el cartucho o A: jugar   Clic en otro sitio o B: cerrar la caja")
-                           : shelf_->busy()  ? ""
-                                             : tr("Clic o A: abrir la caja   Rueda o flechas: otro juego");
+        const char* hint = "";
+        switch (shelf_->stage()) {
+            case BoxShelf::Stage::Shelf: hint = tr("Clic o A: sacar la caja   Rueda: zoom   Arrastrar o flechas: moverse"); break;
+            case BoxShelf::Stage::Box: hint = tr("Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"); break;
+            case BoxShelf::Stage::Cartridge: hint = tr("Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"); break;
+            case BoxShelf::Stage::Console: break;
+        }
         const float line = ImGui::GetTextLineHeightWithSpacing();
         const ImVec2 t = ImGui::CalcTextSize(g.title.c_str()), h = ImGui::CalcTextSize(hint);
         const float cx = (pos.x + end.x) * 0.5f, y = end.y - line * 2 - 10;
