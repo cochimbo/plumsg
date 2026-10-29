@@ -61,10 +61,15 @@ jobs:
       - name: Build emulator (Release)
         if: steps.src.outputs.present == 'true'
         shell: pwsh
+        env:
+          # ScreenScraper's developer account for plumsg; empty if the secrets are not set.
+          SS_DEVID: ${{ secrets.SCREENSCRAPER_DEVID }}
+          SS_DEVPASSWORD: ${{ secrets.SCREENSCRAPER_DEVPASSWORD }}
         run: |
           # A release shows its own version in About and crash reports; other builds, git describe.
           $version = if ($env:RELEASE_TAG) { "-DPLUMSG_VERSION=$env:APP_VERSION" } else { "-DPLUMSG_VERSION=" }
-          cmake -S . -B build -A x64 "-DCMAKE_PREFIX_PATH=$env:SDL2_ROOT/cmake" "-DSDL2_DIR=$env:SDL2_ROOT/cmake" $version
+          cmake -S . -B build -A x64 "-DCMAKE_PREFIX_PATH=$env:SDL2_ROOT/cmake" "-DSDL2_DIR=$env:SDL2_ROOT/cmake" $version `
+            "-DPLUMSG_SCREENSCRAPER_DEVID=$env:SS_DEVID" "-DPLUMSG_SCREENSCRAPER_DEVPASSWORD=$env:SS_DEVPASSWORD"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build --config Release --parallel
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -96,6 +101,8 @@ jobs:
           $gu = "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/$env:GENERALUSER_COMMIT"
           Invoke-WebRequest "$gu/GeneralUser-GS.sf2" -OutFile dist\soundfonts\GeneralUser-GS.sf2
           Invoke-WebRequest "$gu/documentation/LICENSE.txt" -OutFile dist\soundfonts\GeneralUser-GS-LICENSE.txt
+          # The 3D view's console models, with the credits their licenses ask for.
+          Copy-Item -Recurse assets\models dist\models
           Get-ChildItem dist
 
       - name: Build installer (Inno Setup)

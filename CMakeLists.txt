@@ -230,11 +230,17 @@ add_executable(plumsg WIN32
   src/frontend/game_info.cpp
   src/frontend/game_info_data.cpp
   src/frontend/http.cpp
+  src/frontend/screenscraper.cpp
+  src/frontend/screenscraper_data.cpp
+  src/frontend/ui_media.cpp
   src/frontend/cheat_database.cpp
   src/frontend/languages.cpp
   src/frontend/achievements_ui.cpp
   src/render/gl.cpp
   src/render/gl_renderers.cpp
+  src/render/box_shelf.cpp
+  src/render/console_models.cpp
+  src/render/gltf_model.cpp
   src/render/upscale.cpp
 )
 # The plum icon of plumsg.exe (Explorer, taskbar, shortcuts).
@@ -242,7 +248,7 @@ if(WIN32)
   target_sources(plumsg PRIVATE src/frontend/plumsg.rc)
 endif()
 # stb_image (public domain / MIT, vendored) decodes the library's PNG and JPEG covers.
-target_include_directories(plumsg PRIVATE third_party/stb)
+target_include_directories(plumsg PRIVATE third_party/stb third_party/cgltf)
 
 # The PLUMSG logo, the plum icon and the interface's fonts, built into the executable as
 # byte arrays (logo_png.h, chakra_petch_regular_ttf.h...).
@@ -306,17 +312,30 @@ if(NOT plumsg_version)
   set(plumsg_version "dev")
 endif()
 set_source_files_properties(src/frontend/crash.cpp src/frontend/ui.cpp PROPERTIES COMPILE_DEFINITIONS "PLUMSG_VERSION=\"${plumsg_version}\"")
+# ScreenScraper's developer account for plumsg (it gives one to each program that asks):
+# the installer's build passes it from the repository's secrets. Without one the user
+# can type one in the library's media window.
+set(PLUMSG_SCREENSCRAPER_DEVID "" CACHE STRING "ScreenScraper developer id built into plumsg")
+set(PLUMSG_SCREENSCRAPER_DEVPASSWORD "" CACHE STRING "ScreenScraper developer password built into plumsg")
+if(PLUMSG_SCREENSCRAPER_DEVID)
+  set_source_files_properties(src/frontend/screenscraper.cpp PROPERTIES COMPILE_DEFINITIONS
+    "PLUMSG_SS_DEVID=\"${PLUMSG_SCREENSCRAPER_DEVID}\";PLUMSG_SS_DEVPASSWORD=\"${PLUMSG_SCREENSCRAPER_DEVPASSWORD}\"")
+endif()
 
 # Copy SDL2.dll next to plumsg.exe so it runs straight from the build folder.
 if(WIN32 AND TARGET SDL2::SDL2)
   add_custom_command(TARGET plumsg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> $<TARGET_FILE_DIR:plumsg>)
 endif()
+# And the 3D view's console models, which it looks for in models/ beside the executable.
+add_custom_command(TARGET plumsg POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/assets/models $<TARGET_FILE_DIR:plumsg>/models)
 endif()  # PLUMSG_BUILD_FRONTEND
 
 if(PLUMSG_BUILD_TESTS)
   enable_testing()
-  add_executable(core_tests tests/core_tests.cpp src/frontend/library_names.cpp src/frontend/game_info_data.cpp)
+  add_executable(core_tests tests/core_tests.cpp src/frontend/library_names.cpp src/frontend/game_info_data.cpp
+                 src/frontend/screenscraper_data.cpp)
   target_include_directories(core_tests PRIVATE tests)
   target_compile_definitions(core_tests PRIVATE PLUMSG_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")
   target_link_libraries(core_tests PRIVATE plumsg_core plumsg_achievements)

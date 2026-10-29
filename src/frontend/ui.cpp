@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iterator>
 
@@ -21,6 +22,7 @@
 #include "../core/i18n.h"
 #include "../core/system.h"
 #include "../net/udp.h"
+#include "../render/box_shelf.h"
 #include "../render/gl.h"
 
 #define STBI_NO_STDIO
@@ -318,11 +320,14 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
     ImGui_ImplSDL2_InitForOpenGL(window_, context);
     ImGui_ImplOpenGL3_Init("#version 330 core");
     loadLogo();
+    applyScraperSettings();
 }
 
 Ui::~Ui() {
+    shelf_.reset();
     library_.clearTextures();
     gameInfo_.clearTextures();
+    scraper_.clearTextures();
     if (logoTexture_) gl::DeleteTextures(1, &logoTexture_);
     if (iconTexture_) gl::DeleteTextures(1, &iconTexture_);
     ImGui_ImplOpenGL3_Shutdown();
@@ -569,8 +574,11 @@ UiActions Ui::frame(const UiState& state) {
     if (showGameOptions_) drawGameOptions(state, out);
     library_.update();
     gameInfo_.update();
+    scraper_.update();
+    for (ScreenScraper::ForLibrary f; scraper_.takeForLibrary(f);) library_.useDownloaded(f.path, f.cover, f.label, f.replace);
     if (showLibrary_) drawLibrary(out);
     if (showCoverSearch_) drawCoverSearch();
+    if (showMedia_) drawMedia(out);
     if (showBios_) drawBios(out);
     if (showNetplay_) drawNetplay(state, out);
     if (achievements_ && achievements_->drawWindows()) out.achievementsChanged = out.settingsChanged = true;
@@ -1881,6 +1889,7 @@ void Ui::toggleLibrary() {
     if (!showLibrary_) return;
     if (!library_.scanned() || library_.folders() != settings_.libraryFolders) rescanLibrary();
     libraryView_.scroll = true;
+    if (shelf_) shelf_->reset();
 }
 
 void Ui::rescanLibrary() {
@@ -1928,9 +1937,11 @@ std::vector<size_t> Ui::visibleGames() {
     return out;
 }
 
-void Ui::setLibraryList(bool list) {
-    if (settings_.libraryList == list) return;
-    settings_.libraryList = list;
+void Ui::setLibraryView(int view) {
+    if ((settings_.libraryBoxes ? 2 : settings_.libraryList ? 1 : 0) == view) return;
+    settings_.libraryList = view == 1;
+    settings_.libraryBoxes = view == 2;
+    if (shelf_) shelf_->reset();
     libraryView_.syncSort = true;
     libraryView_.scroll = true;
     pendingSave_ = true;
@@ -2019,11 +2030,22 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         libraryView_.scroll = true;
         libraryView_.tabChanged = true;
         pendingSave_ = true;
+        if (shelf_) shelf_->reset();
         return true;
     }
     if (action == View) {
-        setLibraryList(!settings_.libraryList);
+        setLibraryView(settings_.libraryBoxes ? 0 : settings_.libraryList ? 2 : 1);
         return true;
+    }
+    // In the 3D view A opens the chosen box and then takes its cartridge out, B closes
+    // it, and the chosen game stays while a box is open.
+    if (settings_.libraryBoxes && shelf_) {
+        if (action == Play) {
+            shelf_->activate();
+            return true;
+        }
+        if (action == Close && shelf_->back()) return true;
+        if (shelf_->busy() && action != Close && action != Search && action != Menu) return true;
     }
     const int count = static_cast<int>(visibleGames().size());
     const int cols = std::max(1, libraryView_.columns);
@@ -2125,6 +2147,27 @@ void Ui::drawLibrary(UiActions& out) {
                           "y las guarda en la carpeta covers de plumsg. También puedes poner tus\n"
                           "propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado."));
     ImGui::SameLine();
+    // Everything ScreenScraper has of the games it was not asked about yet.
+    if (scraper_.batchLeft() > 0) {
+        if (ImGui::Button(tr("Parar ScreenScraper"))) scraper_.cancelAll();
+    } else if (ImGui::Button(tr("Descargar de ScreenScraper"))) {
+        if (!scraper_.credentials().usable()) {
+            // Nothing can be asked without an account: its tab, for the first game.
+            if (!games.empty()) {
+                openMedia(0);
+                media_.tab = 3;
+            }
+        } else {
+            std::vector<ScreenScraper::Rom> roms;
+            for (const auto& g : games) roms.push_back({g.path, g.stem, g.title, g.tags, g.system});
+            scraper_.downloadAll(roms);
+        }
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Busca en ScreenScraper (internet) cada juego que aún no tenga sus medios: portada completa,\n"
+                                   "etiqueta del cartucho, capturas, logo... Las carátulas que ya hay se quedan, salvo\n"
+                                   "que ScreenScraper tenga la portada completa. Uno a uno, así que tarda un poco."));
+    ImGui::SameLine();
     if (ImGui::Button(tr("BIOS del Mega CD..."))) showBios_ = true;
     ImGui::SameLine();
     if (ImGui::Checkbox(tr("Abrir la biblioteca al empezar"), &settings_.libraryAtStart)) out.settingsChanged = true;
@@ -2162,10 +2205,15 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.selected = 0;
     // How the games are shown: a grid or a list, in what order, and with the panel or not.
     ImGui::SameLine();
-    if (ImGui::RadioButton(tr("Cuadrícula"), !settings_.libraryList)) setLibraryList(false);
+    const int libraryView = settings_.libraryBoxes ? 2 : settings_.libraryList ? 1 : 0;
+    if (ImGui::RadioButton(tr("Cuadrícula"), libraryView == 0)) setLibraryView(0);
     ImGui::SameLine();
-    if (ImGui::RadioButton(tr("Lista"), settings_.libraryList)) setLibraryList(true);
+    if (ImGui::RadioButton(tr("Lista"), libraryView == 1)) setLibraryView(1);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("Cambia de vista con V o con Select en el mando."));
+    ImGui::SameLine();
+    if (ImGui::RadioButton(tr("Cajas 3D"), libraryView == 2)) setLibraryView(2);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Las cajas de los juegos en 3D: ábrelas y lleva el cartucho a la consola para jugar."));
     ImGui::SameLine();
     ImGui::SetNextItemWidth(170);
     static const char* const sorts[Settings::kLibrarySorts] = {N_("Por título"), N_("Por consola"), N_("Por año"),
@@ -2200,8 +2248,12 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.selectedGame = visible[static_cast<size_t>(libraryView_.selected)];
     if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text(tr("%d juegos. %s"), static_cast<int>(visible.size()), library_.downloadStatus().c_str());
+    if (const std::string ss = scraper_.batchStatus(); !ss.empty()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", ss.c_str());
+    }
     // The covers' size, at the right end of that line: smaller ones fit more to a row.
-    if (!settings_.libraryList) {
+    if (libraryView == 0) {
         const char* label = tr("Tamaño");
         const float sliderW = 160.0f;
         const float w = sliderW + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(label).x;
@@ -2213,7 +2265,7 @@ void Ui::drawLibrary(UiActions& out) {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("El tamaño de las carátulas: más pequeñas caben más en cada fila."));
     }
     theme::hint(tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-                   "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"));
+                   "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"));
     ImGui::Separator();
 
     if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd, .iso) en estas carpetas."));
@@ -2225,7 +2277,8 @@ void Ui::drawLibrary(UiActions& out) {
     const float full = ImGui::GetContentRegionAvail().x;
     const float panelW = settings_.libraryDetails ? std::clamp(full * 0.3f, 280.0f, 460.0f) : 0.0f;
     ImGui::BeginChild("juegos", ImVec2(panelW > 0 ? full - panelW - style.ItemSpacing.x : 0.0f, 0.0f));
-    if (settings_.libraryList) drawLibraryList(visible);
+    if (settings_.libraryBoxes) drawLibraryBoxes(visible);
+    else if (settings_.libraryList) drawLibraryList(visible);
     else drawLibraryGrid(visible);
     ImGui::EndChild();
     if (panelW > 0) {
@@ -2250,7 +2303,8 @@ void Ui::drawLibrary(UiActions& out) {
             ImGui::Separator();
             static const char* items[LibraryView::kItems] = {N_("Jugar"), N_("Trucos..."), N_("Opciones de este juego..."),
                                                              N_("Editor de instrumentos..."), N_("Buscar carátula..."),
-                                                             N_("Carátula desde imagen...")};
+                                                             N_("Carátula desde imagen..."), N_("Portada completa..."),
+                                                             N_("Etiqueta del cartucho..."), N_("Medios de ScreenScraper...")};
             int picked = libraryView_.menuAction;
             for (int i = 0; i < LibraryView::kItems; ++i)
                 if (ImGui::Selectable(tr(items[i]), libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
@@ -2265,6 +2319,9 @@ void Ui::drawLibrary(UiActions& out) {
                     break;
                 case 4: openCoverSearch(visible[static_cast<size_t>(n)]); break;
                 case 5: chooseCoverImage(visible[static_cast<size_t>(n)]); break;
+                case 6: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Sleeve); break;
+                case 7: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Label); break;
+                case 8: openMedia(visible[static_cast<size_t>(n)]); break;
                 default: break;
             }
             if (picked >= 0) {
@@ -2329,13 +2386,16 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
         // The cover, fitted into its box; a plain box with the console's name if there is none.
         const ImVec2 box(pos.x + 6, pos.y + 6);
         if (g.texture && g.height > 0) {
-            float w = coverW, h = coverW * static_cast<float>(g.height) / static_cast<float>(g.width);
+            // Of a whole sleeve (back, spine and front), only the front.
+            const float u0 = BoxShelf::coverFront(g.width, g.height);
+            const float gw = static_cast<float>(g.width) * (1 - u0);
+            float w = coverW, h = coverW * static_cast<float>(g.height) / gw;
             if (h > coverH) {
                 h = coverH;
-                w = coverH * static_cast<float>(g.width) / static_cast<float>(g.height);
+                w = coverH * gw / static_cast<float>(g.height);
             }
             const ImVec2 a(box.x + (coverW - w) * 0.5f, box.y + (coverH - h));
-            draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h));
+            draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h), ImVec2(u0, 0), ImVec2(1, 1));
         } else {
             draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(0x15, 0x15, 0x17, 255));
             draw->AddRect(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(0x44, 0x44, 0x4B, 255));
@@ -2368,6 +2428,77 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
         draw->AddText(nullptr, 0.0f, ImVec2(pos.x + 6, box.y + coverH + 4), ImGui::GetColorU32(ImGuiCol_Text),
                       g.title.c_str(), nullptr, coverW, &clip);
         ImGui::PopID();
+    }
+}
+
+// The games' boxes on a shelf in 3D: a click (or A) takes one out, a second its cartridge
+// and a third puts that into the console to play; dragging turns what is out, or moves
+// along the shelf, and the wheel zooms.
+void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
+    const ImVec2 size = ImGui::GetContentRegionAvail();
+    if (visible.empty() || size.x < 16 || size.y < 16) return;
+    if (!shelf_) {
+        shelf_ = std::make_unique<BoxShelf>();
+        shelf_->loadConsoleModels(modelFolders_);
+    }
+    if (boxesPose_) {
+        shelf_->pose(boxesPose_);
+        boxesPose_ = 0;
+    }
+    const auto& games = library_.games();
+    std::vector<BoxShelf::Item> items;
+    items.reserve(visible.size());
+    for (size_t i : visible) {
+        const Library::Game& g = games[i];
+        items.push_back({g.texture, g.width, g.height, g.system, g.label, g.labelWidth, g.labelHeight});
+    }
+    // Drawn at twice the window's pixels and shrunk, for smooth edges.
+    const ImGuiIO& io = ImGui::GetIO();
+    float scale = 2.0f * std::max(1.0f, io.DisplayFramebufferScale.x);
+    scale = std::min(scale, 4096.0f / std::max(size.x, size.y));
+    const unsigned int texture = shelf_->render(items, libraryView_.selected, static_cast<int>(size.x * scale),
+                                                static_cast<int>(size.y * scale), io.DeltaTime);
+    const ImVec2 pos = ImGui::GetCursorScreenPos(), end(pos.x + size.x, pos.y + size.y);
+    ImGui::InvisibleButton("cajas", size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddImage(static_cast<ImTextureID>(texture), pos, end, ImVec2(0, 1), ImVec2(1, 0));
+    const int count = static_cast<int>(visible.size());
+    libraryView_.columns = shelf_->columns();
+    // A press that moves is a drag; one that lets go where it was, a click.
+    const ImVec2 m = ImGui::GetMousePos();
+    const float x = (m.x - pos.x) / size.x, y = (m.y - pos.y) / size.y;
+    if (ImGui::IsItemActivated()) boxesDragged_ = false;
+    if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+        boxesDragged_ = true;
+        shelf_->drag(io.MouseDelta.x / size.x, io.MouseDelta.y / size.y);
+    }
+    if (ImGui::IsItemDeactivated() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !boxesDragged_ && ImGui::IsItemHovered()) {
+        const int n = shelf_->click(x, y);
+        if (n >= 0) libraryView_.selected = n;
+    }
+    if (ImGui::IsItemHovered()) {
+        if (!ImGui::IsItemActive() && shelf_->hover(x, y) != BoxShelf::Target::None) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (io.MouseWheel != 0) shelf_->zoom(io.MouseWheel);
+    }
+    libraryItem(false, libraryView_.selected);  // the right button opens the game's menu
+    if (shelf_->takeLaunch()) libraryView_.load = libraryView_.selected;
+    // The chosen game's name under the boxes, and what to do next.
+    if (libraryView_.selected >= 0 && libraryView_.selected < count) {
+        const Library::Game& g = games[visible[static_cast<size_t>(libraryView_.selected)]];
+        const char* hint = "";
+        switch (shelf_->stage()) {
+            case BoxShelf::Stage::Shelf: hint = tr("Clic o A: sacar la caja   Rueda: zoom   Arrastrar o flechas: moverse"); break;
+            case BoxShelf::Stage::Box: hint = tr("Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"); break;
+            case BoxShelf::Stage::Cartridge: hint = tr("Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"); break;
+            case BoxShelf::Stage::Console: break;
+        }
+        const float line = ImGui::GetTextLineHeightWithSpacing();
+        const ImVec2 t = ImGui::CalcTextSize(g.title.c_str()), h = ImGui::CalcTextSize(hint);
+        const float cx = (pos.x + end.x) * 0.5f, y = end.y - line * 2 - 10;
+        draw->AddRectFilled(ImVec2(cx - std::max(t.x, h.x) * 0.5f - 12, y - 6), ImVec2(cx + std::max(t.x, h.x) * 0.5f + 12, end.y - 4),
+                            IM_COL32(0, 0, 0, 150), 6.0f);
+        draw->AddText(ImVec2(cx - t.x * 0.5f, y), ImGui::GetColorU32(ImGuiCol_Text), g.title.c_str());
+        draw->AddText(ImVec2(cx - h.x * 0.5f, y + line), ImGui::GetColorU32(ImGuiCol_TextDisabled), hint);
     }
 }
 
@@ -2473,18 +2604,20 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g.path.c_str());
 
     // An image fitted into the panel's width and at most `maxH` tall, centred.
-    auto image = [&](unsigned int texture, int w, int h, float maxH) {
-        float iw = width, ih = width * static_cast<float>(h) / static_cast<float>(w);
+    // From `u0` across: a whole sleeve shows only its front.
+    auto image = [&](unsigned int texture, int w, int h, float maxH, float u0 = 0) {
+        const float fw = static_cast<float>(w) * (1 - u0);
+        float iw = width, ih = width * static_cast<float>(h) / fw;
         if (ih > maxH) {
             ih = maxH;
-            iw = maxH * static_cast<float>(w) / static_cast<float>(h);
+            iw = maxH * fw / static_cast<float>(h);
         }
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - iw) * 0.5f);
-        ImGui::Image(static_cast<ImTextureID>(texture), ImVec2(iw, ih));
+        ImGui::Image(static_cast<ImTextureID>(texture), ImVec2(iw, ih), ImVec2(u0, 0), ImVec2(1, 1));
     };
     ImGui::Spacing();
     if (g.texture && g.width > 0 && g.height > 0) {
-        image(g.texture, g.width, g.height, coverMax);
+        image(g.texture, g.width, g.height, coverMax, BoxShelf::coverFront(g.width, g.height));
     } else {
         const ImVec2 a = ImGui::GetCursorScreenPos();
         const float h = std::min(width * 1.4f, coverMax);
@@ -2554,6 +2687,8 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     if (ImGui::SmallButton(tr("Buscar otra vez"))) gameInfo_.refresh();
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Vuelve a buscar la descripción y la captura de este juego en internet."));
+    ImGui::SameLine();
+    if (ImGui::SmallButton(tr("Medios de ScreenScraper..."))) openMedia(visible[static_cast<size_t>(n)]);
 }
 
 void Ui::openCoverSearch(size_t game) {
@@ -2575,10 +2710,11 @@ void Ui::startCoverSearch() {
     library_.searchCovers(library_.games()[coverSearch_.game].system, coverSearch_.query);
 }
 
-void Ui::chooseCoverImage(size_t game) {
+void Ui::chooseCoverImage(size_t game, CoverImage kind) {
     const auto& games = library_.games();
     if (game >= games.size()) return;
     coverImageFor_ = games[game].path;
+    coverImageKind_ = kind;
     const std::string start = coverImageFor_.substr(0, coverImageFor_.find_last_of("/\\"));
     std::string chosen;
     browseFor_ = BrowseFor::CoverImage;
@@ -2596,7 +2732,19 @@ void Ui::useCoverImage(const std::string& file) {
     for (size_t i = 0; i < games.size(); ++i)
         if (games[i].path == coverImageFor_) {
             std::string error;
-            if (!library_.coverFromFile(i, file, &error) && !error.empty()) showError(error);
+            const bool label = coverImageKind_ == CoverImage::Label;
+            if (!(label ? library_.labelFromFile(i, file, &error) : library_.coverFromFile(i, file, &error))) {
+                if (!error.empty()) showError(error);
+                break;
+            }
+            // A whole sleeve is told apart by its shape: much wider than tall.
+            if (coverImageKind_ == CoverImage::Sleeve) {
+                int w = 0, h = 0, channels = 0;
+                std::ifstream in(std::filesystem::u8path(file), std::ios::binary);
+                const std::vector<unsigned char> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+                if (stbi_info_from_memory(data.data(), static_cast<int>(data.size()), &w, &h, &channels) && BoxShelf::coverFront(w, h) <= 0)
+                    notify(tr("Esa imagen no es una portada completa (contraportada, lomo y portada): se usa como portada."));
+            }
             break;
         }
     coverImageFor_.clear();
