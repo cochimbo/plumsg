@@ -320,12 +320,14 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
     ImGui_ImplSDL2_InitForOpenGL(window_, context);
     ImGui_ImplOpenGL3_Init("#version 330 core");
     loadLogo();
+    applyScraperSettings();
 }
 
 Ui::~Ui() {
     shelf_.reset();
     library_.clearTextures();
     gameInfo_.clearTextures();
+    scraper_.clearTextures();
     if (logoTexture_) gl::DeleteTextures(1, &logoTexture_);
     if (iconTexture_) gl::DeleteTextures(1, &iconTexture_);
     ImGui_ImplOpenGL3_Shutdown();
@@ -572,8 +574,11 @@ UiActions Ui::frame(const UiState& state) {
     if (showGameOptions_) drawGameOptions(state, out);
     library_.update();
     gameInfo_.update();
+    scraper_.update();
+    for (ScreenScraper::ForLibrary f; scraper_.takeForLibrary(f);) library_.useDownloaded(f.path, f.cover, f.label, f.replace);
     if (showLibrary_) drawLibrary(out);
     if (showCoverSearch_) drawCoverSearch();
+    if (showMedia_) drawMedia(out);
     if (showBios_) drawBios(out);
     if (showNetplay_) drawNetplay(state, out);
     if (achievements_ && achievements_->drawWindows()) out.achievementsChanged = out.settingsChanged = true;
@@ -2142,6 +2147,27 @@ void Ui::drawLibrary(UiActions& out) {
                           "y las guarda en la carpeta covers de plumsg. También puedes poner tus\n"
                           "propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado."));
     ImGui::SameLine();
+    // Everything ScreenScraper has of the games it was not asked about yet.
+    if (scraper_.batchLeft() > 0) {
+        if (ImGui::Button(tr("Parar ScreenScraper"))) scraper_.cancelAll();
+    } else if (ImGui::Button(tr("Descargar de ScreenScraper"))) {
+        if (!scraper_.credentials().usable()) {
+            // Nothing can be asked without an account: its tab, for the first game.
+            if (!games.empty()) {
+                openMedia(0);
+                media_.tab = 3;
+            }
+        } else {
+            std::vector<ScreenScraper::Rom> roms;
+            for (const auto& g : games) roms.push_back({g.path, g.stem, g.title, g.tags, g.system});
+            scraper_.downloadAll(roms);
+        }
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Busca en ScreenScraper (internet) cada juego que aún no tenga sus medios: portada completa,\n"
+                                   "etiqueta del cartucho, capturas, logo... Las carátulas que ya hay se quedan, salvo\n"
+                                   "que ScreenScraper tenga la portada completa. Uno a uno, así que tarda un poco."));
+    ImGui::SameLine();
     if (ImGui::Button(tr("BIOS del Mega CD..."))) showBios_ = true;
     ImGui::SameLine();
     if (ImGui::Checkbox(tr("Abrir la biblioteca al empezar"), &settings_.libraryAtStart)) out.settingsChanged = true;
@@ -2222,6 +2248,10 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.selectedGame = visible[static_cast<size_t>(libraryView_.selected)];
     if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text(tr("%d juegos. %s"), static_cast<int>(visible.size()), library_.downloadStatus().c_str());
+    if (const std::string ss = scraper_.batchStatus(); !ss.empty()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", ss.c_str());
+    }
     // The covers' size, at the right end of that line: smaller ones fit more to a row.
     if (libraryView == 0) {
         const char* label = tr("Tamaño");
@@ -2274,7 +2304,7 @@ void Ui::drawLibrary(UiActions& out) {
             static const char* items[LibraryView::kItems] = {N_("Jugar"), N_("Trucos..."), N_("Opciones de este juego..."),
                                                              N_("Editor de instrumentos..."), N_("Buscar carátula..."),
                                                              N_("Carátula desde imagen..."), N_("Portada completa..."),
-                                                             N_("Etiqueta del cartucho...")};
+                                                             N_("Etiqueta del cartucho..."), N_("Medios de ScreenScraper...")};
             int picked = libraryView_.menuAction;
             for (int i = 0; i < LibraryView::kItems; ++i)
                 if (ImGui::Selectable(tr(items[i]), libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
@@ -2291,6 +2321,7 @@ void Ui::drawLibrary(UiActions& out) {
                 case 5: chooseCoverImage(visible[static_cast<size_t>(n)]); break;
                 case 6: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Sleeve); break;
                 case 7: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Label); break;
+                case 8: openMedia(visible[static_cast<size_t>(n)]); break;
                 default: break;
             }
             if (picked >= 0) {
@@ -2656,6 +2687,8 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     if (ImGui::SmallButton(tr("Buscar otra vez"))) gameInfo_.refresh();
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Vuelve a buscar la descripción y la captura de este juego en internet."));
+    ImGui::SameLine();
+    if (ImGui::SmallButton(tr("Medios de ScreenScraper..."))) openMedia(visible[static_cast<size_t>(n)]);
 }
 
 void Ui::openCoverSearch(size_t game) {

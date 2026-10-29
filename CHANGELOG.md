@@ -24,6 +24,22 @@ What each version brings, newest first. Installers are on the
 - "Portada completa..." in a game's menu takes a whole sleeve (back, spine and front side
   by side, as The Cover Project has them): the 3D box wears all of it, and the grid and
   the details panel show its front.
+- **ScreenScraper** (screenscraper.fr): "Medios de ScreenScraper..." in a game's menu (or
+  in the details panel) identifies the game by its ROM (CRC32, name and size; a disc by
+  its name, or any game by its title if that fails) and downloads what ScreenScraper has
+  of it: front cover, whole sleeve, back cover, 3D box, cartridge label, cartridge,
+  screenshot, title screen, logo, marquee and fan art, and on request the video and the
+  manual. Its window shows everything downloaded (the cursor over one enlarges it, a
+  click opens it) with ScreenScraper's data of the game; if it is the wrong game,
+  **Buscar otro juego** searches by name in any console, shows each result's cover and
+  **Usar este juego** downloads that one's instead. The sleeve becomes the game's cover
+  (the 3D box wears it) and the label goes on its cartridge. **Descargar de ScreenScraper**
+  in the library does every game that has not been done yet, one by one, keeping the
+  covers already there unless ScreenScraper has the whole sleeve. ScreenScraper asks for
+  a developer account of the program as well as (optionally) the user's free account,
+  both in the window's **Cuenta** tab; builds can carry the developer one
+  (`PLUMSG_SCREENSCRAPER_DEVID` and `PLUMSG_SCREENSCRAPER_DEVPASSWORD` in CMake, from the
+  repository's secrets in the installer's build).
 
 ## 0.1.0-beta.7
 

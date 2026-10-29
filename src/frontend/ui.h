@@ -20,6 +20,7 @@
 #include "instrument_editor.h"
 #include "score_view.h"
 #include "library.h"
+#include "screenscraper.h"
 #include "settings.h"
 
 namespace plumsg {
@@ -168,6 +169,17 @@ public:
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
     GameInfo& gameInfo() { return gameInfo_; }
+    ScreenScraper& scraper() { return scraper_; }
+    // "Medios de ScreenScraper..." for the library's game `game`: what was downloaded of
+    // it, and a search to pick the right game.
+    void openMedia(size_t game);
+    // For screenshots: the window for `game`, downloading its media (mode 1), searching for
+    // its title (2) or downloading every game's (3).
+    void startMedia(size_t game, int mode);
+    bool mediaBusy() const {
+        return showMedia_ && (scraper_.sheet().busy || scraper_.searchState().busy || scraper_.searchState().previewBusy ||
+                              scraper_.batchLeft() > 0);
+    }
     // The detail panel still looking for the chosen game's data, or the font still to be made
     // again with characters it lacks (screenshots wait for both).
     bool libraryInfoBusy() const {
@@ -237,6 +249,13 @@ private:
     void needGlyphs(const std::string& text);
     void drawCoverSearch();
     void startCoverSearch();
+    void drawMedia(UiActions& out);
+    void drawMediaFound(const Library::Game& g);
+    void drawMediaSearch(const Library::Game& g);
+    void drawMediaAccount(UiActions& out);
+    void drawMediaKinds(UiActions& out);
+    // The account and the kinds of media, from the settings to the downloader.
+    void applyScraperSettings();
     void drawBios(UiActions& out);
     void drawNetplay(const UiState& state, UiActions& out);
     void rescanLibrary();
@@ -265,6 +284,7 @@ private:
     std::unique_ptr<BoxShelf> shelf_;  // the library's 3D view, made the first time it is shown
     int boxesPose_ = 0;
     GameInfo gameInfo_;
+    ScreenScraper scraper_;
     std::set<ImWchar> fontExtra_;  // characters beyond the base ranges that texts have needed
     ImVector<ImWchar> fontRanges_;  // the atlas's ranges, alive until it is built
     bool fontsDirty_ = false;
@@ -333,8 +353,8 @@ private:
         // The menu of one game (right click, X on the pad or the menu key): its index in
         // the filtered list, the item chosen with the pad or the keys, and a request to open it.
         // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula, Carátula desde imagen,
-        // Portada completa, Etiqueta del cartucho
-        static constexpr int kItems = 8;
+        // Portada completa, Etiqueta del cartucho, Medios de ScreenScraper
+        static constexpr int kItems = 9;
         int menuGame = -1;
         int menuItem = 0;
         bool openMenu = false;
@@ -355,6 +375,18 @@ private:
         bool focus = false;
         bool autoPreview = false;  // show the closest cover once the names arrive
     } coverSearch_;
+    // "Medios de ScreenScraper..." for one game of the library.
+    bool showMedia_ = false;
+    struct MediaView {
+        std::string path;    // the game's ROM
+        char query[128] = "";
+        int system = 0;      // to search in, a ConsoleSystem
+        int selected = -1;   // in the search's results
+        bool autoPick = false;  // pick the game it is (or the first) once the results arrive
+        int tab = 0;         // to bring forward: 1 the search
+        bool selectTab = false;
+        char user[64] = "", password[64] = "", devId[64] = "", devPassword[96] = "";
+    } media_;
     char cheatCode_[64] = "";
     char cheatName_[96] = "";
     std::string cheatError_;

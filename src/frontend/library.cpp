@@ -313,6 +313,25 @@ bool Library::coverFromFile(size_t game, const std::string& file, std::string* e
     return saveCover(game, image, error);
 }
 
+void Library::useDownloaded(const std::string& path, const std::vector<uint8_t>& cover, const std::vector<uint8_t>& label,
+                            bool replace) {
+    for (size_t i = 0; i < games_.size(); ++i) {
+        const Game& g = games_[i];
+        if (g.path != path) continue;
+        std::string error;
+        int w = 0, h = 0, n = 0;
+        const bool sleeve = !cover.empty() && stbi_info_from_memory(cover.data(), static_cast<int>(cover.size()), &w, &h, &n) &&
+                            w >= h * 6 / 5;
+        const bool hasSleeve = g.cover == Cover::Ready && g.width >= g.height * 6 / 5;
+        const bool hasLabel = g.label != 0;
+        if (!cover.empty() && isImage(cover) &&
+            (replace || g.cover == Cover::Missing || g.cover == Cover::Unknown || (sleeve && !hasSleeve)))
+            saveCover(i, cover, &error);
+        if (!label.empty() && isImage(label) && (replace || !hasLabel)) saveCover(i, label, &error, true);
+        return;
+    }
+}
+
 bool Library::saveCover(size_t game, const std::vector<uint8_t>& image, std::string* error, bool label) {
     if (game >= games_.size()) return false;
     Game& g = games_[game];

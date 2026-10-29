@@ -239,6 +239,21 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   Wikipedia description, in plumsg's language or, failing that, in English, with a link
   to the page. Everything is kept in `game-info\` next to `covers\`; **Search again**
   looks up the game's description and screenshot again.
+- **ScreenScraper media...** in a game's menu (or in the details panel): what
+  [ScreenScraper](https://www.screenscraper.fr) has of the game, found by its ROM's CRC32,
+  name and size (a disc by its name), or by its title if that fails: front cover, whole
+  sleeve, back cover, 3D box, cartridge label, cartridge, screenshot, title screen, logo,
+  marquee, fan art and, if ticked in **What to download** (or one by one), the video and
+  the manual. The window shows each file (hover to enlarge, click to open) and the game's
+  data and description; **Search for another game** searches by name in any console when
+  it found the wrong one, and **Use this game** downloads that one's instead. The files go
+  to `game-info\screenscraper\<console>\<ROM name>\` with `ficha.json`, and the sleeve
+  and the label also become the game's cover and the label of its 3D cartridge.
+  **Download from ScreenScraper** in the library does every game not done yet, one at a
+  time. ScreenScraper needs the program's developer account (built in, or typed in the
+  **Account** tab) and, optionally, your free screenscraper.fr account for more requests
+  a day; the password is kept in `plumsg.ini`, since ScreenScraper asks for it with every
+  request.
 - **Console > Mega CD BIOS** (or the library's button): the BIOS file for each region
   (Japan, USA and Europe, 128 KB, like `bios_CD_U.bin`). plumsg says whether the file looks
   like a BIOS and which region it is, and **Search the library's folders** finds them by
@@ -529,7 +544,9 @@ On Windows, the `windows-installer.yml` workflow builds the installer with Inno 
   `--filter crt` or `--filter scanlines`, or of the library with
   `plumsg --library folder --download-covers --screenshot library.png`
   (`--library` can be repeated, `--bios` opens the BIOS window and
-  `--find-cover` the cover search for the library's first game;
+  `--find-cover` the cover search for the library's first game, `--media` its
+  ScreenScraper media window, downloading them (`--media search` searching for its
+  title, `--media all` downloading every game's);
   `plumsg rom.md --cheats --screenshot cheats.png` opens the game's cheats with its list and
   `--game-options` its own options, or `--game-options controls` its buttons).
 

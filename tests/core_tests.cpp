@@ -32,6 +32,7 @@
 #include "frontend/achievements.h"
 #include "frontend/game_info_data.h"
 #include "frontend/library_names.h"
+#include "frontend/screenscraper_data.h"
 #include "mars/mars_program.h"
 #include "megacd/megacd_program.h"
 #include "cd_image.h"
@@ -2050,6 +2051,81 @@ void testGameInfo() {
     check(wikiTitleDistance("Columns", "Ecco the Dolphin") < 0, "game info: nothing in common");
 }
 
+void testScreenScraper() {
+    // A jeuInfos answer as the API gives it (trimmed), with its trailing comma.
+    const std::string info =
+        "{\"header\":{\"success\":\"true\"},\"response\":{\"ssuser\":{\"requeststoday\":\"12\",\"maxrequestsperday\":\"20000\"},"
+        "\"jeu\":{\"id\":\"3\",\"systeme\":{\"id\":\"1\",\"text\":\"Megadrive\"},"
+        "\"noms\":[{\"region\":\"wor\",\"text\":\"Sonic The Hedgehog\"},{\"region\":\"jp\",\"text\":\"\\u30bd\\u30cb\\u30c3\\u30af\"}],"
+        "\"editeur\":{\"id\":\"1\",\"text\":\"SEGA\"},\"developpeur\":{\"text\":\"Sonic Team\"},\"joueurs\":{\"text\":\"1\"},"
+        "\"note\":{\"text\":\"17\"},\"dates\":[{\"region\":\"us\",\"text\":\"1991-06-23\"},{\"region\":\"eu\",\"text\":\"1991-06-21\"}],"
+        "\"synopsis\":[{\"langue\":\"en\",\"text\":\"Run.\"},{\"langue\":\"es\",\"text\":\"Corre.\"}],"
+        "\"genres\":[{\"id\":\"7\",\"noms\":[{\"langue\":\"en\",\"text\":\"Platform\"},{\"langue\":\"es\",\"text\":\"Plataformas\"}]}],"
+        "\"medias\":[{\"type\":\"box-2D\",\"region\":\"us\",\"format\":\"png\","
+        "\"url\":\"https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=d&devpassword=p&softname=s&ssid=u&sspassword=x&systemeid=1&jeuid=3&media=box-2D(us)\"},"
+        "{\"type\":\"box-2D\",\"region\":\"eu\",\"format\":\"png\",\"url\":\"https://a.screenscraper.fr/api2/mediaJeu.php?jeuid=3&media=box-2D(eu)\"},"
+        "{\"type\":\"wheel\",\"region\":\"wor\",\"format\":\"png\",\"url\":\"https://a.screenscraper.fr/api2/mediaJeu.php?media=wheel(wor)\"},"
+        "{\"type\":\"fanart\",\"format\":\"jpg\",\"url\":\"https://a.screenscraper.fr/api2/mediaJeu.php?media=fanart\"},"
+        "]}}}";
+    SsAnswer a = parseSsAnswer(200, info);
+    check(a.result == SsAnswer::Ok && a.games.size() == 1, "screenscraper: one game");
+    if (a.games.size() == 1) {
+        const SsGame& g = a.games[0];
+        const auto regions = ssRegions("Europe · Rev A");
+        check(g.id == 3 && g.system == 1 && g.publisher == "SEGA" && g.rating == "17", "screenscraper: the game's data");
+        check(g.name(regions) == "Sonic The Hedgehog" && g.date(regions) == "1991-06-21" && g.year(regions) == "1991",
+              "screenscraper: names and dates in the ROM's region");
+        check(g.text(ssLanguages("es")) == "Corre." && g.genre(ssLanguages("es")) == "Plataformas",
+              "screenscraper: texts in the user's language");
+        check(g.names.size() == 2 && g.names[1].second == "\xe3\x82\xbd\xe3\x83\x8b\xe3\x83\x83\xe3\x82\xaf", "screenscraper: escapes");
+        const SsMedia* cover = ssPickMedia(g, *ssKind("portada"), regions);
+        check(cover && cover->region == "eu", "screenscraper: the cover of the ROM's region");
+        const SsMedia* us = ssPickMedia(g, *ssKind("portada"), ssRegions("USA"));
+        check(us && us->url.find("devpassword") == std::string::npos && us->url.find("sspassword") == std::string::npos &&
+                  us->url.find("jeuid=3&media=box-2D(us)") != std::string::npos,
+              "screenscraper: the accounts are not kept with the media");
+        check(ssPickMedia(g, *ssKind("logo"), regions) != nullptr, "screenscraper: a second type for a kind");
+        check(ssPickMedia(g, *ssKind("fanart"), regions) != nullptr, "screenscraper: media without a region");
+        check(ssPickMedia(g, *ssKind("etiqueta"), regions) == nullptr, "screenscraper: a kind it does not have");
+        // What plumsg keeps reads back the same.
+        const SsAnswer back = parseSsAnswer(200, ssGameJson(g));
+        check(back.games.size() == 1 && back.games[0].id == 3 && back.games[0].names == g.names &&
+                  back.games[0].medias.size() == g.medias.size() && back.games[0].genres == g.genres &&
+                  back.games[0].synopsis == g.synopsis && back.games[0].players == "1",
+              "screenscraper: the kept answer reads back");
+    }
+    check(a.requestsToday == 12 && a.maxRequests == 20000, "screenscraper: the day's requests");
+
+    const SsAnswer search = parseSsAnswer(200, "{\"response\":{\"jeux\":[{\"id\":\"3\",\"noms\":[{\"region\":\"wor\",\"text\":\"A\"}]},"
+                                               "{\"id\":\"5\",\"noms\":[{\"region\":\"wor\",\"text\":\"B\"}]}]}}");
+    check(search.result == SsAnswer::Ok && search.games.size() == 2 && search.games[1].id == 5, "screenscraper: a search's games");
+    check(parseSsAnswer(200, "{\"response\":{\"jeux\":[{}]}}").result == SsAnswer::NotFound, "screenscraper: an empty search");
+    check(parseSsAnswer(404, "Erreur : Rom/Iso/Dossier non trouvée !  ").result == SsAnswer::NotFound, "screenscraper: not found");
+    check(parseSsAnswer(403, "Erreur de login : Verifier vos identifiants developpeur !").result == SsAnswer::Login,
+          "screenscraper: a wrong account");
+    check(parseSsAnswer(430, "Votre quota de scrape est dépassé pour aujourd'hui !").result == SsAnswer::Quota,
+          "screenscraper: the day's quota");
+    check(parseSsAnswer(429, "The maximum threads allowed to leecher users is already used").result == SsAnswer::Busy,
+          "screenscraper: too busy");
+    check(parseSsAnswer(0, "").result == SsAnswer::Offline, "screenscraper: no connection");
+
+    SsCredentials c{"dev id", "p&w", "plumsg", "me", "secret"};
+    const std::string url = ssUrl(c, "jeuInfos.php", ssRomParams(0, "Sonic (Europe).zip", 524288, 0xF9394E97u, false));
+    check(url == "https://api.screenscraper.fr/api2/jeuInfos.php?devid=dev%20id&devpassword=p%26w&softname=plumsg&output=json"
+                 "&ssid=me&sspassword=secret&systemeid=1&romtype=rom&romnom=Sonic%20%28Europe%29.zip&romtaille=524288&crc=F9394E97",
+          "screenscraper: a ROM's request");
+    check(ssRomParams(2, "Sonic CD.cue", 0, 0, true) == "systemeid=20&romtype=iso&romnom=Sonic%20CD.cue", "screenscraper: a disc's");
+    check(ssWithCredentials("https://a.screenscraper.fr/api2/mediaJeu.php?devid=old&jeuid=3", c) ==
+              "https://a.screenscraper.fr/api2/mediaJeu.php?devid=dev%20id&devpassword=p%26w&softname=plumsg&ssid=me&sspassword=secret&jeuid=3",
+          "screenscraper: a medium's accounts");
+    check(ssWithCredentials("https://example.com/x.png?a=1", c) == "https://example.com/x.png?a=1",
+          "screenscraper: other servers get no accounts");
+    const auto regions = ssRegions("USA · Europe");
+    check(regions.size() > 3 && regions[0] == "us" && regions[1] == "eu" && regions[2] == "wor", "screenscraper: regions in order");
+    JsonValue j;
+    check(!parseJson("Erreur", j) && parseJson("[1, \"a\", {\"b\": null},]", j) && j.items.size() == 3, "screenscraper: JSON");
+}
+
 void testLibraryNames() {
     check(gameTitle("Lion King, The (World)") == "The Lion King", "library: trailing ', The' moves to the front");
     check(gameTitle("Adventures of Batman & Robin, The (USA)") == "The Adventures of Batman & Robin",
@@ -3403,6 +3479,7 @@ int main() {
     testPal();
     testCheats();
     testLibraryNames();
+    testScreenScraper();
     testGameInfo();
     testSystems();
     testMasterSystem();
