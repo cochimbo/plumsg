@@ -3,7 +3,7 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## Unreleased
+## 0.1.0-beta.8
 
 - **The library's 3D shelf** ("Cajas 3D", next to Cuadrícula and Lista): the games'
   cases stand on a shelf with their spines out; the wheel zooms out to see it all and
