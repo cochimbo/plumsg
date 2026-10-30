@@ -25,8 +25,8 @@ mastersystem.glb, mastersystem-cartridge.glb
   Source: https://sketchfab.com/3d-models/sega-master-system-0ec998c9b9de4e7f956cab56bbca3c0f
   License: Creative Commons Attribution 4.0 (CC BY 4.0),
   https://creativecommons.org/licenses/by/4.0/
-  Changes: split in two, the console with its two pads and the cartridge (the
-  cables, the Sega Cards and the floor left out); textures reduced to 2048x2048
+  Changes: split in two, the console with its two pads and their cables, and the
+  cartridge (the Sega Cards and the floor left out); textures reduced to 2048x2048
   (normal maps 1024x1024) as JPEG, the metallic/roughness textures removed.
   plumsg prints each game's label (or its cover) over the cartridge's own.
 

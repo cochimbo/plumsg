@@ -5,7 +5,7 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
-- The 3D shelf's Master System is a real 3D model too, with its two pads in front and
+- The 3D shelf's Master System is a real 3D model too, with its two pads in front, plugged in, and
   its own cartridge wearing each game's label: "Sega Master System" by dark_igorek
   (CC BY 4.0).
 

@@ -324,7 +324,7 @@ struct ModelFile {
     const float* box;   // the console's own bounds in the file, when it has more (its pads)
 };
 const float kMegaDriveLed[3] = {0.206f, 0.415f, 0.42f};
-// The Master System by dark_igorek, CC BY 4.0, with its two pads in front (in metres).
+// The Master System by dark_igorek, CC BY 4.0, with its two pads plugged in in front (in metres).
 const float kMasterSystemBox[6] = {-0.184f, 0.0f, -0.091f, 0.184f, 0.07f, 0.085f};
 const ModelFile kModelFiles[] = {
     // The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the
