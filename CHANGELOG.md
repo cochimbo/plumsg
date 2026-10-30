@@ -5,6 +5,12 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
+- **Light guns** (#102): Consola > Mando 2 (or a game's options) plugs in Konami's
+  Justifier (Lethal Enforcers I and II, Snatcher), with its second gun for player 2, or
+  Sega's Menacer (T2: The Arcade Game, Menacer 6-Game Cartridge) instead of pad 2. A
+  crosshair on the game aims each gun, moved with the mouse or with the pad's left stick
+  (or d-pad); the left click or A pulls the trigger, the right click or C shoots off the
+  screen to reload, and the middle click or Start is Start.
 - The 3D shelf's Master System is a real 3D model too, with its two pads in front, plugged in, and
   its own cartridge wearing each game's label: "Sega Master System" by dark_igorek
   (CC BY 4.0).

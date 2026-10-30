@@ -132,6 +132,15 @@ constexpr const char* kNoPadTip =
        "Sunday Night NFL pone entonces al ordenador de jugador 2 en vez de esperar al mando 2\n"
        "(por ejemplo, en el sorteo de la moneda). En una partida en red el mando 2 se enchufa.");
 
+constexpr const char* kLightGunTip =
+    N_("Una pistola de luz en el segundo puerto, en lugar del mando 2: la Menacer de Sega (T2: The\n"
+       "Arcade Game, Menacer 6-Game Cartridge...) o la Justifier de Konami (Lethal Enforcers I y II,\n"
+       "Snatcher), que tiene una segunda pistola para el jugador 2. Se apunta con una mira en\n"
+       "pantalla, movida con el ratón o con el stick izquierdo (o la cruceta) del mando.\n"
+       "Gatillo: clic izquierdo o A. Disparar fuera de la pantalla (recargar): clic derecho o C.\n"
+       "Start: clic central o Start. Botones A y B de la Menacer: B y X del mando.\n"
+       "Solo los juegos de Mega Drive y Mega CD; en una partida en red se enchufa un mando.");
+
 // The combo for the overclock; `percent` takes the chosen value.
 // An on/off option as a "Sí" / "No" list, so a row of the game's options has no second
 // box next to the one that says whether the game has its own value.
@@ -636,8 +645,37 @@ UiActions Ui::frame(const UiState& state) {
         }
     }
     drawOverlays(state);
+    drawCrosshairs(state);
     hideIdleCursor(state);
     return out;
+}
+
+// Each light gun's crosshair over the game, behind the windows: a ring with a cross,
+// outlined in black to be seen on any picture, in the gun's colour (the Justifier's
+// blue and pink). Off the picture it waits at the edge, faded.
+void Ui::drawCrosshairs(const UiState& state) {
+    ImDrawList* draw = ImGui::GetBackgroundDrawList();
+    const float r = std::max(8.0f, ImGui::GetFontSize() * 0.75f);
+    const ImVec2 lo = ImGui::GetMainViewport()->Pos;
+    const ImVec2 hi(lo.x + ImGui::GetMainViewport()->Size.x, lo.y + ImGui::GetMainViewport()->Size.y);
+    for (const UiState::Crosshair& c : state.crosshairs) {
+        const ImVec2 p(std::clamp(c.x, lo.x, hi.x), std::clamp(c.y, lo.y, hi.y));
+        const int alpha = c.onPicture ? 255 : 90;
+        const ImU32 colour = c.gun == 0 ? IM_COL32(80, 170, 255, alpha) : IM_COL32(255, 105, 180, alpha);
+        const ImU32 outline = IM_COL32(0, 0, 0, alpha * 3 / 4);
+        for (int pass = 0; pass < 2; ++pass) {
+            const ImU32 col = pass == 0 ? outline : colour;
+            const float t = pass == 0 ? 4.0f : 2.0f;
+            draw->AddCircle(p, r, col, 0, t);
+            draw->AddLine(ImVec2(p.x - r * 1.5f, p.y), ImVec2(p.x - r * 0.4f, p.y), col, t);
+            draw->AddLine(ImVec2(p.x + r * 0.4f, p.y), ImVec2(p.x + r * 1.5f, p.y), col, t);
+            draw->AddLine(ImVec2(p.x, p.y - r * 1.5f), ImVec2(p.x, p.y - r * 0.4f), col, t);
+            draw->AddLine(ImVec2(p.x, p.y + r * 0.4f), ImVec2(p.x, p.y + r * 1.5f), col, t);
+        }
+        draw->AddCircleFilled(p, 2.0f, colour);
+    }
+    // The pointer would hide the crosshair it is aiming.
+    if (state.hideMouse && !ImGui::GetIO().WantCaptureMouse) ImGui::SetMouseCursor(ImGuiMouseCursor_None);
 }
 
 // The backend reads the cursor ImGui asks for at the start of the next frame and hides
@@ -801,17 +839,22 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         for (int port = 0; port < 2; ++port) {
             ImGui::SeparatorText(port == 0 ? tr("Mando 1") : tr("Mando 2"));
             ImGui::PushID(port);
-            for (PadType t : {PadType::ThreeButton, PadType::SixButton, PadType::None}) {
-                if (t == PadType::None && port == 0) continue;
+            for (PadType t : {PadType::ThreeButton, PadType::SixButton, PadType::None, PadType::Menacer,
+                              PadType::Justifier}) {
+                if (t != PadType::ThreeButton && t != PadType::SixButton && port == 0) continue;
                 const char* name = t == PadType::ThreeButton ? tr("3 botones")
                                    : t == PadType::SixButton ? tr("6 botones")
-                                                             : tr("Sin mando");
+                                   : t == PadType::None      ? tr("Sin mando")
+                                   : t == PadType::Menacer   ? tr("Pistola Menacer")
+                                                             : tr("Pistola Justifier");
                 if (ImGui::MenuItem(name, nullptr, settings_.padType[static_cast<size_t>(port)] == t)) {
                     settings_.padType[static_cast<size_t>(port)] = t;
                     out.consoleChanged = out.settingsChanged = true;
                 }
                 if (t == PadType::None && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                     ImGui::SetTooltip("%s", tr(kNoPadTip));
+                if (isLightGun(t) && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip("%s", tr(kLightGunTip));
             }
             ImGui::PopID();
         }
@@ -3370,16 +3413,18 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             }
         } else if (key == "pads") {
             // In PadType's order.
-            static const char* names[] = {N_("3 botones"), N_("6 botones"), N_("Sin mando")};
+            static const char* names[] = {N_("3 botones"), N_("6 botones"), N_("Sin mando"), N_("Pistola Menacer"),
+                                          N_("Pistola Justifier")};
             for (size_t port = 0; port < 2; ++port) {
                 if (port) ImGui::SameLine();
                 int i = static_cast<int>(s.padType[port]);
                 ImGui::SetNextItemWidth(110);
-                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names, port ? 3 : 2)) {
+                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names, port ? 5 : 2)) {
                     s.padType[port] = static_cast<PadType>(i);
                     edited = true;
                 }
-                if (port && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr(kNoPadTip));
+                if (port && ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", tr(isLightGun(s.padType[port]) ? kLightGunTip : kNoPadTip));
             }
         } else if (key == "overclock") {
             edited |= overclockCombo(tr(opt.label), s.overclock);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include "../core/video_frame_md.h"
 
 namespace plumsg {
@@ -59,6 +61,28 @@ inline float pixelAspect(const VideoFrameMd& frame, bool squarePixels) {
 struct Viewport {
     int x = 0, y = 0, width = 0, height = 0;
 };
+
+// Where the 2D views draw the picture inside `area`: as large as the scale mode allows,
+// centred, the lines kept sharp with the integer scale.
+inline Viewport pictureArea(const VideoFrameMd& frame, const Viewport& area, const RenderOptions& options) {
+    // Size of the picture in "screen pixels": lines are one unit high (two interlaced
+    // lines share one), and pixels are as wide as the TV makes them.
+    const float lines = frame.interlaced ? frame.height / 2.0f : static_cast<float>(frame.height);
+    const float pictureW = static_cast<float>(frame.width) * pixelAspect(frame, options.squarePixels);
+    int w = area.width, h = area.height;
+    if (options.scale == ScaleMode::Integer) {
+        // Largest integer scale of the lines that fits, centred, to keep them sharp.
+        const int scale = std::max(1, std::min(static_cast<int>(area.width / pictureW), static_cast<int>(area.height / lines)));
+        w = static_cast<int>(pictureW * static_cast<float>(scale) + 0.5f);
+        h = static_cast<int>(lines) * scale;
+    } else if (options.scale == ScaleMode::Fit) {
+        if (static_cast<float>(area.width) * lines > static_cast<float>(area.height) * pictureW)
+            w = static_cast<int>(static_cast<float>(area.height) * pictureW / lines);
+        else
+            h = static_cast<int>(static_cast<float>(area.width) * lines / pictureW);
+    }
+    return Viewport{area.x + (area.width - w) / 2, area.y + (area.height - h) / 2, w, h};
+}
 
 // A renderer turns a VideoFrameMd into pixels on screen. The emulator core never calls
 // into a renderer; the frontend hands it each finished frame. A pseudo-3D renderer

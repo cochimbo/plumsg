@@ -84,6 +84,9 @@ public:
     }
     void setPadType(int port, PadType t) { io_.setPadType(port, t); }
     PadType padType(int port) const { return io_.padType(port); }
+    // The light guns, when the second port has one (setPadType(1, Menacer or Justifier)):
+    // gun 0, and the Justifier's second gun 1. Mega Drive games only.
+    void setGun(int gun, const GunState& s) { io_.setGun(gun, s); }
 
     // Replaces the active cheats. ROM patches are applied now and undone by the next
     // call (or by loading another ROM); RAM writes are made at the start of every frame.
@@ -213,6 +216,7 @@ private:
     void runUntil(uint64_t clock);
     void syncSound();  // brings PSG and YM2612 up to now_
     void updateIrq() { cpu_.setIrqLevel(vdp_.irqLevel()); }
+    void lightGunLine(int line);
     void applyRegion();
     void configureFor(Region r);  // clocks, PAL/NTSC and version register
     int cdBiosSlot(Region r) const;  // the BIOS for `r`, or with a cartridge any there is; -1 for none

@@ -32,10 +32,43 @@ bool Io::thLevel(int port, uint64_t now) const {
     return thRelease_[port] == kNotRising || now < thRelease_[port] || now - thRelease_[port] >= kThRiseTime;
 }
 
+// The Justifier: TH and TR, set as outputs, choose what it says. TH low turns on the blue
+// gun (TR low) or the pink one (TR high), which show their trigger in bit 0 and Start in
+// bit 1, active low; TH high and TR low reads 0000 (a Justifier is there); both high,
+// nothing. The Menacer always shows its trigger, A, B and Start in bits 0-3, active high.
+uint8_t Io::readGun(PadType type) const {
+    if (type == PadType::Menacer) {
+        const GunState& g = guns_[0];
+        return static_cast<uint8_t>(0x40 | (g.trigger ? 1 : 0) | (g.a ? 2 : 0) | (g.b ? 4 : 0) | (g.start ? 8 : 0));
+    }
+    switch (data_[1] & ctrl_[1] & 0x60) {
+        case 0x40: return 0x30;
+        case 0x00: case 0x20: {
+            const GunState& g = guns_[(data_[1] & ctrl_[1] & 0x20) ? 1 : 0];
+            return static_cast<uint8_t>(0x70 | (g.trigger ? 0 : 1) | (g.start ? 0 : 2));
+        }
+        default: return 0x7F;
+    }
+}
+
+const GunState* Io::activeGun() const {
+    if (!isLightGun(types_[1]) || !(ctrl_[1] & 0x80)) return nullptr;
+    if (types_[1] == PadType::Menacer) return &guns_[0];
+    switch (data_[1] & ctrl_[1] & 0x60) {
+        case 0x00: return &guns_[0];
+        case 0x20: return &guns_[1];
+        default: return nullptr;
+    }
+}
+
 uint8_t Io::readPort(int port, uint64_t now) {
+    if (port == 1 && isLightGun(types_[1])) {
+        const uint8_t v = readGun(types_[1]);
+        return static_cast<uint8_t>((data_[1] & ctrl_[1] & 0x7F) | (v & ~ctrl_[1] & 0x7F) | (data_[1] & 0x80));
+    }
     // An empty port: its pins float high, and a pad's TH-low reading (left and right
     // low) never shows up.
-    if (port == 2 || types_[port] == PadType::None)
+    if (port == 2 || types_[port] == PadType::None || isLightGun(types_[port]))
         return static_cast<uint8_t>((data_[port] & ctrl_[port]) | (0x7F & ~ctrl_[port]));
     const PadState& p = pads_[port];
     const bool th = thLevel(port, now);

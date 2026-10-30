@@ -24,6 +24,7 @@ void VdpMd::reset() {
     fillPending_ = false;
     readBuffer_ = 0;
     hvLatch_ = 0;
+    gunLatched_ = extPending_ = false;
     vcounter_ = 0;
     hintCounter_ = 0;
     vintPending_ = hintPending_ = z80Irq_ = false;
@@ -78,7 +79,7 @@ int VdpMd::writeControl(uint16_t value, uint64_t clock) {
     if (!pendingControl_) {
         if ((value & 0xC000) == 0x8000) {
             const int reg = (value >> 8) & 0x1F;
-            if (reg == 0 && (value & 0x02) && !(regs_[0] & 0x02)) {
+            if (reg == 0 && (value & 0x02) && !(regs_[0] & 0x02) && !gunLatched_) {
                 // Turning the HV counter latch on freezes the counter where it is.
                 const int lineClock = clock == kUntimed ? 0 : static_cast<int>(clock - slotLineStart_);
                 hvLatch_ = readHV(lineClock);
@@ -504,7 +505,7 @@ uint16_t VdpMd::readStatus(int lineClock, uint64_t clock) {
 }
 
 uint16_t VdpMd::readHV(int lineClock) const {
-    if (regs_[0] & 0x02) return hvLatch_;
+    if ((regs_[0] & 0x02) || gunLatched_) return hvLatch_;
     int v = counterLine(lineClock);
     const bool v30 = activeLines() == 240;
     if (pal_) {
@@ -543,6 +544,7 @@ void VdpMd::startLine(int line, uint64_t clock) {
         // this line's first slots, and they stay taken.
         slotLine_ = line;
     }
+    if (line == 0) gunLatched_ = extPending_ = false;
     vcounter_ = line;
     cramWriteCount_ = 0;
     if (line == activeLines() + 1) z80Irq_ = false;  // the Z80's interrupt line is held for about one line
@@ -570,13 +572,32 @@ void VdpMd::endFrame() {
     oddFrame_ = (regs_[12] & 0x02) ? !oddFrame_ : false;
 }
 
+void VdpMd::lightGunHit(int dot) {
+    int v = vcounter_;
+    if ((regs_[12] & 0x06) == 0x06) v = (v << 1) | ((v >> 7) & 1);  // interlace mode 2
+    // The H counter runs 0x00-0xB6 then 0xE4-0xFF in H40 (210 steps a line), 0x00-0x93
+    // then 0xE9-0xFF in H32 (171).
+    int h;
+    if (h40()) {
+        h = ((dot % 210) + 210) % 210;
+        if (h > 0xB6) h += 0xE4 - 0xB7;
+    } else {
+        h = ((dot % 171) + 171) % 171;
+        if (h > 0x93) h += 0xE9 - 0x94;
+    }
+    hvLatch_ = static_cast<uint16_t>(((v & 0xFF) << 8) | (h & 0xFF));
+    gunLatched_ = extPending_ = true;
+}
+
 int VdpMd::irqLevel() const {
     if (vintPending_ && (regs_[1] & 0x20)) return 6;
     if (hintPending_ && (regs_[0] & 0x10)) return 4;
+    if (extPending_ && (regs_[11] & 0x08)) return 2;
     return 0;
 }
 
 void VdpMd::acknowledge(int level) {
+    if (level == 2) extPending_ = false;
     if (level != 4 && level != 6) return;
     // The acknowledge clears whichever interrupt is pending and enabled now, VINT first,
     // whichever of the two the 68000 took: one disabled since it was raised stays pending.

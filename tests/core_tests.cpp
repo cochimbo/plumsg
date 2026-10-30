@@ -326,6 +326,98 @@ void testPads() {
           "I/O: serial TxData and S-Ctrl read back what was written (softcheck)");
 }
 
+void testLightGuns() {
+    Io io;
+    io.reset();
+    GunState blue, pink;
+    blue.x = 100;
+    blue.y = 50;
+    blue.trigger = true;
+    pink.start = true;
+    io.setGun(0, blue);
+    io.setGun(1, pink);
+    io.setPadType(1, PadType::Justifier);
+    const uint64_t now = 1000;
+    io.write(0xA1000B, 0x60, now);  // TH and TR outputs, no interrupt yet
+    auto read = [&](uint8_t thTr) {
+        io.write(0xA10005, thTr, now);
+        return static_cast<uint8_t>(io.read(0xA10005, now) & 0x0F);
+    };
+    check(read(0x40) == 0x00, "Justifier: TH high, TR low reads 0000 (a Justifier is there)");
+    check(read(0x00) == 0x02, "Justifier: TH and TR low read the blue gun's trigger (bit 0, active low)");
+    check(read(0x20) == 0x01, "Justifier: TR high reads the pink gun's Start (bit 1, active low)");
+    check(read(0x60) == 0x0F, "Justifier: TH and TR high read nothing");
+    check(io.activeGun() == nullptr, "light gun: no light seen without the port's TH interrupt");
+    io.write(0xA1000B, 0xE0, now);
+    io.write(0xA10005, 0x00, now);
+    check(io.activeGun() && io.activeGun()->x == 100, "Justifier: the blue gun sees the light with TH and TR low");
+    io.write(0xA10005, 0x60, now);
+    check(io.activeGun() == nullptr, "Justifier: neither gun with TH high");
+    io.setPadType(1, PadType::Menacer);
+    io.write(0xA1000B, 0x80, now);
+    check((io.read(0xA10005, now) & 0x7F) == 0x41, "Menacer: trigger in bit 0, active high, TH high");
+    check(io.activeGun() && io.activeGun()->y == 50, "Menacer: always its one gun");
+
+    // The VDP latches the HV counter where the gun saw the beam, latch bit or not, until
+    // the frame ends, and raises the level 2 interrupt when register 11 lets it.
+    VdpMd vdp;
+    vdp.reset();
+    vdp.writeControl(0x8104);
+    vdp.writeControl(0x8C81);  // H40
+    vdp.startLine(50);
+    vdp.lightGunHit(100 / 2 + 24);
+    check(vdp.readHV(0) == ((50 << 8) | 74) && vdp.readHV(1000) == ((50 << 8) | 74),
+          "light gun: the HV counter holds the line and dot the gun saw");
+    check(vdp.irqLevel() == 0, "light gun: no interrupt with register 11 bit 3 off");
+    vdp.writeControl(0x8B08);
+    check(vdp.irqLevel() == 2, "light gun: external interrupt is level 2");
+    vdp.acknowledge(2);
+    check(vdp.irqLevel() == 0, "light gun: the acknowledge takes it");
+    vdp.lightGunHit(200);  // past 0xB6 in H40 the counter jumps to 0xE4
+    check((vdp.readHV(0) & 0xFF) == 200 + 0xE4 - 0xB7, "light gun: the H counter jumps as the console's does");
+    vdp.startLine(0);
+    check(vdp.irqLevel() == 0 && (vdp.readHV(0) >> 8) != 50, "light gun: a new frame lets the counter go");
+
+    // A whole console: a program that picks the Justifier's blue gun, turns on the
+    // port's interrupt, the HV latch and the external interrupt, and in its level 2
+    // handler keeps the HV counter at 0xFF0002 and counts the shots at 0xFF0004.
+    testrom::Emitter e;
+    for (size_t i = 0; i < 16; ++i) e.rom[0x100 + i] = static_cast<uint8_t>("SEGA MEGA DRIVE "[i]);
+    e.label("reset");
+    e.w16(0x46FC); e.w16(0x2700);                       // move   #$2700,sr
+    e.w16(0x43F9); e.w32(0xC00004);                     // lea    $C00004,a1
+    e.w16(0x32BC); e.w16(0x8006);                       // move.w #$8006,(a1)  HV latch on
+    e.w16(0x32BC); e.w16(0x8144);                       // move.w #$8144,(a1)  display on
+    e.w16(0x32BC); e.w16(0x8B08);                       // move.w #$8B08,(a1)  external interrupt on
+    e.w16(0x32BC); e.w16(0x8C81);                       // move.w #$8C81,(a1)  H40
+    e.w16(0x13FC); e.w16(0x00E0); e.w32(0xA1000B);      // move.b #$E0,$A1000B TH, TR out; TH interrupt
+    e.w16(0x13FC); e.w16(0x0000); e.w32(0xA10005);      // move.b #$00,$A10005 the blue gun
+    e.w16(0x46FC); e.w16(0x2000);                       // move   #$2000,sr
+    e.label("loop");
+    e.w16(0x6000); e.rel("loop");                       // bra.w  loop
+    e.label("level2");
+    e.w16(0x33F9); e.w32(0xC00008); e.w32(0xFF0002);    // move.w $C00008,$FF0002
+    e.w16(0x5279); e.w32(0xFF0004);                     // addq.w #1,$FF0004
+    e.w16(0x4E73);                                      // rte
+    e.link();
+    e.put32(0, 0x00FFFE00);
+    e.put32(4, e.at("reset"));
+    e.put32(0x68, e.at("level2"));
+    while (e.rom.size() % 0x400) e.rom.push_back(0xFF);
+    MegaDrive md;
+    md.loadRomData(e.rom);
+    md.setPadType(1, PadType::Justifier);
+    md.setGun(0, blue);
+    for (int i = 0; i < 4; ++i) md.runFrame();
+    const uint16_t shots = md.peek16(0xFF0004);
+    check(md.peek16(0xFF0002) == ((50 << 8) | 74) && shots >= 3,
+          "light gun: a game's level 2 handler reads where the Justifier points");
+    blue.x = -1;
+    md.setGun(0, blue);
+    for (int i = 0; i < 2; ++i) md.runFrame();
+    check(md.peek16(0xFF0004) == shots, "light gun: pointed off the screen it sees nothing");
+}
+
 void testPsg() {
     Psg psg;
     psg.setClock(Psg::kClockNtsc);
@@ -3450,6 +3542,7 @@ int main() {
     testSram();
     testEeprom();
     testPads();
+    testLightGuns();
     testPsg();
     testVdpPorts();
     testVdpHblankFlag();
