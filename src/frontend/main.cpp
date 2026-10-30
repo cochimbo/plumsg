@@ -30,6 +30,7 @@
 #include "http.h"
 #include "languages.h"
 #include "input.h"
+#include "light_gun.h"
 #include "miniz.h"
 #include "settings.h"
 #include "ui.h"
@@ -915,6 +916,11 @@ int main(int argc, char** argv) {
     bool slowMotion = false;
     double musicSpeed = 1.0;  // the Partitura's speed
     bool orbiting = false;  // dragging the pseudo-3D camera with the mouse
+    // The light guns' crosshairs, while the second port has one and a Mega Drive game runs.
+    LightGunAim gunAim;
+    auto gunPlugged = [&] { return app->romLoaded && isLightGun(app->console.padType(1)) && !app->console.isMasterSystem(); };
+    int lastMouseX = -1, lastMouseY = -1;
+    Uint64 lastAim = SDL_GetPerformanceCounter();
     bool padMenuWasOpen = false;  // the states menu, the library or the file browser, last frame
     int framesRun = 0;
     // The FPS counter's measures: the frames run in this turn of the loop and the time
@@ -1053,7 +1059,9 @@ int main(int argc, char** argv) {
         // ROM cheats change the cartridge, which the savestate the guest gets does not carry.
         app->console.setCheats({});
         // The guest plays on pad 2: it has to be plugged in (the guest gets the host's types).
-        if (app->console.padType(1) == PadType::None) app->console.setPadType(1, PadType::SixButton);
+        // A light gun's aim does not travel over the network either.
+        if (app->console.padType(1) == PadType::None || isLightGun(app->console.padType(1)))
+            app->console.setPadType(1, PadType::SixButton);
         paused = slowMotion = false;
         ui->notify(host ? trf("Esperando al otro jugador en el puerto %d", settings.netPort)
                         : trf("Conectando con %s", settings.netAddress.c_str()));
@@ -1148,7 +1156,7 @@ int main(int argc, char** argv) {
                 default: break;  // rewind and fast forward work while held, below
             }
             // The pseudo-3D camera: drag to turn it, wheel to zoom, double click to centre it.
-            if (cam.pseudo3d) {
+            if (cam.pseudo3d && !gunPlugged()) {  // with a light gun the mouse aims it
                 // Without tilting the camera only the zoom changes.
                 if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && !ui->mouseBusy() &&
                     cam.tiltCamera) {
@@ -1294,6 +1302,45 @@ int main(int argc, char** argv) {
                                                         static_cast<int>(net->desyncFrame()));
                     break;
             }
+        }
+        // The light guns: the picture as the last loop drew it, the mouse where it went
+        // (not over the menus), and each player's stick or d-pad.
+        uiState.crosshairs.clear();
+        uiState.hideMouse = false;
+        if (gunPlugged() && !netPlaying()) {
+            int ww, wh, dw, dh;
+            SDL_GetWindowSize(window, &ww, &wh);
+            SDL_GL_GetDrawableSize(window, &dw, &dh);
+            const float scale = dw > 0 ? static_cast<float>(ww) / static_cast<float>(dw) : 1.0f;
+            const VideoFrameMd& f = app->console.frame();
+            const Viewport pic = pictureArea(f, Viewport{0, 0, dw, std::max(1, dh - ui->menuHeight())}, settings.render);
+            const float colW = static_cast<float>(pic.width) / static_cast<float>(f.width);
+            gunAim.setPicture((static_cast<float>(pic.x) + colW * static_cast<float>(f.wideLeft)) * scale,
+                              static_cast<float>(dh - pic.y - pic.height) * scale,
+                              colW * static_cast<float>(f.consoleWidth()) * scale, static_cast<float>(pic.height) * scale);
+            int mx, my;
+            const Uint32 mouse = SDL_GetMouseState(&mx, &my);
+            const bool mouseFree = !ui->mouseBusy() && (SDL_GetWindowFlags(window) & SDL_WINDOW_MOUSE_FOCUS);
+            if (mouseFree && (mx != lastMouseX || my != lastMouseY)) gunAim.mouseMoved(static_cast<float>(mx), static_cast<float>(my));
+            lastMouseX = mx;
+            lastMouseY = my;
+            gunAim.mouseButtons(mouseFree && (mouse & SDL_BUTTON_LMASK), mouseFree && (mouse & SDL_BUTTON_RMASK),
+                                mouseFree && (mouse & SDL_BUTTON_MMASK));
+            const bool keyboard = !ui->keyboardBusy();
+            const int guns = app->console.padType(1) == PadType::Justifier ? 2 : 1;
+            const Uint64 nowAim = SDL_GetPerformanceCounter();
+            const float seconds = std::min(0.1f, static_cast<float>(static_cast<double>(nowAim - lastAim) / freq));
+            lastAim = nowAim;
+            for (int g = 0; g < guns; ++g) {
+                float sx, sy;
+                input->leftStick(g, &sx, &sy);
+                if (!paused) gunAim.move(g, input->poll(g, keyboard), sx, sy, seconds);
+                UiState::Crosshair c;
+                c.onPicture = gunAim.crosshair(g, &c.x, &c.y);
+                c.gun = g;
+                uiState.crosshairs.push_back(c);
+            }
+            uiState.hideMouse = mouseFree && gunAim.over(static_cast<float>(mx), static_cast<float>(my));
         }
         const UiActions act = ui->frame(uiState);
         if (!act.load.empty()) {
@@ -1504,6 +1551,12 @@ int main(int argc, char** argv) {
                         if (app->console.saveState(snapshot, true)) rewind.push(std::move(snapshot));
                     }
                     app->console.setPads(input->poll(0, keyboard), input->poll(1, keyboard));
+                    if (gunPlugged()) {
+                        const VideoFrameMd& f = app->console.frame();
+                        const int lines = f.interlaced ? f.height / 2 : f.height;
+                        for (int g = 0; g < 2; ++g)
+                            app->console.setGun(g, gunAim.state(g, input->poll(g, keyboard), f.consoleWidth(), lines));
+                    }
                     app->console.setSampleRate(audio->rate() / speed);
                     // The picture shown is run-ahead's, so these need not be drawn.
                     app->console.setDrawing(ahead == 0);

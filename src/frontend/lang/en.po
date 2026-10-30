@@ -2246,6 +2246,12 @@ msgstr "Pinball"
 msgid "Pista"
 msgstr "Track"
 
+msgid "Pistola Justifier"
+msgstr "Justifier light gun"
+
+msgid "Pistola Menacer"
+msgstr "Menacer light gun"
+
 msgid "Pistola de luz"
 msgstr "Light gun"
 
@@ -2939,6 +2945,23 @@ msgstr "A 4-digit code needs an even address."
 
 msgid "Un panel a la derecha con la carátula, los datos y la descripción del juego elegido."
 msgstr "A panel on the right with the chosen game's cover, data and description."
+
+msgid ""
+"Una pistola de luz en el segundo puerto, en lugar del mando 2: la Menacer de Sega (T2: The\n"
+"Arcade Game, Menacer 6-Game Cartridge...) o la Justifier de Konami (Lethal Enforcers I y II,\n"
+"Snatcher), que tiene una segunda pistola para el jugador 2. Se apunta con una mira en\n"
+"pantalla, movida con el ratón o con el stick izquierdo (o la cruceta) del mando.\n"
+"Gatillo: clic izquierdo o A. Disparar fuera de la pantalla (recargar): clic derecho o C.\n"
+"Start: clic central o Start. Botones A y B de la Menacer: B y X del mando.\n"
+"Solo los juegos de Mega Drive y Mega CD; en una partida en red se enchufa un mando."
+msgstr ""
+"A light gun in the second port, instead of pad 2: Sega's Menacer (T2: The Arcade Game,\n"
+"Menacer 6-Game Cartridge...) or Konami's Justifier (Lethal Enforcers I and II, Snatcher),\n"
+"which has a second gun for player 2. You aim with a crosshair on screen, moved with the\n"
+"mouse or with the pad's left stick (or d-pad).\n"
+"Trigger: left click or A. Shoot off the screen (reload): right click or C.\n"
+"Start: middle click or Start. The Menacer's A and B buttons: B and X on the pad.\n"
+"Mega Drive and Mega CD games only; in a netplay game a pad is plugged in."
 
 msgid "Unidades"
 msgstr "Drives"

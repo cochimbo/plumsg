@@ -2246,6 +2246,12 @@ msgstr "Flipper"
 msgid "Pista"
 msgstr "Piste"
 
+msgid "Pistola Justifier"
+msgstr "Pistolet Justifier"
+
+msgid "Pistola Menacer"
+msgstr "Pistolet Menacer"
+
 msgid "Pistola de luz"
 msgstr "Pistolet optique"
 
@@ -2939,6 +2945,23 @@ msgstr "Un code à 4 chiffres a besoin d'une adresse paire."
 
 msgid "Un panel a la derecha con la carátula, los datos y la descripción del juego elegido."
 msgstr "Un panneau à droite avec la jaquette, les informations et la description du jeu choisi."
+
+msgid ""
+"Una pistola de luz en el segundo puerto, en lugar del mando 2: la Menacer de Sega (T2: The\n"
+"Arcade Game, Menacer 6-Game Cartridge...) o la Justifier de Konami (Lethal Enforcers I y II,\n"
+"Snatcher), que tiene una segunda pistola para el jugador 2. Se apunta con una mira en\n"
+"pantalla, movida con el ratón o con el stick izquierdo (o la cruceta) del mando.\n"
+"Gatillo: clic izquierdo o A. Disparar fuera de la pantalla (recargar): clic derecho o C.\n"
+"Start: clic central o Start. Botones A y B de la Menacer: B y X del mando.\n"
+"Solo los juegos de Mega Drive y Mega CD; en una partida en red se enchufa un mando."
+msgstr ""
+"Un pistolet optique dans le second port, à la place de la manette 2 : le Menacer de Sega (T2: The\n"
+"Arcade Game, Menacer 6-Game Cartridge...) ou le Justifier de Konami (Lethal Enforcers I et II,\n"
+"Snatcher), qui a un second pistolet pour le joueur 2. On vise avec un réticule à l'écran,\n"
+"déplacé avec la souris ou le stick gauche (ou la croix) de la manette.\n"
+"Gâchette : clic gauche ou A. Tirer hors de l'écran (recharger) : clic droit ou C.\n"
+"Start : clic du milieu ou Start. Boutons A et B du Menacer : B et X de la manette.\n"
+"Jeux Mega Drive et Mega CD uniquement ; en partie en réseau, une manette est branchée."
 
 msgid "Unidades"
 msgstr "Lecteurs"

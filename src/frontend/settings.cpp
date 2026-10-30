@@ -126,7 +126,11 @@ void Settings::parse(std::istream& in, Settings& s) {
                     if (iniName(lower(value)) == kRegionNames[i]) s.region = static_cast<Region>(i);
             } else if (key == "pad1" || key == "pad2") {
                 PadType t = value == "3" ? PadType::ThreeButton : PadType::SixButton;
-                if (value == "0" && key == "pad2") t = PadType::None;  // pad 1 is always there
+                if (key == "pad2") {  // pad 1 is always there, and light guns only go in port 2
+                    if (value == "0") t = PadType::None;
+                    else if (lower(value) == "menacer") t = PadType::Menacer;
+                    else if (lower(value) == "justifier") t = PadType::Justifier;
+                }
                 s.padType[key == "pad1" ? 0 : 1] = t;
             } else if (key == "fm_master_system") {
                 s.smsFm = yes(value);
@@ -247,10 +251,14 @@ void Settings::write(std::ostream& out) const {
         << "# those of its SoundFont family, and keeping the closest.\n"
         << "compare_sound = " << flag(compareSound) << "\n"
         << "\n[console]\n"
-        << "# region: auto (the ROM's), japan, usa or europe. pad1/pad2: 3 or 6 buttons; pad2 = 0: nothing plugged in.\n"
+        << "# region: auto (the ROM's), japan, usa or europe. pad1/pad2: 3 or 6 buttons; pad2 = 0: nothing plugged in,\n"
+        << "# menacer or justifier: that light gun, aimed with the mouse or the left stick.\n"
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"
         << "pad1 = " << (padType[0] == PadType::ThreeButton ? 3 : 6) << "\n"
-        << "pad2 = " << (padType[1] == PadType::ThreeButton ? 3 : padType[1] == PadType::None ? 0 : 6) << "\n"
+        << "pad2 = "
+        << (padType[1] == PadType::ThreeButton ? "3" : padType[1] == PadType::None ? "0"
+            : padType[1] == PadType::Menacer ? "menacer" : padType[1] == PadType::Justifier ? "justifier" : "6")
+        << "\n"
         << "# fm_master_system: yes, the Master System FM unit outside Japan too.\n"
         << "fm_master_system = " << flag(smsFm) << "\n"
         << "# overclock: processor (68000) speed in percent, from 100 (the console's) to 400.\n"

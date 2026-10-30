@@ -559,6 +559,7 @@ void MegaDrive::runFrameMd() {
         lineStart_ = now_;
         vdp_.startLine(line, lineStart_);
         if (mars_) mars_->startLine(line, vdp_.activeLines());
+        if (isLightGun(io_.padType(1))) lightGunLine(line);
         updateIrq();
         z80_.setIrqLine(vdp_.z80Irq());
         runUntil(lineStart_ + VdpMd::kActiveClocks);
@@ -579,6 +580,23 @@ void MegaDrive::runFrameMd() {
         runUntil(lineStart_ + kMasterPerLine);
     }
     vdp_.endFrame();
+}
+
+// A light gun pointed at this line sees the beam go by. Where on the line the H counter
+// says is each game's to work out, so this is what Genesis Plus GX found they expect:
+// the Justifier sees pixel x at counter step x / 2 + 24; the Menacer at x / 2 + 82, its
+// x first scaled to the 289 dots (304 with the Mega CD) its games scale back up.
+void MegaDrive::lightGunLine(int line) {
+    const GunState* gun = io_.activeGun();
+    const int width = vdp_.h40() ? 320 : 256;
+    if (!gun || gun->y != line || !gun->onScreen(width, vdp_.activeLines())) return;
+    int x = gun->x;
+    int dot = x / 2 + 24;
+    if (io_.padType(1) == PadType::Menacer) {
+        x = x * (mcd_ ? 304 : 289) / 320;
+        dot = x / 2 + 82;
+    }
+    vdp_.lightGunHit(dot);
 }
 
 bool MegaDrive::runAhead(int frames) {

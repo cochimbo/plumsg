@@ -88,7 +88,13 @@ public:
     void endLine(int line);     // HINT counter (at the start of horizontal blanking)
     void endFrame();
 
-    // Interrupts: level 6 (VINT) and level 4 (HINT), already masked by their enables.
+    // A light gun sees the beam on this line (call it as the line starts), `dot` counter
+    // steps (two pixels each) from where the H counter reads 0: the I/O chip pulls the
+    // HL line, which latches the HV counter there until the next frame, latch bit or not
+    // (games read it anywhere in the frame), and raises the external interrupt.
+    void lightGunHit(int dot);
+    // Interrupts: level 6 (VINT), level 4 (HINT) and level 2 (external, a light gun),
+    // already masked by their enables.
     int irqLevel() const;
     void acknowledge(int level);
     bool z80Irq() const { return z80Irq_; }
@@ -210,6 +216,10 @@ private:
     bool fillPending_ = false;     // DMA fill armed: waits for a data port write
     uint16_t readBuffer_ = 0;
     uint16_t hvLatch_ = 0;         // the HV counter while the latch (register 0 bit 1) is on
+    // A light gun latched the HV counter this frame, and its interrupt is waiting. Not
+    // in states: both last at most until the frame ends.
+    bool gunLatched_ = false;
+    bool extPending_ = false;
 
     // The FIFO's four words as last written: reads from CRAM, VSRAM and the 8-bit VRAM
     // target take the bits those memories lack from the oldest one, fifoData_[fifoNext_].

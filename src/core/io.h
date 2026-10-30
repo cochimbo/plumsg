@@ -14,7 +14,19 @@ struct PadState {
 
 // None: nothing plugged in. Some games look: ESPN Sunday Night NFL makes player 2 the
 // computer when the second port is empty, and waits for pad 2 at the coin toss if not.
-enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1, None = 2 };
+// Menacer and Justifier: light guns, which go in the second port (Io only reads them there).
+enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1, None = 2, Menacer = 3, Justifier = 4 };
+inline bool isLightGun(PadType t) { return t == PadType::Menacer || t == PadType::Justifier; }
+
+// Where a light gun points and what is held on it. x and y are pixels of the console's
+// picture (0..255 or 0..319 across, 0..223 or 0..239 down); anywhere else, as when the
+// trigger is pulled off the screen to reload, the gun sees no light. The Justifier has
+// only the trigger and Start; the Menacer also has A and B.
+struct GunState {
+    int x = -1, y = -1;
+    bool trigger = false, a = false, b = false, start = false;
+    bool onScreen(int width, int height) const { return x >= 0 && y >= 0 && x < width && y < height; }
+};
 
 // The I/O chip: version register and the two controller ports (the third, the
 // modem/extension port, reads as nothing connected), and each port's serial registers,
@@ -22,7 +34,8 @@ enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1, None = 2 };
 // a 3-button pad multiplexes its buttons on TH; a 6-button pad also counts TH pulses
 // and shows X/Y/Z/Mode on the fourth one, until TH rests for about 1.5 ms. A TH pin
 // switched from output to input does not rise at once: its pull-up takes a few
-// microseconds to charge the line, and some games read the pad in that time.
+// microseconds to charge the line, and some games read the pad in that time. A light
+// gun in the second port answers instead with its own buttons.
 class Io {
 public:
     void reset();
@@ -30,6 +43,12 @@ public:
     void setPad(int port, const PadState& s) { pads_[port & 1] = s; }
     void setPadType(int port, PadType t) { types_[port & 1] = t; }
     PadType padType(int port) const { return types_[port & 1]; }
+    // Light gun 0, and the Justifier's second (pink) gun 1, in the second port.
+    void setGun(int gun, const GunState& s) { guns_[gun & 1] = s; }
+    // The gun the console would see the light of now, or null: one plugged in, enabled
+    // (the Justifier picks one of its two with TH and TR) and with the second port's
+    // TH interrupt on (control register bit 7), which is what latches the HV counter.
+    const GunState* activeGun() const;
 
     // 0xA10001-0xA1001F, odd addresses. `now` is the time in master clocks, for the
     // 6-button pad's timeout.
@@ -53,6 +72,7 @@ public:
 
 private:
     uint8_t readPort(int port, uint64_t now);
+    uint8_t readGun(PadType type) const;
     bool thLevel(int port, uint64_t now) const;
 
     std::array<uint8_t, 3> data_{};
@@ -66,6 +86,7 @@ private:
     static constexpr uint64_t kNotRising = ~uint64_t{0};
     std::array<PadType, 2> types_{PadType::SixButton, PadType::SixButton};
     std::array<PadState, 2> pads_{};
+    std::array<GunState, 2> guns_{};
     std::array<uint8_t, 3> txData_{0xFF, 0xFF, 0xFF};
     std::array<uint8_t, 3> serialCtrl_{};  // bits 3-7; 0-2 are status (nothing received)
 };

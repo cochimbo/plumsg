@@ -113,6 +113,15 @@ struct UiState {
     const FpsCounter* fps = nullptr;  // drawn over the game while settings.fpsCounter is on
     EditorView editor;
     const ScoreMusic* score = nullptr;  // what the Partitura shows (null for nothing)
+    // The light guns' crosshairs over the game, in window coordinates, and whether the
+    // mouse is aiming one over the picture (its pointer is hidden there).
+    struct Crosshair {
+        float x = 0, y = 0;
+        bool onPicture = false;  // off it, the gun points off the screen
+        int gun = 0;             // 0 the first (blue on the Justifier), 1 the Justifier's pink one
+    };
+    std::vector<Crosshair> crosshairs;
+    bool hideMouse = false;
 };
 
 // Menu bar and option windows, drawn with Dear ImGui (OpenGL 3) on top of the game.
@@ -267,6 +276,7 @@ private:
     void drawStateOptions(int tab, const UiState& state, UiActions& out);
     bool handleStateMenu(const SDL_Event& e);
     void drawOverlays(const UiState& state);
+    void drawCrosshairs(const UiState& state);
     // The FPS counter and its graph, in settings_.fpsCorner; `badge` says the speed badge
     // takes the top right corner.
     void drawFpsCounter(const FpsCounter& fps, bool badge);
