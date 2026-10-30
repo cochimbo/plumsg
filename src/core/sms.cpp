@@ -201,7 +201,7 @@ uint8_t MasterSystem::in(uint8_t port, int cycle) {
     }
     // The ports are decoded by address lines 7, 6 and 0 only.
     switch (port & 0xC1) {
-        case 0x40: return vdp_.vcounter();
+        case 0x40: return vdp_.readVcounter(cycle);
         case 0x41: return vdp_.hcounter();
         case 0x80: return vdp_.readData();
         case 0x81: return vdp_.readStatus(cycle);

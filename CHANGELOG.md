@@ -14,6 +14,10 @@ What each version brings, newest first. Installers are on the
 - The 3D shelf's Master System is a real 3D model too, with its two pads in front, plugged in, and
   its own cartridge wearing each game's label: "Sega Master System" by dark_igorek
   (CC BY 4.0).
+- Game Gear VDP timing (#76): against its H counter a Game Gear's line starts later than
+  a Master System's, so its V counter changes a cycle later and the latched H counter is
+  2 cycles ahead. VDPTEST's "GG 2 ASIC" test now passes all of its data, misc and sprite
+  tests (it failed 6).
 
 ## 0.1.0-beta.8
 

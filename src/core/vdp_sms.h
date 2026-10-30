@@ -51,11 +51,17 @@ public:
     void writeData(uint8_t value);
     uint8_t readStatus(int cycle = 0);  // clears the flags and the interrupt
     void writeControl(uint8_t value, int cycle = 0);
-    uint8_t vcounter() const;
+    uint8_t vcounter() const { return vcounterOf(line_); }
+    // The V counter port `cycle` cycles into the line. The Game Gear's changes
+    // kGgVcounterDelay cycles after the line starts, and it latches the H counter as it
+    // was kGgHcounterLead cycles later than a Master System would: against its H counter
+    // the line starts that much later (VDPTEST's "GG 2 ASIC" test, issue #76).
+    uint8_t readVcounter(int cycle) const;
+    static constexpr int kGgVcounterDelay = 1, kGgHcounterLead = 2;
     // The H counter port gives the value latched by the last rise of a TH line, not the
     // running counter.
     uint8_t hcounter() const { return hcLatch_; }
-    void latchHcounter(int cycle) { hcLatch_ = hcounterAt(cycle); }
+    void latchHcounter(int cycle) { hcLatch_ = hcounterAt(gameGear_ ? cycle + kGgHcounterLead : cycle); }
     // The running H counter (pixels / 2) `cycle` Z80 cycles into the line.
     static uint8_t hcounterAt(int cycle);
 
@@ -116,6 +122,7 @@ public:
     }
 
 private:
+    uint8_t vcounterOf(int line) const;
     void cacheColors();
     void renderLine(int line);
     void renderLineTms(int line);
