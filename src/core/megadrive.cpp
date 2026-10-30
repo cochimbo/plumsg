@@ -313,8 +313,10 @@ void MegaDrive::reset() {
     z80BusReq_ = false;
     z80Reset_ = true;
     now_ = lineStart_ = m68kClock_ = z80Clock_ = psgClock_ = vdpFreeAt_ = 0;
+    m68kBusStall_ = 0;
     psgRemainder_ = 0;
     refreshClocks_ = 0;
+    refreshAfterFetch_ = false;
     ym_.setClockPosition(0);
     psgBuffer_.clear();
     if (mars_) {
@@ -349,24 +351,45 @@ void MegaDrive::runUntil(uint64_t clock) {
             if (mars_) mars_->runUntil(m68kClock_);
             if (mcd_) mcd_->runUntil(m68kClock_);
             if (svp_) svp_->runUntil(m68kClock_);
+            const uint64_t start = m68kClock_;
+            m68kClock_ += m68kBusStall_;
+            m68kBusStall_ = 0;
             now_ = m68kClock_;
             const uint64_t cycles = static_cast<uint64_t>(cpu_.step());
             // Overclocked, each cycle takes fewer master clocks (rounded, never 0).
             const uint64_t clocks = overclock_ == 100 ? cycles * 7
                                                       : std::max<uint64_t>(1, (cycles * 700 + overclock_ / 2) / overclock_);
             m68kClock_ += clocks;
-            // The DRAM refresh holds the 68000 off its bus for 2 of every 128 cycles
-            // (testpico's "time loop" counts them), unless it comes while the 68000 is
-            // on the VDP or the I/O ports, which are not on that bus: those accesses are
-            // taken as the instruction's last before the fetch of the next one
-            // (misc_test's "M68K ROM speed" 1 and 4).
-            refreshClocks_ += static_cast<int>(clocks);
-            const int freeFrom = 4 * 7, freeTo = std::min(static_cast<int>(clocks), freeFrom + freeAccesses_ * 4 * 7);
+            // The DRAM refresh comes every 128 cycles, whatever the 68000 is doing, and holds
+            // its bus for 2 (testpico's "time loop" counts them). It waits for the bus
+            // cycle under way to end, and the next one waits for it, unless that one is to
+            // the VDP or the I/O ports, which are not on that bus. Those accesses are taken
+            // as the instruction's last before the fetch of the next one; a refresh asked
+            // for in the bus cycle before them, or done within them, costs nothing
+            // (misc_test's "M68K ROM speed" 1, 3 and 4). Nor does one that comes while the
+            // 68000 waits for something else (the VDP, a DMA, the Z80 on its bus).
+            refreshClocks_ += static_cast<int>(m68kClock_ - start);
+            const int ran = static_cast<int>(clocks);
+            const int freeFrom = 4 * 7, freeTo = std::min(ran, freeFrom + freeAccesses_ * 4 * 7);
             freeAccesses_ = 0;
+            auto stallFor = [&](int stall) {
+                m68kClock_ += static_cast<uint64_t>(stall);
+                refreshClocks_ += stall;
+            };
+            if (refreshAfterFetch_) {
+                // One asked for in the last instruction's final fetch is done at this one's
+                // start: free if this one starts on the VDP.
+                refreshAfterFetch_ = false;
+                stallFor(freeTo == ran && freeTo > freeFrom ? 0 : kRefreshStall);
+            }
             while (refreshClocks_ >= kRefreshEvery) {
                 refreshClocks_ -= kRefreshEvery;
                 // refreshClocks_ is now how long before the instruction's end it came.
-                if (refreshClocks_ < freeFrom || refreshClocks_ >= freeTo) m68kClock_ += kRefreshStall;
+                const int before = refreshClocks_;
+                if (before >= ran) continue;
+                if (before < freeFrom) refreshAfterFetch_ = true;
+                else if (before < freeTo) stallFor(std::max(0, kRefreshStall - (before - freeFrom)));
+                else if (before >= freeTo + 4 * 7 || freeTo == freeFrom) stallFor(kRefreshStall);
             }
         } else if (z80Running()) {
             now_ = z80Clock_;
@@ -679,12 +702,16 @@ void MegaDrive::writeIo(uint32_t addr, uint8_t value) {
     io_.write(addr | 1, value, now_);
 }
 
+// The 68000 waits a cycle for the Z80's side of the bus (misc_test's "M68K ROM speed 5",
+// a loop reading the YM2612).
 uint8_t MegaDrive::readZ80Area(uint32_t addr) {
+    m68kClock_ += kM68kZ80AreaWait;
     if (!z80BusFree()) return 0xFF;
     return read(static_cast<uint16_t>(addr & 0x7FFF));
 }
 
 void MegaDrive::writeZ80Area(uint32_t addr, uint8_t value) {
+    m68kClock_ += kM68kZ80AreaWait;
     if (!z80BusFree()) return;
     fromM68k_ = true;
     write(static_cast<uint16_t>(addr & 0x7FFF), value);
@@ -948,6 +975,7 @@ uint8_t MegaDrive::read(uint16_t addr) {
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);
         waitForDmaBus();
         z80Clock_ += kZ80BankDelay;
+        if (inZ80_) m68kBusStall_ += kM68kBankStall;
         if (a >= 0xA00000 && a < 0xA10000) return 0xFF;  // the Z80 cannot see itself
         // Nor read the 68000's RAM, only write it (misc_test's "Z80 write-only to M68K RAM").
         if (a >= 0xE00000) return 0xFF;
@@ -989,6 +1017,7 @@ void MegaDrive::write(uint16_t addr, uint8_t value) {
     } else if (addr >= 0x8000) {
         waitForDmaBus();
         z80Clock_ += kZ80BankDelay;
+        if (inZ80_) m68kBusStall_ += kM68kBankStall;
         const uint32_t a = (static_cast<uint32_t>(z80Bank_) << 15) | (addr & 0x7FFF);
         if (a < 0xA00000 || a >= 0xA10000) write8(a, value);
     }
@@ -1085,6 +1114,11 @@ bool MegaDrive::saveState(std::vector<uint8_t>& out, bool quick) {
         StateWriter w;
         w(dmaBusUntil_);
         block("DMAB", w.data());
+    }
+    {
+        StateWriter w;
+        w(m68kBusStall_, refreshAfterFetch_);
+        block("BSTL", w.data());
     }
     {
         StateWriter w;
@@ -1245,6 +1279,8 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     std::vector<uint8_t> thumbnail, addOnState;
     dmaBusUntil_ = 0;  // states without the block: no DMA holds the bus
     refreshClocks_ = 0;  // states without the block are from before the refresh
+    refreshAfterFetch_ = false;
+    m68kBusStall_ = 0;
     cpu_.dropPrefetch();
     z80BusGrantAt_ = 0;  // nor the bus grant delay
     while (ok && !r.atEnd()) {
@@ -1280,6 +1316,7 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
         else if (id == fourcc("IO  ")) io_.state(b);
         else if (id == fourcc("IOTH")) io_.riseState(b);
         else if (id == fourcc("DMAB")) b(dmaBusUntil_);
+        else if (id == fourcc("BSTL")) b(m68kBusStall_, refreshAfterFetch_);
         else if (id == fourcc("IOSR")) io_.serialState(b);
         else if (id == fourcc("CART")) cart_.state(b);
         else if (id == fourcc("EEPR")) cart_.eepromState(b);

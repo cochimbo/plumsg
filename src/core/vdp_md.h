@@ -42,6 +42,7 @@ public:
     // previous one), and VBlank starts and ends. testpico's HBlank tests, which read the
     // status right after the V counter changes, pin it to 2564-2573 in both H32 and H40.
     static constexpr int kVcountClocks = 2568;
+    static constexpr int kVcountGlitchClocks = 7;  // how long before it a read catches it changing
 
     VdpMd();
 
@@ -70,6 +71,7 @@ public:
     uint16_t readStatus(int lineClock);
     // H/V counter for the current position: `lineClock` master clocks into the line.
     uint16_t readHV(int lineClock) const;
+    uint16_t counters(int lineClock) const;  // the HV counter, with no latch
     int counterLine(int lineClock) const;  // the line the V counter is on
 
     // Called by the scheduler.
@@ -186,7 +188,8 @@ private:
     void cacheColors();
     uint32_t color(int index, MdShade shade) const;
     // A byte into VRAM; `addr` keeps A16, which the sprite table cache compares too.
-    void writeVram(uint32_t addr, uint8_t value);
+    // bothHalves: the byte reaches the sprite table cache on both halves of its word.
+    void writeVram(uint32_t addr, uint8_t value, bool bothHalves = false);
 
     // Line rendering helpers.
     struct Cell {

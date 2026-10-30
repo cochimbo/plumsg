@@ -227,12 +227,15 @@ void VdpMd::storeWord(uint8_t code, uint32_t addr, uint16_t value) {
     }
 }
 
-void VdpMd::writeVram(uint32_t addr, uint8_t value) {
+void VdpMd::writeVram(uint32_t addr, uint8_t value, bool bothHalves) {
     vram_[addr & 0xFFFF] = value;
     // H40 tables start at a multiple of $400 (register 5's bit 0 is ignored), H32 at $200.
     const uint32_t mask = h40() ? 0x1FC00 : 0x1FE00;
-    if ((addr & mask) == ((static_cast<uint32_t>(regs_[5]) << 9) & mask) && !(addr & 4))
-        satCache_[((addr >> 1) & (h40() ? 0x1FCu : 0xFCu)) | (addr & 3)] = value;  // by sprite number
+    if ((addr & mask) == ((static_cast<uint32_t>(regs_[5]) << 9) & mask) && !(addr & 4)) {
+        const uint32_t i = ((addr >> 1) & (h40() ? 0x1FCu : 0xFCu)) | (addr & 3);  // by sprite number
+        satCache_[i] = value;
+        if (bothHalves) satCache_[i ^ 1] = value;
+    }
 }
 
 void VdpMd::reloadSatCache() {
@@ -285,7 +288,10 @@ void VdpMd::slot() {
             return;
         }
         copyRead_ = false;
-        writeVram((addr_ ^ 1) & 0x1FFFF, copyByte_);
+        // The sprite table cache takes each byte on both halves of its word, so the last
+        // one copied into a word (the high one, going up) is in both (misc_test's "VDP
+        // sprites VRAM-VRAM DMA glitch").
+        writeVram((addr_ ^ 1) & 0x1FFFF, copyByte_, true);
         dmaSource_ = (dmaSource_ + 1) & 0xFFFF;
         addr_ = (addr_ + regs_[15]) & 0x1FFFF;
         if (--dmaLeft_ == 0) finishDma();
@@ -506,6 +512,16 @@ uint16_t VdpMd::readStatus(int lineClock, uint64_t clock) {
 
 uint16_t VdpMd::readHV(int lineClock) const {
     if ((regs_[0] & 0x02) || gunLatched_) return hvLatch_;
+    uint16_t hv = counters(lineClock);
+    // Read just as the V counter counts up, it is caught half way: the bits that go to 0
+    // already have, those that go to 1 not yet (misc_test's "VDP VCOUNTER corruption").
+    const int at = lineClock % kMasterPerLine;
+    if (at >= kVcountClocks - kVcountGlitchClocks && at < kVcountClocks)
+        hv &= static_cast<uint16_t>(counters(lineClock - at + kVcountClocks) | 0x00FF);
+    return hv;
+}
+
+uint16_t VdpMd::counters(int lineClock) const {
     int v = counterLine(lineClock);
     const bool v30 = activeLines() == 240;
     if (pal_) {
