@@ -52,13 +52,17 @@ public:
     // degrees towards the front.
     void setConsoleModel(ConsoleModel which, const GltfModel& model, float width, float turn, const float slot[3],
                          const float* led = nullptr, float ledTilt = 0);
-    // Draws the Mega Drive's cartridges with `model` (a glTF model of one, front towards
-    // +z, top up), stretched to their real size; `labelArea` and `pictureArea` (u0, v0, u1,
-    // v1) are where its texture has the label and the picture in it, which a game's label
-    // scan or cover replaces.
-    void setCartridgeModel(const GltfModel& model, const float labelArea[4], const float pictureArea[4]);
-    // Loads the consoles' models that plumsg knows how to place (megadrive.glb), from the
-    // first of `folders` that has each. Those it cannot read keep the built-in model.
+    // Draws the system's cartridges with `model` (a glTF model of one), turned `turnX` then
+    // `turnZ` degrees to stand with its label to the front (+z), stretched to their real
+    // size; `labelArea` and `pictureArea` (u0, v0, u1, v1) are where its texture has the
+    // label and the picture in it, which a game's label scan or cover replaces, the label
+    // turned `labelTurn` quarter turns there; `pictureAspect` is the picture's width / height,
+    // and a cover shows there its part `pictureMiddle` of the way down.
+    void setCartridgeModel(ConsoleSystem system, const GltfModel& model, float turnX, float turnZ, const float labelArea[4],
+                           const float pictureArea[4], int labelTurn, float pictureAspect, float pictureMiddle);
+    // Loads the consoles' and cartridges' models that plumsg knows how to place
+    // (megadrive.glb, mastersystem.glb and their cartridges), from the first of `folders`
+    // that has each. Those it cannot read keep the built-in model.
     void loadConsoleModels(const std::vector<std::string>& folders);
     BoxShelf(const BoxShelf&) = delete;
     BoxShelf& operator=(const BoxShelf&) = delete;
@@ -112,7 +116,7 @@ private:
         std::array<float, 4> texRect{0, 0, 1, 1};  // the part of it shown (u0, v0, u1, v1)
         bool cylinder = false;
         int mesh = -1;        // a console or a cartridge's shell instead (meshFirst_)
-        int custom = -1;      // or a console's own model (custom_), or the cartridge's (kCartCustom)
+        int custom = -1;      // or a console's own model (custom_), or a cartridge's (kCartCustom + system)
         unsigned int label = 0;  // on a cartridge's own model: the game's label, over its own
         std::array<float, 4> labelRect{0, 0, 1, 1};  // the part of `label` shown
         bool labelWhole = false;  // a scan of the whole label (else art for its picture)
@@ -163,10 +167,12 @@ private:
         float led[3] = {0, 0, 0}, ledTilt = 0;
         // A cartridge's: where its label is in its texture, all of it and its picture.
         float labelArea[4] = {0, 0, 0, 0}, pictureArea[4] = {0, 0, 0, 0};
+        int labelTurn = 0;
+        float pictureAspect = 1, pictureMiddle = 0.5f;
     };
-    // The consoles' (by ConsoleModel), then the Mega Drive cartridge's.
+    // The consoles' (by ConsoleModel), then the cartridges' (by ConsoleSystem).
     static constexpr int kCartCustom = static_cast<int>(ConsoleModel::Count);
-    Custom custom_[kCartCustom + 1];
+    Custom custom_[kCartCustom + kSystemCount];
     void upload(Custom& c, const GltfModel& model);
     gl::GLuint fbo_ = 0, colour_ = 0, depth_ = 0;
     int width_ = 0, height_ = 0;

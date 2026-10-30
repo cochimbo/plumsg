@@ -3,6 +3,12 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## Unreleased
+
+- The 3D shelf's Master System is a real 3D model too, with its two pads in front, plugged in, and
+  its own cartridge wearing each game's label: "Sega Master System" by dark_igorek
+  (CC BY 4.0).
+
 ## 0.1.0-beta.8
 
 - **The library's 3D shelf** ("Cajas 3D", next to Cuadrícula and Lista): the games'
