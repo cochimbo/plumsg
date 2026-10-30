@@ -48,6 +48,10 @@ public:
     // At most about a machine cycle (7 Z80 clocks) between BUSREQ and the Z80 letting go.
     static constexpr uint64_t kZ80BusGrantDelay = 105;
     static constexpr int kZ80VdpDelay = 38;
+    // And the 68000 loses its bus to each of those bank accesses (misc_test's "M68K delay
+    // on Z80 ROM read").
+    static constexpr int kM68kBankStall = 10 * 7;
+    static constexpr int kM68kZ80AreaWait = 7;  // a 68000 access to the Z80's RAM or YM2612
 
     MegaDrive();
     MegaDrive(const MegaDrive&) = delete;
@@ -268,6 +272,7 @@ private:
     // Till when a DMA from 68000 memory holds the 68000's bus: the Z80's bank waits for it.
     uint64_t dmaBusUntil_ = 0;
     uint64_t z80BusGrantAt_ = 0;  // when a running Z80 lets go of its bus after BUSREQ
+    uint64_t m68kBusStall_ = 0;   // master clocks the Z80's bank accesses have taken from the 68000
 
     Region region_ = Region::Auto;
     Region effectiveRegion_ = Region::UsaNtsc;
@@ -283,10 +288,11 @@ private:
     uint64_t z80Clock_ = 0;
     uint64_t psgClock_ = 0;
     int psgRemainder_ = 0;     // master clocks not yet worth a PSG cycle
-    int refreshClocks_ = 0;    // master clocks the 68000 has run since the last refresh
+    int refreshClocks_ = 0;    // master clocks since the last DRAM refresh
+    bool refreshAfterFetch_ = false;  // a refresh asked for in the 68000's last fetch, not done yet
     int freeAccesses_ = 0;     // VDP and I/O accesses in the 68000's instruction under way
-    static constexpr int kRefreshEvery = 126 * 7;  // 126 cycles running, then
-    static constexpr int kRefreshStall = 2 * 7;    // 2 waiting
+    static constexpr int kRefreshEvery = 128 * 7;  // one every 128 cycles,
+    static constexpr int kRefreshStall = 2 * 7;    // 2 of them on the bus
     int overclock_ = 100;      // the 68000's speed, percent of the real one
     uint64_t frames_ = 0;
     std::vector<int16_t> psgBuffer_;
