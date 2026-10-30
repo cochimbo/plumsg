@@ -637,7 +637,9 @@ by synthetic worlds (mesh and textures by Jon Blenky), under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with smaller textures
 (`assets/models/CREDITS.txt`), and its cartridge
 ["Sonic 2 Mega Drive Cartridge"](https://sketchfab.com/3d-models/sonic-2-mega-drive-cartridge-4c453f8527384c718f652a9f04067119)
-by Naser, also CC BY 4.0. The 32X and Mega CD were
+by Naser, also CC BY 4.0; the Master System, its pads and cartridge are
+["Sega Master System"](https://sketchfab.com/3d-models/sega-master-system-0ec998c9b9de4e7f956cab56bbca3c0f)
+by dark_igorek, CC BY 4.0. The 32X and Mega CD were
 written using Sega's documentation and [ares](https://github.com/ares-emulator/ares)
 (ISC) code as a reference. The 240p Test Suite in `tests/240p/` is GPL v2 and its SGDK
 library LGPL v3, with their source next to it. Cover art and screenshots come from

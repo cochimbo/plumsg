@@ -68,6 +68,7 @@ uniform sampler2D uLabel;
 uniform int uHasLabel;
 uniform vec4 uLabelArea;
 uniform vec4 uLabelRect;
+uniform int uLabelTurn;  // quarter turns of the label in the model's texture
 uniform vec3 uColour;
 uniform int uTexFaces;
 uniform vec4 uTexRect;
@@ -98,6 +99,7 @@ void main() {
     // A game's label printed over a cartridge model's own.
     if (uHasLabel == 1 && all(greaterThanEqual(vUv, uLabelArea.xy)) && all(lessThanEqual(vUv, uLabelArea.zw))) {
         vec2 t = (vUv - uLabelArea.xy) / (uLabelArea.zw - uLabelArea.xy);
+        for (int i = 0; i < uLabelTurn; ++i) t = vec2(t.y, 1.0 - t.x);
         base = texture(uLabel, mix(uLabelRect.xy, uLabelRect.zw, vec2(t.x, 1.0 - t.y))).rgb;
     }
     vec3 n = normalize(vNormal);
@@ -155,6 +157,12 @@ Mat4 rotateY(float degrees) {
 Mat4 rotateX(float degrees) {
     const float c = std::cos(degrees * kRad), s = std::sin(degrees * kRad);
     return {1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1};
+}
+
+// Turns +x towards +y for positive degrees.
+Mat4 rotateZ(float degrees) {
+    const float c = std::cos(degrees * kRad), s = std::sin(degrees * kRad);
+    return {c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 }
 
 Mat4 perspective(float fovY, float aspect, float zNear, float zFar) {
@@ -311,55 +319,97 @@ struct ModelFile {
     const char* file;
     float width, turn;  // 13.5 cm = 1
     float slot[3];
-    float led[3], ledTilt;
+    const float* led;   // its power light, if the model shows where (and its tilt)
+    float ledTilt;
+    const float* box;   // the console's own bounds in the file, when it has more (its pads)
 };
-// The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the dome,
-// its power light on the plate in front of it.
+const float kMegaDriveLed[3] = {0.206f, 0.415f, 0.42f};
+// The Master System by dark_igorek, CC BY 4.0, with its two pads in front (in metres).
+const float kMasterSystemBox[6] = {-0.184f, 0.0f, -0.091f, 0.184f, 0.07f, 0.085f};
 const ModelFile kModelFiles[] = {
-    {ConsoleModel::MegaDrive, "megadrive.glb", 278.0f / 135.0f, 0.0f, {0.206f, 0.43f, -0.306f}, {0.206f, 0.415f, 0.42f}, 12.9f},
+    // The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the
+    // dome, its power light on the plate in front of it.
+    {ConsoleModel::MegaDrive, "megadrive.glb", 278.0f / 135.0f, 0.0f, {0.206f, 0.43f, -0.306f}, kMegaDriveLed, 12.9f, nullptr},
+    {ConsoleModel::MasterSystem, "mastersystem.glb", 365.0f / 135.0f, 0.0f, {ConsoleLayout::kSmsSlotX, ConsoleLayout::kSmsSlotY,
+     ConsoleLayout::kSmsSlotZ}, nullptr, 0.0f, kMasterSystemBox},
 };
 
-// The Mega Drive cartridge by Naser, CC BY 4.0: where its texture has the label (which a
-// scan replaces) and the picture and title above the "MEGA DRIVE" band of its European
-// label (which a cover replaces).
-constexpr const char* kCartridgeFile = "megadrive-cartridge.glb";
-const float kCartridgeLabel[4] = {0.125f, 0.617f, 0.623f, 0.967f};
-const float kCartridgePicture[4] = {0.125f, 0.662f, 0.623f, 0.967f};
+// The cartridges' models: how to turn them to stand with the label to the front, where
+// their texture has the label (which a scan replaces) and the picture in it (which a
+// cover replaces), the label's quarter turns in the texture and the picture's shape.
+struct CartridgeFile {
+    ConsoleSystem system;
+    const char* file;
+    float turnX, turnZ;
+    float label[4], picture[4];
+    int labelTurn;
+    float pictureAspect;  // width / height
+    float pictureMiddle;  // how far down the cover the part shown on it is centred
+};
+const CartridgeFile kCartridgeFiles[] = {
+    // The Mega Drive's by Naser, CC BY 4.0: the picture and title above the "MEGA DRIVE"
+    // band of its European label.
+    {ConsoleSystem::MegaDrive, "megadrive-cartridge.glb", 0, 0, {0.125f, 0.617f, 0.623f, 0.967f}, {0.125f, 0.662f, 0.623f, 0.967f}, 0, 1.8f, 0.45f},
+    // The Master System's, from dark_igorek's model: lying on its back, its label (R-Type's)
+    // turned on its side in the texture (whose coordinates there run from 1 to 2). The
+    // label is a strip along the top, where a cover's title goes.
+    {ConsoleSystem::MasterSystem, "mastersystem-cartridge.glb", 90, 0, {1.473f, 0.0f, 1.552f, 0.40f}, {1.473f, 0.0f, 1.552f, 0.40f}, 1, 4.5f, 0.12f},
+};
 
 }  // namespace
 
 void BoxShelf::loadConsoleModels(const std::vector<std::string>& folders) {
-    for (const std::string& folder : folders) {
-        GltfModel model;
-        std::string error;
-        if (!loadGltf(folder + kCartridgeFile, model, &error)) continue;
-        setCartridgeModel(model, kCartridgeLabel, kCartridgePicture);
-        break;
+    for (const CartridgeFile& f : kCartridgeFiles) {
+        for (const std::string& folder : folders) {
+            GltfModel model;
+            std::string error;
+            if (!loadGltf(folder + f.file, model, &error)) continue;
+            setCartridgeModel(f.system, model, f.turnX, f.turnZ, f.label, f.picture, f.labelTurn, f.pictureAspect, f.pictureMiddle);
+            break;
+        }
     }
     for (const ModelFile& m : kModelFiles) {
         for (const std::string& folder : folders) {
             GltfModel model;
             std::string error;
             if (!loadGltf(folder + m.file, model, &error)) continue;
+            if (m.box) {
+                std::copy(m.box, m.box + 3, model.min);
+                std::copy(m.box + 3, m.box + 6, model.max);
+            }
             setConsoleModel(m.model, model, m.width, m.turn, m.slot, m.led, m.ledTilt);
             break;
         }
     }
 }
 
-void BoxShelf::setCartridgeModel(const GltfModel& model, const float labelArea[4], const float pictureArea[4]) {
-    Custom& c = custom_[kCartCustom];
+void BoxShelf::setCartridgeModel(ConsoleSystem system, const GltfModel& model, float turnX, float turnZ, const float labelArea[4],
+                                 const float pictureArea[4], int labelTurn, float pictureAspect, float pictureMiddle) {
+    Custom& c = custom_[kCartCustom + static_cast<int>(system)];
     upload(c, model);
-    // Centred and stretched to the cartridge's real size.
-    const CartridgeShape shape = cartridgeShape(ConsoleSystem::MegaDrive);
+    // Turned to stand, then centred and stretched to the cartridge's real size.
+    const Mat4 turn = rotateZ(turnZ) * rotateX(turnX);
+    float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
+    for (int k = 0; k < 8; ++k) {
+        const float p[3] = {(k & 1) ? model.max[0] : model.min[0], (k & 2) ? model.max[1] : model.min[1], (k & 4) ? model.max[2] : model.min[2]};
+        for (int i = 0; i < 3; ++i) {
+            const float v = turn[i] * p[0] + turn[4 + i] * p[1] + turn[8 + i] * p[2];
+            lo[i] = std::min(lo[i], v);
+            hi[i] = std::max(hi[i], v);
+        }
+    }
+    const CartridgeShape shape = cartridgeShape(system);
     float size[3], mid[3];
     for (int i = 0; i < 3; ++i) {
-        size[i] = std::max(model.max[i] - model.min[i], 1e-6f);
-        mid[i] = (model.min[i] + model.max[i]) / 2;
+        size[i] = std::max(hi[i] - lo[i], 1e-6f);
+        mid[i] = (lo[i] + hi[i]) / 2;
     }
-    c.fit = scale(shape.w / size[0], shape.h / size[1], shape.d / size[2]) * translate(-mid[0], -mid[1], -mid[2]);
+    c.fit = scale(shape.w / size[0], shape.h / size[1], shape.d / size[2]) * translate(-mid[0], -mid[1], -mid[2]) * turn;
     std::copy(labelArea, labelArea + 4, c.labelArea);
     std::copy(pictureArea, pictureArea + 4, c.pictureArea);
+    c.labelTurn = labelTurn;
+    c.pictureAspect = pictureAspect;
+    c.pictureMiddle = pictureMiddle;
 }
 
 BoxShelf::~BoxShelf() {
@@ -680,22 +730,23 @@ void BoxShelf::addCartridge(const Item& item, const Mat4& place) {
         return;
     }
     const CartridgeShape c = cartridgeShape(item.system);
-    // A Mega Drive cartridge's own model, with the game's label over the one it has.
-    const Custom& own = custom_[kCartCustom];
-    if (item.system == ConsoleSystem::MegaDrive && own.vao) {
+    // A cartridge's own model, with the game's label over the one it has.
+    const int ownIndex = kCartCustom + static_cast<int>(item.system);
+    const Custom& own = custom_[ownIndex];
+    if (own.vao) {
         p.model = place * own.fit;
         p.colour = {1, 1, 1};
         p.shine = 0.35f;
-        p.custom = kCartCustom;
+        p.custom = ownIndex;
         p.label = art;
         p.labelRect = p.texRect;
         p.labelWhole = item.label != 0;
-        // A cover's middle, cut to the picture's shape (about 95 x 53 mm on the cartridge).
+        // A cover's middle, cut to the picture's shape.
         if (!p.labelWhole && item.width > 0 && item.height > 0) {
             std::array<float, 4>& r = p.labelRect;
             const float w = (r[2] - r[0]) * static_cast<float>(item.width);
-            const float h = std::min(w / 1.8f / static_cast<float>(item.height), r[3] - r[1]);
-            const float mid = r[1] + (r[3] - r[1]) * 0.45f;
+            const float h = std::min(w / own.pictureAspect / static_cast<float>(item.height), r[3] - r[1]);
+            const float mid = r[1] + (r[3] - r[1]) * own.pictureMiddle;
             r[1] = std::clamp(mid - h / 2, r[1], r[3] - h);
             r[3] = r[1] + h;
         }
@@ -833,7 +884,7 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
         }
         case ConsoleSystem::MasterSystem:
             mesh(ConsoleModel::MasterSystem, identity());
-            led(L::kSmsLed, false);
+            if (!custom_[static_cast<int>(ConsoleModel::MasterSystem)].vao) led(L::kSmsLed, false);
             return translate(L::kSmsSlotX, kFloorY + L::kSmsSlotY + c.h / 2 - c.insert, kConsoleZ + L::kSmsSlotZ);
         case ConsoleSystem::MegaCD: {
             // The Mega-CD under the Mega Drive, its tray sliding out of the front.
@@ -1064,6 +1115,7 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     const gl::GLint uHasLabel = gl::GetUniformLocation(program_, "uHasLabel");
     const gl::GLint uLabelArea = gl::GetUniformLocation(program_, "uLabelArea");
     const gl::GLint uLabelRect = gl::GetUniformLocation(program_, "uLabelRect");
+    const gl::GLint uLabelTurn = gl::GetUniformLocation(program_, "uLabelTurn");
     const gl::GLint uHasNormals = gl::GetUniformLocation(program_, "uHasNormals");
     gl::UniformMatrix4fv(gl::GetUniformLocation(program_, "uViewProj"), 1, gl::FALSE_, viewProj_.data());
     gl::Uniform3f(gl::GetUniformLocation(program_, "uEye"), eye_.x, eye_.y, eye_.z);
@@ -1097,6 +1149,7 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
                 gl::Uniform1i(uHasLabel, 1);
                 gl::Uniform4f(uLabelArea, area[0], area[1], area[2], area[3]);
                 gl::Uniform4f(uLabelRect, p.labelRect[0], p.labelRect[1], p.labelRect[2], p.labelRect[3]);
+                gl::Uniform1i(uLabelTurn, c.labelTurn);
                 gl::ActiveTexture(gl::TEXTURE0 + 2);
                 gl::BindTexture(gl::TEXTURE_2D, p.label);
                 gl::ActiveTexture(gl::TEXTURE0);
