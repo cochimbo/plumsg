@@ -3369,6 +3369,21 @@ void testGameGearCartridges() {
               frame->info[17 * VideoFrameMd::kMaxWidth + 42].layer != MdLayer::Sprite &&
               frame->info[18 * VideoFrameMd::kMaxWidth + 42].layer == MdLayer::Sprite,
           "SMS VDP: a sprite size changed late in a line is for the line after the next");
+
+    // Against its H counter the Game Gear's line starts later (VDPTEST "GG 2 ASIC", issue
+    // #76): the V counter changes a cycle into the line, and the latched H counter is ahead.
+    auto counters = [&](bool gameGear, int cycle) {
+        MasterSystem m(cart, ram, *frame, gameGear);
+        m.powerOn();
+        for (int line = 0; line <= 10; ++line) m.vdp().startLine(line, false);
+        m.out(0x3F, 0x55, cycle);
+        m.out(0x3F, 0xFF, cycle);  // TH from low to high latches the H counter
+        return std::make_pair(m.in(0x7E, cycle), m.in(0x7F, cycle));
+    };
+    check(counters(false, 0) == std::make_pair<uint8_t, uint8_t>(10, VdpSms::hcounterAt(0)) &&
+              counters(true, 0) == std::make_pair<uint8_t, uint8_t>(9, VdpSms::hcounterAt(VdpSms::kGgHcounterLead)) &&
+              counters(true, 1).first == 10 && counters(true, 100).second == VdpSms::hcounterAt(100 + VdpSms::kGgHcounterLead),
+          "Game Gear VDP: the V counter changes a cycle later, the H counter latched 2 cycles ahead");
 }
 
 void testSmsCheats() {

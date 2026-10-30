@@ -130,17 +130,22 @@ int VdpSms::activeLines() const {
     return 192;
 }
 
-uint8_t VdpSms::vcounter() const {
+uint8_t VdpSms::readVcounter(int cycle) const {
+    if (gameGear_ && cycle < kGgVcounterDelay) return vcounterOf(line_ > 0 ? line_ - 1 : linesPerFrame() - 1);
+    return vcounter();
+}
+
+uint8_t VdpSms::vcounterOf(int line) const {
     // The counter jumps back once a frame so that it runs from 0 to 255 and on.
     const int active = activeLines();
-    int v = line_;
+    int v = line;
     if (!pal_) {
-        if (active == 192 && line_ > 0xDA) v = line_ - 6;
-        else if (active == 224 && line_ > 0xEA) v = line_ - 6;
+        if (active == 192 && line > 0xDA) v = line - 6;
+        else if (active == 224 && line > 0xEA) v = line - 6;
     } else {
-        if (active == 192 && line_ > 0xF2) v = line_ - 57;
-        else if (active == 224 && line_ > 0x102) v = line_ - 57;
-        else if (active == 240 && line_ > 0x10A) v = line_ - 57;
+        if (active == 192 && line > 0xF2) v = line - 57;
+        else if (active == 224 && line > 0x102) v = line - 57;
+        else if (active == 240 && line > 0x10A) v = line - 57;
     }
     return static_cast<uint8_t>(v);
 }
