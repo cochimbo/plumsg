@@ -350,23 +350,8 @@ void GlTextureRenderer::draw(const VideoFrameMd& frame, const Viewport& area) {
     compose(frame, pixels_.data());
     upload(texture_, pixels_.data(), fw, fh, options_.smooth);
 
-    // Size of the picture in "screen pixels": lines are one unit high (two interlaced
-    // lines share one), and pixels are as wide as the TV makes them.
-    const float lines = frame.interlaced ? fh / 2.0f : static_cast<float>(fh);
-    const float pictureW = static_cast<float>(fw) * pixelAspect(frame, options_.squarePixels);
-    int w = area.width, h = area.height;
-    if (options_.scale == ScaleMode::Integer) {
-        // Largest integer scale of the lines that fits, centred, to keep them sharp.
-        const int scale = std::max(1, std::min(static_cast<int>(area.width / pictureW), static_cast<int>(area.height / lines)));
-        w = static_cast<int>(pictureW * static_cast<float>(scale) + 0.5f);
-        h = static_cast<int>(lines) * scale;
-    } else if (options_.scale == ScaleMode::Fit) {
-        if (static_cast<float>(area.width) * lines > static_cast<float>(area.height) * pictureW)
-            w = static_cast<int>(static_cast<float>(area.height) * pictureW / lines);
-        else
-            h = static_cast<int>(static_cast<float>(area.width) * lines / pictureW);
-    }
-    const Viewport picture{area.x + (area.width - w) / 2, area.y + (area.height - h) / 2, w, h};
+    const Viewport picture = pictureArea(frame, area, options_);
+    const int w = picture.width, h = picture.height;
     gl::Viewport(picture.x, picture.y, picture.width, picture.height);
     if (filterable_ && options_.upscale != Upscale2D::None && upscaler_.draw(options_.upscale, texture_, fw, fh, picture))
         return;

@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iterator>
 
@@ -15,11 +16,13 @@
 #include "game_options.h"
 #include "languages.h"
 #include "library_names.h"
+#include "theme.h"
 #include "icon_png.h"
 #include "logo_png.h"
 #include "../core/i18n.h"
 #include "../core/system.h"
 #include "../net/udp.h"
+#include "../render/box_shelf.h"
 #include "../render/gl.h"
 
 #define STBI_NO_STDIO
@@ -129,7 +132,26 @@ constexpr const char* kNoPadTip =
        "Sunday Night NFL pone entonces al ordenador de jugador 2 en vez de esperar al mando 2\n"
        "(por ejemplo, en el sorteo de la moneda). En una partida en red el mando 2 se enchufa.");
 
+constexpr const char* kLightGunTip =
+    N_("Una pistola de luz en el segundo puerto, en lugar del mando 2: la Menacer de Sega (T2: The\n"
+       "Arcade Game, Menacer 6-Game Cartridge...) o la Justifier de Konami (Lethal Enforcers I y II,\n"
+       "Snatcher), que tiene una segunda pistola para el jugador 2. Se apunta con una mira en\n"
+       "pantalla, movida con el ratón o con el stick izquierdo (o la cruceta) del mando.\n"
+       "Gatillo: clic izquierdo o A. Disparar fuera de la pantalla (recargar): clic derecho o C.\n"
+       "Start: clic central o Start. Botones A y B de la Menacer: B y X del mando.\n"
+       "Solo los juegos de Mega Drive y Mega CD; en una partida en red se enchufa un mando.");
+
 // The combo for the overclock; `percent` takes the chosen value.
+// An on/off option as a "Sí" / "No" list, so a row of the game's options has no second
+// box next to the one that says whether the game has its own value.
+bool yesNo(const char* label, bool& value) {
+    static const char* const names[] = {N_("No"), N_("Sí")};
+    int i = value ? 1 : 0;
+    if (!comboTr(label, &i, names, 2)) return false;
+    value = i == 1;
+    return true;
+}
+
 bool overclockCombo(const char* label, int& percent) {
     int i = 0;
     for (int k = 0; k < static_cast<int>(std::size(kOverclocks)); ++k)
@@ -252,30 +274,29 @@ void Ui::buildFonts() {
     fontRanges_.clear();
     builder.BuildRanges(&fontRanges_);
 #ifdef _WIN32
-    const char* const mainFont = "C:\\Windows\\Fonts\\segoeui.ttf";
     // Japanese, Chinese, Korean and symbols, in that order: the first one with a character gives it.
     const char* const fallbacks[] = {"C:\\Windows\\Fonts\\YuGothM.ttc", "C:\\Windows\\Fonts\\meiryo.ttc",
                                      "C:\\Windows\\Fonts\\msgothic.ttc", "C:\\Windows\\Fonts\\msyh.ttc",
                                      "C:\\Windows\\Fonts\\malgun.ttf", "C:\\Windows\\Fonts\\seguisym.ttf"};
 #else
-    const char* const mainFont = nullptr;  // the built-in font
     const char* const fallbacks[] = {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
                                      "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
                                      "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
                                      "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"};
 #endif
-    float size = 13.0f;
-    if (mainFont && fileExists(mainFont)) {
-        size = 18.0f;
-        io.Fonts->AddFontFromFileTTF(mainFont, size, nullptr, fontRanges_.Data);
-    } else {
-        io.Fonts->AddFontDefault();
-    }
-    if (fontExtra_.empty()) return;
-    ImFontConfig merge;
-    merge.MergeMode = true;
-    for (const char* path : fallbacks)
-        if (fileExists(path)) io.Fonts->AddFontFromFileTTF(path, size, &merge, fontRanges_.Data);
+    const float size = 18.0f;
+    // The theme's two fonts, each with the other scripts merged into it.
+    auto merge = [&] {
+        if (fontExtra_.empty()) return;
+        ImFontConfig cfg;
+        cfg.MergeMode = true;
+        for (const char* path : fallbacks)
+            if (fileExists(path)) io.Fonts->AddFontFromFileTTF(path, size, &cfg, fontRanges_.Data);
+    };
+    theme::addBodyFont(size, fontRanges_.Data);
+    merge();
+    theme::addTitleFont(size, fontRanges_.Data);
+    merge();
 }
 
 // Asks for the characters of `text` (UTF-8) that the font does not have yet; the atlas
@@ -303,16 +324,19 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;  // window layout is not worth a second settings file
     ImGui::StyleColorsDark();
-    ImGui::GetStyle().WindowRounding = 4.0f;
+    theme::apply();
     buildFonts();
     ImGui_ImplSDL2_InitForOpenGL(window_, context);
     ImGui_ImplOpenGL3_Init("#version 330 core");
     loadLogo();
+    applyScraperSettings();
 }
 
 Ui::~Ui() {
+    shelf_.reset();
     library_.clearTextures();
     gameInfo_.clearTextures();
+    scraper_.clearTextures();
     if (logoTexture_) gl::DeleteTextures(1, &logoTexture_);
     if (iconTexture_) gl::DeleteTextures(1, &iconTexture_);
     ImGui_ImplOpenGL3_Shutdown();
@@ -559,8 +583,11 @@ UiActions Ui::frame(const UiState& state) {
     if (showGameOptions_) drawGameOptions(state, out);
     library_.update();
     gameInfo_.update();
+    scraper_.update();
+    for (ScreenScraper::ForLibrary f; scraper_.takeForLibrary(f);) library_.useDownloaded(f.path, f.cover, f.label, f.replace);
     if (showLibrary_) drawLibrary(out);
     if (showCoverSearch_) drawCoverSearch();
+    if (showMedia_) drawMedia(out);
     if (showBios_) drawBios(out);
     if (showNetplay_) drawNetplay(state, out);
     if (achievements_ && achievements_->drawWindows()) out.achievementsChanged = out.settingsChanged = true;
@@ -618,8 +645,37 @@ UiActions Ui::frame(const UiState& state) {
         }
     }
     drawOverlays(state);
+    drawCrosshairs(state);
     hideIdleCursor(state);
     return out;
+}
+
+// Each light gun's crosshair over the game, behind the windows: a ring with a cross,
+// outlined in black to be seen on any picture, in the gun's colour (the Justifier's
+// blue and pink). Off the picture it waits at the edge, faded.
+void Ui::drawCrosshairs(const UiState& state) {
+    ImDrawList* draw = ImGui::GetBackgroundDrawList();
+    const float r = std::max(8.0f, ImGui::GetFontSize() * 0.75f);
+    const ImVec2 lo = ImGui::GetMainViewport()->Pos;
+    const ImVec2 hi(lo.x + ImGui::GetMainViewport()->Size.x, lo.y + ImGui::GetMainViewport()->Size.y);
+    for (const UiState::Crosshair& c : state.crosshairs) {
+        const ImVec2 p(std::clamp(c.x, lo.x, hi.x), std::clamp(c.y, lo.y, hi.y));
+        const int alpha = c.onPicture ? 255 : 90;
+        const ImU32 colour = c.gun == 0 ? IM_COL32(80, 170, 255, alpha) : IM_COL32(255, 105, 180, alpha);
+        const ImU32 outline = IM_COL32(0, 0, 0, alpha * 3 / 4);
+        for (int pass = 0; pass < 2; ++pass) {
+            const ImU32 col = pass == 0 ? outline : colour;
+            const float t = pass == 0 ? 4.0f : 2.0f;
+            draw->AddCircle(p, r, col, 0, t);
+            draw->AddLine(ImVec2(p.x - r * 1.5f, p.y), ImVec2(p.x - r * 0.4f, p.y), col, t);
+            draw->AddLine(ImVec2(p.x + r * 0.4f, p.y), ImVec2(p.x + r * 1.5f, p.y), col, t);
+            draw->AddLine(ImVec2(p.x, p.y - r * 1.5f), ImVec2(p.x, p.y - r * 0.4f), col, t);
+            draw->AddLine(ImVec2(p.x, p.y + r * 0.4f), ImVec2(p.x, p.y + r * 1.5f), col, t);
+        }
+        draw->AddCircleFilled(p, 2.0f, colour);
+    }
+    // The pointer would hide the crosshair it is aiming.
+    if (state.hideMouse && !ImGui::GetIO().WantCaptureMouse) ImGui::SetMouseCursor(ImGuiMouseCursor_None);
 }
 
 // The backend reads the cursor ImGui asks for at the start of the next frame and hides
@@ -636,6 +692,7 @@ void Ui::hideIdleCursor(const UiState& state) {
 }
 
 void Ui::render() {
+    theme::decorateWindows();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
@@ -782,17 +839,22 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         for (int port = 0; port < 2; ++port) {
             ImGui::SeparatorText(port == 0 ? tr("Mando 1") : tr("Mando 2"));
             ImGui::PushID(port);
-            for (PadType t : {PadType::ThreeButton, PadType::SixButton, PadType::None}) {
-                if (t == PadType::None && port == 0) continue;
+            for (PadType t : {PadType::ThreeButton, PadType::SixButton, PadType::None, PadType::Menacer,
+                              PadType::Justifier}) {
+                if (t != PadType::ThreeButton && t != PadType::SixButton && port == 0) continue;
                 const char* name = t == PadType::ThreeButton ? tr("3 botones")
                                    : t == PadType::SixButton ? tr("6 botones")
-                                                             : tr("Sin mando");
+                                   : t == PadType::None      ? tr("Sin mando")
+                                   : t == PadType::Menacer   ? tr("Pistola Menacer")
+                                                             : tr("Pistola Justifier");
                 if (ImGui::MenuItem(name, nullptr, settings_.padType[static_cast<size_t>(port)] == t)) {
                     settings_.padType[static_cast<size_t>(port)] = t;
                     out.consoleChanged = out.settingsChanged = true;
                 }
                 if (t == PadType::None && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                     ImGui::SetTooltip("%s", tr(kNoPadTip));
+                if (isLightGun(t) && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip("%s", tr(kLightGunTip));
             }
             ImGui::PopID();
         }
@@ -1386,7 +1448,7 @@ void Ui::drawStateMenu(const UiState& state, UiActions& out) {
         ImGui::EndTabBar();
     }
     stateMenu_.tabChanged = false;
-    ImGui::TextDisabled("%s", tr("L1 / R1 (o Q / E): cambiar de pestaña   B / Esc: cerrar"));
+    theme::hint(tr("L1 / R1 (o Q / E): cambiar de pestaña   B / Esc: cerrar"));
     if (stateMenu_.tab == 0) drawStateSlots(state);
     else drawStateOptions(stateMenu_.tab, state, out);
     ImGui::End();
@@ -1394,7 +1456,7 @@ void Ui::drawStateMenu(const UiState& state, UiActions& out) {
 
 void Ui::drawStateSlots(const UiState& state) {
     if (!state.romLoaded) ImGui::TextDisabled("%s", tr("Abre una ROM para guardar estados."));
-    ImGui::TextDisabled("%s", tr("A / Intro: cargar   Y / Espacio: guardar"));
+    theme::hint(tr("A / Intro: cargar   Y / Espacio: guardar"));
     ImGui::Separator();
     ImGui::BeginChild("ranuras");
     const float thumbH = 56.0f;
@@ -1577,8 +1639,8 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
     const int count = static_cast<int>(options.size());
     stateMenu_.options = count;
     stateMenu_.option = std::clamp(stateMenu_.option, 0, std::max(0, count - 1));
-    ImGui::TextDisabled("%s", tab == StateMenu::kTabs - 1 ? tr("Arriba / abajo: elegir   A / Intro: hacerlo")
-                                                          : tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
+    theme::hint(tab == StateMenu::kTabs - 1 ? tr("Arriba / abajo: elegir   A / Intro: hacerlo")
+                                            : tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
     ImGui::Separator();
 
     // The pad's and the keyboard's changes, and the mouse's below, all to one option.
@@ -1870,6 +1932,7 @@ void Ui::toggleLibrary() {
     if (!showLibrary_) return;
     if (!library_.scanned() || library_.folders() != settings_.libraryFolders) rescanLibrary();
     libraryView_.scroll = true;
+    if (shelf_) shelf_->reset();
 }
 
 void Ui::rescanLibrary() {
@@ -1917,9 +1980,11 @@ std::vector<size_t> Ui::visibleGames() {
     return out;
 }
 
-void Ui::setLibraryList(bool list) {
-    if (settings_.libraryList == list) return;
-    settings_.libraryList = list;
+void Ui::setLibraryView(int view) {
+    if ((settings_.libraryBoxes ? 2 : settings_.libraryList ? 1 : 0) == view) return;
+    settings_.libraryList = view == 1;
+    settings_.libraryBoxes = view == 2;
+    if (shelf_) shelf_->reset();
     libraryView_.syncSort = true;
     libraryView_.scroll = true;
     pendingSave_ = true;
@@ -2008,11 +2073,22 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         libraryView_.scroll = true;
         libraryView_.tabChanged = true;
         pendingSave_ = true;
+        if (shelf_) shelf_->reset();
         return true;
     }
     if (action == View) {
-        setLibraryList(!settings_.libraryList);
+        setLibraryView(settings_.libraryBoxes ? 0 : settings_.libraryList ? 2 : 1);
         return true;
+    }
+    // In the 3D view A opens the chosen box and then takes its cartridge out, B closes
+    // it, and the chosen game stays while a box is open.
+    if (settings_.libraryBoxes && shelf_) {
+        if (action == Play) {
+            shelf_->activate();
+            return true;
+        }
+        if (action == Close && shelf_->back()) return true;
+        if (shelf_->busy() && action != Close && action != Search && action != Menu) return true;
     }
     const int count = static_cast<int>(visibleGames().size());
     const int cols = std::max(1, libraryView_.columns);
@@ -2114,6 +2190,27 @@ void Ui::drawLibrary(UiActions& out) {
                           "y las guarda en la carpeta covers de plumsg. También puedes poner tus\n"
                           "propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado."));
     ImGui::SameLine();
+    // Everything ScreenScraper has of the games it was not asked about yet.
+    if (scraper_.batchLeft() > 0) {
+        if (ImGui::Button(tr("Parar ScreenScraper"))) scraper_.cancelAll();
+    } else if (ImGui::Button(tr("Descargar de ScreenScraper"))) {
+        if (!scraper_.credentials().usable()) {
+            // Nothing can be asked without an account: its tab, for the first game.
+            if (!games.empty()) {
+                openMedia(0);
+                media_.tab = 3;
+            }
+        } else {
+            std::vector<ScreenScraper::Rom> roms;
+            for (const auto& g : games) roms.push_back({g.path, g.stem, g.title, g.tags, g.system});
+            scraper_.downloadAll(roms);
+        }
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Busca en ScreenScraper (internet) cada juego que aún no tenga sus medios: portada completa,\n"
+                                   "etiqueta del cartucho, capturas, logo... Las carátulas que ya hay se quedan, salvo\n"
+                                   "que ScreenScraper tenga la portada completa. Uno a uno, así que tarda un poco."));
+    ImGui::SameLine();
     if (ImGui::Button(tr("BIOS del Mega CD..."))) showBios_ = true;
     ImGui::SameLine();
     if (ImGui::Checkbox(tr("Abrir la biblioteca al empezar"), &settings_.libraryAtStart)) out.settingsChanged = true;
@@ -2151,10 +2248,15 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.selected = 0;
     // How the games are shown: a grid or a list, in what order, and with the panel or not.
     ImGui::SameLine();
-    if (ImGui::RadioButton(tr("Cuadrícula"), !settings_.libraryList)) setLibraryList(false);
+    const int libraryView = settings_.libraryBoxes ? 2 : settings_.libraryList ? 1 : 0;
+    if (ImGui::RadioButton(tr("Cuadrícula"), libraryView == 0)) setLibraryView(0);
     ImGui::SameLine();
-    if (ImGui::RadioButton(tr("Lista"), settings_.libraryList)) setLibraryList(true);
+    if (ImGui::RadioButton(tr("Lista"), libraryView == 1)) setLibraryView(1);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("Cambia de vista con V o con Select en el mando."));
+    ImGui::SameLine();
+    if (ImGui::RadioButton(tr("Cajas 3D"), libraryView == 2)) setLibraryView(2);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Las cajas de los juegos en 3D: ábrelas y lleva el cartucho a la consola para jugar."));
     ImGui::SameLine();
     ImGui::SetNextItemWidth(170);
     static const char* const sorts[Settings::kLibrarySorts] = {N_("Por título"), N_("Por consola"), N_("Por año"),
@@ -2189,8 +2291,24 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.selectedGame = visible[static_cast<size_t>(libraryView_.selected)];
     if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text(tr("%d juegos. %s"), static_cast<int>(visible.size()), library_.downloadStatus().c_str());
-    ImGui::TextDisabled("%s", tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-                        "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"));
+    if (const std::string ss = scraper_.batchStatus(); !ss.empty()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", ss.c_str());
+    }
+    // The covers' size, at the right end of that line: smaller ones fit more to a row.
+    if (libraryView == 0) {
+        const char* label = tr("Tamaño");
+        const float sliderW = 160.0f;
+        const float w = sliderW + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(label).x;
+        ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - w));
+        ImGui::SetNextItemWidth(sliderW);
+        ImGui::SliderInt(label, &settings_.libraryCoverWidth, Settings::kMinCoverWidth, Settings::kMaxCoverWidth, "",
+                         ImGuiSliderFlags_AlwaysClamp);
+        if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("El tamaño de las carátulas: más pequeñas caben más en cada fila."));
+    }
+    theme::hint(tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
+                   "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"));
     ImGui::Separator();
 
     if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd, .iso) en estas carpetas."));
@@ -2202,7 +2320,8 @@ void Ui::drawLibrary(UiActions& out) {
     const float full = ImGui::GetContentRegionAvail().x;
     const float panelW = settings_.libraryDetails ? std::clamp(full * 0.3f, 280.0f, 460.0f) : 0.0f;
     ImGui::BeginChild("juegos", ImVec2(panelW > 0 ? full - panelW - style.ItemSpacing.x : 0.0f, 0.0f));
-    if (settings_.libraryList) drawLibraryList(visible);
+    if (settings_.libraryBoxes) drawLibraryBoxes(visible);
+    else if (settings_.libraryList) drawLibraryList(visible);
     else drawLibraryGrid(visible);
     ImGui::EndChild();
     if (panelW > 0) {
@@ -2227,7 +2346,8 @@ void Ui::drawLibrary(UiActions& out) {
             ImGui::Separator();
             static const char* items[LibraryView::kItems] = {N_("Jugar"), N_("Trucos..."), N_("Opciones de este juego..."),
                                                              N_("Editor de instrumentos..."), N_("Buscar carátula..."),
-                                                             N_("Carátula desde imagen...")};
+                                                             N_("Carátula desde imagen..."), N_("Portada completa..."),
+                                                             N_("Etiqueta del cartucho..."), N_("Medios de ScreenScraper...")};
             int picked = libraryView_.menuAction;
             for (int i = 0; i < LibraryView::kItems; ++i)
                 if (ImGui::Selectable(tr(items[i]), libraryView_.menuItem == i, ImGuiSelectableFlags_NoAutoClosePopups)) picked = i;
@@ -2242,6 +2362,9 @@ void Ui::drawLibrary(UiActions& out) {
                     break;
                 case 4: openCoverSearch(visible[static_cast<size_t>(n)]); break;
                 case 5: chooseCoverImage(visible[static_cast<size_t>(n)]); break;
+                case 6: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Sleeve); break;
+                case 7: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Label); break;
+                case 8: openMedia(visible[static_cast<size_t>(n)]); break;
                 default: break;
             }
             if (picked >= 0) {
@@ -2281,7 +2404,7 @@ void Ui::libraryItem(bool clicked, int n) {
 
 void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
     const auto& games = library_.games();
-    const float coverW = 150.0f, coverH = 210.0f;
+    const float coverW = static_cast<float>(settings_.libraryCoverWidth), coverH = std::round(coverW * 1.4f);
     const ImGuiStyle& style = ImGui::GetStyle();
     const float textH = ImGui::GetTextLineHeight() * 2 + 4;
     const ImVec2 card(coverW + 12, coverH + textH + 12);
@@ -2289,6 +2412,8 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
     const int cols = std::max(1, static_cast<int>((avail + style.ItemSpacing.x) / (card.x + style.ItemSpacing.x)));
     libraryView_.columns = cols;
     ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImRect inner = ImGui::GetCurrentWindow()->InnerRect;
+    theme::boxGrid(inner.Min, inner.Max);
     for (int n = 0; n < static_cast<int>(visible.size()); ++n) {
         const Library::Game& g = games[visible[static_cast<size_t>(n)]];
         if (n % cols) ImGui::SameLine();
@@ -2304,15 +2429,19 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
         // The cover, fitted into its box; a plain box with the console's name if there is none.
         const ImVec2 box(pos.x + 6, pos.y + 6);
         if (g.texture && g.height > 0) {
-            float w = coverW, h = coverW * static_cast<float>(g.height) / static_cast<float>(g.width);
+            // Of a whole sleeve (back, spine and front), only the front.
+            const float u0 = BoxShelf::coverFront(g.width, g.height);
+            const float gw = static_cast<float>(g.width) * (1 - u0);
+            float w = coverW, h = coverW * static_cast<float>(g.height) / gw;
             if (h > coverH) {
                 h = coverH;
-                w = coverH * static_cast<float>(g.width) / static_cast<float>(g.height);
+                w = coverH * gw / static_cast<float>(g.height);
             }
             const ImVec2 a(box.x + (coverW - w) * 0.5f, box.y + (coverH - h));
-            draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h));
+            draw->AddImage(static_cast<ImTextureID>(g.texture), a, ImVec2(a.x + w, a.y + h), ImVec2(u0, 0), ImVec2(1, 1));
         } else {
-            draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(40, 44, 56, 255), 4.0f);
+            draw->AddRectFilled(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(0x15, 0x15, 0x17, 255));
+            draw->AddRect(box, ImVec2(box.x + coverW, box.y + coverH), IM_COL32(0x44, 0x44, 0x4B, 255));
             const char* label = g.cover == Library::Cover::Pending ? "..." : systemName(g.system);
             const ImVec2 size = ImGui::CalcTextSize(label);
             draw->AddText(ImVec2(box.x + (coverW - size.x) * 0.5f, box.y + (coverH - size.y) * 0.5f),
@@ -2331,13 +2460,88 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
             draw->AddText(ImVec2(b0.x + 4, b0.y + 2), IM_COL32(255, 255, 255, 255), badge);
         }
         if (selected)
-            draw->AddRect(ImVec2(pos.x + 2, pos.y + 2), ImVec2(pos.x + card.x - 2, pos.y + card.y - 2),
-                          ImGui::GetColorU32(ImGuiCol_NavCursor), 6.0f, 0, 3.0f);
-        // Two lines of title, cut to the card's width; the tags in grey after it.
+            draw->AddRect(ImVec2(pos.x + 1, pos.y + 1), ImVec2(pos.x + card.x - 1, pos.y + card.y - 1),
+                          ImGui::GetColorU32(ImGuiCol_NavCursor), 0.0f, 0, 3.0f);
+        // Two lines of title, cut to the card's width, on a plate so the grid behind
+        // does not cross them; the tags in grey after it.
         const ImVec4 clip(pos.x + 4, pos.y, pos.x + card.x - 4, pos.y + card.y);
+        if (!selected && !ImGui::IsItemHovered())
+            draw->AddRectFilled(ImVec2(box.x - 2, box.y + coverH + 2), ImVec2(box.x + coverW + 2, pos.y + card.y - 4),
+                                IM_COL32(0x05, 0x05, 0x06, 235));
         draw->AddText(nullptr, 0.0f, ImVec2(pos.x + 6, box.y + coverH + 4), ImGui::GetColorU32(ImGuiCol_Text),
                       g.title.c_str(), nullptr, coverW, &clip);
         ImGui::PopID();
+    }
+}
+
+// The games' boxes on a shelf in 3D: a click (or A) takes one out, a second its cartridge
+// and a third puts that into the console to play; dragging turns what is out, or moves
+// along the shelf, and the wheel zooms.
+void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
+    const ImVec2 size = ImGui::GetContentRegionAvail();
+    if (visible.empty() || size.x < 16 || size.y < 16) return;
+    if (!shelf_) {
+        shelf_ = std::make_unique<BoxShelf>();
+        shelf_->loadConsoleModels(modelFolders_);
+    }
+    if (boxesPose_) {
+        shelf_->pose(boxesPose_);
+        boxesPose_ = 0;
+    }
+    const auto& games = library_.games();
+    std::vector<BoxShelf::Item> items;
+    items.reserve(visible.size());
+    for (size_t i : visible) {
+        const Library::Game& g = games[i];
+        items.push_back({g.texture, g.width, g.height, g.system, g.label, g.labelWidth, g.labelHeight});
+    }
+    // Drawn at twice the window's pixels and shrunk, for smooth edges.
+    const ImGuiIO& io = ImGui::GetIO();
+    float scale = 2.0f * std::max(1.0f, io.DisplayFramebufferScale.x);
+    scale = std::min(scale, 4096.0f / std::max(size.x, size.y));
+    const unsigned int texture = shelf_->render(items, libraryView_.selected, static_cast<int>(size.x * scale),
+                                                static_cast<int>(size.y * scale), io.DeltaTime);
+    const ImVec2 pos = ImGui::GetCursorScreenPos(), end(pos.x + size.x, pos.y + size.y);
+    ImGui::InvisibleButton("cajas", size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddImage(static_cast<ImTextureID>(texture), pos, end, ImVec2(0, 1), ImVec2(1, 0));
+    const int count = static_cast<int>(visible.size());
+    libraryView_.columns = shelf_->columns();
+    // A press that moves is a drag; one that lets go where it was, a click.
+    const ImVec2 m = ImGui::GetMousePos();
+    const float x = (m.x - pos.x) / size.x, y = (m.y - pos.y) / size.y;
+    if (ImGui::IsItemActivated()) boxesDragged_ = false;
+    if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+        boxesDragged_ = true;
+        shelf_->drag(io.MouseDelta.x / size.x, io.MouseDelta.y / size.y);
+    }
+    if (ImGui::IsItemDeactivated() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !boxesDragged_ && ImGui::IsItemHovered()) {
+        const int n = shelf_->click(x, y);
+        if (n >= 0) libraryView_.selected = n;
+    }
+    if (ImGui::IsItemHovered()) {
+        if (!ImGui::IsItemActive() && shelf_->hover(x, y) != BoxShelf::Target::None) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (io.MouseWheel != 0) shelf_->zoom(io.MouseWheel);
+    }
+    libraryItem(false, libraryView_.selected);  // the right button opens the game's menu
+    if (shelf_->takeLaunch()) libraryView_.load = libraryView_.selected;
+    // The chosen game's name under the boxes, and what to do next.
+    if (libraryView_.selected >= 0 && libraryView_.selected < count) {
+        const Library::Game& g = games[visible[static_cast<size_t>(libraryView_.selected)]];
+        const char* hint = "";
+        switch (shelf_->stage()) {
+            case BoxShelf::Stage::Shelf: hint = tr("Clic o A: sacar la caja   Rueda: zoom   Arrastrar o flechas: moverse"); break;
+            case BoxShelf::Stage::Box: hint = tr("Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"); break;
+            case BoxShelf::Stage::Cartridge: hint = tr("Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"); break;
+            case BoxShelf::Stage::Console: break;
+        }
+        const float line = ImGui::GetTextLineHeightWithSpacing();
+        const ImVec2 t = ImGui::CalcTextSize(g.title.c_str()), h = ImGui::CalcTextSize(hint);
+        const float cx = (pos.x + end.x) * 0.5f, y = end.y - line * 2 - 10;
+        draw->AddRectFilled(ImVec2(cx - std::max(t.x, h.x) * 0.5f - 12, y - 6), ImVec2(cx + std::max(t.x, h.x) * 0.5f + 12, end.y - 4),
+                            IM_COL32(0, 0, 0, 150), 6.0f);
+        draw->AddText(ImVec2(cx - t.x * 0.5f, y), ImGui::GetColorU32(ImGuiCol_Text), g.title.c_str());
+        draw->AddText(ImVec2(cx - h.x * 0.5f, y + line), ImGui::GetColorU32(ImGuiCol_TextDisabled), hint);
     }
 }
 
@@ -2434,36 +2638,41 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     ImDrawList* draw = ImGui::GetWindowDrawList();
 
     needGlyphs(g.title);
+    ImGui::PushFont(theme::fonts().title);
     ImGui::SetWindowFontScale(1.25f);
     ImGui::TextWrapped("%s", g.title.c_str());
     ImGui::SetWindowFontScale(1.0f);
+    ImGui::PopFont();
     ImGui::TextDisabled("%s%s%s", systemName(g.system), g.tags.empty() ? "" : " · ", g.tags.c_str());
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g.path.c_str());
 
     // An image fitted into the panel's width and at most `maxH` tall, centred.
-    auto image = [&](unsigned int texture, int w, int h, float maxH) {
-        float iw = width, ih = width * static_cast<float>(h) / static_cast<float>(w);
+    // From `u0` across: a whole sleeve shows only its front.
+    auto image = [&](unsigned int texture, int w, int h, float maxH, float u0 = 0) {
+        const float fw = static_cast<float>(w) * (1 - u0);
+        float iw = width, ih = width * static_cast<float>(h) / fw;
         if (ih > maxH) {
             ih = maxH;
-            iw = maxH * static_cast<float>(w) / static_cast<float>(h);
+            iw = maxH * fw / static_cast<float>(h);
         }
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - iw) * 0.5f);
-        ImGui::Image(static_cast<ImTextureID>(texture), ImVec2(iw, ih));
+        ImGui::Image(static_cast<ImTextureID>(texture), ImVec2(iw, ih), ImVec2(u0, 0), ImVec2(1, 1));
     };
     ImGui::Spacing();
     if (g.texture && g.width > 0 && g.height > 0) {
-        image(g.texture, g.width, g.height, coverMax);
+        image(g.texture, g.width, g.height, coverMax, BoxShelf::coverFront(g.width, g.height));
     } else {
         const ImVec2 a = ImGui::GetCursorScreenPos();
         const float h = std::min(width * 1.4f, coverMax);
-        draw->AddRectFilled(a, ImVec2(a.x + width, a.y + h), IM_COL32(40, 44, 56, 255), 4.0f);
+        draw->AddRectFilled(a, ImVec2(a.x + width, a.y + h), IM_COL32(0x26, 0x26, 0x2A, 255));
+        draw->AddRect(a, ImVec2(a.x + width, a.y + h), IM_COL32(0x44, 0x44, 0x4B, 255));
         const char* label = g.cover == Library::Cover::Pending ? "..." : tr("Sin carátula");
         const ImVec2 size = ImGui::CalcTextSize(label);
         draw->AddText(ImVec2(a.x + (width - size.x) * 0.5f, a.y + (h - size.y) * 0.5f), IM_COL32(140, 146, 160, 255), label);
         ImGui::Dummy(ImVec2(width, h));
     }
     ImGui::Spacing();
-    if (ImGui::Button(tr("Jugar"), ImVec2(-1.0f, 0.0f))) libraryView_.load = n;
+    if (theme::primaryButton(tr("Jugar"))) libraryView_.load = n;
 
     // libretro-database's data, the lines it has.
     ImGui::Spacing();
@@ -2521,6 +2730,8 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     if (ImGui::SmallButton(tr("Buscar otra vez"))) gameInfo_.refresh();
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Vuelve a buscar la descripción y la captura de este juego en internet."));
+    ImGui::SameLine();
+    if (ImGui::SmallButton(tr("Medios de ScreenScraper..."))) openMedia(visible[static_cast<size_t>(n)]);
 }
 
 void Ui::openCoverSearch(size_t game) {
@@ -2542,10 +2753,11 @@ void Ui::startCoverSearch() {
     library_.searchCovers(library_.games()[coverSearch_.game].system, coverSearch_.query);
 }
 
-void Ui::chooseCoverImage(size_t game) {
+void Ui::chooseCoverImage(size_t game, CoverImage kind) {
     const auto& games = library_.games();
     if (game >= games.size()) return;
     coverImageFor_ = games[game].path;
+    coverImageKind_ = kind;
     const std::string start = coverImageFor_.substr(0, coverImageFor_.find_last_of("/\\"));
     std::string chosen;
     browseFor_ = BrowseFor::CoverImage;
@@ -2563,7 +2775,19 @@ void Ui::useCoverImage(const std::string& file) {
     for (size_t i = 0; i < games.size(); ++i)
         if (games[i].path == coverImageFor_) {
             std::string error;
-            if (!library_.coverFromFile(i, file, &error) && !error.empty()) showError(error);
+            const bool label = coverImageKind_ == CoverImage::Label;
+            if (!(label ? library_.labelFromFile(i, file, &error) : library_.coverFromFile(i, file, &error))) {
+                if (!error.empty()) showError(error);
+                break;
+            }
+            // A whole sleeve is told apart by its shape: much wider than tall.
+            if (coverImageKind_ == CoverImage::Sleeve) {
+                int w = 0, h = 0, channels = 0;
+                std::ifstream in(std::filesystem::u8path(file), std::ios::binary);
+                const std::vector<unsigned char> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+                if (stbi_info_from_memory(data.data(), static_cast<int>(data.size()), &w, &h, &channels) && BoxShelf::coverFront(w, h) <= 0)
+                    notify(tr("Esa imagen no es una portada completa (contraportada, lomo y portada): se usa como portada."));
+            }
             break;
         }
     coverImageFor_.clear();
@@ -3063,8 +3287,8 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
         ImGui::End();
         return;
     }
-    ImGui::TextWrapped(tr("Opciones propias de %s. Marca una opción para que este juego use su propio valor; "
-                       "las que no marques siguen a las generales."), v.game.c_str());
+    ImGui::TextWrapped(tr("Opciones propias de %s. Pon una opción en Propio para que este juego use su propio valor; "
+                       "las que dejes en General siguen a las generales."), v.game.c_str());
     if (v.loaded && state.netPlaying) ImGui::TextDisabled("%s", tr("En una partida en red no se pueden cambiar."));
     ImGui::BeginDisabled(v.loaded && state.netPlaying);
     if (ImGui::BeginTabBar("opciones_juego")) {
@@ -3083,8 +3307,8 @@ void Ui::drawGameOptions(const UiState& state, UiActions& out) {
     ImGui::End();
 }
 
-// The Ajustes tab: each option has a box; ticked, the game has its own value (edited
-// here); unticked, it follows the general one (shown greyed).
+// The Ajustes tab: each option has a switch; on ("Propio"), the game has its own value
+// (edited here); off ("General"), it follows the general one (shown greyed).
 void Ui::drawGameSettings(const UiState& state, UiActions& out) {
     const GameOptionsView& v = state.gameOptions;
     Settings& s = *v.values;
@@ -3099,7 +3323,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
         ImGui::PushID(opt.key);
         bool mine = own.count(key) != 0;
         bool edited = false;
-        if (ImGui::Checkbox("##propio", &mine)) {
+        if (theme::switchButton("##propio", &mine, tr("Propio"), tr("General"))) {
             if (mine) own.insert(key);
             else {
                 own.erase(key);
@@ -3128,7 +3352,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
                 edited = true;
             }
         } else if (key == "smooth") {
-            edited |= ImGui::Checkbox(tr("Suavizar píxeles"), &s.render.smooth);
+            edited |= yesNo(tr("Suavizar píxeles"), s.render.smooth);
         } else if (key == "filter") {
             static const char* names[] = {N_("Ninguno"), N_("Scanlines"), "CRT"};
             int i = static_cast<int>(s.render.filter);
@@ -3148,9 +3372,9 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             if (ImGui::SliderFloat(tr(opt.label), &strength, 0.0f, 100.0f, "%.0f %%")) s.render.filterStrength = strength / 100.0f;
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "square_pixels") {
-            edited |= ImGui::Checkbox(tr("Píxeles cuadrados (sin estirar a 4:3)"), &s.render.squarePixels);
+            edited |= yesNo(tr("Píxeles cuadrados (sin estirar a 4:3)"), s.render.squarePixels);
         } else if (key == "no_sprite_limit") {
-            edited |= ImGui::Checkbox(tr("Sin límite de sprites (sin parpadeo)"), &s.unlimitedSprites);
+            edited |= yesNo(tr("Sin límite de sprites (sin parpadeo)"), s.unlimitedSprites);
         } else if (key == "widescreen") {
             ImGui::TextUnformatted(tr(opt.label));
             edited |= widescreenControls(s.wideLeft, s.wideRight);
@@ -3162,7 +3386,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             ImGui::SliderInt(tr(opt.label), &s.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "mute") {
-            edited |= ImGui::Checkbox(tr("Silenciar"), &s.mute);
+            edited |= yesNo(tr("Silenciar"), s.mute);
         } else if (key == "mode") {
             int i = s.roland ? 1 : 0;
             static const char* names[] = {N_("Original (YM2612 y PSG)"), N_("Sintetizador (SoundFont)")};
@@ -3180,7 +3404,7 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             ImGui::SliderInt(tr(opt.label), &amount, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
             edited |= ImGui::IsItemDeactivatedAfterEdit();
         } else if (key == "effects") {
-            edited |= ImGui::Checkbox(tr("Efectos de sonido originales"), &s.effectsOriginal);
+            edited |= yesNo(tr("Efectos de sonido originales"), s.effectsOriginal);
         } else if (key == "region") {
             int i = static_cast<int>(s.region);
             if (comboTr(tr(opt.label), &i, kRegionNames, 4)) {
@@ -3189,16 +3413,18 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
             }
         } else if (key == "pads") {
             // In PadType's order.
-            static const char* names[] = {N_("3 botones"), N_("6 botones"), N_("Sin mando")};
+            static const char* names[] = {N_("3 botones"), N_("6 botones"), N_("Sin mando"), N_("Pistola Menacer"),
+                                          N_("Pistola Justifier")};
             for (size_t port = 0; port < 2; ++port) {
                 if (port) ImGui::SameLine();
                 int i = static_cast<int>(s.padType[port]);
                 ImGui::SetNextItemWidth(110);
-                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names, port ? 3 : 2)) {
+                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names, port ? 5 : 2)) {
                     s.padType[port] = static_cast<PadType>(i);
                     edited = true;
                 }
-                if (port && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr(kNoPadTip));
+                if (port && ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", tr(isLightGun(s.padType[port]) ? kLightGunTip : kNoPadTip));
             }
         } else if (key == "overclock") {
             edited |= overclockCombo(tr(opt.label), s.overclock);

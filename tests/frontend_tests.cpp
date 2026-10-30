@@ -8,6 +8,7 @@
 
 #include "frontend/crash.h"
 #include "frontend/game_options.h"
+#include "frontend/light_gun.h"
 
 #ifndef _WIN32
 #include <csignal>
@@ -121,6 +122,47 @@ void testOverclockOption() {
     check(again.overclock == Settings::kMaxOverclock, "overclock: como mucho 400");
 }
 
+void testLightGunOption() {
+    for (PadType t : {PadType::Menacer, PadType::Justifier, PadType::None, PadType::ThreeButton}) {
+        Settings s;
+        s.padType[1] = t;
+        std::ostringstream out;
+        s.write(out);
+        Settings again;
+        std::istringstream text(out.str());
+        Settings::parse(text, again);
+        check(again.padType[1] == t, "pistola de luz: plumsg.ini guarda lo que hay en el puerto 2");
+    }
+    const Settings general;
+    const GameOverrides o = parseGameOverrides("[consola]\npad2 = justifier\n", general, InputConfig::defaults());
+    check(o.has("pads") && o.values.padType[1] == PadType::Justifier, "pistola de luz: un juego con su Justifier");
+    Settings one;
+    std::istringstream pad1("[consola]\npad1 = menacer\n");
+    Settings::parse(pad1, one);
+    check(!isLightGun(one.padType[0]), "pistola de luz: nunca en el puerto 1");
+
+    // The crosshair: the mouse puts it on the picture, the stick moves it and keeps it
+    // there, C shoots off the screen.
+    LightGunAim aim;
+    aim.setPicture(100, 50, 640, 448);
+    aim.mouseMoved(420, 274);
+    PadState pad;
+    GunState g = aim.state(0, pad, 320, 224);
+    check(g.x == 160 && g.y == 112 && !g.trigger, "mira: el ratón apunta al centro");
+    aim.mouseButtons(true, false, false);
+    check(aim.state(0, pad, 320, 224).trigger && !aim.state(1, pad, 320, 224).trigger,
+          "mira: el clic izquierdo es el gatillo de la primera pistola");
+    aim.mouseButtons(false, false, false);
+    aim.move(0, pad, 1.0f, 0.0f, 10.0f);
+    g = aim.state(0, pad, 320, 224);
+    check(g.x == 319 && g.y == 112, "mira: el stick la mueve sin salirse de la pantalla");
+    pad.c = true;
+    g = aim.state(0, pad, 320, 224);
+    check(g.trigger && !g.onScreen(320, 224), "mira: C dispara fuera de la pantalla");
+    aim.mouseMoved(10, 10);
+    check(!aim.state(0, PadState{}, 320, 224).onScreen(320, 224), "mira: el ratón fuera de la imagen no ve luz");
+}
+
 void testEqualizerOption() {
     Settings s;
     check(s.equalizer == (std::array<int, 5>{}), "ecualizador: plano si no se dice");
@@ -226,6 +268,7 @@ int main() {
     testWidescreenOption();
     testOverclockOption();
     testEqualizerOption();
+    testLightGunOption();
     testSpanishIni();
 #ifndef _WIN32
     testCrashReport();

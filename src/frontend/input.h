@@ -80,6 +80,8 @@ public:
     // Right stick of the first pad that has it pushed past the dead zone, each axis -1..1
     // (y positive down); 0,0 when none is. Turns the pseudo-3D camera.
     void rightStick(float* x, float* y) const;
+    // The left stick of the player's pad the same way, for a light gun's crosshair.
+    void leftStick(int player, float* x, float* y) const;
 
     // The general bindings, as in plumsg.ini.
     const InputConfig& config() const { return config_; }

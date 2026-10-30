@@ -54,6 +54,9 @@ msgstr "%d jeux. Recherche des jaquettes, encore %d..."
 msgid "%d parecidas. Pulsa una para verla."
 msgstr "%d ressemblantes. Cliquez sur l'une pour la voir."
 
+msgid "%d resultados. Pulsa uno para verlo."
+msgstr "%d résultats. Cliquez sur l'un pour le voir."
+
 msgid "%d s"
 msgstr "%d s"
 
@@ -212,6 +215,9 @@ msgstr "Ouvrir un jeu"
 msgid "Abrir la biblioteca al empezar"
 msgstr "Ouvrir la bibliothèque au démarrage"
 
+msgid "Abrir la carpeta"
+msgstr "Ouvrir le dossier"
+
 msgid "Abrir la carpeta de SoundFonts"
 msgstr "Ouvrir le dossier des SoundFonts"
 
@@ -272,6 +278,9 @@ msgstr "Les notes de la musique s'écrivent ici pendant qu'elle joue : ouvrez un
 msgid "Archivo"
 msgstr "Fichier"
 
+msgid "Archivos"
+msgstr "Fichiers"
+
 msgid "Armonio"
 msgstr "Harmonium"
 
@@ -292,6 +301,12 @@ msgstr "Glissez une ROM dans la fenêtre ou utilisez Fichier > Ouvrir une ROM."
 
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Glissez une ROM ici, utilisez Fichier > Ouvrir une ROM ou ouvrez la bibliothèque (F10)"
+
+msgid "Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
+msgstr "Glisser : la tourner   Clic sur la boîte ou A : sortir la cartouche   Clic ailleurs ou B : la ranger"
+
+msgid "Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
+msgstr "Glisser : la tourner   Clic sur la cartouche ou A : jouer   Clic ailleurs ou B : la ranger"
 
 msgid "Arriba"
 msgstr "Haut"
@@ -343,6 +358,9 @@ msgstr "Ajouter un dossier..."
 
 msgid "Año"
 msgstr "Année"
+
+msgid "Aún no se ha descargado nada de este juego."
+msgstr "Rien n'a encore été téléchargé pour ce jeu."
 
 msgid "BIOS del Mega CD"
 msgstr "BIOS du Mega CD"
@@ -433,6 +451,15 @@ msgstr ""
 "de la bibliothèque et leurs sous-dossiers, et en choisit un pour chaque région."
 
 msgid ""
+"Busca en ScreenScraper (internet) cada juego que aún no tenga sus medios: portada completa,\n"
+"etiqueta del cartucho, capturas, logo... Las carátulas que ya hay se quedan, salvo\n"
+"que ScreenScraper tenga la portada completa. Uno a uno, así que tarda un poco."
+msgstr ""
+"Cherche sur ScreenScraper (Internet) chaque jeu qui n'a pas encore ses médias : jaquette complète,\n"
+"étiquette de la cartouche, captures, logo... Les jaquettes déjà présentes restent, sauf\n"
+"si ScreenScraper a la jaquette complète. Un par un, donc cela prend un moment."
+
+msgid ""
 "Busca las canciones en la ROM del juego y las graba una a una, sin nombre\n"
 "(Canción 1, Canción 2...), con las pistas del juego. Sirve para los juegos\n"
 "con un driver de sonido como el de Sonic (SMPS), el de Streets of Rage 2,\n"
@@ -487,6 +514,9 @@ msgstr "Chercher dans les dossiers de la bibliothèque"
 msgid "Buscar otra vez"
 msgstr "Chercher à nouveau"
 
+msgid "Buscar otro juego"
+msgstr "Chercher un autre jeu"
+
 msgid "CRT"
 msgstr "CRT"
 
@@ -511,8 +541,17 @@ msgstr "Boîte à musique"
 msgid "Caja eléctrica"
 msgstr "Caisse claire électrique"
 
+msgid "Caja en 3D"
+msgstr "Boîte en 3D"
+
+msgid "Cajas 3D"
+msgstr "Boîtes 3D"
+
 msgid "Cambia de vista con V o con Select en el mando."
 msgstr "Changez de vue avec V ou avec Select sur la manette."
+
+msgid "Cambia el nombre si no sale el juego: sin región ni número de versión suele ir mejor."
+msgstr "Modifiez le nom si le jeu n'apparaît pas : sans région ni numéro de version, cela marche souvent mieux."
 
 msgid "Campana del ride"
 msgstr "Cloche de ride"
@@ -538,6 +577,9 @@ msgstr "Morceau %d"
 msgid "Capas"
 msgstr "Couches"
 
+msgid "Captura"
+msgstr "Capture"
+
 msgid "Cargar estado"
 msgstr "Charger l'état"
 
@@ -552,6 +594,9 @@ msgstr "Dossier : %s"
 
 msgid "Carreras"
 msgstr "Course"
+
+msgid "Cartucho"
+msgstr "Cartouche"
 
 msgid "Carátula desde imagen..."
 msgstr "Jaquette depuis une image..."
@@ -608,6 +653,9 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
+msgid "Clic o A: sacar la caja   Rueda: zoom   Arrastrar o flechas: moverse"
+msgstr "Clic ou A : sortir la boîte   Molette : zoom   Glisser ou flèches : se déplacer"
+
 msgid ""
 "Como si no hubiera nada enchufado en el segundo puerto. Algunos juegos lo miran: ESPN\n"
 "Sunday Night NFL pone entonces al ordenador de jugador 2 en vez de esperar al mando 2\n"
@@ -616,6 +664,12 @@ msgstr ""
 "Comme si rien n'était branché sur le second port. Certains jeux le vérifient : ESPN\n"
 "Sunday Night NFL fait alors jouer l'ordinateur en joueur 2 au lieu d'attendre la manette 2\n"
 "(au tirage au sort, par exemple). En partie en réseau, la manette 2 est branchée."
+
+msgid "Composición"
+msgstr "Composition"
+
+msgid "Con una cuenta de screenscraper.fr (es gratis) se pueden hacer más peticiones al día, y ScreenScraper sigue respondiendo aunque esté lleno. Se guarda en plumsg.ini."
+msgstr "Avec un compte screenscraper.fr (gratuit), on peut faire plus de requêtes par jour, et ScreenScraper continue de répondre même quand il est plein. Il est enregistré dans plumsg.ini."
 
 msgid "Conectando con %s"
 msgstr "Connexion à %s"
@@ -662,6 +716,9 @@ msgstr "Compteur d'IPS désactivé"
 msgid "Contrabajo"
 msgstr "Contrebasse"
 
+msgid "Contraportada"
+msgstr "Dos de la boîte"
+
 msgid "Contraseña"
 msgstr "Mot de passe"
 
@@ -679,6 +736,9 @@ msgstr "Chœur \"aah\""
 
 msgid "Correcta%s%s"
 msgstr "Correct%s%s"
+
+msgid "Crear una cuenta"
+msgstr "Créer un compte"
 
 msgid "Crear una cuenta en retroachievements.org"
 msgstr "Créer un compte sur retroachievements.org"
@@ -703,6 +763,9 @@ msgstr ""
 
 msgid "Cuenta"
 msgstr "Compte"
+
+msgid "Cuenta de desarrollador"
+msgstr "Compte développeur"
 
 msgid "Cuenta..."
 msgstr "Compte..."
@@ -802,11 +865,36 @@ msgstr "Désactivés"
 msgid "Desarrolladora"
 msgstr "Développeur"
 
+msgid "Desarrolladora: %s"
+msgstr "Développeur : %s"
+
+msgid ""
+"Descarga los medios de este juego en lugar de los que había, y su portada y etiqueta\n"
+"pasan a ser las de la biblioteca."
+msgstr ""
+"Télécharge les médias de ce jeu à la place des précédents, et sa jaquette et son étiquette\n"
+"deviennent celles de la bibliothèque."
+
+msgid "Descarga otra vez los medios del mismo juego de ScreenScraper."
+msgstr "Télécharge à nouveau les médias du même jeu depuis ScreenScraper."
+
+msgid "Descargado"
+msgstr "Téléchargé"
+
 msgid "Descargando los datos de los juegos..."
 msgstr "Téléchargement des informations des jeux..."
 
+msgid "Descargando: %s..."
+msgstr "Téléchargement : %s..."
+
 msgid "Descargar carátulas que faltan"
 msgstr "Télécharger les jaquettes manquantes"
+
+msgid "Descargar de ScreenScraper"
+msgstr "Télécharger depuis ScreenScraper"
+
+msgid "Descargar: %s"
+msgstr "Télécharger : %s"
 
 msgid "Descripción"
 msgstr "Description"
@@ -970,6 +1058,9 @@ msgstr "Le port %d est occupé (un autre plumsg héberge-t-il ?)."
 msgid "El puerto de \"%s\" no es válido."
 msgstr "Le port de \"%s\" n'est pas valide."
 
+msgid "El tamaño de las carátulas: más pequeñas caben más en cada fila."
+msgstr "La taille des jaquettes : plus petites, il en tient plus par ligne."
+
 msgid ""
 "El tempo y dónde empiezan los compases (4/4) se adivinan por cuándo empiezan las notas.\n"
 "Si las figuras salen el doble o la mitad de largas, quítalo y pon el tempo a mano."
@@ -1012,6 +1103,9 @@ msgstr "Émulation"
 
 msgid "Emulación parada"
 msgstr "Émulation arrêtée"
+
+msgid "En ScreenScraper: «%s»"
+msgstr "Sur ScreenScraper : « %s »"
 
 msgid "En casa, tu amigo se une a %s:%d."
 msgstr "À la maison, votre ami rejoint %s:%d."
@@ -1056,6 +1150,9 @@ msgstr "Envoi de la partie à l'autre joueur..."
 msgid "Error del servidor: %s"
 msgstr "Erreur du serveur : %s"
 
+msgid "Esa imagen no es una portada completa (contraportada, lomo y portada): se usa como portada."
+msgstr "Cette image n'est pas une jaquette complète (dos, tranche et face) : elle sert de jaquette."
+
 msgid "Esc  mostrar u ocultar la barra de menús"
 msgstr "Échap  afficher ou masquer la barre de menus"
 
@@ -1085,6 +1182,9 @@ msgstr "En attente de l'autre joueur sur le port %d. En attendant, vous pouvez c
 
 msgid "Esperando notas... (la batería no se escribe: no tiene notas)"
 msgstr "En attente de notes... (la batterie ne s'écrit pas : elle n'a pas de notes)"
+
+msgid "Esta versión de plumsg ya trae la suya: déjalo vacío."
+msgstr "Cette version de plumsg a déjà le sien : laissez vide."
 
 msgid "Estado"
 msgstr "État"
@@ -1118,6 +1218,12 @@ msgstr "Étirer"
 
 msgid "Estrategia"
 msgstr "Stratégie"
+
+msgid "Etiqueta del cartucho"
+msgstr "Étiquette de la cartouche"
+
+msgid "Etiqueta del cartucho..."
+msgstr "Étiquette de la cartouche..."
 
 msgid "Europa (Mega-CD)"
 msgstr "Europe (Mega-CD)"
@@ -1170,6 +1276,12 @@ msgstr "Il manque le BIOS du Mega CD japonais : choisissez-le dans Console > BIO
 msgid "Falta la función %s"
 msgstr "Il manque la fonction %s"
 
+msgid "Falta una cuenta de desarrollador de ScreenScraper: ponla en la pestaña Cuenta."
+msgstr "Il manque un compte développeur ScreenScraper : saisissez-le dans l'onglet Compte."
+
+msgid "Fecha"
+msgstr "Date"
+
 msgid "Filtrar (lives, energy, invincible...)"
 msgstr "Filtrer (lives, energy, invincible...)"
 
@@ -1199,10 +1311,13 @@ msgstr "Flèches  croix;  A S D  boutons A B C ;  Q W E  boutons X Y Z"
 
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula o lista"
+"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
 msgstr ""
 "Flèches ou croix : choisir   A ou Entrée : jouer   X, bouton droit ou touche menu : codes, options et instruments\n"
-"B ou Échap : fermer   L / R ou Page préc. / Page suiv. : console   Select ou V : grille ou liste"
+"B ou Échap : fermer   L / R ou Page préc. / Page suiv. : console   Select ou V : grille, liste ou boîtes 3D"
+
+msgid "Fondo (fan art)"
+msgstr "Fond (fan art)"
 
 msgid "Fondo arco"
 msgstr "Nappe archet"
@@ -1239,6 +1354,9 @@ msgstr "GIF enregistré dans %s"
 
 msgid "Gaita"
 msgstr "Cornemuse"
+
+msgid "General"
+msgstr "Général"
 
 msgid "GeneralUser GS (incluido)"
 msgstr "GeneralUser GS (inclus)"
@@ -1392,6 +1510,12 @@ msgstr "Hélicoptère"
 msgid "IP o nombre, y :puerto si no es el de arriba"
 msgstr "IP ou nom, et :port s'il diffère de celui du haut"
 
+msgid "Identifica el juego por su ROM (o por su nombre) y descarga sus medios."
+msgstr "Identifie le jeu par sa ROM (ou son nom) et télécharge ses médias."
+
+msgid "Identificando el juego..."
+msgstr "Identification du jeu..."
+
 msgid "Idioma"
 msgstr "Langue"
 
@@ -1458,6 +1582,9 @@ msgstr "Jeux de hasard"
 msgid "Jugadores"
 msgstr "Joueurs"
 
+msgid "Jugadores: %s"
+msgstr "Joueurs : %s"
+
 msgid ""
 "Jugando en red como jugador %d.\n"
 "Ping: %d ms. Retardo de los mandos: %d fotogramas. Vuelta atrás: %d fotogramas."
@@ -1491,6 +1618,9 @@ msgstr "L1 / R1 (ou Q / E) : changer d'onglet   B / Échap : fermer"
 
 msgid "La"
 msgstr "La"
+
+msgid "La API de ScreenScraper está cerrada por ahora. Prueba más tarde."
+msgstr "L'API de ScreenScraper est fermée pour l'instant. Réessayez plus tard."
 
 msgid "La base de trucos de libretro no tiene listas para este juego."
 msgstr "La base de codes de libretro n'a pas de listes pour ce jeu."
@@ -1556,6 +1686,9 @@ msgstr ""
 msgid "La#"
 msgstr "La#"
 
+msgid "Las cajas de los juegos en 3D: ábrelas y lleva el cartucho a la consola para jugar."
+msgstr "Les boîtes des jeux en 3D : ouvrez-en une et portez la cartouche à la console pour jouer."
+
 msgid "Las canciones de los discos de Mega CD van en pistas de audio del disco, no en el chip."
 msgstr "Les morceaux des disques Mega CD sont des pistes audio du disque, pas dans la puce."
 
@@ -1596,6 +1729,12 @@ msgstr "Liste : %s"
 
 msgid "Listas de libretro-database, la base de trucos de RetroArch (licencia CC BY-SA 4.0). Los nombres vienen en inglés; los añadidos quedan activados en la lista de arriba, con el código maestro (Master Code) del juego cuando lo pide."
 msgstr "Listes de libretro-database, la base de codes de RetroArch (licence CC BY-SA 4.0). Les noms sont en anglais ; ceux ajoutés sont activés dans la liste du haut, avec le code maître (Master Code) du jeu quand il le demande."
+
+msgid "Lo que se descarga de cada juego. Los vídeos y los manuales ocupan mucho, así que no se descargan si no los marcas (cada juego los puede descargar aparte)."
+msgstr "Ce qui est téléchargé pour chaque jeu. Les vidéos et les manuels prennent beaucoup de place : ils ne sont téléchargés que si vous les cochez (chaque jeu peut les télécharger à part)."
+
+msgid "Logo"
+msgstr "Logo"
 
 msgid "Logros"
 msgstr "Succès"
@@ -1702,6 +1841,9 @@ msgstr "Manette 2"
 msgid "Mandos conectados:"
 msgstr "Manettes connectées :"
 
+msgid "Manual"
+msgstr "Manuel"
+
 msgid "Maracas"
 msgstr "Maracas"
 
@@ -1711,6 +1853,9 @@ msgstr "Score envoyé : %s"
 msgid "Marimba"
 msgstr "Marimba"
 
+msgid "Marquesina"
+msgstr "Marquee"
+
 msgid "Matamarcianos"
 msgstr "Shoot'em up"
 
@@ -1719,6 +1864,12 @@ msgstr "Médiums"
 
 msgid "Medios agudos"
 msgstr "Hauts médiums"
+
+msgid "Medios de ScreenScraper"
+msgstr "Médias ScreenScraper"
+
+msgid "Medios de ScreenScraper..."
+msgstr "Médias ScreenScraper..."
 
 msgid "Medios graves"
 msgstr "Bas médiums"
@@ -1768,8 +1919,14 @@ msgstr "Aucun"
 msgid "Ningún juego coincide con la búsqueda."
 msgstr "Aucun jeu ne correspond à la recherche."
 
+msgid "Ningún juego se llama así en ScreenScraper."
+msgstr "Aucun jeu ne porte ce nom sur ScreenScraper."
+
 msgid "Ningún truco tiene ese nombre."
 msgstr "Aucun code n'a ce nom."
+
+msgid "No"
+msgstr "Non"
 
 msgid "No es un archivo VGM."
 msgstr "Ce n'est pas un fichier VGM."
@@ -1855,6 +2012,9 @@ msgstr "Impossible de charger l'état : %s. La partie continue comme avant."
 msgid "No se pudo cargar la partida del anfitrión: %s"
 msgstr "Impossible de charger la partie de l'hôte : %s"
 
+msgid "No se pudo conectar con ScreenScraper. ¿Hay conexión a internet?"
+msgstr "Impossible de se connecter à ScreenScraper. Y a-t-il une connexion Internet ?"
+
 msgid "No se pudo conectar con Wikipedia."
 msgstr "Impossible de se connecter à Wikipédia."
 
@@ -1881,6 +2041,9 @@ msgstr "Impossible d'écrire %s : le disque est-il plein ?"
 
 msgid "No se pudo guardar el estado en %s: ¿falta espacio en el disco?"
 msgstr "Impossible d'enregistrer l'état dans %s : le disque est-il plein ?"
+
+msgid "No se pudo guardar en %s"
+msgstr "Impossible d'enregistrer dans %s"
 
 msgid "No se pudo guardar la carátula en %s"
 msgstr "Impossible d'enregistrer la jaquette dans %s"
@@ -1933,6 +2096,9 @@ msgstr "Nom (facultatif)"
 msgid "Nombre del juego"
 msgstr "Nom du jeu"
 
+msgid "Nota"
+msgstr "Note"
+
 msgid "Notas"
 msgstr "Notes"
 
@@ -1960,8 +2126,8 @@ msgstr "Options de ce jeu..."
 msgid "Opciones propias de %s"
 msgstr "Options propres à %s"
 
-msgid "Opciones propias de %s. Marca una opción para que este juego use su propio valor; las que no marques siguen a las generales."
-msgstr "Options propres à %s. Cochez une option pour que ce jeu utilise sa propre valeur ; celles que vous ne cochez pas suivent les générales."
+msgid "Opciones propias de %s. Pon una opción en Propio para que este juego use su propio valor; las que dejes en General siguen a las generales."
+msgstr "Options propres à %s. Mettez une option sur Propre pour que ce jeu utilise sa propre valeur ; celles laissées sur Général suivent les options générales."
 
 msgid "Opción desconocida: %s"
 msgstr "Option inconnue : %s"
@@ -1987,6 +2153,9 @@ msgstr "P  pause"
 msgid "PAUSA"
 msgstr "PAUSE"
 
+msgid "PDF"
+msgstr "PDF"
+
 msgid "Palmada"
 msgstr "Claquement de mains"
 
@@ -2002,6 +2171,9 @@ msgstr "Plein écran"
 msgid "Pantalla completa (F11)"
 msgstr "Plein écran (F11)"
 
+msgid "Pantalla de título"
+msgstr "Écran titre"
+
 msgid "Para juegos que pintan el cielo en el plano B: no lo levanta en 3D."
 msgstr "Pour les jeux qui peignent le ciel dans le plan B : il n'est pas relevé en 3D."
 
@@ -2010,6 +2182,9 @@ msgstr "Arrêté : les morceaux extraits jusqu'ici restent dans la liste."
 
 msgid "Parar"
 msgstr "Arrêter"
+
+msgid "Parar ScreenScraper"
+msgstr "Arrêter ScreenScraper"
 
 msgid "Parar emulación"
 msgstr "Arrêter l'émulation"
@@ -2059,6 +2234,9 @@ msgstr "Piano à queue électrique"
 msgid "Pianos"
 msgstr "Pianos"
 
+msgid "Pidiendo los datos del juego..."
+msgstr "Demande des données du jeu..."
+
 msgid "Pieza del kit"
 msgstr "Élément du kit"
 
@@ -2067,6 +2245,12 @@ msgstr "Flipper"
 
 msgid "Pista"
 msgstr "Piste"
+
+msgid "Pistola Justifier"
+msgstr "Pistolet Justifier"
+
+msgid "Pistola Menacer"
+msgstr "Pistolet Menacer"
 
 msgid "Pistola de luz"
 msgstr "Pistolet optique"
@@ -2128,6 +2312,15 @@ msgstr "Par internet : ouvrez (redirigez) le port UDP %d de votre box vers cet o
 msgid "Por título"
 msgstr "Par titre"
 
+msgid "Portada"
+msgstr "Couverture"
+
+msgid "Portada completa"
+msgstr "Jaquette complète"
+
+msgid "Portada completa..."
+msgstr "Jaquette complète..."
+
 msgid "Posición del contador"
 msgstr "Position du compteur"
 
@@ -2145,6 +2338,9 @@ msgstr "Essai du numéro %d"
 
 msgid "Profundidad"
 msgstr "Profondeur"
+
+msgid "Propio"
+msgstr "Propre"
 
 msgid "Propio de este juego"
 msgstr "Propre à ce jeu"
@@ -2197,6 +2393,9 @@ msgstr ""
 
 msgid "Quitar"
 msgstr "Retirer"
+
+msgid "Qué descargar"
+msgstr "Que télécharger"
 
 msgid "Quítalo para no oír este instrumento (también en la Partitura)."
 msgstr "Décochez-la pour ne plus entendre cet instrument (dans la Partition aussi)."
@@ -2369,11 +2568,41 @@ msgstr ""
 "CRT : en plus, l'écran un peu bombé, le masque de couleurs et les coins\n"
 "plus sombres. Seulement dans la vue 2D ; c'est plus joli en plein écran."
 
+msgid "ScreenScraper está muy ocupado ahora mismo. Con una cuenta (es gratis) se puede usar igual; si no, prueba dentro de un rato."
+msgstr "ScreenScraper est très chargé en ce moment. Avec un compte (gratuit) on peut l'utiliser quand même ; sinon, réessayez plus tard."
+
+msgid "ScreenScraper no acepta la cuenta: revisa el usuario y la contraseña (o las credenciales de desarrollador)."
+msgstr "ScreenScraper refuse le compte : vérifiez l'identifiant et le mot de passe (ou les identifiants développeur)."
+
+msgid "ScreenScraper no conoce este juego. Búscalo por su nombre."
+msgstr "ScreenScraper ne connaît pas ce jeu. Cherchez-le par son nom."
+
+msgid "ScreenScraper pide además la cuenta del programa, que da a quien la solicita en su foro. Esta versión de plumsg no trae ninguna: si tienes una, ponla aquí."
+msgstr "ScreenScraper demande aussi le compte du logiciel, qu'il donne à qui le demande sur son forum. Cette version de plumsg n'en a pas : si vous en avez un, saisissez-le ici."
+
+msgid "ScreenScraper respondió con un error."
+msgstr "ScreenScraper a répondu par une erreur."
+
+msgid "ScreenScraper respondió con un error: %s"
+msgstr "ScreenScraper a répondu par une erreur : %s"
+
+msgid "ScreenScraper: %d de %d juegos..."
+msgstr "ScreenScraper : jeu %d sur %d..."
+
+msgid "ScreenScraper: %d juego descargado"
+msgstr "ScreenScraper : %d jeu téléchargé"
+
+msgid "ScreenScraper: %d juegos descargados"
+msgstr "ScreenScraper : %d jeux téléchargés"
+
 msgid "Se buscan también en sus subcarpetas, y luego puedes añadir más carpetas."
 msgstr "Ses sous-dossiers sont aussi parcourus, et vous pourrez ajouter d'autres dossiers ensuite."
 
 msgid "Se ha perdido la conexión con el otro jugador."
 msgstr "La connexion avec l'autre joueur a été perdue."
+
+msgid "Se han acabado las peticiones de hoy de tu cuenta de ScreenScraper."
+msgstr "Votre compte ScreenScraper a épuisé ses requêtes du jour."
 
 msgid "Sección de metales"
 msgstr "Section de cuivres"
@@ -2435,6 +2664,9 @@ msgstr "Pas de connexion : les succès seront envoyés à son retour."
 
 msgid "Sin elegir"
 msgstr "Non choisi"
+
+msgid "Sin imagen"
+msgstr "Pas d'image"
 
 msgid "Sin límite de sprites"
 msgstr "Sans limite de sprites"
@@ -2545,6 +2777,9 @@ msgstr "Remonter"
 msgid "Suena como"
 msgstr "Sonne comme"
 
+msgid "Sí"
+msgstr "Oui"
+
 msgid "Sí, todo a las sugerencias"
 msgstr "Oui, tout aux suggestions"
 
@@ -2557,8 +2792,14 @@ msgstr "Jeu de plateau"
 msgid "Taiko"
 msgstr "Taiko"
 
+msgid "Tamaño"
+msgstr "Taille"
+
 msgid "Tamaño:"
 msgstr "Taille :"
+
+msgid "También tiene"
+msgstr "Disponible aussi"
 
 msgid "Tambor sintetizado"
 msgstr "Tambour synthé"
@@ -2635,6 +2876,9 @@ msgstr "Tom mélodique"
 msgid "Total"
 msgstr "Total"
 
+msgid "Trabajando..."
+msgstr "En cours..."
+
 msgid "Traste de guitarra"
 msgstr "Bruit de frette"
 
@@ -2702,6 +2946,23 @@ msgstr "Un code à 4 chiffres a besoin d'une adresse paire."
 msgid "Un panel a la derecha con la carátula, los datos y la descripción del juego elegido."
 msgstr "Un panneau à droite avec la jaquette, les informations et la description du jeu choisi."
 
+msgid ""
+"Una pistola de luz en el segundo puerto, en lugar del mando 2: la Menacer de Sega (T2: The\n"
+"Arcade Game, Menacer 6-Game Cartridge...) o la Justifier de Konami (Lethal Enforcers I y II,\n"
+"Snatcher), que tiene una segunda pistola para el jugador 2. Se apunta con una mira en\n"
+"pantalla, movida con el ratón o con el stick izquierdo (o la cruceta) del mando.\n"
+"Gatillo: clic izquierdo o A. Disparar fuera de la pantalla (recargar): clic derecho o C.\n"
+"Start: clic central o Start. Botones A y B de la Menacer: B y X del mando.\n"
+"Solo los juegos de Mega Drive y Mega CD; en una partida en red se enchufa un mando."
+msgstr ""
+"Un pistolet optique dans le second port, à la place de la manette 2 : le Menacer de Sega (T2: The\n"
+"Arcade Game, Menacer 6-Game Cartridge...) ou le Justifier de Konami (Lethal Enforcers I et II,\n"
+"Snatcher), qui a un second pistolet pour le joueur 2. On vise avec un réticule à l'écran,\n"
+"déplacé avec la souris ou le stick gauche (ou la croix) de la manette.\n"
+"Gâchette : clic gauche ou A. Tirer hors de l'écran (recharger) : clic droit ou C.\n"
+"Start : clic du milieu ou Start. Boutons A et B du Menacer : B et X de la manette.\n"
+"Jeux Mega Drive et Mega CD uniquement ; en partie en réseau, une manette est branchée."
+
 msgid "Unidades"
 msgstr "Lecteurs"
 
@@ -2729,6 +2990,9 @@ msgstr "Utiliser ce dossier"
 msgid "Usar esta carátula"
 msgstr "Utiliser cette jaquette"
 
+msgid "Usar este juego"
+msgstr "Utiliser ce jeu"
+
 msgid "Usuario"
 msgstr "Utilisateur"
 
@@ -2749,6 +3013,9 @@ msgstr "Vitesse normale"
 
 msgid "Ventana"
 msgstr "Fenêtre"
+
+msgid "Ver en screenscraper.fr"
+msgstr "Voir sur screenscraper.fr"
 
 msgid "Versión %s"
 msgstr "Version %s"
@@ -2782,6 +3049,9 @@ msgstr "Volume"
 
 msgid "Volver a buscar"
 msgstr "Chercher à nouveau"
+
+msgid "Volver a descargar"
+msgstr "Télécharger à nouveau"
 
 msgid "Volver a la sugerencia"
 msgstr "Revenir à la suggestion"
@@ -2976,6 +3246,7 @@ msgid ""
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
 "  --find-cover           con --library: buscar la carátula del primer juego\n"
 "  --list                 con --library: verla como lista en vez de cuadrícula\n"
+"  --boxes                con --library: verla como cajas 3D\n"
 "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
 "  --achievements         abrir la ventana de RetroAchievements\n"
 "  --game-options         abrir las opciones propias del juego\n"
@@ -3007,6 +3278,7 @@ msgstr ""
 "  --bios                 ouvrir la fenêtre des BIOS du Mega CD\n"
 "  --find-cover           avec --library : chercher la jaquette du premier jeu\n"
 "  --list                 avec --library : l'afficher en liste au lieu d'une grille\n"
+"  --boxes                avec --library : l'afficher en boîtes 3D\n"
 "  --cheats               ouvrir les codes du jeu, avec leurs listes d'internet\n"
 "  --achievements         ouvrir la fenêtre de RetroAchievements\n"
 "  --game-options         ouvrir les options propres au jeu\n"
@@ -3051,6 +3323,15 @@ msgstr "Jeu maîtrisé ! Vous avez tous ses succès en hardcore."
 
 msgid "¡Logro desbloqueado! (%u puntos)"
 msgstr "Succès débloqué ! (%u points)"
+
+msgid "«%s»: %d archivo descargado."
+msgstr "« %s » : %d fichier téléchargé."
+
+msgid "«%s»: %d archivos descargados."
+msgstr "« %s » : %d fichiers téléchargés."
+
+msgid "«%s»: ScreenScraper no tiene imágenes de este juego."
+msgstr "« %s » : ScreenScraper n'a pas d'images de ce jeu."
 
 msgid "¿Quitar lo elegido a mano en todos los instrumentos de esta pista?"
 msgstr "Retirer ce qui a été choisi à la main pour tous les instruments de cette piste ?"

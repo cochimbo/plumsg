@@ -15,7 +15,7 @@ namespace plumsg {
 
 // Everything the menus change apart from the controls. Lives in plumsg.ini next to
 // the [teclado] / [mando] sections, under [interfaz], [video], [audio], [consola],
-// [velocidad], [estados], [biblioteca], [bios], [red], [logros] and [recientes].
+// [velocidad], [estados], [biblioteca], [bios], [red], [logros], [screenscraper] and [recientes].
 // Ready-made widths for the widescreen: the columns on each side (at 320 pixels a line,
 // VdpMd::wideColumnsFor) that make the picture that aspect, and its name.
 struct Widescreen {
@@ -77,7 +77,10 @@ struct Settings {
     bool libraryAtStart = true;   // open the library when plumsg starts without a ROM
     int librarySystem = -1;       // the library's tab: -1 every console, else a ConsoleSystem
     bool libraryList = false;     // the library as a list (title, console, year...) instead of a grid of covers
+    bool libraryBoxes = false;    // the library as a row of 3D boxes that open (wins over libraryList)
     bool libraryDetails = true;   // the panel on the right with the chosen game's cover, data and description
+    static constexpr int kMinCoverWidth = 90, kMaxCoverWidth = 300;
+    int libraryCoverWidth = 150;  // the width of the grid's covers, in pixels: smaller ones fit more to a row
     static constexpr int kLibrarySorts = 5;
     int librarySort = 0;          // what the games are sorted by: 0 title, 1 console, 2 year, 3 genre, 4 developer
     // The Mega CD's BIOS for each region (Japan, USA, Europe); plumsg does not include them.
@@ -94,6 +97,12 @@ struct Settings {
     std::string raUser;
     std::string raToken;
     bool raHardcore = false;
+    // ScreenScraper (screenscraper.fr), for the library's media: the user's account, a
+    // developer account if plumsg was built without one, and the kinds of media to
+    // download (SsKind ids with commas; empty: the usual ones).
+    std::string ssUser, ssPassword;
+    std::string ssDevId, ssDevPassword;
+    std::string ssMedia;
 
     void addRecent(const std::string& path);
     void removeRecent(const std::string& path);

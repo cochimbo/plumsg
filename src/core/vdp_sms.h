@@ -74,6 +74,11 @@ public:
     // A write to the X scroll this many cycles before the end of a line is too late for
     // the next one.
     static constexpr int kHscrollLatchLead = 1;
+    // The VDP looks for the next line's sprites while it draws this one: a change of the
+    // sprite size (register 1 bits 0-1) from this cycle of a line on, in the border after
+    // the picture, comes too late for the next line (issue #82: Madou Monogatari I
+    // switches to tall sprites there, a line before its text box).
+    static constexpr int kSpriteSizeLatchAt = 186;
     void endFrame();
 
     // The Z80's INT line: a pending frame or line interrupt whose enable is set.
@@ -133,6 +138,8 @@ private:
     uint8_t hcLatch_ = 0;
     bool hscrollHeld_ = false;  // register 8 changed too late for the coming line,
     uint8_t heldHscroll_ = 0;   // which takes this value instead
+    bool spriteSizeHeld_ = false;  // the same for the sprite size,
+    uint8_t heldSpriteSize_ = 0;   // register 1 as the coming line's sprites were found
     int line_ = 0;
     int lineCounter_ = 0;
     bool frameIrq_ = false;

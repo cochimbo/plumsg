@@ -239,6 +239,21 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   Wikipedia description, in plumsg's language or, failing that, in English, with a link
   to the page. Everything is kept in `game-info\` next to `covers\`; **Search again**
   looks up the game's description and screenshot again.
+- **ScreenScraper media...** in a game's menu (or in the details panel): what
+  [ScreenScraper](https://www.screenscraper.fr) has of the game, found by its ROM's CRC32,
+  name and size (a disc by its name), or by its title if that fails: front cover, whole
+  sleeve, back cover, 3D box, cartridge label, cartridge, screenshot, title screen, logo,
+  marquee, fan art and, if ticked in **What to download** (or one by one), the video and
+  the manual. The window shows each file (hover to enlarge, click to open) and the game's
+  data and description; **Search for another game** searches by name in any console when
+  it found the wrong one, and **Use this game** downloads that one's instead. The files go
+  to `game-info\screenscraper\<console>\<ROM name>\` with `ficha.json`, and the sleeve
+  and the label also become the game's cover and the label of its 3D cartridge.
+  **Download from ScreenScraper** in the library does every game not done yet, one at a
+  time. ScreenScraper needs the program's developer account (built in, or typed in the
+  **Account** tab) and, optionally, your free screenscraper.fr account for more requests
+  a day; the password is kept in `plumsg.ini`, since ScreenScraper asks for it with every
+  request.
 - **Console > Mega CD BIOS** (or the library's button): the BIOS file for each region
   (Japan, USA and Europe, 128 KB, like `bios_CD_U.bin`). plumsg says whether the file looks
   like a BIOS and which region it is, and **Search the library's folders** finds them by
@@ -529,7 +544,9 @@ On Windows, the `windows-installer.yml` workflow builds the installer with Inno 
   `--filter crt` or `--filter scanlines`, or of the library with
   `plumsg --library folder --download-covers --screenshot library.png`
   (`--library` can be repeated, `--bios` opens the BIOS window and
-  `--find-cover` the cover search for the library's first game;
+  `--find-cover` the cover search for the library's first game, `--media` its
+  ScreenScraper media window, downloading them (`--media search` searching for its
+  title, `--media all` downloading every game's);
   `plumsg rom.md --cheats --screenshot cheats.png` opens the game's cheats with its list and
   `--game-options` its own options, or `--game-options controls` its buttons).
 
@@ -609,10 +626,20 @@ Own code under the [MIT License](LICENSE). Libraries: SDL2 (zlib), Dear ImGui (M
 `third_party/stb`), ymfm (BSD-3-Clause), the Anime4K network weights (MIT, by bloc97, in
 `src/render/anime4k_shaders.h`, generated with `tools/anime4k.py`), the xBR shader written
 following Hyllian's xbr-lv2 (MIT), libchdr (BSD-3-Clause, for `.chd` files), TinySoundFont
-(MIT, in `third_party/tsf`), rcheevos (MIT, for RetroAchievements), minimp3 (CC0, in
-`third_party/minimp3`) and stb_vorbis (public domain or MIT, in `third_party/stb`). The included
+(MIT, in `third_party/tsf`), cgltf (MIT, in `third_party/cgltf`), rcheevos (MIT, for RetroAchievements), minimp3 (CC0, in
+`third_party/minimp3`) and stb_vorbis (public domain or MIT, in `third_party/stb`). The
+interface's typeface is Chakra Petch (SIL Open Font License 1.1, in
+`src/frontend/assets/fonts` with its license). The included
 SoundFont is GeneralUser GS by S. Christian Collins, with its own free license
-(`soundfonts\GeneralUser-GS-LICENSE.txt` in the installation). The 32X and Mega CD were
+(`soundfonts\GeneralUser-GS-LICENSE.txt` in the installation). The 3D library's Mega
+Drive is ["Sega Mega Drive"](https://sketchfab.com/3d-models/sega-mega-drive-47cf3eae9fc3423db22aba119a6a37d5)
+by synthetic worlds (mesh and textures by Jon Blenky), under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with smaller textures
+(`assets/models/CREDITS.txt`), and its cartridge
+["Sonic 2 Mega Drive Cartridge"](https://sketchfab.com/3d-models/sonic-2-mega-drive-cartridge-4c453f8527384c718f652a9f04067119)
+by Naser, also CC BY 4.0; the Master System, its pads and cartridge are
+["Sega Master System"](https://sketchfab.com/3d-models/sega-master-system-0ec998c9b9de4e7f956cab56bbca3c0f)
+by dark_igorek, CC BY 4.0. The 32X and Mega CD were
 written using Sega's documentation and [ares](https://github.com/ares-emulator/ares)
 (ISC) code as a reference. The 240p Test Suite in `tests/240p/` is GPL v2 and its SGDK
 library LGPL v3, with their source next to it. Cover art and screenshots come from

@@ -1,11 +1,31 @@
 #include "sms.h"
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+
 namespace plumsg {
 
 bool isCodemasters(const std::vector<uint8_t>& rom) {
     if (rom.size() < 0x8000) return false;
     const unsigned sum = rom[0x7FE6] | rom[0x7FE7] << 8, inverse = rom[0x7FE8] | rom[0x7FE9] << 8;
     return sum != 0 && sum + inverse == 0x10000;
+}
+
+bool hasGameGearEeprom(uint32_t romCrc) {
+    static constexpr uint32_t kCrcs[] = {
+        0x36EBCD6D,  // Majors Pro Baseball (USA)
+        0x3D8D0DD6,  // World Series Baseball (USA)
+        0xBB38CFD7,  // World Series Baseball (USA) (Rev 1)
+        0x578A8A38,  // World Series Baseball '95 (USA)
+    };
+    return std::find(std::begin(kCrcs), std::end(kCrcs), romCrc) != std::end(kCrcs);
+}
+
+bool isMasterSystemBiosFile(const std::string& path) {
+    std::string name = std::filesystem::u8path(path).filename().u8string();
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+    return name.find("bios") != std::string::npos;
 }
 
 MasterSystem::MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame, bool gameGear)
@@ -16,6 +36,7 @@ MasterSystem::MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, Vi
 void MasterSystem::powerOn() {
     vdp_.reset();
     codemasters_ = isCodemasters(cart_.rom());
+    eepromPresent_ = gameGear_ && hasGameGearEeprom(cart_.crc32());
     mapper_ = codemasters_ ? std::array<uint8_t, 4>{0, 0, 1, 0} : std::array<uint8_t, 4>{0, 0, 1, 2};
     reset();
 }
@@ -25,6 +46,8 @@ void MasterSystem::reset() {
     memoryControl_ = 0;
     pause_ = false;
     fmControl_ = 0;
+    link_ = kLinkReset;
+    eeprom_ = Eeprom{};
 }
 
 uint8_t MasterSystem::romByte(int bank, uint16_t offset) const {
@@ -44,10 +67,12 @@ uint8_t MasterSystem::read(uint16_t addr) const {
         }
         return ram_[addr & 0x1FFF];
     }
+    if (bios_ && (memoryControl_ & 0x08) && addr < 0xC000) return 0xFF;
     if (addr < 0x0400) return cart_.rom()[addr];
     if (addr < 0x4000) return romByte(mapper_[1], addr);
     if (addr < 0x8000) return romByte(mapper_[2], addr & 0x3FFF);
     if (addr < 0xC000) {
+        if (eepromPresent_) return addr == 0x8000 && eeprom_.enabled ? eepromRead() : romByte(mapper_[3], addr & 0x3FFF);
         if (mapper_[0] & 0x08) return cart_.saveRamByte(((mapper_[0] >> 2) & 1) * 0x4000u + (addr & 0x3FFF));
         return romByte(mapper_[3], addr & 0x3FFF);
     }
@@ -68,17 +93,111 @@ void MasterSystem::write(uint16_t addr, uint8_t value) {
     if (addr >= 0xC000) {
         ram_[addr & 0x1FFF] = value;
         if (addr >= 0xFFFC) mapper_[addr - 0xFFFC] = value;
+        if (addr == 0xFFFC && eepromPresent_) {
+            eeprom_.enabled = (value & 0x08) != 0;
+            if (value & 0x80) eeprom_ = Eeprom{eeprom_.enabled};
+        }
+    } else if (eepromPresent_) {
+        if (addr == 0x8000 && eeprom_.enabled) eepromWrite(value);
     } else if (addr >= 0x8000 && (mapper_[0] & 0x08)) {
         cart_.writeSaveRamByte(((mapper_[0] >> 2) & 1) * 0x4000u + (addr & 0x3FFF), value);
     }
 }
 
+// The 93C46 takes a bit on each rise of the clock while selected: a start bit, then 8
+// bits of opcode and address, then for a write 16 bits of data; a read shifts its word
+// out a bit a clock, and goes on to the next word. Dropping the chip select ends a
+// command. The words are kept little-endian in the save RAM.
+void MasterSystem::eepromWrite(uint8_t value) {
+    Eeprom& e = eeprom_;
+    const bool cs = value & 0x04, clk = value & 0x02, in = value & 0x01;
+    if (!cs) {
+        if (e.cs) {
+            e.data = true;
+            e.state = Eeprom::WaitStart;
+        }
+    } else if (clk && !e.clk) {
+        switch (e.state) {
+            case Eeprom::WaitStart:
+                if (in) {
+                    e.opcode = 0;
+                    e.cycles = 0;
+                    e.state = Eeprom::Opcode;
+                }
+                break;
+            case Eeprom::Opcode:
+                e.opcode = static_cast<uint8_t>(e.opcode | in << (7 - e.cycles));
+                if (++e.cycles < 8) break;
+                e.cycles = 0;
+                e.buffer = 0;
+                e.state = Eeprom::Standby;
+                switch (e.opcode >> 6) {
+                    case 1: e.state = Eeprom::Write; break;  // WRITE
+                    case 2:                                   // READ
+                        e.buffer = eepromWord(e.opcode & 0x3F);
+                        e.data = false;  // a dummy 0 bit comes first
+                        e.state = Eeprom::Read;
+                        break;
+                    case 3:  // ERASE
+                        if (e.writeEnable) setEepromWord(e.opcode & 0x3F, 0xFFFF);
+                        break;
+                    default:
+                        switch ((e.opcode >> 4) & 3) {
+                            case 1: e.state = Eeprom::Write; break;  // WRITE ALL
+                            case 2:                                   // ERASE ALL
+                                if (e.writeEnable)
+                                    for (int i = 0; i < 64; ++i) setEepromWord(i, 0xFFFF);
+                                break;
+                            default: e.writeEnable = (e.opcode >> 4) & 1; break;  // EWEN / EWDS
+                        }
+                        break;
+                }
+                break;
+            case Eeprom::Write:
+                e.buffer = static_cast<uint16_t>(e.buffer | in << (15 - e.cycles));
+                if (++e.cycles < 16) break;
+                if (e.writeEnable) {
+                    if (e.opcode & 0x40) setEepromWord(e.opcode & 0x3F, e.buffer);
+                    else
+                        for (int i = 0; i < 64; ++i) setEepromWord(i, e.buffer);
+                }
+                e.state = Eeprom::Standby;
+                break;
+            case Eeprom::Read:
+                e.data = (e.buffer >> (15 - e.cycles)) & 1;
+                if (++e.cycles < 16) break;
+                e.cycles = 0;
+                e.opcode = static_cast<uint8_t>((e.opcode & 0xC0) | ((e.opcode + 1) & 0x3F));
+                e.buffer = eepromWord(e.opcode & 0x3F);
+                break;
+            default: break;
+        }
+    }
+    e.cs = cs;
+    e.clk = clk;
+}
+
+uint8_t MasterSystem::eepromRead() const {
+    return static_cast<uint8_t>((eeprom_.cs ? 0x04 : 0) | 0x02 | (eeprom_.data ? 0x01 : 0));
+}
+
+uint16_t MasterSystem::eepromWord(int index) const {
+    return static_cast<uint16_t>(cart_.saveRamByte(index * 2u) | cart_.saveRamByte(index * 2u + 1) << 8);
+}
+
+void MasterSystem::setEepromWord(int index, uint16_t value) {
+    cart_.writeSaveRamByte(index * 2u, static_cast<uint8_t>(value));
+    cart_.writeSaveRamByte(index * 2u + 1, static_cast<uint8_t>(value >> 8));
+}
+
 uint8_t MasterSystem::in(uint8_t port, int cycle) {
-    if (gameGear_ && port < 0x07) {
-        // START (active low), export console, NTSC; then the link port, idle.
-        static constexpr uint8_t kLink[6] = {0x7F, 0xFF, 0x00, 0xFF, 0x00, 0xFF};
+    if (gameGear_ && port < 0x06) {
+        // START (active low), export console, NTSC; then the link port.
         if (port == 0) return static_cast<uint8_t>((pads_[0].start ? 0x00 : 0x80) | (japanese_ ? 0x00 : 0x40));
-        return kLink[port - 1];
+        // Its outputs read back what was written, its inputs high (issue #78: Primal Rage
+        // writes and reads it back to look for the cable, and waits till it works).
+        if (port == 1) return static_cast<uint8_t>((link_[1] & ~(link_[2] & 0x7F)) | (link_[2] & 0x7F));
+        return link_[port];
     }
     // The ports are decoded by address lines 7, 6 and 0 only.
     switch (port & 0xC1) {
@@ -93,6 +212,12 @@ uint8_t MasterSystem::in(uint8_t port, int cycle) {
 }
 
 void MasterSystem::out(uint8_t port, uint8_t value, int cycle) {
+    if (gameGear_ && port < 0x06) {
+        // The link port's own registers, not the I/O and memory control of 0x3E/0x3F.
+        if (port == 1 || port == 2 || port == 3) link_[port] = value;
+        else if (port == 5) link_[5] = value & 0xF8;  // the low bits are its status
+        return;
+    }
     switch (port & 0xC1) {
         case 0x00: memoryControl_ = value; break;
         case 0x01: {

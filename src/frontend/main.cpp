@@ -30,6 +30,7 @@
 #include "http.h"
 #include "languages.h"
 #include "input.h"
+#include "light_gun.h"
 #include "miniz.h"
 #include "settings.h"
 #include "ui.h"
@@ -83,6 +84,8 @@ struct Paths {
     std::string soundfont; // the SoundFont that comes with plumsg, next to the executable
     std::string sound;     // the instrument editor's folder: assignments and recordings
     std::string videos;    // folder for the games' video and GIF recordings
+    std::string models;    // the 3D view's console models that come with plumsg, next to the executable
+    std::string myModels;  // the user's own, which take their place
 };
 
 const char* const kSoundfont = "soundfonts/GeneralUser-GS.sf2";
@@ -96,17 +99,17 @@ Paths findPaths() {
         if (SDL_RWops* f = SDL_RWFromFile(portable.c_str(), "rb")) {
             SDL_RWclose(f);
             return {portable, base + "states/", base + "profiles/", base + "cheats/", base + "covers/", base + "game-info/",
-                    base + kSoundfont, base + "sound/", base + "recordings/"};
+                    base + kSoundfont, base + "sound/", base + "recordings/", base + "models/", base + "models/"};
         }
     }
     if (char* pref = SDL_GetPrefPath("plumsg", "plumsg")) {
         const std::string dir = pref;
         SDL_free(pref);
         return {dir + "plumsg.ini", dir + "states/", dir + "profiles/", dir + "cheats/", dir + "covers/", dir + "game-info/",
-                base + kSoundfont, dir + "sound/", dir + "recordings/"};
+                base + kSoundfont, dir + "sound/", dir + "recordings/", base + "models/", dir + "models/"};
     }
     return {base + "plumsg.ini", base + "states/", base + "profiles/", base + "cheats/", base + "covers/", base + "game-info/",
-            base + kSoundfont, base + "sound/", base + "recordings/"};
+            base + kSoundfont, base + "sound/", base + "recordings/", base + "models/", base + "models/"};
 }
 
 // Up to 0.0.31 the folders and some files next to plumsg.ini had Spanish names. Renames
@@ -389,8 +392,10 @@ struct CommandLine {
     bool fps = false;        // --fps: with the FPS counter on
     bool downloadCovers = false;  // --download-covers: fetch the library's missing covers
     bool libraryList = false;     // --list: with --library, show it as a list
+    int libraryBoxes = -1;        // --boxes [1-4]: with --library, show its 3D boxes (and hold one open at that step)
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
     bool coverSearch = false;     // --find-cover: with --library, look for the first game's cover
+    int media = 0;                // --media [search|all]: with --library, the first game's ScreenScraper media (1 downloaded, 2 searched for, 3 every game's)
     bool cheats = false;          // --cheats: start with the game's Cheats window open
     bool achievements = false;    // --achievements: start with the RetroAchievements window open
     int gameOptions = 0;          // --game-options [controls]: start with its Options for this game window open (2 on Controls)
@@ -427,6 +432,7 @@ const char* const kHelp = N_(
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
     "  --find-cover           con --library: buscar la carátula del primer juego\n"
     "  --list                 con --library: verla como lista en vez de cuadrícula\n"
+    "  --boxes                con --library: verla como cajas 3D\n"
     "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
     "  --achievements         abrir la ventana de RetroAchievements\n"
     "  --game-options         abrir las opciones propias del juego\n"
@@ -447,7 +453,7 @@ std::string optionName(const std::string& a) {
         {"--captura", "--screenshot"}, {"--grabar", "--record"}, {"--cuadros", "--frames"}, {"--vista", "--view"},
         {"--inclinacion", "--tilt"}, {"--giro", "--yaw"}, {"--menu-estados", "--states-menu"},
         {"--biblioteca", "--library"}, {"--descargar-caratulas", "--download-covers"}, {"--lista", "--list"},
-        {"--buscar-caratula", "--find-cover"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
+        {"--buscar-caratula", "--find-cover"}, {"--medios", "--media"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
         {"--opciones-juego", "--game-options"}, {"--instrumentos", "--instruments"}, {"--pista", "--track"}, {"--partitura", "--score"},
         {"--filtro", "--filter"}, {"--reescalado", "--upscaling"}, {"--pantalla-completa", "--fullscreen"},
         {"--ventana", "--windowed"}, {"--estado", "--load-state"}, {"--alojar", "--host"}, {"--unirse", "--join"},
@@ -475,8 +481,19 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--library") c.library.push_back(next());
         else if (a == "--download-covers") c.downloadCovers = true;
         else if (a == "--list") c.libraryList = true;
+        else if (a == "--boxes") {
+            // Undocumented steps, for screenshots: 1 the box out, 2 its cartridge out, 3 on the way, 4 in the console.
+            c.libraryBoxes = 0;
+            if (i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '4' && !argv[i + 1][1]) c.libraryBoxes = argv[++i][0] - '0';
+        }
         else if (a == "--bios") c.bios = true;
         else if (a == "--find-cover") c.coverSearch = true;
+        else if (a == "--media") {
+            c.media = 1;
+            const std::string mode = i + 1 < argc ? argv[i + 1] : "";
+            if (mode == "search" || mode == "buscar") c.media = 2, ++i;
+            else if (mode == "all" || mode == "todos") c.media = 3, ++i;
+        }
         else if (a == "--cheats") c.cheats = true;
         else if (a == "--achievements") c.achievements = true;
         else if (a == "--game-options") {
@@ -633,6 +650,7 @@ int main(int argc, char** argv) {
     app->cheatsDir = paths.cheats;
     ui->library().setCoversFolder(paths.covers);
     ui->gameInfo().setFolder(paths.info);
+    ui->scraper().setFolder(paths.info + "screenscraper/");
     auto audio = std::make_unique<Audio>();
     // RetroAchievements: a screenshot run shows its windows but never logs in.
     Achievements achievements([](const std::string& url, const std::string& post, const std::string& agent,
@@ -674,6 +692,8 @@ int main(int argc, char** argv) {
     InstrumentEditor editor(paths.sound);
     ui->setEditor(&editor);
     ui->setSoundfonts(paths.soundfont, paths.sound + "soundfonts/");
+    ui->setModelFolders(paths.myModels == paths.models ? std::vector<std::string>{paths.models}
+                                                       : std::vector<std::string>{paths.myModels, paths.models});
     auto loadSoundfont = [&] {
         const std::string path = settings.soundfont.empty() ? paths.soundfont : settings.soundfont;
         if (path == rolandFont) return rolandFontOk;
@@ -861,6 +881,10 @@ int main(int argc, char** argv) {
     bool openStateMenu = cmd.stateMenu;
     if (!cmd.library.empty()) settings.libraryFolders = cmd.library;
     if (cmd.libraryList) settings.libraryList = true;
+    if (cmd.libraryBoxes >= 0) {
+        settings.libraryBoxes = true;
+        ui->poseBoxes(cmd.libraryBoxes);
+    }
     if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolders.empty()))
         ui->toggleLibrary();
     if (cmd.bios) ui->openBios();
@@ -882,6 +906,7 @@ int main(int argc, char** argv) {
     int loops = 0;
     bool downloadCovers = cmd.downloadCovers;
     bool coverSearch = cmd.coverSearch;
+    int media = cmd.media;
     bool sizedForMenu = false;
 
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -891,6 +916,11 @@ int main(int argc, char** argv) {
     bool slowMotion = false;
     double musicSpeed = 1.0;  // the Partitura's speed
     bool orbiting = false;  // dragging the pseudo-3D camera with the mouse
+    // The light guns' crosshairs, while the second port has one and a Mega Drive game runs.
+    LightGunAim gunAim;
+    auto gunPlugged = [&] { return app->romLoaded && isLightGun(app->console.padType(1)) && !app->console.isMasterSystem(); };
+    int lastMouseX = -1, lastMouseY = -1;
+    Uint64 lastAim = SDL_GetPerformanceCounter();
     bool padMenuWasOpen = false;  // the states menu, the library or the file browser, last frame
     int framesRun = 0;
     // The FPS counter's measures: the frames run in this turn of the loop and the time
@@ -1029,7 +1059,9 @@ int main(int argc, char** argv) {
         // ROM cheats change the cartridge, which the savestate the guest gets does not carry.
         app->console.setCheats({});
         // The guest plays on pad 2: it has to be plugged in (the guest gets the host's types).
-        if (app->console.padType(1) == PadType::None) app->console.setPadType(1, PadType::SixButton);
+        // A light gun's aim does not travel over the network either.
+        if (app->console.padType(1) == PadType::None || isLightGun(app->console.padType(1)))
+            app->console.setPadType(1, PadType::SixButton);
         paused = slowMotion = false;
         ui->notify(host ? trf("Esperando al otro jugador en el puerto %d", settings.netPort)
                         : trf("Conectando con %s", settings.netAddress.c_str()));
@@ -1124,7 +1156,7 @@ int main(int argc, char** argv) {
                 default: break;  // rewind and fast forward work while held, below
             }
             // The pseudo-3D camera: drag to turn it, wheel to zoom, double click to centre it.
-            if (cam.pseudo3d) {
+            if (cam.pseudo3d && !gunPlugged()) {  // with a light gun the mouse aims it
                 // Without tilting the camera only the zoom changes.
                 if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && !ui->mouseBusy() &&
                     cam.tiltCamera) {
@@ -1270,6 +1302,45 @@ int main(int argc, char** argv) {
                                                         static_cast<int>(net->desyncFrame()));
                     break;
             }
+        }
+        // The light guns: the picture as the last loop drew it, the mouse where it went
+        // (not over the menus), and each player's stick or d-pad.
+        uiState.crosshairs.clear();
+        uiState.hideMouse = false;
+        if (gunPlugged() && !netPlaying()) {
+            int ww, wh, dw, dh;
+            SDL_GetWindowSize(window, &ww, &wh);
+            SDL_GL_GetDrawableSize(window, &dw, &dh);
+            const float scale = dw > 0 ? static_cast<float>(ww) / static_cast<float>(dw) : 1.0f;
+            const VideoFrameMd& f = app->console.frame();
+            const Viewport pic = pictureArea(f, Viewport{0, 0, dw, std::max(1, dh - ui->menuHeight())}, settings.render);
+            const float colW = static_cast<float>(pic.width) / static_cast<float>(f.width);
+            gunAim.setPicture((static_cast<float>(pic.x) + colW * static_cast<float>(f.wideLeft)) * scale,
+                              static_cast<float>(dh - pic.y - pic.height) * scale,
+                              colW * static_cast<float>(f.consoleWidth()) * scale, static_cast<float>(pic.height) * scale);
+            int mx, my;
+            const Uint32 mouse = SDL_GetMouseState(&mx, &my);
+            const bool mouseFree = !ui->mouseBusy() && (SDL_GetWindowFlags(window) & SDL_WINDOW_MOUSE_FOCUS);
+            if (mouseFree && (mx != lastMouseX || my != lastMouseY)) gunAim.mouseMoved(static_cast<float>(mx), static_cast<float>(my));
+            lastMouseX = mx;
+            lastMouseY = my;
+            gunAim.mouseButtons(mouseFree && (mouse & SDL_BUTTON_LMASK), mouseFree && (mouse & SDL_BUTTON_RMASK),
+                                mouseFree && (mouse & SDL_BUTTON_MMASK));
+            const bool keyboard = !ui->keyboardBusy();
+            const int guns = app->console.padType(1) == PadType::Justifier ? 2 : 1;
+            const Uint64 nowAim = SDL_GetPerformanceCounter();
+            const float seconds = std::min(0.1f, static_cast<float>(static_cast<double>(nowAim - lastAim) / freq));
+            lastAim = nowAim;
+            for (int g = 0; g < guns; ++g) {
+                float sx, sy;
+                input->leftStick(g, &sx, &sy);
+                if (!paused) gunAim.move(g, input->poll(g, keyboard), sx, sy, seconds);
+                UiState::Crosshair c;
+                c.onPicture = gunAim.crosshair(g, &c.x, &c.y);
+                c.gun = g;
+                uiState.crosshairs.push_back(c);
+            }
+            uiState.hideMouse = mouseFree && gunAim.over(static_cast<float>(mx), static_cast<float>(my));
         }
         const UiActions act = ui->frame(uiState);
         if (!act.load.empty()) {
@@ -1480,6 +1551,12 @@ int main(int argc, char** argv) {
                         if (app->console.saveState(snapshot, true)) rewind.push(std::move(snapshot));
                     }
                     app->console.setPads(input->poll(0, keyboard), input->poll(1, keyboard));
+                    if (gunPlugged()) {
+                        const VideoFrameMd& f = app->console.frame();
+                        const int lines = f.interlaced ? f.height / 2 : f.height;
+                        for (int g = 0; g < 2; ++g)
+                            app->console.setGun(g, gunAim.state(g, input->poll(g, keyboard), f.consoleWidth(), lines));
+                    }
                     app->console.setSampleRate(audio->rate() / speed);
                     // The picture shown is run-ahead's, so these need not be drawn.
                     app->console.setDrawing(ahead == 0);
@@ -1554,11 +1631,16 @@ int main(int argc, char** argv) {
             coverSearch = false;
             loops = 0;
         }
+        if (media && ui->libraryOpen() && ui->library().pending() == 0 && loops > 3) {
+            ui->startMedia(0, media);
+            media = 0;
+            loops = 0;
+        }
         // A screenshot waits a few frames for the window and the popups to settle, and a
         // library one for its covers.
         const bool libraryReady =
-            loops > 3 && (!ui->libraryOpen() || (!downloadCovers && !coverSearch && ui->library().pending() == 0 && loops > 20)) &&
-            !ui->coverSearchBusy() && !ui->cheatsBusy() && !ui->libraryInfoBusy();
+            loops > 3 && (!ui->libraryOpen() || (!downloadCovers && !coverSearch && !media && ui->library().pending() == 0 && loops > 20)) &&
+            !ui->coverSearchBusy() && !ui->mediaBusy() && !ui->cheatsBusy() && !ui->libraryInfoBusy();
         if (capturing && libraryReady &&
             (framesRun >= cmd.frames || !app->romLoaded || ui->libraryOpen() ||
              (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {

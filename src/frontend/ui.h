@@ -20,9 +20,12 @@
 #include "instrument_editor.h"
 #include "score_view.h"
 #include "library.h"
+#include "screenscraper.h"
 #include "settings.h"
 
 namespace plumsg {
+
+class BoxShelf;
 
 // What the user asked for this frame; main() carries it out.
 struct UiActions {
@@ -110,6 +113,15 @@ struct UiState {
     const FpsCounter* fps = nullptr;  // drawn over the game while settings.fpsCounter is on
     EditorView editor;
     const ScoreMusic* score = nullptr;  // what the Partitura shows (null for nothing)
+    // The light guns' crosshairs over the game, in window coordinates, and whether the
+    // mouse is aiming one over the picture (its pointer is hidden there).
+    struct Crosshair {
+        float x = 0, y = 0;
+        bool onPicture = false;  // off it, the gun points off the screen
+        int gun = 0;             // 0 the first (blue on the Justifier), 1 the Justifier's pink one
+    };
+    std::vector<Crosshair> crosshairs;
+    bool hideMouse = false;
 };
 
 // Menu bar and option windows, drawn with Dear ImGui (OpenGL 3) on top of the game.
@@ -139,11 +151,16 @@ public:
     // The game library: a grid of covers that the pad (or the keyboard) can drive.
     void toggleLibrary();
     bool libraryOpen() const { return showLibrary_; }
+    // For screenshots: the library's 3D view holding still at that step (see BoxShelf::pose).
+    void poseBoxes(int step) { boxesPose_ = step; }
     void openBios() { showBios_ = true; }
     // "Buscar carátula..." for the library's game `game`.
     void openCoverSearch(size_t game);
-    // A PNG or JPEG of the user's as the game's cover, for when none is found online.
-    void chooseCoverImage(size_t game);
+    // A PNG or JPEG of the user's as the game's cover, for when none is found online; or
+    // the whole sleeve (back, spine and front side by side) or the cartridge's label, for
+    // its 3D box.
+    enum class CoverImage { Front, Sleeve, Label };
+    void chooseCoverImage(size_t game, CoverImage kind = CoverImage::Front);
     void useCoverImage(const std::string& file);
     bool coverSearchBusy() const { return showCoverSearch_ && (coverSearch_.autoPreview || library_.coverSearch().busy); }
     // The Trucos window, for the game main() handed it.
@@ -161,6 +178,17 @@ public:
     bool browserOpen() const { return browser_.isOpen(); }
     Library& library() { return library_; }
     GameInfo& gameInfo() { return gameInfo_; }
+    ScreenScraper& scraper() { return scraper_; }
+    // "Medios de ScreenScraper..." for the library's game `game`: what was downloaded of
+    // it, and a search to pick the right game.
+    void openMedia(size_t game);
+    // For screenshots: the window for `game`, downloading its media (mode 1), searching for
+    // its title (2) or downloading every game's (3).
+    void startMedia(size_t game, int mode);
+    bool mediaBusy() const {
+        return showMedia_ && (scraper_.sheet().busy || scraper_.searchState().busy || scraper_.searchState().previewBusy ||
+                              scraper_.batchLeft() > 0);
+    }
     // The detail panel still looking for the chosen game's data, or the font still to be made
     // again with characters it lacks (screenshots wait for both).
     bool libraryInfoBusy() const {
@@ -182,6 +210,8 @@ public:
     // Where the SoundFonts to choose from are: the one that comes with plumsg, and the
     // user's folder (created if missing), listed in Sonido > SoundFont.
     void setSoundfonts(std::string included, std::string folder);
+    // Where the 3D view's console models are, the user's first: each folder ends in a slash.
+    void setModelFolders(std::vector<std::string> folders) { modelFolders_ = std::move(folders); }
     // The states menu: a list of the slots that the pad (or the keyboard) can drive.
     void toggleStateMenu();
     bool stateMenuOpen() const { return stateMenu_.open; }
@@ -219,13 +249,22 @@ private:
     void drawLibraryFolders(UiActions& out);
     void drawLibraryGrid(const std::vector<size_t>& visible);
     void drawLibraryList(const std::vector<size_t>& visible);
+    void drawLibraryBoxes(const std::vector<size_t>& visible);
     void drawLibraryDetails(const std::vector<size_t>& visible);
     void libraryItem(bool clicked, int n);
-    void setLibraryList(bool list);
+    // 0 the grid, 1 the list, 2 the 3D boxes.
+    void setLibraryView(int view);
     void buildFonts();
     void needGlyphs(const std::string& text);
     void drawCoverSearch();
     void startCoverSearch();
+    void drawMedia(UiActions& out);
+    void drawMediaFound(const Library::Game& g);
+    void drawMediaSearch(const Library::Game& g);
+    void drawMediaAccount(UiActions& out);
+    void drawMediaKinds(UiActions& out);
+    // The account and the kinds of media, from the settings to the downloader.
+    void applyScraperSettings();
     void drawBios(UiActions& out);
     void drawNetplay(const UiState& state, UiActions& out);
     void rescanLibrary();
@@ -237,6 +276,7 @@ private:
     void drawStateOptions(int tab, const UiState& state, UiActions& out);
     bool handleStateMenu(const SDL_Event& e);
     void drawOverlays(const UiState& state);
+    void drawCrosshairs(const UiState& state);
     // The FPS counter and its graph, in settings_.fpsCorner; `badge` says the speed badge
     // takes the top right corner.
     void drawFpsCounter(const FpsCounter& fps, bool badge);
@@ -250,7 +290,11 @@ private:
     Input& input_;
     FileBrowser browser_;
     Library library_;
+    bool boxesDragged_ = false;  // the press on the 3D view has moved: no click when it ends
+    std::unique_ptr<BoxShelf> shelf_;  // the library's 3D view, made the first time it is shown
+    int boxesPose_ = 0;
     GameInfo gameInfo_;
+    ScreenScraper scraper_;
     std::set<ImWchar> fontExtra_;  // characters beyond the base ranges that texts have needed
     ImVector<ImWchar> fontRanges_;  // the atlas's ranges, alive until it is built
     bool fontsDirty_ = false;
@@ -259,6 +303,7 @@ private:
     ScoreWindow score_;
     std::unique_ptr<AchievementsUi> achievements_;
     std::string includedSoundfont_, soundfontFolder_;
+    std::vector<std::string> modelFolders_;
     void drawSoundfontMenu(UiActions& out);
     void drawSoundfontCombo(UiActions& out, bool labelled = true);
     void drawEqualizer(UiActions& out);
@@ -283,6 +328,7 @@ private:
     BrowseFor browseFor_ = BrowseFor::Game;
     int biosSlot_ = 0;  // the region whose BIOS is being chosen
     std::string coverImageFor_;  // the game (its path) whose cover image is being chosen
+    CoverImage coverImageKind_ = CoverImage::Front;  // and what it is meant to be
     std::string biosStatus_;
     std::map<std::string, BiosInfo> biosChecked_;  // what each chosen file looks like, read once
     bool openRequested_ = false;
@@ -316,8 +362,9 @@ private:
         bool tabChanged = false;  // the console tab was changed with the pad or the keyboard
         // The menu of one game (right click, X on the pad or the menu key): its index in
         // the filtered list, the item chosen with the pad or the keys, and a request to open it.
-        // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula, Carátula desde imagen
-        static constexpr int kItems = 6;
+        // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula, Carátula desde imagen,
+        // Portada completa, Etiqueta del cartucho, Medios de ScreenScraper
+        static constexpr int kItems = 9;
         int menuGame = -1;
         int menuItem = 0;
         bool openMenu = false;
@@ -338,6 +385,18 @@ private:
         bool focus = false;
         bool autoPreview = false;  // show the closest cover once the names arrive
     } coverSearch_;
+    // "Medios de ScreenScraper..." for one game of the library.
+    bool showMedia_ = false;
+    struct MediaView {
+        std::string path;    // the game's ROM
+        char query[128] = "";
+        int system = 0;      // to search in, a ConsoleSystem
+        int selected = -1;   // in the search's results
+        bool autoPick = false;  // pick the game it is (or the first) once the results arrive
+        int tab = 0;         // to bring forward: 1 the search
+        bool selectTab = false;
+        char user[64] = "", password[64] = "", devId[64] = "", devPassword[96] = "";
+    } media_;
     char cheatCode_[64] = "";
     char cheatName_[96] = "";
     std::string cheatError_;

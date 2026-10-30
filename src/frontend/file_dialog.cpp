@@ -9,6 +9,7 @@
 #include "../core/i18n.h"
 #include "../core/system.h"
 #include "imgui.h"
+#include "theme.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -220,8 +221,8 @@ bool FileBrowser::draw(std::string* chosen) {
             }
         }
         ImGui::SameLine();
-        ImGui::TextDisabled("%s", pickFolder ? tr("A / Intro: entrar   B / Retroceso: subir   Esc: cerrar")
-                                              : tr("A / Intro: abrir   B / Retroceso: subir   Esc: cerrar"));
+        theme::hint(pickFolder ? tr("A / Intro: entrar   B / Retroceso: subir   Esc: cerrar")
+                               : tr("A / Intro: abrir   B / Retroceso: subir   Esc: cerrar"));
         ImGui::Separator();
         std::string next;
         auto choose = [&](const Entry& e) {

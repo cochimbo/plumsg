@@ -3,6 +3,97 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## Unreleased
+
+- **Light guns** (#102): Consola > Mando 2 (or a game's options) plugs in Konami's
+  Justifier (Lethal Enforcers I and II, Snatcher), with its second gun for player 2, or
+  Sega's Menacer (T2: The Arcade Game, Menacer 6-Game Cartridge) instead of pad 2. A
+  crosshair on the game aims each gun, moved with the mouse or with the pad's left stick
+  (or d-pad); the left click or A pulls the trigger, the right click or C shoots off the
+  screen to reload, and the middle click or Start is Start.
+- The 3D shelf's Master System is a real 3D model too, with its two pads in front, plugged in, and
+  its own cartridge wearing each game's label: "Sega Master System" by dark_igorek
+  (CC BY 4.0).
+
+## 0.1.0-beta.8
+
+- **The library's 3D shelf** ("Cajas 3D", next to Cuadrícula and Lista): the games'
+  cases stand on a shelf with their spines out; the wheel zooms out to see it all and
+  dragging moves along it. A click (or A) takes a box out, and dragging turns it to see
+  its back; a second click opens its lid and brings out the cartridge (the disc on the
+  Mega CD), which dragging turns too; a third puts it into the console, which rises from
+  the floor, its power light comes on and the game starts. A click anywhere else puts
+  things back a step. The cartridges and consoles are built from their real
+  measurements: the Mega Drive and Master System of the first model, the Game Gear, the
+  32X in the Mega Drive's slot and the first Mega-CD under it, with its tray. The Mega
+  Drive is a real 3D model, "Sega Mega Drive" by synthetic worlds (Jon Blenky, CC BY
+  4.0), and so is its cartridge, "Sonic 2 Mega Drive Cartridge" by Naser (CC BY 4.0),
+  wearing each game's label; a .glb of your own with the same name in the "models"
+  folder next to plumsg.ini takes its place.
+- "Etiqueta del cartucho..." in a game's menu puts a scan of its cartridge label on the
+  3D cartridge; labels in an "etiquetas" (or "labels", "Named_Labels") folder next to
+  the ROMs are found by the game's name.
+- "Portada completa..." in a game's menu takes a whole sleeve (back, spine and front side
+  by side, as The Cover Project has them): the 3D box wears all of it, and the grid and
+  the details panel show its front.
+- **ScreenScraper** (screenscraper.fr): "Medios de ScreenScraper..." in a game's menu (or
+  in the details panel) identifies the game by its ROM (CRC32, name and size; a disc by
+  its name, or any game by its title if that fails) and downloads what ScreenScraper has
+  of it: front cover, whole sleeve, back cover, 3D box, cartridge label, cartridge,
+  screenshot, title screen, logo, marquee and fan art, and on request the video and the
+  manual. Its window shows everything downloaded (the cursor over one enlarges it, a
+  click opens it) with ScreenScraper's data of the game; if it is the wrong game,
+  **Buscar otro juego** searches by name in any console, shows each result's cover and
+  **Usar este juego** downloads that one's instead. The sleeve becomes the game's cover
+  (the 3D box wears it) and the label goes on its cartridge. **Descargar de ScreenScraper**
+  in the library does every game that has not been done yet, one by one, keeping the
+  covers already there unless ScreenScraper has the whole sleeve. ScreenScraper asks for
+  a developer account of the program as well as (optionally) the user's free account,
+  both in the window's **Cuenta** tab; builds can carry the developer one
+  (`PLUMSG_SCREENSCRAPER_DEVID` and `PLUMSG_SCREENSCRAPER_DEVPASSWORD` in CMake, from the
+  repository's secrets in the installer's build).
+
+## 0.1.0-beta.7
+
+- **A look of its own**: the interface takes its style from the console, black ribbed
+  plastic with the red of its "16-BIT" and chrome italic lettering, in the Chakra Petch
+  font. Window title bars, the "Jugar" button, the pad's buttons in the controls help
+  and the grid behind the library's covers match it.
+- "Opciones de este juego": each option has a General / Propio switch, and the on/off
+  ones a "Sí" / "No" list, instead of two boxes on a row.
+- The library's grid has a "Tamaño" slider to make the covers smaller or bigger.
+- Game Gear: World Series Baseball saves to the EEPROM on its cartridge and no longer
+  stays black ([#77](https://github.com/cochimbo/plumsg/issues/77)); Primal Rage gets
+  past its title screen, as the link port now reads back what the game writes to it
+  ([#78](https://github.com/cochimbo/plumsg/issues/78)); and the last line of the
+  pictures in Madou Monogatari I is no longer garbled: a change of sprite size at the
+  end of a line waits a line, as on the console
+  ([#82](https://github.com/cochimbo/plumsg/issues/82)).
+
+## 0.1.0-beta.6
+
+- **Virtua Racing** runs: the SVP chip on its cartridge (the SSP1601 DSP and its memory
+  controller) is emulated.
+- Master System: a BIOS dump loaded as a game ("[BIOS] Alex Kidd in Miracle World...")
+  no longer stays on the Sega logo: it finds the slots empty and runs the game it has
+  inside ([#136](https://github.com/cochimbo/plumsg/issues/136)).
+- 32X: the reset button resets only the 68000, as on the console, and the SH-2s go back
+  to their boot ROM; BC Racers starts again after a reset. testpico passes all its 57
+  tests ([#69](https://github.com/cochimbo/plumsg/issues/69)).
+- misc_test passes 23 of its 28 checks: the 68000's prefetch and DRAM
+  refresh, the Z80's reset, bus request and waits during DMA, and the VDP's sprite
+  table cache ([#137](https://github.com/cochimbo/plumsg/issues/137)). Sega's softcheck
+  says OK to every test ([#117](https://github.com/cochimbo/plumsg/issues/117)), and
+  m68k_opcode_sizes gets both checksums right
+  ([#111](https://github.com/cochimbo/plumsg/issues/111)).
+- Another World (Europe) starts on a PAL console: the top of the picture no longer goes
+  blank when it flips pages.
+- Honoo no Toukyuuji Dodge Danpei finds its EEPROM and gets past the SEGA logo
+  ([#115](https://github.com/cochimbo/plumsg/issues/115)).
+- Pad 2 can be unplugged ("Sin mando"), for games such as ESPN Sunday Night NFL that make
+  player 2 the computer only with the second port empty
+  ([#93](https://github.com/cochimbo/plumsg/issues/93)).
+
 ## 0.1.0-beta.5
 
 - Master System: the games made only for European 50 Hz consoles (Back to the Future

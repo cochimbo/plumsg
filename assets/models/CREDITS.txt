@@ -1,0 +1,34 @@
+Console models for plumsg's 3D library view
+===========================================
+
+megadrive.glb
+  "Sega Mega Drive" by synthetic worlds (https://sketchfab.com/syntheticworlds),
+  mesh and textures by Jon Blenky, modelled for the synthetic worlds VR gaming room
+  (http://syntheticworlds.co.uk/).
+  Source: https://sketchfab.com/3d-models/sega-mega-drive-47cf3eae9fc3423db22aba119a6a37d5
+  License: Creative Commons Attribution 4.0 (CC BY 4.0),
+  https://creativecommons.org/licenses/by/4.0/
+  Changes: textures reduced to 2048x2048 (the colour one as JPEG) and the
+  metallic/roughness texture removed, to keep the file small.
+
+megadrive-cartridge.glb
+  "Sonic 2 Mega Drive Cartridge" by Naser (https://sketchfab.com/naser.ali).
+  Source: https://sketchfab.com/3d-models/sonic-2-mega-drive-cartridge-4c453f8527384c718f652a9f04067119
+  License: Creative Commons Attribution 4.0 (CC BY 4.0),
+  https://creativecommons.org/licenses/by/4.0/
+  Changes: the normal map reduced to 1024x1024, both textures as JPEG, and the
+  roughness and occlusion textures removed. plumsg prints each game's label (or
+  its cover) over the model's own.
+
+mastersystem.glb, mastersystem-cartridge.glb
+  "Sega Master System" by dark_igorek (https://sketchfab.com/dark_igorek).
+  Source: https://sketchfab.com/3d-models/sega-master-system-0ec998c9b9de4e7f956cab56bbca3c0f
+  License: Creative Commons Attribution 4.0 (CC BY 4.0),
+  https://creativecommons.org/licenses/by/4.0/
+  Changes: split in two, the console with its two pads and their cables, and the
+  cartridge (the Sega Cards and the floor left out); textures reduced to 2048x2048
+  (normal maps 1024x1024) as JPEG, the metallic/roughness textures removed.
+  plumsg prints each game's label (or its cover) over the cartridge's own.
+
+Your own models: put a .glb with the same name in the "models" folder next to
+plumsg.ini and plumsg uses it instead.

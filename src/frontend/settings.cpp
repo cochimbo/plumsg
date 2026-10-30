@@ -126,7 +126,11 @@ void Settings::parse(std::istream& in, Settings& s) {
                     if (iniName(lower(value)) == kRegionNames[i]) s.region = static_cast<Region>(i);
             } else if (key == "pad1" || key == "pad2") {
                 PadType t = value == "3" ? PadType::ThreeButton : PadType::SixButton;
-                if (value == "0" && key == "pad2") t = PadType::None;  // pad 1 is always there
+                if (key == "pad2") {  // pad 1 is always there, and light guns only go in port 2
+                    if (value == "0") t = PadType::None;
+                    else if (lower(value) == "menacer") t = PadType::Menacer;
+                    else if (lower(value) == "justifier") t = PadType::Justifier;
+                }
                 s.padType[key == "pad1" ? 0 : 1] = t;
             } else if (key == "fm_master_system") {
                 s.smsFm = yes(value);
@@ -147,8 +151,14 @@ void Settings::parse(std::istream& in, Settings& s) {
                 if (!value.empty() && std::find(s.libraryFolders.begin(), s.libraryFolders.end(), value) == s.libraryFolders.end())
                     s.libraryFolders.push_back(value);
             } else if (key == "open_at_start") s.libraryAtStart = yes(value);
-            else if (key == "view") s.libraryList = iniName(lower(value)) == "list";
+            else if (key == "view") {
+                const std::string view = iniName(lower(value));
+                s.libraryList = view == "list";
+                s.libraryBoxes = view == "boxes";
+            }
             else if (key == "details") s.libraryDetails = yes(value);
+            else if (key == "cover_width")
+                s.libraryCoverWidth = std::clamp(std::atoi(value.c_str()), Settings::kMinCoverWidth, Settings::kMaxCoverWidth);
             else if (key == "sort") {
                 s.librarySort = 0;
                 for (int i = 0; i < Settings::kLibrarySorts; ++i)
@@ -170,6 +180,12 @@ void Settings::parse(std::istream& in, Settings& s) {
             else if (key == "user") s.raUser = value;
             else if (key == "token") s.raToken = value;
             else if (key == "hardcore") s.raHardcore = yes(value);
+        } else if (section == "screenscraper") {
+            if (key == "user") s.ssUser = value;
+            else if (key == "password") s.ssPassword = value;
+            else if (key == "dev_id") s.ssDevId = value;
+            else if (key == "dev_password") s.ssDevPassword = value;
+            else if (key == "media") s.ssMedia = value;
         } else if (section == "recent") {
             if (key == "rom" && !value.empty() && s.recent.size() < kMaxRecent) s.recent.push_back(value);
             else if (key == "last_folder") s.lastFolder = value;
@@ -235,10 +251,14 @@ void Settings::write(std::ostream& out) const {
         << "# those of its SoundFont family, and keeping the closest.\n"
         << "compare_sound = " << flag(compareSound) << "\n"
         << "\n[console]\n"
-        << "# region: auto (the ROM's), japan, usa or europe. pad1/pad2: 3 or 6 buttons; pad2 = 0: nothing plugged in.\n"
+        << "# region: auto (the ROM's), japan, usa or europe. pad1/pad2: 3 or 6 buttons; pad2 = 0: nothing plugged in,\n"
+        << "# menacer or justifier: that light gun, aimed with the mouse or the left stick.\n"
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"
         << "pad1 = " << (padType[0] == PadType::ThreeButton ? 3 : 6) << "\n"
-        << "pad2 = " << (padType[1] == PadType::ThreeButton ? 3 : padType[1] == PadType::None ? 0 : 6) << "\n"
+        << "pad2 = "
+        << (padType[1] == PadType::ThreeButton ? "3" : padType[1] == PadType::None ? "0"
+            : padType[1] == PadType::Menacer ? "menacer" : padType[1] == PadType::Justifier ? "justifier" : "6")
+        << "\n"
         << "# fm_master_system: yes, the Master System FM unit outside Japan too.\n"
         << "fm_master_system = " << flag(smsFm) << "\n"
         << "# overclock: processor (68000) speed in percent, from 100 (the console's) to 400.\n"
@@ -262,13 +282,14 @@ void Settings::write(std::ostream& out) const {
         << "\n[library]\n"
         << "# folder: where your games are (one line per folder). open_at_start: show the library when\n"
         << "# plumsg opens without a game. system: the chosen tab (all, megadrive, 32x, megacd, mastersystem\n"
-        << "# or gamegear). view: grid or list. details: the right-hand panel with the chosen game's data.\n"
-        << "# sort: title, console, year, genre or developer.\n";
+        << "# or gamegear). view: grid, list or boxes. details: the right-hand panel with the chosen game's data.\n"
+        << "# sort: title, console, year, genre or developer. cover_width: the grid's covers, in pixels.\n";
     for (const auto& f : libraryFolders) out << "folder = " << f << "\n";
     out << "open_at_start = " << flag(libraryAtStart) << "\n"
         << "system = " << (librarySystem >= 0 && librarySystem < kSystemCount ? kSystemKeys[librarySystem] : "all") << "\n"
-        << "view = " << (libraryList ? "list" : "grid") << "\n"
+        << "view = " << (libraryBoxes ? "boxes" : libraryList ? "list" : "grid") << "\n"
         << "details = " << flag(libraryDetails) << "\n"
+        << "cover_width = " << libraryCoverWidth << "\n"
         << "sort = " << kLibrarySortKeys[std::clamp(librarySort, 0, kLibrarySorts - 1)] << "\n"
         << "\n[bios]\n"
         << "# The Mega CD BIOS for each region (they do not come with plumsg).\n";
@@ -286,6 +307,15 @@ void Settings::write(std::ostream& out) const {
         << "user = " << raUser << "\n"
         << "token = " << raToken << "\n"
         << "hardcore = " << flag(raHardcore) << "\n"
+        << "\n[screenscraper]\n"
+        << "# The screenscraper.fr account for the library's media (ScreenScraper asks for the password\n"
+        << "# with every request, so it is kept here). dev_id and dev_password: a developer account, only\n"
+        << "# if this build of plumsg has none of its own. media: the kinds to download, with commas.\n"
+        << "user = " << ssUser << "\n"
+        << "password = " << ssPassword << "\n"
+        << "dev_id = " << ssDevId << "\n"
+        << "dev_password = " << ssDevPassword << "\n"
+        << "media = " << ssMedia << "\n"
         << "\n[recent]\n";
     if (!lastFolder.empty()) out << "last_folder = " << lastFolder << "\n";
     for (const auto& r : recent) out << "rom = " << r << "\n";

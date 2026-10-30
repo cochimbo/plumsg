@@ -348,6 +348,17 @@ void Input::rightStick(float* x, float* y) const {
     }
 }
 
+void Input::leftStick(int player, float* x, float* y) const {
+    *x = *y = 0;
+    if (player < 0 || static_cast<size_t>(player) >= pads_.size()) return;
+    SDL_GameController* p = pads_[static_cast<size_t>(player)];
+    const int ax = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_LEFTX);
+    const int ay = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_LEFTY);
+    if (std::abs(ax) < config_.stickDeadzone && std::abs(ay) < config_.stickDeadzone) return;
+    *x = static_cast<float>(ax) / 32767.0f;
+    *y = static_cast<float>(ay) / 32767.0f;
+}
+
 std::array<bool, InputConfig::kButtons> Input::buttonsDown(int player, bool useKeyboard) const {
     std::array<bool, InputConfig::kButtons> down{};
     const Uint8* kb = SDL_GetKeyboardState(nullptr);

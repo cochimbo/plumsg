@@ -32,6 +32,7 @@
 #include "frontend/achievements.h"
 #include "frontend/game_info_data.h"
 #include "frontend/library_names.h"
+#include "frontend/screenscraper_data.h"
 #include "mars/mars_program.h"
 #include "megacd/megacd_program.h"
 #include "cd_image.h"
@@ -323,6 +324,98 @@ void testPads() {
     check(io.read(0xA1000F, now) == 0x5A && io.read(0xA10019, now) == 0xF8 && io.read(0xA10011, now) == 0x00 &&
               io.read(0xA1001B, now) == 0xFF,
           "I/O: serial TxData and S-Ctrl read back what was written (softcheck)");
+}
+
+void testLightGuns() {
+    Io io;
+    io.reset();
+    GunState blue, pink;
+    blue.x = 100;
+    blue.y = 50;
+    blue.trigger = true;
+    pink.start = true;
+    io.setGun(0, blue);
+    io.setGun(1, pink);
+    io.setPadType(1, PadType::Justifier);
+    const uint64_t now = 1000;
+    io.write(0xA1000B, 0x60, now);  // TH and TR outputs, no interrupt yet
+    auto read = [&](uint8_t thTr) {
+        io.write(0xA10005, thTr, now);
+        return static_cast<uint8_t>(io.read(0xA10005, now) & 0x0F);
+    };
+    check(read(0x40) == 0x00, "Justifier: TH high, TR low reads 0000 (a Justifier is there)");
+    check(read(0x00) == 0x02, "Justifier: TH and TR low read the blue gun's trigger (bit 0, active low)");
+    check(read(0x20) == 0x01, "Justifier: TR high reads the pink gun's Start (bit 1, active low)");
+    check(read(0x60) == 0x0F, "Justifier: TH and TR high read nothing");
+    check(io.activeGun() == nullptr, "light gun: no light seen without the port's TH interrupt");
+    io.write(0xA1000B, 0xE0, now);
+    io.write(0xA10005, 0x00, now);
+    check(io.activeGun() && io.activeGun()->x == 100, "Justifier: the blue gun sees the light with TH and TR low");
+    io.write(0xA10005, 0x60, now);
+    check(io.activeGun() == nullptr, "Justifier: neither gun with TH high");
+    io.setPadType(1, PadType::Menacer);
+    io.write(0xA1000B, 0x80, now);
+    check((io.read(0xA10005, now) & 0x7F) == 0x41, "Menacer: trigger in bit 0, active high, TH high");
+    check(io.activeGun() && io.activeGun()->y == 50, "Menacer: always its one gun");
+
+    // The VDP latches the HV counter where the gun saw the beam, latch bit or not, until
+    // the frame ends, and raises the level 2 interrupt when register 11 lets it.
+    VdpMd vdp;
+    vdp.reset();
+    vdp.writeControl(0x8104);
+    vdp.writeControl(0x8C81);  // H40
+    vdp.startLine(50);
+    vdp.lightGunHit(100 / 2 + 24);
+    check(vdp.readHV(0) == ((50 << 8) | 74) && vdp.readHV(1000) == ((50 << 8) | 74),
+          "light gun: the HV counter holds the line and dot the gun saw");
+    check(vdp.irqLevel() == 0, "light gun: no interrupt with register 11 bit 3 off");
+    vdp.writeControl(0x8B08);
+    check(vdp.irqLevel() == 2, "light gun: external interrupt is level 2");
+    vdp.acknowledge(2);
+    check(vdp.irqLevel() == 0, "light gun: the acknowledge takes it");
+    vdp.lightGunHit(200);  // past 0xB6 in H40 the counter jumps to 0xE4
+    check((vdp.readHV(0) & 0xFF) == 200 + 0xE4 - 0xB7, "light gun: the H counter jumps as the console's does");
+    vdp.startLine(0);
+    check(vdp.irqLevel() == 0 && (vdp.readHV(0) >> 8) != 50, "light gun: a new frame lets the counter go");
+
+    // A whole console: a program that picks the Justifier's blue gun, turns on the
+    // port's interrupt, the HV latch and the external interrupt, and in its level 2
+    // handler keeps the HV counter at 0xFF0002 and counts the shots at 0xFF0004.
+    testrom::Emitter e;
+    for (size_t i = 0; i < 16; ++i) e.rom[0x100 + i] = static_cast<uint8_t>("SEGA MEGA DRIVE "[i]);
+    e.label("reset");
+    e.w16(0x46FC); e.w16(0x2700);                       // move   #$2700,sr
+    e.w16(0x43F9); e.w32(0xC00004);                     // lea    $C00004,a1
+    e.w16(0x32BC); e.w16(0x8006);                       // move.w #$8006,(a1)  HV latch on
+    e.w16(0x32BC); e.w16(0x8144);                       // move.w #$8144,(a1)  display on
+    e.w16(0x32BC); e.w16(0x8B08);                       // move.w #$8B08,(a1)  external interrupt on
+    e.w16(0x32BC); e.w16(0x8C81);                       // move.w #$8C81,(a1)  H40
+    e.w16(0x13FC); e.w16(0x00E0); e.w32(0xA1000B);      // move.b #$E0,$A1000B TH, TR out; TH interrupt
+    e.w16(0x13FC); e.w16(0x0000); e.w32(0xA10005);      // move.b #$00,$A10005 the blue gun
+    e.w16(0x46FC); e.w16(0x2000);                       // move   #$2000,sr
+    e.label("loop");
+    e.w16(0x6000); e.rel("loop");                       // bra.w  loop
+    e.label("level2");
+    e.w16(0x33F9); e.w32(0xC00008); e.w32(0xFF0002);    // move.w $C00008,$FF0002
+    e.w16(0x5279); e.w32(0xFF0004);                     // addq.w #1,$FF0004
+    e.w16(0x4E73);                                      // rte
+    e.link();
+    e.put32(0, 0x00FFFE00);
+    e.put32(4, e.at("reset"));
+    e.put32(0x68, e.at("level2"));
+    while (e.rom.size() % 0x400) e.rom.push_back(0xFF);
+    MegaDrive md;
+    md.loadRomData(e.rom);
+    md.setPadType(1, PadType::Justifier);
+    md.setGun(0, blue);
+    for (int i = 0; i < 4; ++i) md.runFrame();
+    const uint16_t shots = md.peek16(0xFF0004);
+    check(md.peek16(0xFF0002) == ((50 << 8) | 74) && shots >= 3,
+          "light gun: a game's level 2 handler reads where the Justifier points");
+    blue.x = -1;
+    md.setGun(0, blue);
+    for (int i = 0; i < 2; ++i) md.runFrame();
+    check(md.peek16(0xFF0004) == shots, "light gun: pointed off the screen it sees nothing");
 }
 
 void testPsg() {
@@ -2050,6 +2143,81 @@ void testGameInfo() {
     check(wikiTitleDistance("Columns", "Ecco the Dolphin") < 0, "game info: nothing in common");
 }
 
+void testScreenScraper() {
+    // A jeuInfos answer as the API gives it (trimmed), with its trailing comma.
+    const std::string info =
+        "{\"header\":{\"success\":\"true\"},\"response\":{\"ssuser\":{\"requeststoday\":\"12\",\"maxrequestsperday\":\"20000\"},"
+        "\"jeu\":{\"id\":\"3\",\"systeme\":{\"id\":\"1\",\"text\":\"Megadrive\"},"
+        "\"noms\":[{\"region\":\"wor\",\"text\":\"Sonic The Hedgehog\"},{\"region\":\"jp\",\"text\":\"\\u30bd\\u30cb\\u30c3\\u30af\"}],"
+        "\"editeur\":{\"id\":\"1\",\"text\":\"SEGA\"},\"developpeur\":{\"text\":\"Sonic Team\"},\"joueurs\":{\"text\":\"1\"},"
+        "\"note\":{\"text\":\"17\"},\"dates\":[{\"region\":\"us\",\"text\":\"1991-06-23\"},{\"region\":\"eu\",\"text\":\"1991-06-21\"}],"
+        "\"synopsis\":[{\"langue\":\"en\",\"text\":\"Run.\"},{\"langue\":\"es\",\"text\":\"Corre.\"}],"
+        "\"genres\":[{\"id\":\"7\",\"noms\":[{\"langue\":\"en\",\"text\":\"Platform\"},{\"langue\":\"es\",\"text\":\"Plataformas\"}]}],"
+        "\"medias\":[{\"type\":\"box-2D\",\"region\":\"us\",\"format\":\"png\","
+        "\"url\":\"https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=d&devpassword=p&softname=s&ssid=u&sspassword=x&systemeid=1&jeuid=3&media=box-2D(us)\"},"
+        "{\"type\":\"box-2D\",\"region\":\"eu\",\"format\":\"png\",\"url\":\"https://a.screenscraper.fr/api2/mediaJeu.php?jeuid=3&media=box-2D(eu)\"},"
+        "{\"type\":\"wheel\",\"region\":\"wor\",\"format\":\"png\",\"url\":\"https://a.screenscraper.fr/api2/mediaJeu.php?media=wheel(wor)\"},"
+        "{\"type\":\"fanart\",\"format\":\"jpg\",\"url\":\"https://a.screenscraper.fr/api2/mediaJeu.php?media=fanart\"},"
+        "]}}}";
+    SsAnswer a = parseSsAnswer(200, info);
+    check(a.result == SsAnswer::Ok && a.games.size() == 1, "screenscraper: one game");
+    if (a.games.size() == 1) {
+        const SsGame& g = a.games[0];
+        const auto regions = ssRegions("Europe · Rev A");
+        check(g.id == 3 && g.system == 1 && g.publisher == "SEGA" && g.rating == "17", "screenscraper: the game's data");
+        check(g.name(regions) == "Sonic The Hedgehog" && g.date(regions) == "1991-06-21" && g.year(regions) == "1991",
+              "screenscraper: names and dates in the ROM's region");
+        check(g.text(ssLanguages("es")) == "Corre." && g.genre(ssLanguages("es")) == "Plataformas",
+              "screenscraper: texts in the user's language");
+        check(g.names.size() == 2 && g.names[1].second == "\xe3\x82\xbd\xe3\x83\x8b\xe3\x83\x83\xe3\x82\xaf", "screenscraper: escapes");
+        const SsMedia* cover = ssPickMedia(g, *ssKind("portada"), regions);
+        check(cover && cover->region == "eu", "screenscraper: the cover of the ROM's region");
+        const SsMedia* us = ssPickMedia(g, *ssKind("portada"), ssRegions("USA"));
+        check(us && us->url.find("devpassword") == std::string::npos && us->url.find("sspassword") == std::string::npos &&
+                  us->url.find("jeuid=3&media=box-2D(us)") != std::string::npos,
+              "screenscraper: the accounts are not kept with the media");
+        check(ssPickMedia(g, *ssKind("logo"), regions) != nullptr, "screenscraper: a second type for a kind");
+        check(ssPickMedia(g, *ssKind("fanart"), regions) != nullptr, "screenscraper: media without a region");
+        check(ssPickMedia(g, *ssKind("etiqueta"), regions) == nullptr, "screenscraper: a kind it does not have");
+        // What plumsg keeps reads back the same.
+        const SsAnswer back = parseSsAnswer(200, ssGameJson(g));
+        check(back.games.size() == 1 && back.games[0].id == 3 && back.games[0].names == g.names &&
+                  back.games[0].medias.size() == g.medias.size() && back.games[0].genres == g.genres &&
+                  back.games[0].synopsis == g.synopsis && back.games[0].players == "1",
+              "screenscraper: the kept answer reads back");
+    }
+    check(a.requestsToday == 12 && a.maxRequests == 20000, "screenscraper: the day's requests");
+
+    const SsAnswer search = parseSsAnswer(200, "{\"response\":{\"jeux\":[{\"id\":\"3\",\"noms\":[{\"region\":\"wor\",\"text\":\"A\"}]},"
+                                               "{\"id\":\"5\",\"noms\":[{\"region\":\"wor\",\"text\":\"B\"}]}]}}");
+    check(search.result == SsAnswer::Ok && search.games.size() == 2 && search.games[1].id == 5, "screenscraper: a search's games");
+    check(parseSsAnswer(200, "{\"response\":{\"jeux\":[{}]}}").result == SsAnswer::NotFound, "screenscraper: an empty search");
+    check(parseSsAnswer(404, "Erreur : Rom/Iso/Dossier non trouvée !  ").result == SsAnswer::NotFound, "screenscraper: not found");
+    check(parseSsAnswer(403, "Erreur de login : Verifier vos identifiants developpeur !").result == SsAnswer::Login,
+          "screenscraper: a wrong account");
+    check(parseSsAnswer(430, "Votre quota de scrape est dépassé pour aujourd'hui !").result == SsAnswer::Quota,
+          "screenscraper: the day's quota");
+    check(parseSsAnswer(429, "The maximum threads allowed to leecher users is already used").result == SsAnswer::Busy,
+          "screenscraper: too busy");
+    check(parseSsAnswer(0, "").result == SsAnswer::Offline, "screenscraper: no connection");
+
+    SsCredentials c{"dev id", "p&w", "plumsg", "me", "secret"};
+    const std::string url = ssUrl(c, "jeuInfos.php", ssRomParams(0, "Sonic (Europe).zip", 524288, 0xF9394E97u, false));
+    check(url == "https://api.screenscraper.fr/api2/jeuInfos.php?devid=dev%20id&devpassword=p%26w&softname=plumsg&output=json"
+                 "&ssid=me&sspassword=secret&systemeid=1&romtype=rom&romnom=Sonic%20%28Europe%29.zip&romtaille=524288&crc=F9394E97",
+          "screenscraper: a ROM's request");
+    check(ssRomParams(2, "Sonic CD.cue", 0, 0, true) == "systemeid=20&romtype=iso&romnom=Sonic%20CD.cue", "screenscraper: a disc's");
+    check(ssWithCredentials("https://a.screenscraper.fr/api2/mediaJeu.php?devid=old&jeuid=3", c) ==
+              "https://a.screenscraper.fr/api2/mediaJeu.php?devid=dev%20id&devpassword=p%26w&softname=plumsg&ssid=me&sspassword=secret&jeuid=3",
+          "screenscraper: a medium's accounts");
+    check(ssWithCredentials("https://example.com/x.png?a=1", c) == "https://example.com/x.png?a=1",
+          "screenscraper: other servers get no accounts");
+    const auto regions = ssRegions("USA · Europe");
+    check(regions.size() > 3 && regions[0] == "us" && regions[1] == "eu" && regions[2] == "wor", "screenscraper: regions in order");
+    JsonValue j;
+    check(!parseJson("Erreur", j) && parseJson("[1, \"a\", {\"b\": null},]", j) && j.items.size() == 3, "screenscraper: JSON");
+}
+
 void testLibraryNames() {
     check(gameTitle("Lion King, The (World)") == "The Lion King", "library: trailing ', The' moves to the front");
     check(gameTitle("Adventures of Batman & Robin, The (USA)") == "The Adventures of Batman & Robin",
@@ -2995,6 +3163,31 @@ void testSmsPhase2() {
     check(smsRegion(rom) == Region::EuropePal && smsRegion(rom, true) == Region::UsaNtsc,
           "Codemasters: a European console for the Master System, not for the Game Gear");
 
+    // A BIOS loaded as the game switches itself off through port 0x3E to look in the
+    // slots, and finds nothing there (issue #136).
+    check(isMasterSystemBiosFile("roms/[BIOS] Alex Kidd in Miracle World (USA, Europe, Brazil) (En).sms") &&
+              isMasterSystemBiosFile("BIOS13.SMS") && !isMasterSystemBiosFile("roms/Alex Kidd in Miracle World.sms"),
+          "Master System BIOS: told by its file name");
+    std::vector<uint8_t> biosRom(0x20000);
+    for (size_t i = 0; i < biosRom.size(); ++i) biosRom[i] = static_cast<uint8_t>(0x10 + i / 0x4000);
+    Cartridge biosCart;
+    biosCart.loadData(biosRom);
+    MasterSystem bios(biosCart, ram, *frame);
+    bios.powerOn();
+    bios.setBios(true);
+    bios.write(0xFFFE, 3);
+    ram[0] = 0x5A;
+    const bool biosOn = bios.read(0x0000) == 0x10 && bios.read(0x7FF0) == 0x13;
+    bios.out(0x3E, 0xAB);  // cartridge on, BIOS off
+    const bool slotsEmpty = bios.read(0x0000) == 0xFF && bios.read(0x7FF0) == 0xFF && bios.read(0xBFFF) == 0xFF &&
+                            bios.read(0xC000) == 0x5A;
+    bios.out(0x3E, 0xE3);  // BIOS on again
+    check(biosOn && slotsEmpty && bios.read(0x7FF0) == 0x13, "Master System BIOS: switched off, the slots are empty");
+    MasterSystem game(biosCart, ram, *frame);
+    game.powerOn();
+    game.out(0x3E, 0xAB);
+    check(game.read(0x0000) == 0x10, "Master System: a cartridge stays on whatever port 0x3E says of the BIOS");
+
     // The TMS9918's Graphics I mode with a sprite.
     MasterSystem tms(cart, ram, *frame);
     tms.powerOn();
@@ -3083,6 +3276,99 @@ void testGameGear() {
     md.loadRomData(st::build());
     md.runFrame();
     check(!md.isGameGear() && md.frame().width == 256 && md.frame().aspectLines == 224, "Game Gear: back to a Master System");
+}
+
+// What some Game Gear cartridges need beyond the test program: the link port read back
+// (Primal Rage, issue #78), the EEPROM of World Series Baseball (issue #77), and the
+// sprite size taken a line ahead (Madou Monogatari I, issue #82).
+void testGameGearCartridges() {
+    namespace st = smstestrom;
+    std::array<uint8_t, 0x2000> ram{};
+    auto frame = std::make_unique<VideoFrameMd>();
+    Cartridge cart;
+    cart.loadData(st::build(true));
+    MasterSystem gg(cart, ram, *frame, true);
+    gg.powerOn();
+    const uint8_t idle = gg.in(0x01, 0);
+    gg.out(0x02, 0x00);  // all outputs
+    gg.out(0x01, 0x22);
+    const uint8_t back = gg.in(0x01, 0);
+    gg.out(0x02, 0x0F);  // the low half inputs again
+    check(idle == 0x7F && back == 0x22 && gg.in(0x01, 0) == 0x2F && gg.in(0x02, 0) == 0x0F && gg.in(0x04, 0) == 0xFF,
+          "Game Gear: the link port reads back its outputs, its inputs high");
+    gg.out(0x3F, 0x55);
+    gg.out(0x01, 0x00);
+    gg.out(0x05, 0x00);
+    check(gg.in(0x01, 0) == 0x0F, "Game Gear: the link port has its own registers, not 0x3E/0x3F's");
+
+    check(!gg.eeprom(), "Game Gear: no EEPROM on an ordinary cartridge");
+    Cartridge wsbCart;
+    wsbCart.loadData(withCrc32(st::build(true), 0xBB38CFD7));
+    MasterSystem wsb(wsbCart, ram, *frame, true);
+    wsb.powerOn();
+    check(wsb.eeprom(), "Game Gear: World Series Baseball has its EEPROM");
+    uint8_t lines = 0;
+    auto put = [&](uint8_t v) {
+        lines = v;
+        wsb.write(0x8000, v);
+    };
+    auto clockBit = [&](int bit) {
+        put(static_cast<uint8_t>(0x04 | (bit & 1)));
+        put(static_cast<uint8_t>(0x06 | (bit & 1)));
+        put(static_cast<uint8_t>(0x04 | (bit & 1)));
+    };
+    auto command = [&](int bits, int count) {
+        put(0x00);
+        clockBit(1);  // start
+        for (int i = count - 1; i >= 0; --i) clockBit(bits >> i);
+    };
+    const uint8_t romByte = wsb.read(0x8000);
+    wsb.write(0xFFFC, 0x08);
+    command(0x30, 8);  // EWEN
+    command(0x45, 8);  // WRITE word 5
+    for (int i = 15; i >= 0; --i) clockBit(0xBEEF >> i);
+    command(0x85, 8);  // READ word 5
+    uint16_t word = 0;
+    for (int i = 0; i < 16; ++i) {
+        clockBit(0);
+        word = static_cast<uint16_t>(word << 1 | (wsb.read(0x8000) & 1));
+    }
+    put(0x00);
+    wsb.write(0xFFFC, 0x00);
+    check(word == 0xBEEF && wsbCart.saveRamByte(10) == 0xEF && wsbCart.saveRamByte(11) == 0xBE && wsbCart.hasSaveData() &&
+              wsb.read(0x8000) == romByte && lines == 0,
+          "Game Gear: the 93C46 EEPROM written and read back, kept in the save RAM");
+
+    // A sprite on lines 9-16 (8 high); the size goes to 8x16 late in line 16: line 17
+    // still has no sprite, as it was looked for with the old size.
+    MasterSystem vdp(cart, ram, *frame, false);
+    vdp.powerOn();
+    auto reg = [&](int r, int v, int cycle = 0) {
+        vdp.out(0xBF, static_cast<uint8_t>(v), cycle);
+        vdp.out(0xBF, static_cast<uint8_t>(0x80 | r), cycle);
+    };
+    auto vram = [&](int addr, std::initializer_list<int> bytes) {
+        vdp.out(0xBF, static_cast<uint8_t>(addr));
+        vdp.out(0xBF, static_cast<uint8_t>(0x40 | addr >> 8));
+        for (int b : bytes) vdp.out(0xBE, static_cast<uint8_t>(b));
+    };
+    reg(0, 0x04);
+    reg(1, 0x40);
+    reg(5, 0x7F);  // sprites at 0x3F00
+    reg(6, 0x00);
+    for (int t = 0; t < 2; ++t)
+        for (int row = 0; row < 8; ++row) vram(t * 32 + row * 4, {0xFF, 0, 0, 0});  // tiles 0 and 1: colour 1
+    vram(0x3F00, {8, 0xD0});
+    vram(0x3F80, {40, 1});
+    vram(0xC000 + 17, {0x3F});  // sprite colour 1: white
+    for (int line = 0; line < 17; ++line) vdp.vdp().startLine(line, true);
+    reg(1, 0x42, VdpSms::kCyclesPerLine - 4);
+    vdp.vdp().startLine(17, true);
+    vdp.vdp().startLine(18, true);
+    check(frame->info[16 * VideoFrameMd::kMaxWidth + 42].layer == MdLayer::Sprite &&
+              frame->info[17 * VideoFrameMd::kMaxWidth + 42].layer != MdLayer::Sprite &&
+              frame->info[18 * VideoFrameMd::kMaxWidth + 42].layer == MdLayer::Sprite,
+          "SMS VDP: a sprite size changed late in a line is for the line after the next");
 }
 
 void testSmsCheats() {
@@ -3256,6 +3542,7 @@ int main() {
     testSram();
     testEeprom();
     testPads();
+    testLightGuns();
     testPsg();
     testVdpPorts();
     testVdpHblankFlag();
@@ -3285,12 +3572,14 @@ int main() {
     testPal();
     testCheats();
     testLibraryNames();
+    testScreenScraper();
     testGameInfo();
     testSystems();
     testMasterSystem();
     testSmsMapper();
     testSmsPhase2();
     testGameGear();
+    testGameGearCartridges();
     testSmsCheats();
     testSmsVgm();
     testSmsRoland();
