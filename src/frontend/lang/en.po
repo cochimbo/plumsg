@@ -152,8 +152,17 @@ msgstr "A / Enter: go in   B / Backspace: up   Esc: close"
 msgid "A punto (reto en marcha)"
 msgstr "Almost (challenge running)"
 
+msgid "A: abrir"
+msgstr "A: open"
+
+msgid "A: abrir la barra de menús"
+msgstr "A: open the menu bar"
+
 msgid "A: aplicar"
 msgstr "A: apply"
+
+msgid "A: buscar el archivo"
+msgstr "A: find the file"
 
 msgid "A: continuar"
 msgstr "A: resume"
@@ -163,6 +172,9 @@ msgstr "A: pause"
 
 msgid "A: reiniciar"
 msgstr "A: reset"
+
+msgid "A: salir"
+msgstr "A: quit"
 
 msgid "A: salir del juego"
 msgstr "A: quit the game"
@@ -203,6 +215,9 @@ msgstr "Open a ROM, or pick a game in the library with the right button."
 msgid "Abrir .vgm..."
 msgstr "Open .vgm..."
 
+msgid "Abrir ROM"
+msgstr "Open ROM"
+
 msgid "Abrir ROM..."
 msgstr "Open ROM..."
 
@@ -235,6 +250,9 @@ msgstr "About plumsg"
 
 msgid "Acordeón"
 msgstr "Accordion"
+
+msgid "Activado"
+msgstr "On"
 
 msgid "Activar los logros"
 msgstr "Turn on achievements"
@@ -311,9 +329,6 @@ msgstr "Drag: turn it   Click the cartridge or A: play   Click elsewhere or B: p
 msgid "Arriba"
 msgstr "Up"
 
-msgid "Arriba / abajo: elegir   A / Intro: hacerlo"
-msgstr "Up / down: choose   A / Enter: do it"
-
 msgid "Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"
 msgstr "Up / down: choose   Left / right: change   A / Enter: switch"
 
@@ -328,6 +343,12 @@ msgstr "Shortcuts"
 
 msgid "Automática (la de la ROM)"
 msgstr "Automatic (the ROM's)"
+
+msgid "Automático"
+msgstr "Automatic"
+
+msgid "Automático (%s)"
+msgstr "Automatic (%s)"
 
 msgid "Avance rápido"
 msgstr "Fast forward"
@@ -418,6 +439,9 @@ msgstr "Beat'em up"
 
 msgid "Biblioteca"
 msgstr "Library"
+
+msgid "Biblioteca de juegos"
+msgstr "Game library"
 
 msgid "Biblioteca..."
 msgstr "Library..."
@@ -855,6 +879,9 @@ msgstr "Sports with animals"
 
 msgid "Derecha"
 msgstr "Right"
+
+msgid "Desactivado"
+msgstr "Off"
 
 msgid "Desactivado (velocidad real)"
 msgstr "Off (real speed)"
@@ -1880,6 +1907,9 @@ msgstr "States menu"
 msgid "Menú de estados..."
 msgstr "States menu..."
 
+msgid "Menús (todas las opciones)"
+msgstr "Menus (every option)"
+
 msgid "Metales"
 msgstr "Brass"
 
@@ -1891,6 +1921,9 @@ msgstr "Synth brass 2"
 
 msgid "Mi"
 msgstr "E"
+
+msgid "Modo consola"
+msgstr "Console mode"
 
 msgid "Modo hardcore"
 msgstr "Hardcore mode"
@@ -2176,6 +2209,15 @@ msgstr "Title screen"
 
 msgid "Para juegos que pintan el cielo en el plano B: no lo levanta en 3D."
 msgstr "For games that paint the sky on plane B: it is not raised in 3D."
+
+msgid ""
+"Para jugar con mando desde el sofá o en una portátil\n"
+"(Steam Deck, ROG Ally, Legion Go, MSI Claw...): letra\n"
+"más grande y el mando en todas las ventanas."
+msgstr ""
+"For playing with a pad from the sofa or on a handheld\n"
+"(Steam Deck, ROG Ally, Legion Go, MSI Claw...): bigger\n"
+"letters and the pad in every window."
 
 msgid "Parado: las canciones sacadas hasta ahora se quedan en la lista."
 msgstr "Stopped: the songs got so far stay in the list."
@@ -2544,6 +2586,9 @@ msgstr "Leave the game"
 msgid "Salir de la partida en red"
 msgstr "Leave the netplay game"
 
+msgid "Salir de plumsg"
+msgstr "Quit plumsg"
+
 msgid "Saxo alto"
 msgstr "Alto sax"
 
@@ -2794,6 +2839,9 @@ msgstr "Taiko drum"
 
 msgid "Tamaño"
 msgstr "Size"
+
+msgid "Tamaño de la interfaz"
+msgstr "Interface size"
 
 msgid "Tamaño:"
 msgstr "Size:"
@@ -3234,6 +3282,8 @@ msgid ""
 "  juego                  cartucho (.md .gen .bin .smd .32x .sms .gg .zip) o disco (.cue .chd .iso)\n"
 "  --fullscreen           abrir a pantalla completa\n"
 "  --windowed             abrir en ventana\n"
+"  --modo-consola         para jugar con mando (Steam Deck, ROG Ally...): pantalla completa,\n"
+"                         biblioteca y letra grande (--modo-escritorio para no usarlo)\n"
 "  --3d / --2d            con o sin la vista pseudo-3D\n"
 "  --filter f             none, scanlines o crt\n"
 "  --upscaling u          none, xbr o anime4k (experimental)\n"
@@ -3266,6 +3316,8 @@ msgstr ""
 "  game                   cartridge (.md .gen .bin .smd .32x .sms .gg .zip) or disc (.cue .chd .iso)\n"
 "  --fullscreen           open in full screen\n"
 "  --windowed             open in a window\n"
+"  --console-mode         for playing with a pad (Steam Deck, ROG Ally...): full screen,\n"
+"                         the library and big letters (--desktop-mode to turn it off)\n"
 "  --3d / --2d            with or without the pseudo-3D view\n"
 "  --filter f             none, scanlines or crt\n"
 "  --upscaling u          none, xbr or anime4k (experimental)\n"

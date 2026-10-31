@@ -30,6 +30,14 @@ struct Settings {
     static constexpr int kMaxRewindSeconds = 60;
 
     std::string language;  // "es", "en", "fr" or "pt"; empty: the system's, decided at start
+    // Console mode, for PCs played from the sofa with a pad (Steam Deck, Big Picture): full
+    // screen, no menu bar, the library at start, bigger letters and the pad in every window.
+    // 0 automatic (on when Steam's game mode or Big Picture started plumsg), 1 on, 2 off.
+    int consoleMode = 0;
+    // The size of the interface in percent (kMinUiScale-kMaxUiScale); 0 automatic: 100,
+    // or after the screen's height in console mode.
+    static constexpr int kMinUiScale = 75, kMaxUiScale = 250;
+    int uiScale = 0;
     std::string view = "2D";  // Renderer::name() of the active view
     RenderOptions render;
     // Draw every sprite on a line, without the console's limit that makes them flicker.

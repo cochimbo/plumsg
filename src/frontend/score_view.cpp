@@ -8,6 +8,7 @@
 #include <string>
 
 #include "imgui.h"
+#include "theme.h"
 #include "../core/i18n.h"
 
 namespace plumsg {
@@ -396,7 +397,7 @@ void ScoreWindow::updateMeter(const ScoreMusic& music) {
 void ScoreWindow::draw(const ScoreMusic* music, ScoreRequests& out) {
     const ImGuiViewport* screen = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(screen->Pos.x + 20, screen->Pos.y + screen->Size.y * 0.45f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(std::min(900.0f, screen->Size.x - 40), screen->Size.y * 0.5f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(std::min(theme::px(900.0f), screen->Size.x - 40), screen->Size.y * 0.5f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(tr("Partitura"), &open_)) {
         ImGui::End();
         return;

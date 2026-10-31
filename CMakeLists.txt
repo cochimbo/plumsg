@@ -224,6 +224,7 @@ add_executable(plumsg WIN32
   src/frontend/score_view.cpp
   src/frontend/file_dialog.cpp
   src/frontend/ui.cpp
+  src/frontend/handheld.cpp
   src/frontend/theme.cpp
   src/frontend/library.cpp
   src/frontend/library_names.cpp
@@ -296,7 +297,7 @@ if(TARGET SDL2::SDL2main)
 endif()
 target_link_libraries(plumsg PRIVATE ${PLUMSG_SDL2_TARGET})
 if(WIN32)
-  target_link_libraries(plumsg PRIVATE comdlg32 wininet dbghelp)
+  target_link_libraries(plumsg PRIVATE comdlg32 wininet dbghelp advapi32)
 endif()
 # The version About and the crash reports show: -DPLUMSG_VERSION=... (the release workflow
 # passes the release's), else the tag and commit it was built from.
@@ -373,7 +374,7 @@ if(PLUMSG_BUILD_TESTS)
   # The frontend's files (a game's own options and controls); needs SDL2 for the key names.
   if(PLUMSG_BUILD_FRONTEND)
     add_executable(frontend_tests tests/frontend_tests.cpp src/frontend/game_options.cpp src/frontend/input.cpp
-                   src/frontend/settings.cpp src/frontend/crash.cpp)
+                   src/frontend/settings.cpp src/frontend/crash.cpp src/frontend/handheld.cpp)
     target_link_libraries(frontend_tests PRIVATE plumsg_core ${PLUMSG_SDL2_TARGET})
     add_test(NAME frontend_tests COMMAND frontend_tests)
   endif()

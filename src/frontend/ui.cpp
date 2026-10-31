@@ -1,5 +1,7 @@
 #include "ui.h"
 
+#include "handheld.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -230,6 +232,20 @@ constexpr const char* kFpsCornerNames[] = {N_("Arriba a la izquierda"), N_("Arri
                                            N_("Abajo a la izquierda"), N_("Abajo a la derecha")};
 static_assert(std::size(kFpsCornerNames) == Settings::kFpsCorners, "a name per corner");
 
+// The interface's sizes to choose from, in percent (0 automatic).
+constexpr int kUiScales[] = {0, 75, 100, 125, 150, 175, 200, 250};
+constexpr int kUiScaleCount = static_cast<int>(std::size(kUiScales));
+std::string uiScaleName(int i) {
+    return kUiScales[i] ? std::to_string(kUiScales[i]) + " %" : std::string(tr("Automático"));
+}
+// Settings::consoleMode's: automatic (saying why it is on, if it is), on, off.
+std::string consoleModeName(int mode) {
+    if (mode == 1) return tr("Activado");
+    if (mode == 2) return tr("Desactivado");
+    const std::string& why = consoleModeReason();
+    return why.empty() ? std::string(tr("Automático")) : trf("Automático (%s)", why.c_str());
+}
+
 constexpr const char* kRegionNames[] = {N_("Automática (la de la ROM)"), N_("Japón (NTSC)"), N_("EE. UU. (NTSC)"),
                                         N_("Europa (PAL)")};
 
@@ -284,7 +300,7 @@ void Ui::buildFonts() {
                                      "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
                                      "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"};
 #endif
-    const float size = 18.0f;
+    const float size = std::round(18.0f * scale_);
     // The theme's two fonts, each with the other scripts merged into it.
     auto merge = [&] {
         if (fontExtra_.empty()) return;
@@ -323,8 +339,8 @@ Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& inp
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;  // window layout is not worth a second settings file
-    ImGui::StyleColorsDark();
-    theme::apply();
+    scale_ = wantedScale();
+    theme::apply(scale_);
     buildFonts();
     ImGui_ImplSDL2_InitForOpenGL(window_, context);
     ImGui_ImplOpenGL3_Init("#version 330 core");
@@ -400,11 +416,16 @@ bool Ui::handleEvent(const SDL_Event& e) {
     if (stateMenu_.open && handleStateMenu(e)) return true;
     if (showLibrary_ && handleLibrary(e)) return true;
     ImGui_ImplSDL2_ProcessEvent(&e);
+    // The pad on a window (console mode): ImGui reads it by itself, and its presses are not
+    // the game's nor hotkeys, but for the states menu's.
+    if (padNav_ && (e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_CONTROLLERBUTTONUP || e.type == SDL_CONTROLLERAXISMOTION))
+        return input_.hotkeyFor(e) != Hotkey::StateMenu;
     return false;
 }
 
-void Ui::toggleStateMenu() {
+void Ui::toggleStateMenu(int tab) {
     stateMenu_.open = !stateMenu_.open;
+    if (tab >= 0 && tab < StateMenu::kTabs) stateMenu_.tab = tab;
     stateMenu_.selected = settings_.stateSlot;
     stateMenu_.scroll = true;
     stateMenu_.changes.clear();
@@ -544,6 +565,54 @@ void Ui::notify(std::string message) {
     toastUntil_ = SDL_GetTicks() + 2500;
 }
 
+bool Ui::consoleMode() const {
+    if (consoleForced_ >= 0) return consoleForced_ == 1;
+    if (settings_.consoleMode != 0) return settings_.consoleMode == 1;
+    return !consoleModeReason().empty();
+}
+
+float Ui::wantedScale() const {
+    if (settings_.uiScale > 0) return static_cast<float>(settings_.uiScale) / 100.0f;
+    if (!consoleMode()) return 1.0f;
+    // From the sofa or in the hand the letters have to be bigger: after the screen's
+    // height, in quarters (1280x800 125 %, 1080p 175 %).
+    int w = 0, h = 0;
+    SDL_GetWindowSize(window_, &w, &h);
+    return std::clamp(std::round(static_cast<float>(h) / 640.0f * 4.0f) / 4.0f, 1.0f, 2.5f);
+}
+
+void Ui::prepareFrame() {
+    const float scale = wantedScale();
+    if (scale != scale_) {
+        scale_ = scale;
+        theme::apply(scale_);
+        fontsDirty_ = true;
+    }
+    // In console mode the pad drives ImGui's windows (the d-pad moves, A presses, B goes
+    // back, X the menu bar) while one of them has the focus; the library, the states menu
+    // and the file browser drive themselves. The game waits meanwhile (padInWindows()).
+    // B with nothing left to close takes the focus away, and the pad is the game's again.
+    ImGuiIO& io = ImGui::GetIO();
+    const bool console = consoleMode();
+    io.ConfigNavEscapeClearFocusWindow = console;
+    // A window counts while it has the focus and takes the pad: not the overlays nor the
+    // states menu (NoNav), and the menu bar only with the pad on its menus (ImGui may hand it
+    // the focus when another window closes).
+    const ImGuiContext& g = *GImGui;
+    const ImGuiWindow* w = g.NavWindow;
+    bool focused = w && w->WasActive && !(w->RootWindow->Flags & ImGuiWindowFlags_NoNav);
+    if (focused && (w->RootWindow->Flags & ImGuiWindowFlags_MenuBar) && (w->RootWindow->Flags & ImGuiWindowFlags_NoTitleBar))
+        focused = g.NavLayer == ImGuiNavLayer_Menu || g.OpenPopupStack.Size > 0;
+    padNav_ = console && !stateMenu_.open && !showLibrary_ && !browser_.isOpen() && !capture_.active &&
+              (focusMenuBar_ || focused);
+    if (menuForPad_ && !padNav_ && !focusMenuBar_) {
+        settings_.showMenu = false;
+        menuForPad_ = false;
+    }
+    if (padNav_) io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    else io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
+}
+
 UiActions Ui::frame(const UiState& state) {
     UiActions out;
     out.settingsChanged = pendingSave_;
@@ -565,8 +634,9 @@ UiActions Ui::frame(const UiState& state) {
         }
     }
 
+    prepareFrame();
     if (fontsDirty_) {
-        // Characters that came in a game's description: the atlas is made again with them.
+        // Characters that came in a game's description, or a new size: the atlas is made again.
         buildFonts();
         ImGui_ImplOpenGL3_DestroyFontsTexture();
         ImGui_ImplOpenGL3_CreateFontsTexture();
@@ -709,6 +779,14 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
     if (!settings_.showMenu && !peekMenu_) return;
     if (!ImGui::BeginMainMenuBar()) return;
 
+    if (focusMenuBar_) {
+        // Asked from the states menu with the pad: the pad on the first menu.
+        focusMenuBar_ = false;
+        ImGuiWindow* bar = ImGui::GetCurrentWindow();
+        ImGui::FocusWindow(bar);
+        ImGui::SetFocusID(ImGui::GetID(tr("Archivo")), bar);
+        GImGui->NavCursorVisible = GImGui->NavHighlightItemUnderNav = true;
+    }
     if (ImGui::BeginMenu(tr("Archivo"))) {
         if (ImGui::MenuItem(tr("Abrir ROM..."), "Ctrl+O")) openRequested_ = true;
         if (ImGui::MenuItem(tr("Biblioteca..."), "F10", showLibrary_)) toggleLibrary();
@@ -902,6 +980,26 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         if (ImGui::MenuItem(tr("Barra de menús"), "Esc", settings_.showMenu)) {
             settings_.showMenu = !settings_.showMenu;
             out.settingsChanged = true;
+        }
+        if (ImGui::BeginMenu(tr("Tamaño de la interfaz"))) {
+            for (int i = 0; i < kUiScaleCount; ++i)
+                if (ImGui::MenuItem(uiScaleName(i).c_str(), nullptr, settings_.uiScale == kUiScales[i])) {
+                    settings_.uiScale = kUiScales[i];
+                    out.settingsChanged = true;
+                }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu(tr("Modo consola"))) {
+            for (int i = 0; i < 3; ++i)
+                if (ImGui::MenuItem(consoleModeName(i).c_str(), nullptr, settings_.consoleMode == i)) {
+                    settings_.consoleMode = i;
+                    out.settingsChanged = true;
+                }
+            ImGui::Separator();
+            ImGui::TextDisabled("%s", tr("Para jugar con mando desde el sofá o en una portátil\n"
+                                         "(Steam Deck, ROG Ally, Legion Go, MSI Claw...): letra\n"
+                                         "más grande y el mando en todas las ventanas."));
+            ImGui::EndMenu();
         }
         ImGui::Separator();
         // "Language" too, for whoever cannot read the language it is in.
@@ -1163,7 +1261,7 @@ bool Ui::drawBindings(InputConfig& c, bool game) {
 }
 
 void Ui::drawControls(UiActions& out) {
-    ImGui::SetNextWindowSize(ImVec2(760, 0), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(theme::px(760), 0), ImGuiCond_Appearing);
     if (!ImGui::Begin(tr("Controles"), &showControls_)) {
         ImGui::End();
         return;
@@ -1217,7 +1315,7 @@ void Ui::drawControls(UiActions& out) {
 }
 
 void Ui::drawVideo(const UiState& state, UiActions& out) {
-    ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(theme::px(420), 0), ImGuiCond_Appearing);
     if (!ImGui::Begin(tr("Vídeo"), &showVideo_)) {
         ImGui::End();
         return;
@@ -1333,6 +1431,33 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
         changed = true;
     }
     changed |= ImGui::Checkbox(tr("Mostrar la barra de menús (Esc)"), &settings_.showMenu);
+    {
+        int scale = 0;
+        for (int i = 0; i < kUiScaleCount; ++i)
+            if (settings_.uiScale == kUiScales[i]) scale = i;
+        const std::string current = uiScaleName(scale);
+        if (ImGui::BeginCombo(tr("Tamaño de la interfaz"), current.c_str())) {
+            for (int i = 0; i < kUiScaleCount; ++i)
+                if (ImGui::Selectable(uiScaleName(i).c_str(), i == scale)) {
+                    settings_.uiScale = kUiScales[i];
+                    changed = true;
+                }
+            ImGui::EndCombo();
+        }
+        const std::string mode = consoleModeName(settings_.consoleMode);
+        if (ImGui::BeginCombo(tr("Modo consola"), mode.c_str())) {
+            for (int i = 0; i < 3; ++i)
+                if (ImGui::Selectable(consoleModeName(i).c_str(), i == settings_.consoleMode)) {
+                    settings_.consoleMode = i;
+                    changed = true;
+                }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", tr("Para jugar con mando desde el sofá o en una portátil\n"
+                                       "(Steam Deck, ROG Ally, Legion Go, MSI Claw...): letra\n"
+                                       "más grande y el mando en todas las ventanas."));
+    }
 
     ImGui::SeparatorText(tr("Pseudo-3D"));
     ImGui::BeginDisabled(!state.romLoaded);
@@ -1415,7 +1540,7 @@ void Ui::drawStateMenu(const UiState& state, UiActions& out) {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Always,
                             ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(std::min(vp->Size.x - 20.0f, 520.0f), std::min(vp->Size.y - 40.0f, 540.0f)),
+    ImGui::SetNextWindowSize(ImVec2(std::min(vp->Size.x - 20.0f, theme::px(520.0f)), std::min(vp->Size.y - 40.0f, theme::px(540.0f))),
                              ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.92f);
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
@@ -1543,6 +1668,14 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
         options.push_back(number(N_("Derecha##ancha"), settings_.wideRight, 0, VideoFrameMd::kMaxWideSide, 4, "%.0f px"));
         options.push_back(toggle(N_("Pantalla completa (F11)"), settings_.fullscreen, kSave | kFullscreen));
         options.push_back(toggle(N_("Mostrar la barra de menús (Esc)"), settings_.showMenu));
+        int scale = 0;
+        for (int i = 0; i < kUiScaleCount; ++i)
+            if (settings_.uiScale == kUiScales[i]) scale = i;
+        options.push_back({tr("Tamaño de la interfaz"), uiScaleName(scale), true,
+                           [this, scale](int dir) {
+                               settings_.uiScale = kUiScales[(scale + (dir < 0 ? kUiScaleCount - 1 : 1)) % kUiScaleCount];
+                           },
+                           kSave});
     } else if (tab == 2) {
         options.push_back(toggle(N_("Efecto 3D"), r.pseudo3d));
         const bool on = r.pseudo3d;
@@ -1632,6 +1765,38 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
                                out.stop = true;
                                stateMenu_.open = false;
                            }, 0, false});
+        // And what the menu bar's windows are for, so that a pad alone (a Steam Deck, a ROG
+        // Ally...) reaches everything: each opens its window with the pad on it.
+        auto open = [this](const char* label, const char* value, bool enabled, std::function<void()> act) {
+            return MenuOption{tr(label), tr(value), enabled, [this, act = std::move(act)](int dir) {
+                                  if (dir != 0) return;
+                                  act();
+                                  stateMenu_.open = false;
+                              }, 0, false};
+        };
+        options.push_back(open(N_("Biblioteca de juegos"), N_("A: abrir"), true, [this] {
+            if (!showLibrary_) toggleLibrary();
+        }));
+        options.push_back(open(N_("Abrir ROM"), N_("A: buscar el archivo"), true, [this] { openRequested_ = true; }));
+        options.push_back(open(N_("Controles"), N_("A: abrir"), true, [this] { showControls_ = true; }));
+        options.push_back(open(N_("Trucos"), N_("A: abrir"), solo && !state.hardcore, [this, &state, &out] {
+            out.cheatsFor = state.romPath;
+            showCheats_ = true;
+        }));
+        options.push_back(open(N_("Opciones de este juego"), N_("A: abrir"), solo, [this, &state, &out] {
+            out.optionsFor = state.romPath;
+            showGameOptions_ = true;
+        }));
+        options.push_back(open(N_("Menús (todas las opciones)"), N_("A: abrir la barra de menús"), true, [this] {
+            // Shown for the pad, it hides again when the pad leaves it.
+            menuForPad_ = !settings_.showMenu;
+            settings_.showMenu = true;
+            focusMenuBar_ = true;
+        }));
+        options.push_back({tr("Modo consola"), consoleModeName(settings_.consoleMode), true,
+                           [this](int dir) { settings_.consoleMode = (settings_.consoleMode + (dir < 0 ? 2 : 1)) % 3; },
+                           kSave});
+        options.push_back(open(N_("Salir de plumsg"), N_("A: salir"), true, [&out] { out.quit = true; }));
         if (state.romLoaded && state.netPlaying)
             ImGui::TextDisabled("%s", tr("En una partida en red no se puede pausar ni reiniciar."));
     }
@@ -1639,8 +1804,7 @@ void Ui::drawStateOptions(int tab, const UiState& state, UiActions& out) {
     const int count = static_cast<int>(options.size());
     stateMenu_.options = count;
     stateMenu_.option = std::clamp(stateMenu_.option, 0, std::max(0, count - 1));
-    theme::hint(tab == StateMenu::kTabs - 1 ? tr("Arriba / abajo: elegir   A / Intro: hacerlo")
-                                            : tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
+    theme::hint(tr("Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"));
     ImGui::Separator();
 
     // The pad's and the keyboard's changes, and the mouse's below, all to one option.
@@ -2800,7 +2964,7 @@ void Ui::drawCoverSearch() {
     auto& games = library_.games();
     const bool valid = showLibrary_ && coverSearch_.game < games.size() && games[coverSearch_.game].path == coverSearch_.path;
     if (!valid) showCoverSearch_ = false;
-    ImGui::SetNextWindowSize(ImVec2(720, 460), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(std::min(theme::px(720), ImGui::GetMainViewport()->Size.x - 20), std::min(theme::px(460), ImGui::GetMainViewport()->Size.y - 20)), ImGuiCond_Appearing);
     if (showCoverSearch_ && ImGui::Begin(tr("Buscar carátula"), &showCoverSearch_, ImGuiWindowFlags_NoCollapse)) {
         Library::Game& g = games[coverSearch_.game];
         const Library::CoverSearch& search = library_.coverSearch();
@@ -2878,7 +3042,7 @@ void Ui::drawCoverSearch() {
 
 // The Mega CD BIOS of each region. plumsg cannot include them: they are Sega's.
 void Ui::drawBios(UiActions& out) {
-    ImGui::SetNextWindowSize(ImVec2(680, 0), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(std::min(theme::px(680), ImGui::GetMainViewport()->Size.x - 20), 0), ImGuiCond_Appearing);
     if (!ImGui::Begin(tr("BIOS del Mega CD"), &showBios_)) {
         ImGui::End();
         return;
@@ -3037,7 +3201,7 @@ void Ui::drawNetplay(const UiState& state, UiActions& out) {
 
 void Ui::drawCheats(const UiState& state, UiActions& out) {
     const bool smsCodes = state.cheatsSms;
-    ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(std::min(theme::px(560), ImGui::GetMainViewport()->Size.x - 20), 0), ImGuiCond_Appearing);
     if (cheatsRefit_ > 0) ImGui::SetNextWindowSize(ImVec2(cheatsWidth_, 0));  // grow to fit the list that arrived
     if (!ImGui::Begin(tr("Trucos"), &showCheats_)) {
         ImGui::End();
@@ -3273,7 +3437,7 @@ void Ui::drawGameControls(const GameOptionsView& v, UiActions& out) {
 
 // The options this game keeps a value of its own for, in two tabs: Ajustes and Controles.
 void Ui::drawGameOptions(const UiState& state, UiActions& out) {
-    ImGui::SetNextWindowSize(ImVec2(700, 0), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(std::min(theme::px(700), ImGui::GetMainViewport()->Size.x - 20), 0), ImGuiCond_Appearing);
     if (!ImGui::Begin(tr("Opciones de este juego"), &showGameOptions_)) {
         ImGui::End();
         return;
