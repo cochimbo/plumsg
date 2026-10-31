@@ -412,6 +412,9 @@ bool Ui::handleEvent(const SDL_Event& e) {
             return true;
         }
     }
+    if (e.type == SDL_KEYDOWN || e.type == SDL_TEXTINPUT) typedOnKeys_ = true;
+    else if (e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_FINGERDOWN) typedOnKeys_ = false;
+    if (osk_.isOpen() && osk_.handleEvent(e)) return true;
     if (browser_.isOpen() && browser_.handleEvent(e)) return true;
     if (stateMenu_.open && handleStateMenu(e)) return true;
     if (showLibrary_ && handleLibrary(e)) return true;
@@ -595,6 +598,10 @@ void Ui::prepareFrame() {
     ImGuiIO& io = ImGui::GetIO();
     const bool console = consoleMode();
     io.ConfigNavEscapeClearFocusWindow = console;
+    // A text box being typed in without a keyboard (with the pad, a touch or the Steam
+    // Deck's trackpads): the on-screen keyboard, which takes the pad meanwhile.
+    if (console && io.WantTextInput && !typedOnKeys_) osk_.open();
+    else osk_.close();
     // A window counts while it has the focus and takes the pad: not the overlays nor the
     // states menu (NoNav), and the menu bar only with the pad on its menus (ImGui may hand it
     // the focus when another window closes).
@@ -603,7 +610,7 @@ void Ui::prepareFrame() {
     bool focused = w && w->WasActive && !(w->RootWindow->Flags & ImGuiWindowFlags_NoNav);
     if (focused && (w->RootWindow->Flags & ImGuiWindowFlags_MenuBar) && (w->RootWindow->Flags & ImGuiWindowFlags_NoTitleBar))
         focused = g.NavLayer == ImGuiNavLayer_Menu || g.OpenPopupStack.Size > 0;
-    padNav_ = console && !stateMenu_.open && !showLibrary_ && !browser_.isOpen() && !capture_.active &&
+    padNav_ = console && !osk_.isOpen() && !stateMenu_.open && !showLibrary_ && !browser_.isOpen() && !capture_.active &&
               (focusMenuBar_ || focused);
     if (menuForPad_ && !padNav_ && !focusMenuBar_) {
         settings_.showMenu = false;
@@ -714,6 +721,7 @@ UiActions Ui::frame(const UiState& state) {
             }
         }
     }
+    osk_.draw();
     drawOverlays(state);
     drawCrosshairs(state);
     hideIdleCursor(state);

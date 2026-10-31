@@ -496,6 +496,11 @@ In console mode plumsg:
 - lets the pad drive every window: the d-pad moves, A presses, B goes back, X jumps to
   the window's menu bar and holding X switches windows. While the pad is on a window the
   game waits; B with nothing left to close gives the pad back to the game;
+- shows its own on-screen keyboard while a text box is being typed in without a
+  keyboard (the library's search with Y, a host's address, a cheat code...): the d-pad
+  chooses a key, A types it, B rubs out, Y is a space, X capitals, L1 / R1 move the
+  cursor and Start accepts. It works on Windows handhelds too, where Steam's keyboard
+  is not there; a real keyboard's key hides it;
 - the states menu (left stick click) gains, in its Sistema tab, the library, Open ROM,
   Controls, Cheats, the game's own options, the whole menu bar (with the pad on it) and
   Quit plumsg, so that nothing needs a keyboard.

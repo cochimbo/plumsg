@@ -225,6 +225,7 @@ add_executable(plumsg WIN32
   src/frontend/file_dialog.cpp
   src/frontend/ui.cpp
   src/frontend/handheld.cpp
+  src/frontend/osk.cpp
   src/frontend/theme.cpp
   src/frontend/library.cpp
   src/frontend/library_names.cpp

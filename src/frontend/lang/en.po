@@ -167,6 +167,13 @@ msgstr "A: find the file"
 msgid "A: continuar"
 msgstr "A: resume"
 
+msgid ""
+"A: escribir   B: borrar   Y: espacio   X: mayúsculas\n"
+"L1 / R1: mover el cursor   Start: aceptar"
+msgstr ""
+"A: type   B: delete   Y: space   X: shift\n"
+"L1 / R1: move the cursor   Start: done"
+
 msgid "A: pausar"
 msgstr "A: pause"
 
@@ -457,6 +464,9 @@ msgstr "High bongo"
 
 msgid "Bongó grave"
 msgstr "Low bongo"
+
+msgid "Borrar"
+msgstr "Delete"
 
 msgid "Borrar lista"
 msgstr "Clear list"
@@ -1201,6 +1211,9 @@ msgstr "Type a code."
 msgid "Escuchar solo este"
 msgstr "Hear only this one"
 
+msgid "Espacio"
+msgstr "Space"
+
 msgid "Esperando al otro jugador en el puerto %d"
 msgstr "Waiting for the other player on port %d"
 
@@ -1885,6 +1898,9 @@ msgstr "Marquee"
 
 msgid "Matamarcianos"
 msgstr "Shoot'em up"
+
+msgid "Mayúsculas"
+msgstr "Shift"
 
 msgid "Medios"
 msgstr "Mids"

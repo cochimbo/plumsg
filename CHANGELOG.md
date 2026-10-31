@@ -10,7 +10,9 @@ What each version brings, newest first. Installers are on the
   those handhelds (Options > Console mode, `--console-mode`). Full screen without the
   menu bar, the library at start, bigger letters (Options > Interface size, also by
   hand), the pad in every window, and the states menu's Sistema tab reaching the
-  library, the controls, the cheats, the menu bar and Quit without a keyboard.
+  library, the controls, the cheats, the menu bar and Quit without a keyboard. Its own
+  on-screen keyboard, driven by the pad, types in the library's search, the netplay
+  address, the cheat codes and every other text box.
 - **Light guns** (#102): Consola > Mando 2 (or a game's options) plugs in Konami's
   Justifier (Lethal Enforcers I and II, Snatcher), with its second gun for player 2, or
   Sega's Menacer (T2: The Arcade Game, Menacer 6-Game Cartridge) instead of pad 2. A

@@ -388,6 +388,7 @@ struct CommandLine {
     float tilt = -1000, yaw = -1000;
     bool stateMenu = false;  // --states-menu: start with the states menu open
     int stateTab = -1;       // --states-tab N: on that tab (0 the slots ... 5 Sistema)
+    bool search = false;     // --search: with --library, typing in its search box (screenshots)
     int windowW = 0, windowH = 0;  // --window-size WxH: the window's size (a Steam Deck's 1280x800)
     std::vector<std::string> library;  // --library folder (repeatable): start with the library of those folders open
     int filter = -1;         // --filter none|scanlines|crt
@@ -484,6 +485,7 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--tilt") c.tilt = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--yaw") c.yaw = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--states-menu") c.stateMenu = true;
+        else if (a == "--search") c.search = true;
         else if (a == "--states-tab") {
             c.stateMenu = true;
             c.stateTab = std::atoi(next().c_str());
@@ -925,6 +927,7 @@ int main(int argc, char** argv) {
     if (!cmd.library.empty() ||
         (cmd.rom.empty() && !capturing && settings.libraryAtStart && (!settings.libraryFolders.empty() || consoleStart)))
         ui->toggleLibrary();
+    if (cmd.search) ui->focusLibrarySearch();
     if (cmd.bios) ui->openBios();
     if (cmd.achievements) ui->openAchievements();
     if (cmd.editor) {

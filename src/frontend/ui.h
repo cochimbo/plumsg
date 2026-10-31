@@ -20,6 +20,7 @@
 #include "instrument_editor.h"
 #include "score_view.h"
 #include "library.h"
+#include "osk.h"
 #include "screenscraper.h"
 #include "settings.h"
 
@@ -151,6 +152,9 @@ public:
     // The game library: a grid of covers that the pad (or the keyboard) can drive.
     void toggleLibrary();
     bool libraryOpen() const { return showLibrary_; }
+    // Puts the keyboard on the library's search box (Y on the pad): in console mode, with
+    // the on-screen keyboard.
+    void focusLibrarySearch() { libraryView_.focusSearch = true; }
     // For screenshots: the library's 3D view holding still at that step (see BoxShelf::pose).
     void poseBoxes(int step) { boxesPose_ = step; }
     void openBios() { showBios_ = true; }
@@ -227,7 +231,8 @@ public:
     void forceConsoleMode(bool on) { consoleForced_ = on ? 1 : 0; }
     // In console mode, the pad is driving one of the windows (Controles, BIOS, the menu
     // bar...): the game waits and its presses are not the game's.
-    bool padInWindows() const { return padNav_; }
+    // So does the on-screen keyboard, which takes it to type in a text box.
+    bool padInWindows() const { return padNav_ || osk_.isOpen(); }
 
 private:
     struct Capture {
@@ -353,7 +358,9 @@ private:
     float scale_ = 1.0f;       // the interface's size the fonts and the style were made at
     bool padNav_ = false;      // the pad drives ImGui's windows this frame
     bool focusMenuBar_ = false;  // put the pad on the menu bar's first menu next frame
-    bool menuForPad_ = false;    // the menu bar was hidden and is shown while the pad is on it
+    bool menuForPad_ = false;
+    OnScreenKeyboard osk_;       // console mode's, while a text box is being typed in with the pad
+    bool typedOnKeys_ = false;   // the last thing pressed was a real keyboard's: no on-screen one    // the menu bar was hidden and is shown while the pad is on it
     int menuHeight_ = 0;
     Capture capture_;
     struct StateMenu {
