@@ -3,7 +3,7 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## Unreleased
+## 0.1.0-beta.9
 
 - **Master System Light Phaser and paddle** (#73): Consola > Mando 1 or Mando 2 (or a
   game's options) plugs in the Light Phaser or the Japanese paddle (HPD-200). The games
