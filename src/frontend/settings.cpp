@@ -92,6 +92,13 @@ void Settings::parse(std::istream& in, Settings& s) {
 
         if (section == "interface") {
             if (key == "language") s.language = lower(value);
+            else if (key == "console_mode") {
+                const std::string v = iniName(lower(value));
+                s.consoleMode = v == "yes" ? 1 : v == "no" ? 2 : 0;
+            } else if (key == "size") {
+                const int v = std::atoi(value.c_str());
+                s.uiScale = v <= 0 ? 0 : std::clamp(v, kMinUiScale, kMaxUiScale);
+            }
         } else if (section == "video") {
             if (key == "view") s.view = value;
             else if (key == "scale") {
@@ -221,6 +228,14 @@ void Settings::write(std::ostream& out) const {
     out << "\n[interface]\n"
         << "# language: es (español), en (English), fr (français) or pt (português); empty: the system's.\n"
         << "language = " << language << "\n"
+        << "# console_mode: auto (on in Steam's game mode or Big Picture), yes or no. Full screen,\n"
+        << "# no menu bar, the library at start, bigger letters and the pad in every window.\n"
+        << "# size: the size of the interface in percent (75 to 250); auto: after the screen in console mode.\n"
+        << "console_mode = " << (consoleMode == 1 ? "yes" : consoleMode == 2 ? "no" : "auto") << "\n"
+        << "size = ";
+    if (uiScale > 0) out << uiScale;
+    else out << "auto";
+    out << "\n"
         << "\n[video]\n"
         << "# view: 2D or a debug view. scale: integer, fit or stretch.\n"
         << "view = " << view << "\n"

@@ -152,17 +152,36 @@ msgstr "A / Entrée : entrer   B / Retour arrière : remonter   Échap : fermer"
 msgid "A punto (reto en marcha)"
 msgstr "Presque (défi en cours)"
 
+msgid "A: abrir"
+msgstr "A : ouvrir"
+
+msgid "A: abrir la barra de menús"
+msgstr "A : ouvrir la barre de menus"
+
 msgid "A: aplicar"
 msgstr "A : appliquer"
 
+msgid "A: buscar el archivo"
+msgstr "A : chercher le fichier"
+
 msgid "A: continuar"
 msgstr "A : reprendre"
+
+msgid ""
+"A: escribir   B: borrar   Y: espacio   X: mayúsculas\n"
+"L1 / R1: mover el cursor   Start: aceptar"
+msgstr ""
+"A : écrire   B : effacer   Y : espace   X : majuscules\n"
+"L1 / R1 : déplacer le curseur   Start : valider"
 
 msgid "A: pausar"
 msgstr "A : mettre en pause"
 
 msgid "A: reiniciar"
 msgstr "A : réinitialiser"
+
+msgid "A: salir"
+msgstr "A : quitter"
 
 msgid "A: salir del juego"
 msgstr "A : quitter le jeu"
@@ -203,6 +222,9 @@ msgstr "Ouvrez une ROM, ou choisissez un jeu dans la bibliothèque avec le bouto
 msgid "Abrir .vgm..."
 msgstr "Ouvrir un .vgm..."
 
+msgid "Abrir ROM"
+msgstr "Ouvrir une ROM"
+
 msgid "Abrir ROM..."
 msgstr "Ouvrir une ROM..."
 
@@ -235,6 +257,9 @@ msgstr "À propos de plumsg"
 
 msgid "Acordeón"
 msgstr "Accordéon"
+
+msgid "Activado"
+msgstr "Activé"
 
 msgid "Activar los logros"
 msgstr "Activer les succès"
@@ -311,9 +336,6 @@ msgstr "Glisser : la tourner   Clic sur la cartouche ou A : jouer   Clic ailleur
 msgid "Arriba"
 msgstr "Haut"
 
-msgid "Arriba / abajo: elegir   A / Intro: hacerlo"
-msgstr "Haut / bas : choisir   A / Entrée : valider"
-
 msgid "Arriba / abajo: elegir   Izquierda / derecha: cambiar   A / Intro: activar"
 msgstr "Haut / bas : choisir   Gauche / droite : changer   A / Entrée : activer"
 
@@ -328,6 +350,12 @@ msgstr "Raccourcis"
 
 msgid "Automática (la de la ROM)"
 msgstr "Automatique (celle de la ROM)"
+
+msgid "Automático"
+msgstr "Automatique"
+
+msgid "Automático (%s)"
+msgstr "Automatique (%s)"
 
 msgid "Avance rápido"
 msgstr "Avance rapide"
@@ -419,6 +447,9 @@ msgstr "Beat'em up"
 msgid "Biblioteca"
 msgstr "Bibliothèque"
 
+msgid "Biblioteca de juegos"
+msgstr "Bibliothèque de jeux"
+
 msgid "Biblioteca..."
 msgstr "Bibliothèque..."
 
@@ -433,6 +464,9 @@ msgstr "Bongo aigu"
 
 msgid "Bongó grave"
 msgstr "Bongo grave"
+
+msgid "Borrar"
+msgstr "Effacer"
 
 msgid "Borrar lista"
 msgstr "Effacer la liste"
@@ -856,6 +890,9 @@ msgstr "Sports avec animaux"
 msgid "Derecha"
 msgstr "Droite"
 
+msgid "Desactivado"
+msgstr "Désactivé"
+
 msgid "Desactivado (velocidad real)"
 msgstr "Désactivé (vitesse réelle)"
 
@@ -1186,6 +1223,9 @@ msgstr "Saisissez un code."
 
 msgid "Escuchar solo este"
 msgstr "N'écouter que celui-ci"
+
+msgid "Espacio"
+msgstr "Espace"
 
 msgid "Esperando al otro jugador en el puerto %d"
 msgstr "En attente de l'autre joueur sur le port %d"
@@ -1888,6 +1928,9 @@ msgstr "Marquee"
 msgid "Matamarcianos"
 msgstr "Shoot'em up"
 
+msgid "Mayúsculas"
+msgstr "Maj"
+
 msgid "Medios"
 msgstr "Médiums"
 
@@ -1909,6 +1952,9 @@ msgstr "Menu des états"
 msgid "Menú de estados..."
 msgstr "Menu des états..."
 
+msgid "Menús (todas las opciones)"
+msgstr "Menus (toutes les options)"
+
 msgid "Metales"
 msgstr "Cuivres"
 
@@ -1920,6 +1966,9 @@ msgstr "Cuivres synthé 2"
 
 msgid "Mi"
 msgstr "Mi"
+
+msgid "Modo consola"
+msgstr "Mode console"
 
 msgid "Modo hardcore"
 msgstr "Mode hardcore"
@@ -2208,6 +2257,15 @@ msgstr "Écran titre"
 
 msgid "Para juegos que pintan el cielo en el plano B: no lo levanta en 3D."
 msgstr "Pour les jeux qui peignent le ciel dans le plan B : il n'est pas relevé en 3D."
+
+msgid ""
+"Para jugar con mando desde el sofá o en una portátil\n"
+"(Steam Deck, ROG Ally, Legion Go, MSI Claw...): letra\n"
+"más grande y el mando en todas las ventanas."
+msgstr ""
+"Pour jouer à la manette depuis le canapé ou sur une portable\n"
+"(Steam Deck, ROG Ally, Legion Go, MSI Claw...) : texte\n"
+"plus grand et la manette dans toutes les fenêtres."
 
 msgid "Parado: las canciones sacadas hasta ahora se quedan en la lista."
 msgstr "Arrêté : les morceaux extraits jusqu'ici restent dans la liste."
@@ -2576,6 +2634,9 @@ msgstr "Quitter la partie"
 msgid "Salir de la partida en red"
 msgstr "Quitter la partie en réseau"
 
+msgid "Salir de plumsg"
+msgstr "Quitter plumsg"
+
 msgid "Saxo alto"
 msgstr "Saxo alto"
 
@@ -2826,6 +2887,9 @@ msgstr "Taiko"
 
 msgid "Tamaño"
 msgstr "Taille"
+
+msgid "Tamaño de la interfaz"
+msgstr "Taille de l'interface"
 
 msgid "Tamaño:"
 msgstr "Taille :"
@@ -3266,6 +3330,8 @@ msgid ""
 "  juego                  cartucho (.md .gen .bin .smd .32x .sms .gg .zip) o disco (.cue .chd .iso)\n"
 "  --fullscreen           abrir a pantalla completa\n"
 "  --windowed             abrir en ventana\n"
+"  --modo-consola         para jugar con mando (Steam Deck, ROG Ally...): pantalla completa,\n"
+"                         biblioteca y letra grande (--modo-escritorio para no usarlo)\n"
 "  --3d / --2d            con o sin la vista pseudo-3D\n"
 "  --filter f             none, scanlines o crt\n"
 "  --upscaling u          none, xbr o anime4k (experimental)\n"
@@ -3298,6 +3364,8 @@ msgstr ""
 "  jeu                    cartouche (.md .gen .bin .smd .32x .sms .gg .zip) ou disque (.cue .chd .iso)\n"
 "  --fullscreen           ouvrir en plein écran\n"
 "  --windowed             ouvrir dans une fenêtre\n"
+"  --console-mode         pour jouer à la manette (Steam Deck, ROG Ally...) : plein écran,\n"
+"                         bibliothèque et grand texte (--desktop-mode pour le désactiver)\n"
 "  --3d / --2d            avec ou sans la vue pseudo-3D\n"
 "  --filter f             none (aucun), scanlines ou crt\n"
 "  --upscaling u          none (aucune), xbr ou anime4k (expérimental)\n"

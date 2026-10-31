@@ -27,6 +27,7 @@
 #include "crash.h"
 #include "fps_counter.h"
 #include "game_options.h"
+#include "handheld.h"
 #include "http.h"
 #include "languages.h"
 #include "input.h"
@@ -386,6 +387,9 @@ struct CommandLine {
     std::string view;     // --view name
     float tilt = -1000, yaw = -1000;
     bool stateMenu = false;  // --states-menu: start with the states menu open
+    int stateTab = -1;       // --states-tab N: on that tab (0 the slots ... 5 Sistema)
+    bool search = false;     // --search: with --library, typing in its search box (screenshots)
+    int windowW = 0, windowH = 0;  // --window-size WxH: the window's size (a Steam Deck's 1280x800)
     std::vector<std::string> library;  // --library folder (repeatable): start with the library of those folders open
     int filter = -1;         // --filter none|scanlines|crt
     int upscale = -1;        // --upscaling none|xbr|anime4k
@@ -406,6 +410,7 @@ struct CommandLine {
     // For launchers (LaunchBox, Playnite, frontends of arcade cabinets). These last only
     // for this session: the settings file keeps what it had.
     int fullscreen = -1;          // --fullscreen / --windowed
+    int console = -1;             // --console-mode / --desktop-mode: console mode on or off
     int region = -1;              // --region auto|jp|us|eu (a Region)
     int slot = -1;                // --load-state N: load the game's state N once it is open
     bool netHost = false;         // --host: host a netplay game with the open game
@@ -420,6 +425,8 @@ const char* const kHelp = N_(
     "  juego                  cartucho (.md .gen .bin .smd .32x .sms .gg .zip) o disco (.cue .chd .iso)\n"
     "  --fullscreen           abrir a pantalla completa\n"
     "  --windowed             abrir en ventana\n"
+    "  --modo-consola         para jugar con mando (Steam Deck, ROG Ally...): pantalla completa,\n"
+    "                         biblioteca y letra grande (--modo-escritorio para no usarlo)\n"
     "  --3d / --2d            con o sin la vista pseudo-3D\n"
     "  --filter f             none, scanlines o crt\n"
     "  --upscaling u          none, xbr o anime4k (experimental)\n"
@@ -456,6 +463,7 @@ std::string optionName(const std::string& a) {
         {"--buscar-caratula", "--find-cover"}, {"--medios", "--media"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
         {"--opciones-juego", "--game-options"}, {"--instrumentos", "--instruments"}, {"--pista", "--track"}, {"--partitura", "--score"},
         {"--filtro", "--filter"}, {"--reescalado", "--upscaling"}, {"--pantalla-completa", "--fullscreen"},
+        {"--modo-consola", "--console-mode"}, {"--modo-escritorio", "--desktop-mode"},
         {"--ventana", "--windowed"}, {"--estado", "--load-state"}, {"--alojar", "--host"}, {"--unirse", "--join"},
         {"--ayuda", "--help"}};
     for (const auto& [es, en] : kSpanish)
@@ -477,6 +485,18 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--tilt") c.tilt = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--yaw") c.yaw = static_cast<float>(std::atof(next().c_str()));
         else if (a == "--states-menu") c.stateMenu = true;
+        else if (a == "--search") c.search = true;
+        else if (a == "--states-tab") {
+            c.stateMenu = true;
+            c.stateTab = std::atoi(next().c_str());
+        } else if (a == "--window-size") {
+            const std::string v = next();
+            const size_t x = v.find('x');
+            if (x != std::string::npos) {
+                c.windowW = std::atoi(v.substr(0, x).c_str());
+                c.windowH = std::atoi(v.substr(x + 1).c_str());
+            }
+        }
         else if (a == "--fps") c.fps = true;
         else if (a == "--library") c.library.push_back(next());
         else if (a == "--download-covers") c.downloadCovers = true;
@@ -517,6 +537,8 @@ CommandLine parse(int argc, char** argv) {
         }
         else if (a == "--fullscreen") c.fullscreen = 1;
         else if (a == "--windowed") c.fullscreen = 0;
+        else if (a == "--console-mode") c.console = 1;
+        else if (a == "--desktop-mode") c.console = 0;
         else if (a == "--region") {
             const std::string r = next();
             if (r == "auto") c.region = static_cast<int>(Region::Auto);
@@ -587,7 +609,21 @@ int main(int argc, char** argv) {
     const Region fileRegion = settings.region;
     if (cmd.fullscreen >= 0) settings.fullscreen = cmd.fullscreen == 1;
     if (cmd.region >= 0) settings.region = static_cast<Region>(cmd.region);
+    // Console mode (a Steam Deck, a ROG Ally, Big Picture...) starts in full screen without
+    // the menu bar, for this session: the settings file keeps the desktop's.
+    const bool consoleStart = (!capturing || cmd.console == 1) && (cmd.console >= 0 ? cmd.console == 1
+                                             : settings.consoleMode ? settings.consoleMode == 1
+                                                                    : !consoleModeReason().empty());
+    const bool fileShowMenu = settings.showMenu;
+    if (consoleStart) {
+        if (cmd.fullscreen < 0) settings.fullscreen = true;
+        settings.showMenu = false;
+    }
     auto toSave = [&](Settings s) {
+        if (consoleStart) {
+            s.fullscreen = fileFullscreen;
+            s.showMenu = fileShowMenu;
+        }
         if (cmd.fullscreen >= 0) s.fullscreen = fileFullscreen;
         if (cmd.region >= 0) s.region = fileRegion;
         return s;
@@ -606,7 +642,8 @@ int main(int argc, char** argv) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_Window* window = SDL_CreateWindow("plumsg", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          pictureWidth(settings) * settings.windowScale, 224 * settings.windowScale,
+                                          cmd.windowW > 0 ? cmd.windowW : pictureWidth(settings) * settings.windowScale,
+                                          cmd.windowH > 0 ? cmd.windowH : 224 * settings.windowScale,
                                           SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
@@ -640,6 +677,7 @@ int main(int argc, char** argv) {
 
     input->openAll();
     auto ui = std::make_unique<Ui>(window, context, settings, *input);
+    if (cmd.console >= 0) ui->forceConsoleMode(cmd.console == 1);
     // The last run crashed: say where its report is, so that it can be sent.
     if (const std::string report = takeCrashReport(crashDir); !report.empty() && !capturing)
         ui->showError(trf("plumsg se cerró por un fallo la última vez.\nEl informe está en %s", report.c_str()));
@@ -885,8 +923,11 @@ int main(int argc, char** argv) {
         settings.libraryBoxes = true;
         ui->poseBoxes(cmd.libraryBoxes);
     }
-    if (!cmd.library.empty() || (cmd.rom.empty() && !capturing && settings.libraryAtStart && !settings.libraryFolders.empty()))
+    // In console mode the library is the start screen even without folders: it asks for one.
+    if (!cmd.library.empty() ||
+        (cmd.rom.empty() && !capturing && settings.libraryAtStart && (!settings.libraryFolders.empty() || consoleStart)))
         ui->toggleLibrary();
+    if (cmd.search) ui->focusLibrarySearch();
     if (cmd.bios) ui->openBios();
     if (cmd.achievements) ui->openAchievements();
     if (cmd.editor) {
@@ -1230,7 +1271,7 @@ int main(int argc, char** argv) {
 
         // For screenshots, open it once a few frames have run.
         if (openStateMenu && (framesRun >= cmd.frames - 1 || !capturing)) {
-            ui->toggleStateMenu();
+            ui->toggleStateMenu(cmd.stateTab);
             openStateMenu = false;
         }
         // Another game loaded: the windows that were on the old one now edit its files.
@@ -1398,7 +1439,7 @@ int main(int argc, char** argv) {
         if (act.loadState >= 0 && !netBusy) loadState(act.loadState);
         // A menu that owned the pad has closed (A loaded a state, Y saved one, B closed it):
         // that button is still down, and the game must not take it as a press of its own.
-        const bool padMenuOpen = ui->stateMenuOpen() || ui->libraryOpen() || ui->browserOpen();
+        const bool padMenuOpen = ui->stateMenuOpen() || ui->libraryOpen() || ui->browserOpen() || ui->padInWindows();
         if (padMenuWasOpen && !padMenuOpen) input->ignoreHeld();
         padMenuWasOpen = padMenuOpen;
         if (act.consoleChanged && !netBusy) {
@@ -1459,7 +1500,7 @@ int main(int argc, char** argv) {
         if (act.stopRecording || (recording && !editor.isOpen())) stopRecording();
         if (act.assignmentsChanged && app->romLoaded) applyInstruments(app->romPath);
         // The first frame tells us how tall the menu bar is; grow the window to fit it.
-        if (!sizedForMenu && !settings.fullscreen) {
+        if (!sizedForMenu && !settings.fullscreen && cmd.windowW <= 0) {
             applyWindowScale(window, settings.windowScale, ui->menuHeight(), settings);
             sizedForMenu = true;
         }
@@ -1531,7 +1572,7 @@ int main(int argc, char** argv) {
             pacer.reset();
         }
         // The game waits while the states menu, the library or the file browser is open.
-        else if (app->romLoaded && !paused && !ui->stateMenuOpen() && !ui->libraryOpen() && !ui->browserOpen()) {
+        else if (app->romLoaded && !paused && !padMenuOpen) {
             const bool keyboard = !ui->keyboardBusy();
             const bool fast = input->held(Hotkey::FastForward, keyboard);
             const bool canRewind = settings.rewindSeconds > 0 && !hardcore();

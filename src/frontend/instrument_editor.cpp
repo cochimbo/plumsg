@@ -13,6 +13,7 @@
 #include <SDL.h>
 
 #include "imgui.h"
+#include "theme.h"
 #include "../core/i18n.h"
 #include "../core/system.h"
 #include "miniz.h"
@@ -477,7 +478,7 @@ void InstrumentEditor::draw(const EditorView& view, EditorRequests& out) {
     const ImGuiViewport* screen = ImGui::GetMainViewport();
     const float top = ImGui::GetFrameHeight() + 10;  // below the menu bar
     ImGui::SetNextWindowPos(ImVec2(screen->Pos.x + 10, screen->Pos.y + top), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(std::min(960.0f, screen->Size.x - 20), std::min(680.0f, screen->Size.y - top - 10)),
+    ImGui::SetNextWindowSize(ImVec2(std::min(theme::px(960.0f), screen->Size.x - 20), std::min(theme::px(680.0f), screen->Size.y - top - 10)),
                              ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(tr("Editor de instrumentos"), &open_)) {
         ImGui::End();
