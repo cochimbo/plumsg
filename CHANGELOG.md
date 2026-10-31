@@ -5,6 +5,14 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
+- **Console mode** for the Steam Deck, the ROG Ally, the MSI Claw, the Legion Go and
+  other PCs played with a pad: on by itself in Steam's game mode or Big Picture and on
+  those handhelds (Options > Console mode, `--console-mode`). Full screen without the
+  menu bar, the library at start, bigger letters (Options > Interface size, also by
+  hand), the pad in every window, and the states menu's Sistema tab reaching the
+  library, the controls, the cheats, the menu bar and Quit without a keyboard. Its own
+  on-screen keyboard, driven by the pad, types in the library's search, the netplay
+  address, the cheat codes and every other text box.
 - **Mega CD 32X** (#96): the six Mega CD 32X discs (Corpse Killer, Night Trap,
   Fahrenheit, Slam City, Supreme Warrior, Surgical Strike) run with the Mega CD and the
   32X together, the 32X with no cartridge: its boot ROMs take the SH-2s' program from

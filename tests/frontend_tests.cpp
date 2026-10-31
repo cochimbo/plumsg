@@ -8,6 +8,7 @@
 
 #include "frontend/crash.h"
 #include "frontend/game_options.h"
+#include "frontend/handheld.h"
 #include "frontend/light_gun.h"
 
 #ifndef _WIN32
@@ -221,6 +222,33 @@ void testSpanishIni() {
           "ini: lo guarda en inglés");
 }
 
+// Console mode and the interface's size are kept, and the handhelds are told apart by
+// their firmware's model names.
+void testConsoleMode() {
+    Settings s;
+    s.consoleMode = 1;
+    s.uiScale = 150;
+    std::ostringstream out;
+    s.write(out);
+    std::istringstream in(out.str());
+    Settings back;
+    Settings::parse(in, back);
+    check(back.consoleMode == 1 && back.uiScale == 150, "ini: modo consola y tamaño de la interfaz");
+    std::istringstream automatic("[interface]\nconsole_mode = auto\nsize = auto\n");
+    Settings a;
+    a.consoleMode = 2;
+    a.uiScale = 120;
+    Settings::parse(automatic, a);
+    check(a.consoleMode == 0 && a.uiScale == 0, "ini: modo consola y tamaño automáticos");
+    check(handheldFromModel("Jupiter Valve") == "Steam Deck" && handheldFromModel("Galileo Valve") == "Steam Deck" &&
+              handheldFromModel("ROG Ally RC71L_RC71L ROG Ally ASUSTeK COMPUTER INC.") == "ROG Ally" &&
+              handheldFromModel("Claw A1M Claw Micro-Star International Co., Ltd.") == "MSI Claw" &&
+              handheldFromModel("83E1 Legion Go 8APU1 LENOVO") == "Legion Go" &&
+              handheldFromModel("System Product Name To be filled by O.E.M.").empty() &&
+              handheldFromModel("ROG STRIX B550-F GAMING").empty(),
+          "modo consola: reconoce las portátiles por su modelo");
+}
+
 #ifndef _WIN32
 // A child process crashes, in each way the handler catches; the report it leaves says
 // what happened and with which game, and the next start is told about it once.
@@ -270,6 +298,7 @@ int main() {
     testEqualizerOption();
     testLightGunOption();
     testSpanishIni();
+    testConsoleMode();
 #ifndef _WIN32
     testCrashReport();
 #endif

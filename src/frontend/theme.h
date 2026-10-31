@@ -19,8 +19,12 @@ const Fonts& fonts();
 void addBodyFont(float size, const ImWchar* ranges);
 void addTitleFont(float size, const ImWchar* ranges);
 
-// The colours and shapes, once after ImGui::CreateContext.
-void apply();
+// The colours and shapes, after ImGui::CreateContext and again when the size changes:
+// the style is made anew at `scale` times its size (1 is 100 %).
+void apply(float scale = 1.0f);
+// The interface's size last applied, and `pixels` at that size, for the sizes of windows.
+float scale();
+inline float px(float pixels) { return pixels * scale(); }
 
 // Repaints the title bars of the windows drawn this frame (ribs, red line, chrome
 // title). Between the last End and ImGui::Render.
