@@ -59,7 +59,10 @@ bool MegaDrive::loadRom(const std::string& path, std::string* error) {
     ggFile_ = detectSystem(path) == ConsoleSystem::GameGear;
     loadNotice_.clear();
     std::unique_ptr<CdImage> disc;
-    const std::string cue = detectSystemFromData(cart_.rom()) == ConsoleSystem::MegaDrive ? msuMdCue(path) : "";
+    // MSU-MD, and its 32X kind (MSU-32X): the cartridge plays its music from the disc.
+    const ConsoleSystem inside = detectSystemFromData(cart_.rom());
+    const std::string cue =
+        inside == ConsoleSystem::MegaDrive || inside == ConsoleSystem::Mega32X ? msuMdCue(path) : "";
     if (!cue.empty()) {
         std::string why;
         auto open = std::make_unique<CdImage>();
@@ -167,16 +170,47 @@ bool MegaDrive::loadDiscImage(std::unique_ptr<CdImage> disc, std::string* error)
 }
 
 std::vector<int16_t>* MegaDrive::addOnSamples() {
+    if (mars_ && mcd_) {
+        // Both: the 32X's PWM and the Mega CD's PCM and CD audio, added up. They cover the
+        // same time, so what one has more of waits for the next frame.
+        std::vector<int16_t>& pwm = mars_->samples();
+        std::vector<int16_t>& cd = mcd_->samples();
+        addOnPwm_.insert(addOnPwm_.end(), pwm.begin(), pwm.end());
+        addOnCd_.insert(addOnCd_.end(), cd.begin(), cd.end());
+        pwm.clear();
+        cd.clear();
+        const size_t n = std::min(addOnPwm_.size(), addOnCd_.size()) & ~size_t{1};
+        for (size_t i = 0; i < n; ++i)
+            addOnMixed_.push_back(static_cast<int16_t>(std::clamp(addOnPwm_[i] + addOnCd_[i], -32768, 32767)));
+        addOnPwm_.erase(addOnPwm_.begin(), addOnPwm_.begin() + static_cast<long>(n));
+        addOnCd_.erase(addOnCd_.begin(), addOnCd_.begin() + static_cast<long>(n));
+        if (addOnPwm_.size() > 4096) addOnPwm_.clear();
+        if (addOnCd_.size() > 4096) addOnCd_.clear();
+        return &addOnMixed_;
+    }
     if (mars_) return &mars_->samples();
     if (mcd_) return &mcd_->samples();
     if (paprium_) return &paprium_->samples();
     return nullptr;
 }
 
+// A Mega CD 32X disc says so where a 32X cartridge does, in the header of its first sector.
+bool MegaDrive::isMegaCd32xDisc() const {
+    const std::vector<uint8_t>& h = cart_.rom();
+    return disc_ && mcd_ && !mcd_->cartridgeMode() && !bootRomAsBios_ && h.size() >= 0x108 &&
+           std::memcmp(h.data() + 0x100, "SEGA 32X", 8) == 0;
+}
+
 void MegaDrive::setUpMars() {
-    const bool wanted = detectSystemFromData(cart_.rom()) == ConsoleSystem::Mega32X;
-    if (wanted && !mars_) mars_ = std::make_unique<Mars>(cart_);
+    // A 32X cartridge, or a Mega CD 32X disc, which has the 32X with no cartridge in it.
+    const bool noCartridge = isMegaCd32xDisc();
+    const bool wanted = noCartridge || detectSystemFromData(cart_.rom()) == ConsoleSystem::Mega32X;
+    if (mars_ && mars_->noCartridge() != noCartridge) mars_.reset();
+    if (wanted && !mars_) mars_ = std::make_unique<Mars>(cart_, noCartridge);
     if (!wanted) mars_.reset();
+    addOnPwm_.clear();
+    addOnCd_.clear();
+    addOnMixed_.clear();
     vdp_.frame().mars.fill(0);
 }
 
@@ -329,6 +363,9 @@ void MegaDrive::reset() {
         mcd_->rebaseClock();
         mcd_->samples().clear();
     }
+    addOnPwm_.clear();
+    addOnCd_.clear();
+    addOnMixed_.clear();
     if (svp_) svp_->reset();
     cpu_.setIrqLevel(0);
     cpu_.reset();
@@ -1405,6 +1442,9 @@ bool MegaDrive::loadState(const std::vector<uint8_t>& in, std::string* error) {
     psg_.clearSamples();
     if (mars_) mars_->samples().clear();
     if (mcd_) mcd_->samples().clear();
+    addOnPwm_.clear();
+    addOnCd_.clear();
+    addOnMixed_.clear();
     if (paprium_) paprium_->samples().clear();
     frames_ = frames;
     vdpFreeAt_ = 0;

@@ -25,12 +25,46 @@ uint32_t colorOf(uint16_t c) { return kColors[c & 0x7FFF]; }
 
 }  // namespace
 
-Mars::Mars(Cartridge& cart) : cart_(cart) {
+Mars::Mars(Cartridge& cart, bool noCartridge) : cart_(cart), noCartridge_(noCartridge) {
     master_.setPeer(&slave_);
     slave_.setPeer(&master_);
     master_.setFastMemory(0x06000000, 0x40000, sdram_.data());
     slave_.setFastMemory(0x06000000, 0x40000, sdram_.data());
+    buildBootRoms();
 
+    // The 68000's vector ROM, seen while the adapter is on: every vector jumps into the
+    // table the game keeps at 0x880200, and two small routines the games' start-up code
+    // calls (they set the cartridge's bank registers and give the ROM back to the SH-2s).
+    for (uint32_t i = 1; i < 0xC0 / 4; ++i) {
+        const uint32_t target = 0x880200 + (i - 1) * 6;
+        vectorRom_[i * 2] = static_cast<uint16_t>(target >> 16);
+        vectorRom_[i * 2 + 1] = static_cast<uint16_t>(target);
+    }
+    vectorRom_[0x70 / 2] = vectorRom_[0x72 / 2] = 0;
+    for (uint32_t a = 0xC0; a < 0x100; a += 2) vectorRom_[a / 2] = 0x4E71;  // nop
+    static constexpr uint16_t kAt0xC8[] = {
+        0x1280,                          // move.b d0,(a1)
+        0x0239, 0x00FE, 0x00A1, 0x5107,  // and.b #$fe,$a15107 (RV off)
+        0x4E75,                          // rts
+    };
+    static constexpr uint16_t kAt0xD4[] = {
+        0x48E7, 0x8040,                  // movem.l d0/a1,-(sp)
+        0x227C, 0x00A1, 0x30F1,          // movea.l #$a130f1,a1
+        0x7007,                          // moveq #7,d0
+        0x12D8,                          // move.b (a0)+,(a1)+
+        0x5289,                          // addq.l #1,a1
+        0x51C8, 0xFFFA,                  // dbra d0,*-4
+        0x0239, 0x00FE, 0x00A1, 0x5107,  // and.b #$fe,$a15107
+        0x4CDF, 0x0201,                  // movem.l (sp)+,d0/a1
+    };
+    std::copy(std::begin(kAt0xC8), std::end(kAt0xC8), vectorRom_.begin() + 0xC8 / 2);
+    std::copy(std::begin(kAt0xD4), std::end(kAt0xD4), vectorRom_.begin() + 0xD4 / 2);
+    vectorRom_[0xFE / 2] = 0x4E75;  // rts
+
+    powerOn();
+}
+
+void Mars::buildBootRoms() {
     // The SH-2 boot ROMs. Every exception vector leads to a loop at 0x200; reset starts
     // at 0x204. The master waits a little (the 68000 is still clearing memory), says
     // "M_OK" in the first communication words; the slave waits for that and answers
@@ -99,37 +133,82 @@ Mars::Mars(Cartridge& cart) : cart_(cart) {
             put32(0x248, 0x220003E4);
         }
     }
+    if (!noCartridge_) return;
 
-    // The 68000's vector ROM, seen while the adapter is on: every vector jumps into the
-    // table the game keeps at 0x880200, and two small routines the games' start-up code
-    // calls (they set the cartridge's bank registers and give the ROM back to the SH-2s).
-    for (uint32_t i = 1; i < 0xC0 / 4; ++i) {
-        const uint32_t target = 0x880200 + (i - 1) * 6;
-        vectorRom_[i * 2] = static_cast<uint16_t>(target >> 16);
-        vectorRom_[i * 2 + 1] = static_cast<uint16_t>(target);
+    // With no cartridge (a Mega CD 32X game) the boot ROMs take the program from the
+    // frame buffer instead, once the 68000 says "_CD_". The master's vectors from 80 on
+    // lead back to the start through a run of nops: the Digital Pictures games jump to
+    // 0x140 to start again.
+    for (int c = 0; c < 2; ++c) {
+        auto& rom = bootRom_[c];
+        auto put16 = [&](uint32_t a, uint16_t v) {
+            rom[a] = static_cast<uint8_t>(v >> 8);
+            rom[a + 1] = static_cast<uint8_t>(v);
+        };
+        auto put32 = [&](uint32_t a, uint32_t v) {
+            put16(a, static_cast<uint16_t>(v >> 16));
+            put16(a + 2, static_cast<uint16_t>(v));
+        };
+        static constexpr uint16_t kMaster[] = {
+            0xD10D,  // 204 mov.l @(0x23c),r1      "_CD_"
+            0xC608,  // 206 mov.l @(0x20,gbr),r0   until the 68000 writes it
+            0x3100,  // 208 cmp/eq r0,r1
+            0x8BFC,  // 20a bf 0x206
+            0xE000,  // 20c mov #0,r0
+            0xCF80,  // 20e or.b #0x80,@(r0,gbr)   FM: the frame buffer is the SH-2s'
+            0xD80B,  // 210 mov.l @(0x240),r8      the header in the frame buffer
+            0xD30C,  // 212 mov.l @(0x244),r3      the most there is room for
+            0x5B84,  // 214 mov.l @(0x10,r8),r11   VBR
+            0x5A82,  // 216 mov.l @(8,r8),r10      entry point
+            0x5081,  // 218 mov.l @(4,r8),r0       size
+            0x5980,  // 21a mov.l @(0,r8),r9       destination
+            0x3036,  // 21c cmp/hi r3,r0
+            0x8B00,  // 21e bf 0x222
+            0x6033,  // 220 mov r3,r0
+            0x7820,  // 222 add #0x20,r8           the program follows the header
+            0x6286,  // 224 mov.l @r8+,r2
+            0x2922,  // 226 mov.l r2,@r9
+            0x7904,  // 228 add #4,r9
+            0x70FC,  // 22a add #-4,r0
+            0x4015,  // 22c cmp/pl r0
+            0x89F9,  // 22e bt 0x224
+            0x4B2E,  // 230 ldc r11,vbr
+            0xD005,  // 232 mov.l @(0x248),r0      "M_OK"
+            0xC208,  // 234 mov.l r0,@(0x20,gbr)
+            0x4A2B,  // 236 jmp @r10
+            0x0009,  // 238 nop
+            0x0009,  // 23a
+        };
+        static constexpr uint16_t kSlave[] = {
+            0xD105,  // 204 mov.l @(0x21c),r1      "M_OK": the master has copied the program
+            0xC608,  // 206 mov.l @(0x20,gbr),r0
+            0x3100,  // 208 cmp/eq r0,r1
+            0x8BFC,  // 20a bf 0x206
+            0xD804,  // 20c mov.l @(0x220),r8      the header
+            0x5B85,  // 20e mov.l @(0x14,r8),r11   VBR
+            0x5A83,  // 210 mov.l @(0x0c,r8),r10   entry point
+            0x4B2E,  // 212 ldc r11,vbr
+            0xD003,  // 214 mov.l @(0x224),r0      "S_OK"
+            0xC209,  // 216 mov.l r0,@(0x24,gbr)
+            0x4A2B,  // 218 jmp @r10
+            0x0009,  // 21a nop
+        };
+        if (c == 0) {
+            for (uint32_t a = 0x140; a < 0x1FC; a += 2) put16(a, 0x0009);  // nop
+            put16(0x1FC, 0xA002);                                           // bra 0x204
+            put16(0x1FE, 0x0009);
+            for (uint32_t i = 0; i < std::size(kMaster); ++i) put16(0x204 + i * 2, kMaster[i]);
+            put32(0x23C, 0x5F43445F);  // "_CD_"
+            put32(0x240, 0x24000018);
+            put32(0x244, 0x0001FFE0);
+            put32(0x248, 0x4D5F4F4B);  // "M_OK"
+        } else {
+            for (uint32_t i = 0; i < std::size(kSlave); ++i) put16(0x204 + i * 2, kSlave[i]);
+            put32(0x21C, 0x4D5F4F4B);  // "M_OK"
+            put32(0x220, 0x24000018);
+            put32(0x224, 0x535F4F4B);  // "S_OK"
+        }
     }
-    vectorRom_[0x70 / 2] = vectorRom_[0x72 / 2] = 0;
-    for (uint32_t a = 0xC0; a < 0x100; a += 2) vectorRom_[a / 2] = 0x4E71;  // nop
-    static constexpr uint16_t kAt0xC8[] = {
-        0x1280,                          // move.b d0,(a1)
-        0x0239, 0x00FE, 0x00A1, 0x5107,  // and.b #$fe,$a15107 (RV off)
-        0x4E75,                          // rts
-    };
-    static constexpr uint16_t kAt0xD4[] = {
-        0x48E7, 0x8040,                  // movem.l d0/a1,-(sp)
-        0x227C, 0x00A1, 0x30F1,          // movea.l #$a130f1,a1
-        0x7007,                          // moveq #7,d0
-        0x12D8,                          // move.b (a0)+,(a1)+
-        0x5289,                          // addq.l #1,a1
-        0x51C8, 0xFFFA,                  // dbra d0,*-4
-        0x0239, 0x00FE, 0x00A1, 0x5107,  // and.b #$fe,$a15107
-        0x4CDF, 0x0201,                  // movem.l (sp)+,d0/a1
-    };
-    std::copy(std::begin(kAt0xC8), std::end(kAt0xC8), vectorRom_.begin() + 0xC8 / 2);
-    std::copy(std::begin(kAt0xD4), std::end(kAt0xD4), vectorRom_.begin() + 0xD4 / 2);
-    vectorRom_[0xFE / 2] = 0x4E75;  // rts
-
-    powerOn();
 }
 
 void Mars::powerOn() {
@@ -180,6 +259,13 @@ void Mars::bootSh2s() {
         cpu->setDreq(0, false);
         cpu->setDreq(1, false);
     }
+    if (noCartridge_) {
+        // The boot ROMs take the program from the frame buffer themselves.
+        bootCache();
+        setRomView();
+        updateIrls();
+        return;
+    }
     const std::vector<uint8_t>& rom = cart_.rom();
     auto rd = [&](uint32_t a, int bytes) {
         uint32_t v = 0;
@@ -205,6 +291,10 @@ void Mars::bootSh2s() {
 // The SH-2s read the cartridge straight from the ROM, up to where SRAM or banks could
 // start, with the wait the bus would add (6 cycles a word).
 void Mars::setRomView() {
+    if (noCartridge_) {
+        for (Sh2* cpu : {&master_, &slave_}) cpu->setRom(nullptr, 0, 6);
+        return;
+    }
     const uint32_t limit = cart_.plainRomBytes();
     for (Sh2* cpu : {&master_, &slave_}) cpu->setRom(&cart_.rom(), limit, 6);
 }
@@ -628,7 +718,7 @@ bool Mars::read68k(uint32_t addr, uint16_t& v) {
     addr &= 0xFFFFFE;
     now_ = masterTicks_;
     if (addr < 0x400000) {
-        if (!io_.adapterEnable) return false;
+        if (!io_.adapterEnable || noCartridge_) return false;  // the Mega CD's, with no cartridge
         if (addr < 0x100) {
             if (addr == 0x70) v = static_cast<uint16_t>(io_.vectorLevel4 >> 16);
             else if (addr == 0x72) v = static_cast<uint16_t>(io_.vectorLevel4);
@@ -648,6 +738,8 @@ bool Mars::read68k(uint32_t addr, uint16_t& v) {
         if (!io_.adapterEnable) return true;
         if (addr >= 0x840000 && addr < 0x880000) {
             if (!vdp_.access) v = backBuffer()[(addr >> 1) & 0xFFFF];
+        } else if (noCartridge_) {
+            // No cartridge behind the windows onto it.
         } else if (addr >= 0x880000 && addr < 0x900000) {
             if (!dreq_.vram) v = cart_.read16(addr & 0x7FFFF);
         } else if (addr >= 0x900000) {
@@ -708,7 +800,7 @@ bool Mars::write68k(uint32_t addr, uint16_t v, bool upper, bool lower) {
     master_.unpark();
     slave_.unpark();
     if (addr < 0x400000) {
-        if (!io_.adapterEnable) return false;
+        if (!io_.adapterEnable || noCartridge_) return false;
         if (addr < 0x100) {
             uint32_t& vec = io_.vectorLevel4;
             if (addr == 0x70) {
@@ -870,7 +962,7 @@ uint16_t Mars::sh2Read16(Sh2& cpu, uint32_t addr) {
     }
     if (addr >= 0x02000000 && addr < 0x04000000) {
         cpu.addCycles(6);
-        return cart_.read16(addr & 0x3FFFFE);
+        return noCartridge_ ? 0 : cart_.read16(addr & 0x3FFFFE);
     }
     if (addr >= 0x04000000 && addr < 0x06000000) {
         if (!vdp_.access) return 0;
@@ -917,7 +1009,8 @@ uint16_t Mars::readSysRegValue(Sh2& cpu, uint32_t reg) {
         case 0x00:
             return static_cast<uint16_t>((q.enable[kPwm] ? 1 : 0) | (q.enable[kCmd] ? 2 : 0) | (q.enable[kHint] ? 4 : 0) |
                                          (q.enable[kVint] ? 8 : 0) | (io_.hintVblank ? 0x80 : 0) |
-                                         (io_.adapterEnable ? 0x200 : 0) | (vdp_.access ? 0x8000 : 0));
+                                         (noCartridge_ ? 0x100 : 0) | (io_.adapterEnable ? 0x200 : 0) |
+                                         (vdp_.access ? 0x8000 : 0));
         case 0x04: return io_.hperiod;
         case 0x06:
             return static_cast<uint16_t>((dreq_.vram ? 1 : 0) | (dreq_.dma ? 2 : 0) | (dreq_.active ? 4 : 0) |

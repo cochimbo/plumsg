@@ -249,7 +249,7 @@ void Achievements::loadProgress(const std::vector<uint8_t>& data) {
 // Identifying the game and reading its memory.
 
 uint32_t Achievements::consoleId(const MegaDrive& console) {
-    if (console.isMegaCd()) return RC_CONSOLE_SEGA_CD;
+    if (console.isMegaCd() && !console.hasMsuMd()) return RC_CONSOLE_SEGA_CD;  // the Mega CD 32X too
     if (console.is32x()) return RC_CONSOLE_SEGA_32X;
     if (console.isGameGear()) return RC_CONSOLE_GAME_GEAR;
     if (console.isMasterSystem()) return RC_CONSOLE_MASTER_SYSTEM;

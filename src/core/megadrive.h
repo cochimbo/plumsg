@@ -165,6 +165,8 @@ public:
     Ym2413* ym2413() { return opll_.get(); }  // null unless the game is a Master System one
     MegaCd* megaCd() { return mcd_.get(); }  // null unless a disc is loaded
     bool isMegaCd() const { return mcd_ != nullptr; }
+    // A Mega CD 32X game: a disc with the 32X attached too (is32x() and isMegaCd()).
+    bool isMegaCd32x() const { return mars_ && mcd_ && !mcd_->cartridgeMode(); }
     CdImage* disc() { return disc_.get(); }  // the disc in the Mega CD, null if none
     // CPU view of memory, for tools and tests.
     uint8_t peek(uint32_t addr) { return read8(addr); }
@@ -231,7 +233,9 @@ private:
     void setUpSvp();              // adds Virtua Racing's SVP chip for its cartridge
     void runFrameSms();
     void runFrameMd();
-    std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound
+    std::vector<int16_t>* addOnSamples();  // the 32X's or the Mega CD's sound, or both
+    bool isMegaCd32xDisc() const;
+    std::vector<int16_t> addOnPwm_, addOnCd_, addOnMixed_;  // addOnSamples() with both
     int lineClock() const { return static_cast<int>(now_ - lineStart_); }
     int smsPortCycle();
     // When a VDP port access happens: a second access in the same instruction comes after
