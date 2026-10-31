@@ -207,6 +207,9 @@ void MegaDrive::setUpSms() {
     if (wanted) {
         cart_.setMasterSystemHeader(smsRegion(cart_.rom(), gameGear), gameGear);
         sms_->setBios(!gameGear && isMasterSystemBiosFile(cart_.path()));
+        sms_->setPadType(0, io_.padType(0));
+        sms_->setPadType(1, io_.padType(1));
+        sms_->setAutoControllers(autoControllers_);
     }
     if (!wanted) {
         sms_.reset();
@@ -509,6 +512,9 @@ void MegaDrive::setVgmWriter(VgmWriter* writer) {
 
 void MegaDrive::runFrameSms() {
     VdpSms& vdp = sms_->vdp();
+    // A state loaded brings the ports' types.
+    sms_->setPadType(0, io_.padType(0));
+    sms_->setPadType(1, io_.padType(1));
     if (sms_->pausePressed()) z80_.triggerNmi();
     const int lines = vdp.linesPerFrame();
     for (int line = 0; line < lines; ++line) {

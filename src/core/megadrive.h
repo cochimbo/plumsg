@@ -86,11 +86,30 @@ public:
         io_.setPad(1, p2);
         if (sms_) sms_->setPads(p1, p2);
     }
-    void setPadType(int port, PadType t) { io_.setPadType(port, t); }
+    void setPadType(int port, PadType t) {
+        io_.setPadType(port, t);
+        if (sms_) sms_->setPadType(port, t);
+    }
     PadType padType(int port) const { return io_.padType(port); }
+    // What the game sees in a port: the type chosen, but for a Master System game, which
+    // reads Mega Drive pads and guns as its own pad, and gets a Light Phaser or a paddle
+    // in the first port on its own when it needs one (setAutoControllers).
+    PadType controller(int port) const { return sms_ ? sms_->controller(port) : io_.padType(port); }
+    void setAutoControllers(bool on) {
+        autoControllers_ = on;
+        if (sms_) sms_->setAutoControllers(on);
+    }
     // The light guns, when the second port has one (setPadType(1, Menacer or Justifier)):
-    // gun 0, and the Justifier's second gun 1. Mega Drive games only.
-    void setGun(int gun, const GunState& s) { io_.setGun(gun, s); }
+    // gun 0, and the Justifier's second gun 1. With a Master System game, the Light
+    // Phaser of port `gun`.
+    void setGun(int gun, const GunState& s) {
+        io_.setGun(gun, s);
+        if (sms_) sms_->setGun(gun, s);
+    }
+    // The Master System paddle of a port.
+    void setPaddle(int port, const PaddleState& s) {
+        if (sms_) sms_->setPaddle(port, s);
+    }
 
     // Replaces the active cheats. ROM patches are applied now and undone by the next
     // call (or by loading another ROM); RAM writes are made at the start of every frame.
@@ -263,6 +282,7 @@ private:
     uint8_t tmss_ = 1;  // what Paprium reads back from 0xA14101
     std::unique_ptr<Ym2413> opll_;  // the Master System's FM unit, with sms_
     bool smsFmAlways_ = false;
+    bool autoControllers_ = true;
     bool smsFile_ = false;  // the file loaded is a Master System one by its name
     bool ggFile_ = false;   // ...or a Game Gear one
     std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe

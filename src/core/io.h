@@ -15,8 +15,20 @@ struct PadState {
 // None: nothing plugged in. Some games look: ESPN Sunday Night NFL makes player 2 the
 // computer when the second port is empty, and waits for pad 2 at the coin toss if not.
 // Menacer and Justifier: light guns, which go in the second port (Io only reads them there).
-enum class PadType : uint8_t { ThreeButton = 0, SixButton = 1, None = 2, Menacer = 3, Justifier = 4 };
+// LightPhaser and Paddle: the Master System's light gun and its paddle (HPD-200), in
+// either port; only Master System games see them, and a Mega Drive game a 3-button pad.
+enum class PadType : uint8_t {
+    ThreeButton = 0, SixButton = 1, None = 2, Menacer = 3, Justifier = 4, LightPhaser = 5, Paddle = 6
+};
+constexpr int kPadTypes = 7;
 inline bool isLightGun(PadType t) { return t == PadType::Menacer || t == PadType::Justifier; }
+inline bool isMasterSystemController(PadType t) { return t == PadType::LightPhaser || t == PadType::Paddle; }
+
+// The Master System paddle: its knob, 0 (all to the left) to 255, and its button.
+struct PaddleState {
+    uint8_t position = 128;
+    bool button = false;
+};
 
 // Where a light gun points and what is held on it. x and y are pixels of the console's
 // picture (0..255 or 0..319 across, 0..223 or 0..239 down); anywhere else, as when the

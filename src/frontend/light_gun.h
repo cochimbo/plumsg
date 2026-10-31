@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 
 #include "../core/io.h"
 
@@ -69,6 +70,12 @@ public:
             s.y = static_cast<int>(aimY_[g] * static_cast<float>(height));
         }
         return s;
+    }
+    // A Master System paddle's knob, 0..255, from where the gun's crosshair is across the
+    // picture (off it, all the way to that side): the mouse or the stick turn it.
+    uint8_t knob(int gun) const {
+        const float x = std::clamp(aimX_[static_cast<size_t>(gun & 1)], 0.0f, 1.0f);
+        return static_cast<uint8_t>(std::min(255.0f, x * 256.0f));
     }
     // Where a crosshair is in the window, and whether it is on the picture.
     bool crosshair(int gun, float* x, float* y) const {

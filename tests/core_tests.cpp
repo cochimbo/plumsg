@@ -3104,6 +3104,74 @@ void testSmsMapper() {
     check(before == 0x93 && sms.in(0x7F, 0) == 0xE9, "SMS VDP: H counter jumps from 0x93 to 0xE9");
 }
 
+void testSmsControllers() {
+    std::vector<uint8_t> rom(0x8000);
+    std::copy_n("TMR SEGA", 8, rom.begin() + 0x7FF0);
+    Cartridge cart;
+    cart.loadData(rom);
+    std::array<uint8_t, 0x2000> ram{};
+    auto frame = std::make_unique<VideoFrameMd>();
+    MasterSystem sms(cart, ram, *frame);
+    sms.powerOn();
+    check(sms.controller(0) == PadType::SixButton && sms.controller(1) == PadType::SixButton,
+          "SMS controllers: pads unless a game needs something else");
+    check(masterSystemControllerFor(0x4B051022) == PadType::LightPhaser &&
+              masterSystemControllerFor(0x315917D4) == PadType::Paddle &&
+              masterSystemControllerFor(0x12345678) == PadType::SixButton,
+          "SMS controllers: Shooting Gallery wants the Light Phaser, Woody Pop the paddle");
+    sms.setPadType(1, PadType::Menacer);
+    check(sms.controller(1) == PadType::SixButton, "SMS controllers: a Mega Drive gun reads as a pad");
+
+    // The Light Phaser in port 1, aimed at (100, 50) with the trigger pulled.
+    sms.setPadType(0, PadType::LightPhaser);
+    GunState gun;
+    gun.x = 100;
+    gun.y = 50;
+    gun.trigger = true;
+    sms.setGun(0, gun);
+    check(!(sms.in(0xDC, 0) & 0x10), "Light Phaser: the trigger is TL");
+    // H counter 50 (pixel 100) is 82 cycles into the line.
+    check(VdpSms::hcounterAt(82) == 50, "Light Phaser: H counter 50 at cycle 82");
+    sms.vdp().startLine(40, false);
+    check(sms.in(0xDD, 82) & 0x40, "Light Phaser: no light ten lines above");
+    sms.vdp().startLine(50, false);
+    check(!(sms.in(0xDD, 82) & 0x40), "Light Phaser: TH low where it points");
+    check(sms.in(0x7F, 82) == 20 + 50, "Light Phaser: the H counter latched at its x");
+    check(sms.in(0xDD, 200) & 0x40, "Light Phaser: no light far right of it");
+    sms.out(0x3F, 0xDD);  // TH of port A an output, low
+    check(!(sms.in(0xDD, 200) & 0x40), "Light Phaser: TH an output reads back what was written");
+    sms.out(0x3F, 0xFF);
+    gun.x = -1;
+    sms.setGun(0, gun);
+    check(sms.in(0xDD, 82) & 0x40, "Light Phaser: off the screen, no light");
+
+    // The paddle in port 1, its knob at 0xA7 with the button held.
+    sms.setPadType(0, PadType::Paddle);
+    PaddleState paddle;
+    paddle.position = 0xA7;
+    paddle.button = true;
+    sms.setPaddle(0, paddle);
+    bool low = false, high = false;
+    for (int n = 0; n < 12; ++n) {
+        const uint8_t v = sms.in(0xDC, 0);
+        if ((v & 0x3F) == 0x07) low = true;           // TR low, TL low (button), 7
+        if ((v & 0x3F) == (0x20 | 0x0A)) high = true;  // TR high, TL low, A
+    }
+    check(low && high, "Paddle: the Japanese one shows both halves of the knob in turn");
+    sms.out(0x3F, 0xFD);  // TH of port A an output, high: the high half
+    check((sms.in(0xDC, 0) & 0x2F) == 0x2A && (sms.in(0xDC, 0) & 0x2F) == 0x2A, "Paddle: TH high picks the high half");
+    sms.out(0x3F, 0xDD);
+    check((sms.in(0xDC, 0) & 0x2F) == 0x07, "Paddle: TH low picks the low half");
+    // The second port's paddle: its four bits are split between ports A and B.
+    sms.setPadType(1, PadType::Paddle);
+    paddle.position = 0x5E;
+    paddle.button = false;
+    sms.setPaddle(1, paddle);
+    sms.out(0x3F, 0x77);  // TH of port B an output, low
+    check((sms.in(0xDC, 0) >> 6) == (0xE & 3) && (sms.in(0xDD, 0) & 0x0F) == (0x4 | 0xE >> 2),
+          "Paddle: the second port's low half, button up");
+}
+
 void testSmsPhase2() {
     // The FM unit: a note on the YM2413 sounds.
     Ym2413 opll;
@@ -3592,6 +3660,7 @@ int main() {
     testSystems();
     testMasterSystem();
     testSmsMapper();
+    testSmsControllers();
     testSmsPhase2();
     testGameGear();
     testGameGearCartridges();

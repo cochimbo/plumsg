@@ -5,6 +5,15 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
+- **Master System Light Phaser and paddle** (#73): Consola > Mando 1 or Mando 2 (or a
+  game's options) plugs in the Light Phaser or the Japanese paddle (HPD-200). The games
+  that need one get it in port 1 on their own while a pad is chosen there: Safari Hunt,
+  Shooting Gallery, Marksman Shooting, Operation Wolf, Rambo III, Wanted, Gangster Town,
+  Assault City, Laser Ghost, Space Gun, Rescue Mission, Missile Defense 3-D for the gun;
+  Woody Pop, Alex Kidd BMX Trial, Galactic Protector and Megumi Rescue for the paddle.
+  The Light Phaser is aimed like the Mega Drive's guns, with the crosshair, the mouse or
+  the left stick (left click or A to shoot); the paddle's dial follows the mouse across
+  the picture, or the left stick (left click, A or B for its button).
 - **Console mode** for the Steam Deck, the ROG Ally, the MSI Claw, the Legion Go and
   other PCs played with a pad: on by itself in Steam's game mode or Big Picture and on
   those handhelds (Options > Console mode, `--console-mode`). Full screen without the
