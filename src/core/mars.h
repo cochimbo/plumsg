@@ -20,12 +20,21 @@ namespace plumsg {
 // No BIOS is needed: what the SH-2s' boot ROMs and the 68000's vector ROM do is done
 // here (copying the game's initial program to SDRAM, the handshake with the 68000 and
 // the jump to the game's entry points), as other emulators do.
+//
+// On a Mega CD with no cartridge (the Mega CD 32X games) the 32X has no cartridge to
+// show: the Mega CD answers at 0x000000 up (its BIOS and vectors), nothing does at
+// 0x880000 up, and the SH-2s read nCART set. Their boot ROMs then wait for the 68000 to
+// put "_CD_" in the first communication words, having left the initial program in the
+// frame buffer (a header at 0x18: where it goes, its size, the entry points and VBRs
+// of both CPUs; the program from 0x38), and copy it from there.
 class Mars : public Sh2Bus {
 public:
     // Time is counted in thirds of a master clock: an SH-2 cycle is 7, a 68000 cycle 21.
     static constexpr int kTicksPerSh2Cycle = 7;
 
-    explicit Mars(Cartridge& cart);
+    // `noCartridge`: the Mega CD 32X, see above.
+    explicit Mars(Cartridge& cart, bool noCartridge = false);
+    bool noCartridge() const { return noCartridge_; }
 
     void powerOn();  // clears memory and starts the boot sequence again
     void reset();        // everything but memory as it powers on (powerOn() does it)
@@ -122,6 +131,7 @@ private:
     bool readShared(uint32_t reg, uint16_t& value);
     void writeShared(uint32_t reg, uint16_t value, bool upper, bool lower);
 
+    void buildBootRoms();
     void bootSh2s();        // what the boot ROMs do, then the CPUs run the game
     void updateIrl(int cpu);
     void updateIrls() {
@@ -140,6 +150,7 @@ private:
     void raiseDreq0();
 
     Cartridge& cart_;
+    bool noCartridge_ = false;
     bool pal_ = false;
     Sh2 master_{*this, 0};
     Sh2 slave_{*this, 1};

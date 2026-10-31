@@ -22,6 +22,15 @@ What each version brings, newest first. Installers are on the
   library, the controls, the cheats, the menu bar and Quit without a keyboard. Its own
   on-screen keyboard, driven by the pad, types in the library's search, the netplay
   address, the cheat codes and every other text box.
+- **Mega CD 32X** (#96): the six Mega CD 32X discs (Corpse Killer, Night Trap,
+  Fahrenheit, Slam City, Supreme Warrior, Surgical Strike) run with the Mega CD and the
+  32X together, the 32X with no cartridge: its boot ROMs take the SH-2s' program from
+  the frame buffer, as the real ones do on a Mega CD, and the 32X's PWM is mixed with the
+  Mega CD's PCM and CD audio. Corpse Killer only reads pad 1 with **Sin mando** (or the
+  Menacer) in port 2.
+- **Mode 1 for 32X cartridges** (#96): a 32X cartridge with a `.cue` of its name next to
+  it (the MSU-32X patches) starts with the Mega CD attached and plays its CD music, as
+  MSU-MD cartridges already did.
 - **Light guns** (#102): Consola > Mando 2 (or a game's options) plugs in Konami's
   Justifier (Lethal Enforcers I and II, Snatcher), with its second gun for player 2, or
   Sega's Menacer (T2: The Arcade Game, Menacer 6-Game Cartridge) instead of pad 2. A

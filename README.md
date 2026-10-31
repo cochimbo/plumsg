@@ -66,12 +66,20 @@ First version. What it has:
   graphics chip that rotates and scales stamps, the timer, the RF5C164 PCM chip and CD
   audio, all mixed with the FM and the PSG. It needs the BIOS for the disc's region (see
   below).
+- **Mega CD 32X** (Corpse Killer, Night Trap, Fahrenheit, Slam City, Supreme Warrior,
+  Surgical Strike): discs whose header says `SEGA 32X` run with both add-ons, the 32X
+  holding no cartridge. The Mega CD BIOS boots the disc as usual and the game starts the
+  32X, whose boot ROMs (done by plumsg, as for cartridges) take the SH-2s' program from
+  the frame buffer; the PWM, the PCM and CD audio are mixed together. Corpse Killer only
+  reads pad 1 when nothing is in port 2 (or a Menacer is): set **Consola > Mando 2** to
+  **Sin mando** in its game options.
 - **Paprium**: the chip on its cartridge (graphics unpacking, sprites, the menus'
   scaling, saves and sound effects). Its music is recordings outside the ROM: put the
   album's tracks (`.ogg`, `.mp3` or `.wav`, each name starting with its number, such as
   `01 Theme of Paprium.ogg`) in a folder with the ROM's name next to it (`Paprium.bin`
   and `Paprium/`).
-- **MSU-MD**: cartridges patched by the community to play their music from CD tracks.
+- **MSU-MD** (and **MSU-32X**): cartridges patched by the community to play their music
+  from CD tracks, 32X ones too.
   Just put a `.cue` with the same name next to the cartridge (`Sonic.md` and `Sonic.cue`,
   with the tracks it names): the game starts with the Mega CD attached, as on a real
   console (mode 1). A Mega CD BIOS of any region works; with none the game runs on its

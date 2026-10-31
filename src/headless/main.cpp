@@ -944,7 +944,7 @@ int main(int argc, char** argv) {
         failures.push_back("sound hash " + hex8(audioHash) + ", expected " + hex8(expectAudio));
     if (divergence >= 0) failures.push_back("frame " + std::to_string(divergence) + ": " + divergenceWhat);
 
-    const char* system = md.hasMsuMd() ? "msu-md" : md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : md.isGameGear() ? "gamegear" : md.isMasterSystem() ? "mastersystem" : "megadrive";
+    const char* system = md.hasMsuMd() ? (md.is32x() ? "msu-32x" : "msu-md") : md.isMegaCd32x() ? "megacd32x" : md.isMegaCd() ? "megacd" : md.is32x() ? "32x" : md.isGameGear() ? "gamegear" : md.isMasterSystem() ? "mastersystem" : "megadrive";
     const double fps = seconds > 0 ? ran / seconds : 0;
     if (!quiet) {
         std::printf("title: %s\nsystem: %s  region: %s\nframes: %ld  size: %dx%d  hash: %08x\n",

@@ -35,6 +35,7 @@
 #include "frontend/screenscraper_data.h"
 #include "mars/mars_program.h"
 #include "megacd/megacd_program.h"
+#include "megacd32x/megacd32x_program.h"
 #include "cd_image.h"
 #include "netplay.h"
 #include "notation.h"
@@ -1462,8 +1463,9 @@ void testCdImage() {
 // A disc made in memory for the Mega CD program: a data track whose sector 0 is a
 // disc header, and a second, audio track with a loud square wave.
 // `header` is the region in its header and `security` the byte of its security code
-// that says the region the BIOS checks (0x7A USA, 0xA1 Japan, 0x64 Europe).
-std::unique_ptr<CdImage> testDisc(char header = 'U', uint8_t security = 0x7A) {
+// that says the region the BIOS checks (0x7A USA, 0xA1 Japan, 0x64 Europe), and `system`
+// what it says it is for ("SEGA 32X" on a Mega CD 32X disc).
+std::unique_ptr<CdImage> testDisc(char header = 'U', uint8_t security = 0x7A, const char* system = "SEGA MEGA DRIVE ") {
     std::vector<CdImage::Track> tracks(2);
     tracks[0].number = 1;
     tracks[0].begin = -150;
@@ -1478,7 +1480,7 @@ std::unique_ptr<CdImage> testDisc(char header = 'U', uint8_t security = 0x7A) {
     tracks[1].offset = 40 * 2048;
     std::vector<uint8_t> data(40 * 2048 + 200 * 2352);
     std::memcpy(data.data(), "SEGADISCSYSTEM  ", 16);
-    std::memcpy(&data[0x100], "SEGA MEGA DRIVE ", 16);
+    std::memcpy(&data[0x100], system, 16);
     data[0x1F0] = static_cast<uint8_t>(header);
     data[0x20B] = security;
     for (size_t i = 40 * 2048; i < data.size(); i += 4) {
@@ -1819,6 +1821,68 @@ void testMsuMd() {
           "MSU-MD: sin BIOS el cartucho va solo y dice por qué no hay música en CD");
     check(withBios.loadRom((dir / "Solo.md").u8string(), &error) && !withBios.isMegaCd(),
           "MSU-MD: un cartucho sin .cue va solo");
+    std::filesystem::remove_all(dir);
+}
+
+// A Mega CD 32X disc: the console has both, with no cartridge in the 32X. The stand-in
+// BIOS starts the SH-2s as the games do, from the frame buffer.
+void testMegaCd32x() {
+    std::vector<uint8_t> bios(kMegaCd32xProgram, kMegaCd32xProgram + sizeof kMegaCd32xProgram);
+    bios.resize(0x20000);
+    MegaDrive md;
+    md.setSampleRate(44100);
+    md.setCdBios(Region::UsaNtsc, bios);
+    std::string error;
+    check(md.loadDiscImage(testDisc('U', 0x7A, "SEGA 32X        "), &error) && md.isMegaCd() && md.is32x() &&
+              md.isMegaCd32x() && !md.hasMsuMd(),
+          "Mega CD 32X: el disco arranca con el Mega CD y el 32X");
+    for (int i = 0; i < 30 && md.workRam()[0] == 0; ++i) md.runFrame();
+    check(md.workRam()[0] == 0x60 && md.workRam()[1] == 0x0D, "Mega CD 32X: las SH-2 arrancan desde el disco");
+    check(md.workRam()[4] == 0x46 && md.workRam()[5] == 0xFC,
+          "Mega CD 32X: con el 32X encendido la BIOS del Mega CD sigue en 0");
+    Mars& mars = *md.mars();
+    check(mars.comm()[0] == 0x4D5F && mars.comm()[1] == 0x4F4B && mars.comm()[2] == 0x535F && mars.comm()[3] == 0x4F4B,
+          "Mega CD 32X: M_OK y S_OK");
+    check(mars.sdram()[8] == 0x12 && mars.sdram()[9] == 0x34 && mars.master().pc() - 0x06000004u < 4 &&
+              mars.slave().pc() - 0x06000010u < 4 && (mars.master().read(0x20004000, 2) & 0x8100) == 0x8100,
+          "Mega CD 32X: el programa se copia del búfer de imagen a la SDRAM, sin cartucho (nCART)");
+    std::vector<uint8_t> state;
+    md.mars()->master().write(0x20004028, 0, 2);
+    const bool saved = md.saveState(state);
+    md.mars()->master().write(0x20004028, 0x5555, 2);
+    md.runFrame();
+    check(saved && md.loadState(state, &error) && md.mars()->comm()[4] == 0 && md.mars()->sdram()[9] == 0x34 &&
+              md.megaCd() && md.workRam()[0] == 0x60,
+          "Mega CD 32X: el estado guarda el Mega CD y el 32X juntos");
+    // The same disc with the system of any other: no 32X.
+    MegaDrive plain;
+    plain.setCdBios(Region::UsaNtsc, bios);
+    check(plain.loadDiscImage(testDisc(), &error) && plain.isMegaCd() && !plain.is32x(),
+          "Mega CD 32X: un disco de Mega CD va sin el 32X");
+}
+
+// MSU-32X: a 32X cartridge that plays its music from a disc, with the Mega CD in mode 1.
+void testMsu32x() {
+    std::vector<uint8_t> bios(kMegaCdProgram, kMegaCdProgram + sizeof kMegaCdProgram);
+    bios.resize(0x20000);
+    std::vector<uint8_t> cart(kMegaCdCartridge, kMegaCdCartridge + sizeof kMegaCdCartridge);
+    cart.resize(0x1000);
+    std::memcpy(&cart[0x100], "SEGA 32X        ", 16);
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "plumsg_msu32x_test";
+    std::filesystem::create_directories(dir);
+    std::ofstream(dir / "Juego.32x", std::ios::binary).write(reinterpret_cast<const char*>(cart.data()), cart.size());
+    std::ofstream(dir / "Juego.cue") << "FILE \"Juego.iso\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n";
+    std::vector<uint8_t> iso(40 * 2048);
+    std::ofstream(dir / "Juego.iso", std::ios::binary).write(reinterpret_cast<const char*>(iso.data()), iso.size());
+    MegaDrive md;
+    md.setSampleRate(44100);
+    md.setCdBios(Region::UsaNtsc, bios);
+    std::string error;
+    check(md.loadRom((dir / "Juego.32x").u8string(), &error) && md.hasMsuMd() && md.is32x() && !md.isMegaCd32x(),
+          "MSU-32X: un cartucho de 32X con su .cue arranca con el Mega CD en modo 1");
+    check(md.peek16(0x400100) == 0x5345, "MSU-32X: la BIOS del Mega CD en 0x400000");
+    for (int i = 0; i < 5; ++i) md.runFrame();
+    check(!md.audio().samples().empty(), "MSU-32X: suenan el 32X y el CD juntos");
     std::filesystem::remove_all(dir);
 }
 
@@ -3675,6 +3739,8 @@ int main() {
     testCdImage();
     testMegaCd();
     testMegaCdBootRom();
+    testMegaCd32x();
+    testMsu32x();
     testMsuMd();
     testPaprium();
     testSvp();
