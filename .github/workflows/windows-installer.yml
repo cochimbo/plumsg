@@ -27,12 +27,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Only documentation changed?
+        id: changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash tools/ci/needs-build.sh
 
       - name: Check for emulator sources
         id: src
         shell: pwsh
         run: |
-          if (Test-Path CMakeLists.txt) { "present=true" >> $env:GITHUB_OUTPUT }
+          if ("${{ steps.changes.outputs.build }}" -ne "true") { "present=false" >> $env:GITHUB_OUTPUT }
+          elseif (Test-Path CMakeLists.txt) { "present=true" >> $env:GITHUB_OUTPUT }
           else {
             "present=false" >> $env:GITHUB_OUTPUT
             Write-Host "::notice::No CMakeLists.txt at the repo root yet; skipping the installer build."
