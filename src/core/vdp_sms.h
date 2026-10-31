@@ -62,6 +62,10 @@ public:
     // running counter.
     uint8_t hcounter() const { return hcLatch_; }
     void latchHcounter(int cycle) { hcLatch_ = hcounterAt(gameGear_ ? cycle + kGgHcounterLead : cycle); }
+    // A Light Phaser latches it with what it saw.
+    void setHcounterLatch(uint8_t value) { hcLatch_ = value; }
+    // The line being drawn (0 is the picture's first).
+    int line() const { return line_; }
     // The running H counter (pixels / 2) `cycle` Z80 cycles into the line.
     static uint8_t hcounterAt(int cycle);
 

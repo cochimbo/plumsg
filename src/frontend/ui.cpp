@@ -141,6 +141,45 @@ constexpr const char* kLightGunTip =
        "Start: clic central o Start. Botones A y B de la Menacer: B y X del mando.\n"
        "Solo los juegos de Mega Drive y Mega CD; en una partida en red se enchufa un mando.");
 
+constexpr const char* kPhaserTip =
+    N_("La pistola de luz de la Master System (Light Phaser), en lugar del mando: Safari Hunt,\n"
+       "Shooting Gallery, Operation Wolf, Rambo III, Wanted... Se apunta con una mira en pantalla,\n"
+       "movida con el ratón o con el stick izquierdo (o la cruceta) del mando de ese jugador.\n"
+       "Gatillo: clic izquierdo o A. Los juegos que la necesitan la tienen ya en el puerto 1 si ahí\n"
+       "hay un mando. Solo los juegos de Master System; en una partida en red se enchufa un mando.");
+constexpr const char* kPaddleTip =
+    N_("El mando de rueda de la Master System japonesa (Paddle Control HPD-200): Woody Pop,\n"
+       "Alex Kidd BMX Trial, Galactic Protector, Megumi Rescue. La rueda se gira moviendo el\n"
+       "ratón a lo ancho de la imagen, o con el stick izquierdo (o la cruceta). Botón: clic\n"
+       "izquierdo, A o B. Los juegos que lo necesitan lo tienen ya en el puerto 1 si ahí hay un\n"
+       "mando. Solo los juegos de Master System; en una partida en red se enchufa un mando.");
+
+// What can go in each port, and its name.
+std::vector<PadType> portTypes(int port) {
+    if (port == 0) return {PadType::ThreeButton, PadType::SixButton, PadType::LightPhaser, PadType::Paddle};
+    return {PadType::ThreeButton, PadType::SixButton, PadType::None,       PadType::Menacer,
+            PadType::Justifier,   PadType::LightPhaser, PadType::Paddle};
+}
+const char* padTypeName(PadType t) {
+    switch (t) {
+        case PadType::ThreeButton: return N_("3 botones");
+        case PadType::SixButton: return N_("6 botones");
+        case PadType::None: return N_("Sin mando");
+        case PadType::Menacer: return N_("Pistola Menacer");
+        case PadType::Justifier: return N_("Pistola Justifier");
+        case PadType::LightPhaser: return N_("Light Phaser (Master System)");
+        case PadType::Paddle: return N_("Paddle (Master System)");
+    }
+    return "";
+}
+const char* padTypeTip(PadType t) {
+    if (t == PadType::None) return kNoPadTip;
+    if (isLightGun(t)) return kLightGunTip;
+    if (t == PadType::LightPhaser) return kPhaserTip;
+    if (t == PadType::Paddle) return kPaddleTip;
+    return nullptr;
+}
+
 // The combo for the overclock; `percent` takes the chosen value.
 // An on/off option as a "Sí" / "No" list, so a row of the game's options has no second
 // box next to the one that says whether the game has its own value.
@@ -839,22 +878,13 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         for (int port = 0; port < 2; ++port) {
             ImGui::SeparatorText(port == 0 ? tr("Mando 1") : tr("Mando 2"));
             ImGui::PushID(port);
-            for (PadType t : {PadType::ThreeButton, PadType::SixButton, PadType::None, PadType::Menacer,
-                              PadType::Justifier}) {
-                if (t != PadType::ThreeButton && t != PadType::SixButton && port == 0) continue;
-                const char* name = t == PadType::ThreeButton ? tr("3 botones")
-                                   : t == PadType::SixButton ? tr("6 botones")
-                                   : t == PadType::None      ? tr("Sin mando")
-                                   : t == PadType::Menacer   ? tr("Pistola Menacer")
-                                                             : tr("Pistola Justifier");
-                if (ImGui::MenuItem(name, nullptr, settings_.padType[static_cast<size_t>(port)] == t)) {
+            for (PadType t : portTypes(port)) {
+                if (ImGui::MenuItem(tr(padTypeName(t)), nullptr, settings_.padType[static_cast<size_t>(port)] == t)) {
                     settings_.padType[static_cast<size_t>(port)] = t;
                     out.consoleChanged = out.settingsChanged = true;
                 }
-                if (t == PadType::None && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip("%s", tr(kNoPadTip));
-                if (isLightGun(t) && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip("%s", tr(kLightGunTip));
+                if (padTypeTip(t) && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip("%s", tr(padTypeTip(t)));
             }
             ImGui::PopID();
         }
@@ -3412,19 +3442,25 @@ void Ui::drawGameSettings(const UiState& state, UiActions& out) {
                 edited = true;
             }
         } else if (key == "pads") {
-            // In PadType's order.
-            static const char* names[] = {N_("3 botones"), N_("6 botones"), N_("Sin mando"), N_("Pistola Menacer"),
-                                          N_("Pistola Justifier")};
             for (size_t port = 0; port < 2; ++port) {
                 if (port) ImGui::SameLine();
-                int i = static_cast<int>(s.padType[port]);
+                const std::vector<PadType> types = portTypes(static_cast<int>(port));
+                std::vector<const char*> names;
+                int i = 0;
+                for (size_t k = 0; k < types.size(); ++k) {
+                    names.push_back(padTypeName(types[k]));
+                    if (types[k] == s.padType[port]) i = static_cast<int>(k);
+                }
                 ImGui::SetNextItemWidth(110);
-                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names, port ? 5 : 2)) {
-                    s.padType[port] = static_cast<PadType>(i);
+                if (comboTr(port ? tr("Mando 2") : tr("Mando 1"), &i, names.data(), static_cast<int>(names.size()))) {
+                    s.padType[port] = types[static_cast<size_t>(i)];
                     edited = true;
                 }
-                if (port && ImGui::IsItemHovered())
-                    ImGui::SetTooltip("%s", tr(isLightGun(s.padType[port]) ? kLightGunTip : kNoPadTip));
+                if (ImGui::IsItemHovered()) {
+                    const char* tip = padTypeTip(s.padType[port]);
+                    if (!tip && port) tip = kNoPadTip;
+                    if (tip) ImGui::SetTooltip("%s", tr(tip));
+                }
             }
         } else if (key == "overclock") {
             edited |= overclockCombo(tr(opt.label), s.overclock);

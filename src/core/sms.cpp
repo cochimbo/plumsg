@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 
 namespace plumsg {
@@ -28,6 +29,38 @@ bool isMasterSystemBiosFile(const std::string& path) {
     return name.find("bios") != std::string::npos;
 }
 
+PadType masterSystemControllerFor(uint32_t romCrc) {
+    static constexpr uint32_t kPhaser[] = {
+        0xFBE5CFBB,  // Missile Defense 3-D
+        0xE79BB689,  // Missile Defense 3-D (BIOS)
+        0x43DEF05D,  // Missile Defense 3-D (prototype)
+        0x56DCB2D4,  // 3-D Gunner (prototype)
+        0x861B6E79,  // Assault City (Light Phaser)
+        0x5FC74D2A,  // Gangster Town
+        0xE167A561,  // Hang-On / Safari Hunt
+        0x91E93385,  // Hang-On / Safari Hunt (BIOS)
+        0xE8EA842C,  // Marksman Shooting / Trap Shooting
+        0xE8215C2E,  // Marksman Shooting / Trap Shooting / Safari Hunt
+        0x205CAAE8,  // Operation Wolf
+        0x23283F37,  // Operation Wolf (alt.)
+        0xDA5A7013,  // Rambo III
+        0x79AC8E7F,  // Rescue Mission
+        0x4B051022,  // Shooting Gallery
+        0xA908CFF5,  // Space Gun
+        0x5359762D,  // Wanted
+        0x0CA95637,  // Laser Ghost
+    };
+    static constexpr uint32_t kPaddle[] = {
+        0xF9DBB533,  // Alex Kidd BMX Trial
+        0xA6FA42D0,  // Galactic Protector
+        0x29BC7FAD,  // Megumi Rescue
+        0x315917D4,  // Woody Pop
+    };
+    if (std::find(std::begin(kPhaser), std::end(kPhaser), romCrc) != std::end(kPhaser)) return PadType::LightPhaser;
+    if (std::find(std::begin(kPaddle), std::end(kPaddle), romCrc) != std::end(kPaddle)) return PadType::Paddle;
+    return PadType::SixButton;
+}
+
 MasterSystem::MasterSystem(Cartridge& cart, std::array<uint8_t, 0x2000>& ram, VideoFrameMd& frame, bool gameGear)
     : cart_(cart), ram_(ram), vdp_(frame), gameGear_(gameGear) {
     vdp_.setGameGear(gameGear);
@@ -37,6 +70,9 @@ void MasterSystem::powerOn() {
     vdp_.reset();
     codemasters_ = isCodemasters(cart_.rom());
     eepromPresent_ = gameGear_ && hasGameGearEeprom(cart_.crc32());
+    autoController_ = gameGear_ ? PadType::SixButton : masterSystemControllerFor(cart_.crc32());
+    // Wanted and Gangster Town see the light a little further to the left.
+    phaserOffset_ = cart_.crc32() == 0x5359762D || cart_.crc32() == 0x5FC74D2A ? 16 : 20;
     mapper_ = codemasters_ ? std::array<uint8_t, 4>{0, 0, 1, 0} : std::array<uint8_t, 4>{0, 0, 1, 2};
     reset();
 }
@@ -48,6 +84,17 @@ void MasterSystem::reset() {
     fmControl_ = 0;
     link_ = kLinkReset;
     eeprom_ = Eeprom{};
+    gunLit_ = {};
+    paddleHigh_ = {};
+    paddleReads_ = {};
+}
+
+PadType MasterSystem::controller(int port) const {
+    if (gameGear_) return PadType::SixButton;
+    const PadType t = types_[static_cast<size_t>(port & 1)];
+    if (isMasterSystemController(t)) return t;
+    if (port == 0 && autoControllers_ && (t == PadType::ThreeButton || t == PadType::SixButton)) return autoController_;
+    return PadType::SixButton;  // a pad, also for nothing plugged in or a Mega Drive gun
 }
 
 uint8_t MasterSystem::romByte(int bank, uint16_t offset) const {
@@ -205,8 +252,8 @@ uint8_t MasterSystem::in(uint8_t port, int cycle) {
         case 0x41: return vdp_.hcounter();
         case 0x80: return vdp_.readData();
         case 0x81: return vdp_.readStatus(cycle);
-        case 0xC0: return portA();
-        case 0xC1: return portB();
+        case 0xC0: return portA(cycle);
+        case 0xC1: return portB(cycle);
         default: return 0xFF;
     }
 }
@@ -242,41 +289,108 @@ uint8_t MasterSystem::thLevels() const {
     return v;
 }
 
-// Both ports read active low.
-uint8_t MasterSystem::portA() const {
-    static const PadState kNone{};
-    const PadState& a = pads_[0];
-    const PadState& b = gameGear_ ? kNone : pads_[1];
-    uint8_t v = 0xFF;
-    if (a.up) v &= ~0x01;
-    if (a.down) v &= ~0x02;
-    if (a.left) v &= ~0x04;
-    if (a.right) v &= ~0x08;
-    if (a.a || a.b) v &= ~0x10;
-    if (a.c) v &= ~0x20;
-    if (b.up) v &= ~0x40;
-    if (b.down) v &= ~0x80;
-    return v;
+// TH of a port as the console reads it: an input is pulled high (but for what drives
+// it); an output reads back what was written on an export console, and the opposite on
+// a Japanese one.
+bool MasterSystem::thPin(int port) const {
+    const int dirBit = port ? 0x08 : 0x02, levelBit = port ? 0x80 : 0x20;
+    if (ioControl_ & dirBit) return true;
+    const bool level = (ioControl_ & levelBit) != 0;
+    return japanese_ ? !level : level;
 }
 
-uint8_t MasterSystem::portB() const {
+// The Light Phaser sees the light while the beam goes by near where it points: a few
+// lines up or down, and a wide stretch of the line around it, as its lens is not sharp.
+// The H counter runs in pairs of pixels from 0 at the picture's left edge, and skips
+// from 0x93 to 0xE9 in the blanking, so past that it is left of the picture.
+bool MasterSystem::phaserSeesLight(int port, int cycle) const {
+    const GunState& g = guns_[static_cast<size_t>(port)];
+    if (!g.onScreen(256, vdp_.activeLines())) return false;
+    int h = VdpSms::hcounterAt(cycle);
+    if (h > 0x93) h -= 0x100;
+    return std::abs(g.y - vdp_.line()) <= 5 && std::abs(g.x - h * 2) <= 60;
+}
+
+uint8_t MasterSystem::portPins(int port, int cycle, bool thRead) {
     static const PadState kNone{};
-    const PadState& b = gameGear_ ? kNone : pads_[1];
-    uint8_t v = 0xFF;
-    if (b.left) v &= ~0x01;
-    if (b.right) v &= ~0x02;
-    if (b.a || b.b) v &= ~0x04;
-    if (b.c) v &= ~0x08;
-    // TH of each port: an input reads high; an output reads back what was written on an
-    // export console, and the opposite on a Japanese one.
-    auto th = [&](int dirBit, int levelBit) {
-        if (ioControl_ & dirBit) return true;
-        const bool level = (ioControl_ & levelBit) != 0;
-        return japanese_ ? !level : level;
-    };
-    if (!th(0x02, 0x20)) v &= ~0x40;
-    if (!th(0x08, 0x80)) v &= ~0x80;
-    return v;
+    const size_t p = static_cast<size_t>(port);
+    const PadState& pad = gameGear_ && port == 1 ? kNone : pads_[p];
+    const int dirBit = port ? 0x08 : 0x02, levelBit = port ? 0x80 : 0x20;
+    switch (controller(port)) {
+        case PadType::Paddle: {
+            // Bits 0-3: four bits of the knob, the high ones with TR high; TL the button.
+            // With TH an output (export consoles' way) the game picks them with TH; the
+            // Japanese paddle switches on its own, here after every few reads of the
+            // port that has them, as both ports take two reads.
+            if (thRead == (port == 1)) {
+                if (!(ioControl_ & dirBit)) paddleHigh_[p] = (ioControl_ & levelBit) != 0;
+                else if (++paddleReads_[p] > 2) {
+                    paddleReads_[p] = 0;
+                    paddleHigh_[p] = !paddleHigh_[p];
+                }
+            }
+            const PaddleState& paddle = paddles_[p];
+            uint8_t v = paddleHigh_[p] ? static_cast<uint8_t>(0x20 | (paddle.position >> 4)) : (paddle.position & 0x0F);
+            if (!paddle.button) v |= 0x10;
+            if (thPin(port)) v |= 0x40;
+            return v;
+        }
+        case PadType::LightPhaser: {
+            // The gun drives TL (its trigger) and TH (low while it sees the light); the
+            // pad's other buttons go on showing, for the games that also take a pad there
+            // (Hang-On, on the same cartridge as Safari Hunt).
+            uint8_t v = 0x7F;
+            if (pad.up) v &= ~0x01;
+            if (pad.down) v &= ~0x02;
+            if (pad.left) v &= ~0x04;
+            if (pad.right) v &= ~0x08;
+            if (guns_[p].trigger || pad.a || pad.b) v &= ~0x10;
+            if (pad.c) v &= ~0x20;
+            if (!thPin(port)) v &= ~0x40;
+            if (thRead && (ioControl_ & dirBit)) {
+                const bool lit = phaserSeesLight(port, cycle);
+                if (lit) {
+                    v &= ~0x40;
+                    // Seeing it latches the H counter, where the games expect the gun's x.
+                    if (!gunLit_[p]) vdp_.setHcounterLatch(static_cast<uint8_t>(phaserOffset_ + guns_[p].x / 2));
+                }
+                gunLit_[p] = lit;
+            }
+            return v;
+        }
+        default: {
+            uint8_t v = 0x7F;
+            if (pad.up) v &= ~0x01;
+            if (pad.down) v &= ~0x02;
+            if (pad.left) v &= ~0x04;
+            if (pad.right) v &= ~0x08;
+            if (pad.a || pad.b) v &= ~0x10;
+            if (pad.c) v &= ~0x20;
+            if (!thPin(port)) v &= ~0x40;
+            return v;
+        }
+    }
+}
+
+// Port A: the first port's pins but TH, and the second one's up and down.
+uint8_t MasterSystem::portA(int cycle) {
+    const uint8_t a = portPins(0, cycle, false);
+    const uint8_t b = gameGear_ ? 0x7F : portPins(1, cycle, false);
+    return static_cast<uint8_t>((a & 0x3F) | (b & 0x03) << 6);
+}
+
+// Port B: the second port's other pins, the reset button (not pressed) and both THs.
+uint8_t MasterSystem::portB(int cycle) {
+    const uint8_t a = gameGear_ ? 0x7F : portPins(0, cycle, true);
+    const uint8_t b = gameGear_ ? 0x7F : portPins(1, cycle, true);
+    uint8_t v = static_cast<uint8_t>(0x30 | ((b >> 2) & 0x0F));
+    if (gameGear_) {
+        // TH of each port as the console drives it; nothing is plugged in.
+        if (thPin(0)) v |= 0x40;
+        if (thPin(1)) v |= 0x80;
+        return v;
+    }
+    return static_cast<uint8_t>(v | (a & 0x40) | (b & 0x40) << 1);
 }
 
 }  // namespace plumsg

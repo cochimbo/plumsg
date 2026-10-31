@@ -1049,6 +1049,19 @@ msgstr "Le jeu utilise de nouveau la 3D générale"
 msgid "El juego vuelve a usar la pantalla ancha general"
 msgstr "Le jeu reprend l'écran large général"
 
+msgid ""
+"El mando de rueda de la Master System japonesa (Paddle Control HPD-200): Woody Pop,\n"
+"Alex Kidd BMX Trial, Galactic Protector, Megumi Rescue. La rueda se gira moviendo el\n"
+"ratón a lo ancho de la imagen, o con el stick izquierdo (o la cruceta). Botón: clic\n"
+"izquierdo, A o B. Los juegos que lo necesitan lo tienen ya en el puerto 1 si ahí hay un\n"
+"mando. Solo los juegos de Master System; en una partida en red se enchufa un mando."
+msgstr ""
+"La manette à molette de la Master System japonaise (Paddle Control HPD-200) : Woody Pop,\n"
+"Alex Kidd BMX Trial, Galactic Protector, Megumi Rescue. On tourne la molette en déplaçant\n"
+"la souris sur la largeur de l'image, ou avec le stick gauche (ou la croix). Bouton : clic\n"
+"gauche, A ou B. Les jeux qui en ont besoin l'ont déjà dans le port 1 s'il y a une\n"
+"manette. Jeux Master System uniquement ; en partie en réseau, une manette est branchée."
+
 msgid "El otro jugador ha salido de la partida."
 msgstr "L'autre joueur a quitté la partie."
 
@@ -1667,6 +1680,19 @@ msgstr "L'écran large est maintenant enregistré seulement pour %s"
 msgid "La partida se ha descompasado y no se puede recuperar."
 msgstr "La partie s'est désynchronisée et ne peut pas être récupérée."
 
+msgid ""
+"La pistola de luz de la Master System (Light Phaser), en lugar del mando: Safari Hunt,\n"
+"Shooting Gallery, Operation Wolf, Rambo III, Wanted... Se apunta con una mira en pantalla,\n"
+"movida con el ratón o con el stick izquierdo (o la cruceta) del mando de ese jugador.\n"
+"Gatillo: clic izquierdo o A. Los juegos que la necesitan la tienen ya en el puerto 1 si ahí\n"
+"hay un mando. Solo los juegos de Master System; en una partida en red se enchufa un mando."
+msgstr ""
+"Le pistolet optique de la Master System (Light Phaser), à la place de la manette : Safari Hunt,\n"
+"Shooting Gallery, Operation Wolf, Rambo III, Wanted... On vise avec un viseur à l'écran,\n"
+"déplacé avec la souris ou avec le stick gauche (ou la croix) de la manette de ce joueur.\n"
+"Gâchette : clic gauche ou A. Les jeux qui en ont besoin l'ont déjà dans le port 1 s'il y\n"
+"a une manette. Jeux Master System uniquement ; en partie en réseau, une manette est branchée."
+
 msgid "La ranura %d está vacía"
 msgstr "L'emplacement %d est vide"
 
@@ -1720,6 +1746,9 @@ msgstr "Latence"
 
 msgid "Lengüetas"
 msgstr "Anches"
+
+msgid "Light Phaser (Master System)"
+msgstr "Light Phaser (Master System)"
 
 msgid "Lista"
 msgstr "Liste"
@@ -2155,6 +2184,9 @@ msgstr "PAUSE"
 
 msgid "PDF"
 msgstr "PDF"
+
+msgid "Paddle (Master System)"
+msgstr "Paddle (Master System)"
 
 msgid "Palmada"
 msgstr "Claquement de mains"

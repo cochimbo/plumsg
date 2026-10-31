@@ -22,6 +22,19 @@ std::string trim(const std::string& s) {
     return b == std::string::npos ? std::string() : s.substr(b, e - b + 1);
 }
 
+// A port's type as plumsg.ini writes it.
+const char* padIni(PadType t) {
+    switch (t) {
+        case PadType::ThreeButton: return "3";
+        case PadType::None: return "0";
+        case PadType::Menacer: return "menacer";
+        case PadType::Justifier: return "justifier";
+        case PadType::LightPhaser: return "phaser";
+        case PadType::Paddle: return "paddle";
+        default: return "6";
+    }
+}
+
 std::string lower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return s;
@@ -126,7 +139,9 @@ void Settings::parse(std::istream& in, Settings& s) {
                     if (iniName(lower(value)) == kRegionNames[i]) s.region = static_cast<Region>(i);
             } else if (key == "pad1" || key == "pad2") {
                 PadType t = value == "3" ? PadType::ThreeButton : PadType::SixButton;
-                if (key == "pad2") {  // pad 1 is always there, and light guns only go in port 2
+                if (lower(value) == "phaser") t = PadType::LightPhaser;
+                else if (lower(value) == "paddle") t = PadType::Paddle;
+                else if (key == "pad2") {  // pad 1 is always there, and light guns only go in port 2
                     if (value == "0") t = PadType::None;
                     else if (lower(value) == "menacer") t = PadType::Menacer;
                     else if (lower(value) == "justifier") t = PadType::Justifier;
@@ -252,13 +267,11 @@ void Settings::write(std::ostream& out) const {
         << "compare_sound = " << flag(compareSound) << "\n"
         << "\n[console]\n"
         << "# region: auto (the ROM's), japan, usa or europe. pad1/pad2: 3 or 6 buttons; pad2 = 0: nothing plugged in,\n"
-        << "# menacer or justifier: that light gun, aimed with the mouse or the left stick.\n"
+        << "# menacer or justifier: that light gun, aimed with the mouse or the left stick. Either one = phaser or\n"
+        << "# paddle: the Master System's Light Phaser or paddle (Master System games only).\n"
         << "region = " << kRegionNames[static_cast<int>(region)] << "\n"
-        << "pad1 = " << (padType[0] == PadType::ThreeButton ? 3 : 6) << "\n"
-        << "pad2 = "
-        << (padType[1] == PadType::ThreeButton ? "3" : padType[1] == PadType::None ? "0"
-            : padType[1] == PadType::Menacer ? "menacer" : padType[1] == PadType::Justifier ? "justifier" : "6")
-        << "\n"
+        << "pad1 = " << padIni(padType[0]) << "\n"
+        << "pad2 = " << padIni(padType[1]) << "\n"
         << "# fm_master_system: yes, the Master System FM unit outside Japan too.\n"
         << "fm_master_system = " << flag(smsFm) << "\n"
         << "# overclock: processor (68000) speed in percent, from 100 (the console's) to 400.\n"

@@ -45,6 +45,10 @@ bool hasGameGearEeprom(uint32_t romCrc);
 // A dump of the console's own BIOS, told by its file name ("[BIOS] Alex Kidd in Miracle
 // World (USA, Europe, Brazil) (En).sms", "bios13.sms").
 bool isMasterSystemBiosFile(const std::string& path);
+// The controller a Master System game needs in its first port, by the CRC of its ROM:
+// LightPhaser for the light gun games (Safari Hunt, Shooting Gallery, Operation Wolf...),
+// Paddle for the paddle ones (Woody Pop, Alex Kidd BMX Trial...), else SixButton.
+PadType masterSystemControllerFor(uint32_t romCrc);
 
 class MasterSystem {
 public:
@@ -78,10 +82,25 @@ public:
     }
     bool pausePressed() {
         if (gameGear_) return false;
-        const bool pressed = pads_[0].start && !pause_;
-        pause_ = pads_[0].start;
+        const bool held = pads_[0].start || (controller(0) == PadType::LightPhaser && guns_[0].start);
+        const bool pressed = held && !pause_;
+        pause_ = held;
         return pressed;
     }
+
+    // What is plugged in each port, as chosen (MegaDrive passes its own). A pad, or the
+    // Mega Drive's light guns, which the Master System reads as a pad. The Light Phaser
+    // and the paddle answer in their own way, the first port's on its own too when the
+    // game needs one (masterSystemControllerFor) and a pad was chosen there, unless
+    // setAutoControllers(false) (netplay, which does not carry where they point).
+    void setPadType(int port, PadType t) { types_[static_cast<size_t>(port & 1)] = t; }
+    void setAutoControllers(bool on) { autoControllers_ = on; }
+    // What the game sees in a port; nothing but pads on the Game Gear.
+    PadType controller(int port) const;
+    // Where each port's Light Phaser points (pixels of the picture, as the Mega Drive's
+    // guns) and its trigger, and each port's paddle.
+    void setGun(int port, const GunState& s) { guns_[static_cast<size_t>(port & 1)] = s; }
+    void setPaddle(int port, const PaddleState& s) { paddles_[static_cast<size_t>(port & 1)] = s; }
 
     // Japanese consoles read the TH lines back differently from export ones; some
     // games tell where they are from that.
@@ -130,6 +149,14 @@ public:
         }
         ar(link_, eeprom_.enabled, eeprom_.cs, eeprom_.clk, eeprom_.data, eeprom_.writeEnable, eeprom_.state,
            eeprom_.opcode, eeprom_.cycles, eeprom_.buffer);
+        // Added with the Light Phaser and the paddle.
+        if constexpr (Ar::kLoading) {
+            gunLit_ = {};
+            paddleHigh_ = {};
+            paddleReads_ = {};
+            if (ar.atEnd()) return;
+        }
+        ar(gunLit_, paddleHigh_, paddleReads_);
     }
 
 private:
@@ -152,8 +179,12 @@ private:
     void setEepromWord(int index, uint16_t value);
 
     uint8_t romByte(int bank, uint16_t offset) const;
-    uint8_t portA() const;
-    uint8_t portB() const;
+    uint8_t portA(int cycle);
+    uint8_t portB(int cycle);
+    // A port's pins, active low: up, down, left, right, TL, TR in bits 0-5 and TH in 6.
+    uint8_t portPins(int port, int cycle, bool thRead);
+    bool thPin(int port) const;
+    bool phaserSeesLight(int port, int cycle) const;
     uint8_t thLevels() const;
 
     Cartridge& cart_;
@@ -169,6 +200,21 @@ private:
     uint8_t ioControl_ = 0xFF;    // port 0x3F
     uint8_t memoryControl_ = 0;   // port 0x3E
     std::array<PadState, 2> pads_{};
+    std::array<PadType, 2> types_{PadType::SixButton, PadType::SixButton};
+    bool autoControllers_ = true;
+    PadType autoController_ = PadType::SixButton;  // what the game needs in the first port
+    // The Light Phaser: where it is aimed, whether it saw the beam at the last read of
+    // its TH (a new sight latches the H counter), and what the H counter says for its x
+    // (x / 2 plus this, which the games expect).
+    std::array<GunState, 2> guns_{};
+    std::array<bool, 2> gunLit_{};
+    int phaserOffset_ = 20;
+    // The paddle: its knob and button; and, as the Japanese paddle switches on its own
+    // between the low and the high four bits of the knob, which it shows now (TR high
+    // with the high ones) and the reads since it switched.
+    std::array<PaddleState, 2> paddles_{};
+    std::array<bool, 2> paddleHigh_{};
+    std::array<uint8_t, 2> paddleReads_{};
     bool pause_ = false;          // Start held at the last frame
     bool japanese_ = false;
     bool fmPresent_ = false;

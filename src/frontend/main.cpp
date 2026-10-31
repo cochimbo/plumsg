@@ -916,9 +916,18 @@ int main(int argc, char** argv) {
     bool slowMotion = false;
     double musicSpeed = 1.0;  // the Partitura's speed
     bool orbiting = false;  // dragging the pseudo-3D camera with the mouse
-    // The light guns' crosshairs, while the second port has one and a Mega Drive game runs.
+    // The light guns' crosshairs, while the second port has one and a Mega Drive game runs,
+    // or a Master System game has a Light Phaser or a paddle (whose knob follows the
+    // crosshair across) in a port.
     LightGunAim gunAim;
-    auto gunPlugged = [&] { return app->romLoaded && isLightGun(app->console.padType(1)) && !app->console.isMasterSystem(); };
+    auto smsAimed = [&](int port) {
+        return app->romLoaded && app->console.isMasterSystem() && isMasterSystemController(app->console.controller(port));
+    };
+    auto gunPlugged = [&] {
+        if (!app->romLoaded) return false;
+        if (app->console.isMasterSystem()) return smsAimed(0) || smsAimed(1);
+        return isLightGun(app->console.padType(1));
+    };
     int lastMouseX = -1, lastMouseY = -1;
     Uint64 lastAim = SDL_GetPerformanceCounter();
     bool padMenuWasOpen = false;  // the states menu, the library or the file browser, last frame
@@ -1033,7 +1042,9 @@ int main(int argc, char** argv) {
         net.reset();
         netSocket.reset();
         if (app->romLoaded) app->applyCheats();
+        app->console.setPadType(0, settings.padType[0]);
         app->console.setPadType(1, settings.padType[1]);
+        app->console.setAutoControllers(true);
         rewind.clear();
         if (error) ui->showError(why);
         else if (!why.empty()) ui->notify(why);
@@ -1060,8 +1071,11 @@ int main(int argc, char** argv) {
         app->console.setCheats({});
         // The guest plays on pad 2: it has to be plugged in (the guest gets the host's types).
         // A light gun's aim does not travel over the network either.
-        if (app->console.padType(1) == PadType::None || isLightGun(app->console.padType(1)))
+        if (app->console.padType(1) == PadType::None || isLightGun(app->console.padType(1)) ||
+            isMasterSystemController(app->console.padType(1)))
             app->console.setPadType(1, PadType::SixButton);
+        if (isMasterSystemController(app->console.padType(0))) app->console.setPadType(0, PadType::SixButton);
+        app->console.setAutoControllers(false);
         paused = slowMotion = false;
         ui->notify(host ? trf("Esperando al otro jugador en el puerto %d", settings.netPort)
                         : trf("Conectando con %s", settings.netAddress.c_str()));
@@ -1327,20 +1341,25 @@ int main(int argc, char** argv) {
             gunAim.mouseButtons(mouseFree && (mouse & SDL_BUTTON_LMASK), mouseFree && (mouse & SDL_BUTTON_RMASK),
                                 mouseFree && (mouse & SDL_BUTTON_MMASK));
             const bool keyboard = !ui->keyboardBusy();
-            const int guns = app->console.padType(1) == PadType::Justifier ? 2 : 1;
+            const bool sms = app->console.isMasterSystem();
             const Uint64 nowAim = SDL_GetPerformanceCounter();
             const float seconds = std::min(0.1f, static_cast<float>(static_cast<double>(nowAim - lastAim) / freq));
             lastAim = nowAim;
-            for (int g = 0; g < guns; ++g) {
+            bool anyGun = false;
+            for (int g = 0; g < 2; ++g) {
+                // A Master System game: each port's own (the paddle draws no crosshair).
+                if (sms ? !smsAimed(g) : g == 1 && app->console.padType(1) != PadType::Justifier) continue;
                 float sx, sy;
                 input->leftStick(g, &sx, &sy);
                 if (!paused) gunAim.move(g, input->poll(g, keyboard), sx, sy, seconds);
+                if (sms && app->console.controller(g) == PadType::Paddle) continue;
+                anyGun = true;
                 UiState::Crosshair c;
                 c.onPicture = gunAim.crosshair(g, &c.x, &c.y);
                 c.gun = g;
                 uiState.crosshairs.push_back(c);
             }
-            uiState.hideMouse = mouseFree && gunAim.over(static_cast<float>(mx), static_cast<float>(my));
+            uiState.hideMouse = anyGun && mouseFree && gunAim.over(static_cast<float>(mx), static_cast<float>(my));
         }
         const UiActions act = ui->frame(uiState);
         if (!act.load.empty()) {
@@ -1554,8 +1573,17 @@ int main(int argc, char** argv) {
                     if (gunPlugged()) {
                         const VideoFrameMd& f = app->console.frame();
                         const int lines = f.interlaced ? f.height / 2 : f.height;
-                        for (int g = 0; g < 2; ++g)
-                            app->console.setGun(g, gunAim.state(g, input->poll(g, keyboard), f.consoleWidth(), lines));
+                        for (int g = 0; g < 2; ++g) {
+                            const PadState pad = input->poll(g, keyboard);
+                            const GunState gun = gunAim.state(g, pad, f.consoleWidth(), lines);
+                            app->console.setGun(g, gun);
+                            if (smsAimed(g) && app->console.controller(g) == PadType::Paddle) {
+                                PaddleState paddle;
+                                paddle.position = gunAim.knob(g);
+                                paddle.button = gun.trigger || pad.b;
+                                app->console.setPaddle(g, paddle);
+                            }
+                        }
                     }
                     app->console.setSampleRate(audio->rate() / speed);
                     // The picture shown is run-ahead's, so these need not be drawn.

@@ -5,6 +5,15 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
+- **Master System Light Phaser and paddle** (#73): Consola > Mando 1 or Mando 2 (or a
+  game's options) plugs in the Light Phaser or the Japanese paddle (HPD-200). The games
+  that need one get it in port 1 on their own while a pad is chosen there: Safari Hunt,
+  Shooting Gallery, Marksman Shooting, Operation Wolf, Rambo III, Wanted, Gangster Town,
+  Assault City, Laser Ghost, Space Gun, Rescue Mission, Missile Defense 3-D for the gun;
+  Woody Pop, Alex Kidd BMX Trial, Galactic Protector and Megumi Rescue for the paddle.
+  The Light Phaser is aimed like the Mega Drive's guns, with the crosshair, the mouse or
+  the left stick (left click or A to shoot); the paddle's dial follows the mouse across
+  the picture, or the left stick (left click, A or B for its button).
 - **Light guns** (#102): Consola > Mando 2 (or a game's options) plugs in Konami's
   Justifier (Lethal Enforcers I and II, Snatcher), with its second gun for player 2, or
   Sega's Menacer (T2: The Arcade Game, Menacer 6-Game Cartridge) instead of pad 2. A

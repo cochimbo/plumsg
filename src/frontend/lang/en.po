@@ -1049,6 +1049,19 @@ msgstr "The game uses the general 3D again"
 msgid "El juego vuelve a usar la pantalla ancha general"
 msgstr "The game goes back to the general widescreen"
 
+msgid ""
+"El mando de rueda de la Master System japonesa (Paddle Control HPD-200): Woody Pop,\n"
+"Alex Kidd BMX Trial, Galactic Protector, Megumi Rescue. La rueda se gira moviendo el\n"
+"ratón a lo ancho de la imagen, o con el stick izquierdo (o la cruceta). Botón: clic\n"
+"izquierdo, A o B. Los juegos que lo necesitan lo tienen ya en el puerto 1 si ahí hay un\n"
+"mando. Solo los juegos de Master System; en una partida en red se enchufa un mando."
+msgstr ""
+"The Japanese Master System's dial controller (Paddle Control HPD-200): Woody Pop,\n"
+"Alex Kidd BMX Trial, Galactic Protector, Megumi Rescue. Turn the dial by moving the\n"
+"mouse across the picture, or with the left stick (or d-pad). Button: left\n"
+"click, A or B. Games that need it already have it in port 1 if a pad is\n"
+"there. Master System games only; in a netplay game a pad is plugged in."
+
 msgid "El otro jugador ha salido de la partida."
 msgstr "The other player has left the game."
 
@@ -1667,6 +1680,19 @@ msgstr "The widescreen is now saved only for %s"
 msgid "La partida se ha descompasado y no se puede recuperar."
 msgstr "The game went out of sync and cannot be recovered."
 
+msgid ""
+"La pistola de luz de la Master System (Light Phaser), en lugar del mando: Safari Hunt,\n"
+"Shooting Gallery, Operation Wolf, Rambo III, Wanted... Se apunta con una mira en pantalla,\n"
+"movida con el ratón o con el stick izquierdo (o la cruceta) del mando de ese jugador.\n"
+"Gatillo: clic izquierdo o A. Los juegos que la necesitan la tienen ya en el puerto 1 si ahí\n"
+"hay un mando. Solo los juegos de Master System; en una partida en red se enchufa un mando."
+msgstr ""
+"The Master System's light gun (Light Phaser), instead of the pad: Safari Hunt,\n"
+"Shooting Gallery, Operation Wolf, Rambo III, Wanted... Aim with a crosshair on screen,\n"
+"moved with the mouse or with that player's left stick (or d-pad).\n"
+"Trigger: left click or A. Games that need it already have it in port 1 if a pad\n"
+"is there. Master System games only; in a netplay game a pad is plugged in."
+
 msgid "La ranura %d está vacía"
 msgstr "Slot %d is empty"
 
@@ -1720,6 +1746,9 @@ msgstr "Latency"
 
 msgid "Lengüetas"
 msgstr "Reed"
+
+msgid "Light Phaser (Master System)"
+msgstr "Light Phaser (Master System)"
 
 msgid "Lista"
 msgstr "List"
@@ -2155,6 +2184,9 @@ msgstr "PAUSED"
 
 msgid "PDF"
 msgstr "PDF"
+
+msgid "Paddle (Master System)"
+msgstr "Paddle (Master System)"
 
 msgid "Palmada"
 msgstr "Hand clap"

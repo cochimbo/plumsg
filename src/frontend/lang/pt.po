@@ -1049,6 +1049,19 @@ msgstr "O jogo volta a usar o 3D geral"
 msgid "El juego vuelve a usar la pantalla ancha general"
 msgstr "O jogo volta a usar o ecrã panorâmico geral"
 
+msgid ""
+"El mando de rueda de la Master System japonesa (Paddle Control HPD-200): Woody Pop,\n"
+"Alex Kidd BMX Trial, Galactic Protector, Megumi Rescue. La rueda se gira moviendo el\n"
+"ratón a lo ancho de la imagen, o con el stick izquierdo (o la cruceta). Botón: clic\n"
+"izquierdo, A o B. Los juegos que lo necesitan lo tienen ya en el puerto 1 si ahí hay un\n"
+"mando. Solo los juegos de Master System; en una partida en red se enchufa un mando."
+msgstr ""
+"O comando de roda do Master System japonês (Paddle Control HPD-200): Woody Pop,\n"
+"Alex Kidd BMX Trial, Galactic Protector, Megumi Rescue. A roda gira-se movendo o\n"
+"rato ao longo da imagem, ou com o stick esquerdo (ou a cruz). Botão: clique\n"
+"esquerdo, A ou B. Os jogos que precisam dele já o têm na porta 1 se aí houver um\n"
+"comando. Só jogos de Master System; numa partida em rede liga-se um comando."
+
 msgid "El otro jugador ha salido de la partida."
 msgstr "O outro jogador saiu da partida."
 
@@ -1667,6 +1680,19 @@ msgstr "O ecrã panorâmico guarda-se agora só para %s"
 msgid "La partida se ha descompasado y no se puede recuperar."
 msgstr "A partida perdeu a sincronia e não pode ser recuperada."
 
+msgid ""
+"La pistola de luz de la Master System (Light Phaser), en lugar del mando: Safari Hunt,\n"
+"Shooting Gallery, Operation Wolf, Rambo III, Wanted... Se apunta con una mira en pantalla,\n"
+"movida con el ratón o con el stick izquierdo (o la cruceta) del mando de ese jugador.\n"
+"Gatillo: clic izquierdo o A. Los juegos que la necesitan la tienen ya en el puerto 1 si ahí\n"
+"hay un mando. Solo los juegos de Master System; en una partida en red se enchufa un mando."
+msgstr ""
+"A pistola de luz do Master System (Light Phaser), em vez do comando: Safari Hunt,\n"
+"Shooting Gallery, Operation Wolf, Rambo III, Wanted... Aponta-se com uma mira no ecrã,\n"
+"movida com o rato ou com o stick esquerdo (ou a cruz) do comando desse jogador.\n"
+"Gatilho: clique esquerdo ou A. Os jogos que precisam dela já a têm na porta 1 se aí\n"
+"houver um comando. Só jogos de Master System; numa partida em rede liga-se um comando."
+
 msgid "La ranura %d está vacía"
 msgstr "O slot %d está vazio"
 
@@ -1720,6 +1746,9 @@ msgstr "Latência"
 
 msgid "Lengüetas"
 msgstr "Palhetas"
+
+msgid "Light Phaser (Master System)"
+msgstr "Light Phaser (Master System)"
 
 msgid "Lista"
 msgstr "Lista"
@@ -2155,6 +2184,9 @@ msgstr "PAUSA"
 
 msgid "PDF"
 msgstr "PDF"
+
+msgid "Paddle (Master System)"
+msgstr "Paddle (Master System)"
 
 msgid "Palmada"
 msgstr "Palmas"
