@@ -208,7 +208,7 @@ bool FileBrowser::draw(std::string* chosen) {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Appearing,
                             ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(std::min(640.0f, vp->Size.x - 40), std::min(480.0f, vp->Size.y - 40)),
+    ImGui::SetNextWindowSize(ImVec2(std::min(theme::px(640.0f), vp->Size.x - 40), std::min(theme::px(480.0f), vp->Size.y - 40)),
                              ImGuiCond_Appearing);
     if (ImGui::BeginPopupModal(title.c_str(), &open_)) {
         ImGui::TextWrapped("%s", drives_ ? tr("Unidades") : folder_.c_str());

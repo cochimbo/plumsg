@@ -101,7 +101,7 @@ void Ui::drawMedia(UiActions& out) {
         if (g.path == media_.path) game = &g;
     if (!game || !showLibrary_) showMedia_ = false;
     const ImVec2 view = ImGui::GetMainViewport()->WorkSize;
-    ImGui::SetNextWindowSize(ImVec2(std::min(860.0f, view.x - 40), std::min(620.0f, view.y - 40)), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(std::min(theme::px(860.0f), view.x - 40), std::min(theme::px(620.0f), view.y - 40)), ImGuiCond_Appearing);
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (showMedia_ && ImGui::Begin((std::string(tr("Medios de ScreenScraper")) + "###medios").c_str(), &showMedia_,
                                    ImGuiWindowFlags_NoCollapse)) {

@@ -77,8 +77,17 @@ void addTitleFont(float size, const ImWchar* ranges) {
     gFonts.title = addFont(kChakraPetchBoldItalic, sizeof(kChakraPetchBoldItalic), size, ranges);
 }
 
-void apply() {
+namespace {
+float gScale = 1.0f;
+}
+
+float scale() { return gScale; }
+
+void apply(float scale) {
+    gScale = scale;
     ImGuiStyle& s = ImGui::GetStyle();
+    s = ImGuiStyle();
+    ImGui::StyleColorsDark(&s);
     s.WindowRounding = s.ChildRounding = s.FrameRounding = s.PopupRounding = 0.0f;
     s.ScrollbarRounding = s.GrabRounding = s.TabRounding = 0.0f;
     s.WindowBorderSize = s.PopupBorderSize = s.FrameBorderSize = 1.0f;
@@ -152,6 +161,7 @@ void apply() {
     c[ImGuiCol_NavWindowingHighlight] = rgb(0xFF, 0xFF, 0xFF, 0.7f);
     c[ImGuiCol_NavWindowingDimBg] = rgb(0, 0, 0, 0.5f);
     c[ImGuiCol_ModalWindowDimBg] = rgb(0, 0, 0, 0.6f);
+    if (scale != 1.0f) s.ScaleAllSizes(scale);
 }
 
 // ImGui draws the title bar in Begin; this paints over it, up to the close button: the

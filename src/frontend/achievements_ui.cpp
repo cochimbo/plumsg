@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "imgui.h"
+#include "theme.h"
 #include "../core/i18n.h"
 #include "http.h"
 #include "../render/gl.h"
@@ -196,7 +197,7 @@ void AchievementsUi::drawAccount(bool& changed) {
 }
 
 void AchievementsUi::drawList() {
-    ImGui::SetNextWindowSize(ImVec2(520, 560), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(theme::px(520), theme::px(560)), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(tr("Logros de este juego"), &showList_)) {
         ImGui::End();
         return;

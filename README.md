@@ -459,6 +459,7 @@ plumsg.exe "C:\Games\Sonic CD.cue" --region eu --load-state 1
 |---|---|
 | `game` | the cartridge or disc to open |
 | `--fullscreen` / `--windowed` | full screen or windowed (up to 0.0.31 they were Spanish, e.g. `--pantalla-completa`; those still work) |
+| `--console-mode` / `--desktop-mode` | console mode on or off for this time (see below) |
 | `--3d` / `--2d` | with or without the pseudo-3D view |
 | `--filter f` | `none`, `scanlines` or `crt` |
 | `--upscaling u` | `none`, `xbr` or `anime4k` (experimental) |
@@ -474,6 +475,35 @@ plumsg.exe "C:\Games\Sonic CD.cue" --region eu --load-state 1
 The full screen and region given this way are for that time only: `plumsg.ini` stays as it
 was. In LaunchBox, for example, add plumsg as an emulator with the path to `plumsg.exe`
 and `--fullscreen` in the command-line parameters.
+
+### Steam Deck, ROG Ally, Legion Go and other PCs played with a pad
+
+**Console mode** is for playing from the sofa or on a handheld, with a pad and no
+keyboard or mouse. It turns on by itself when Steam's game mode or Big Picture starts
+plumsg (also as a non-Steam game under Proton) and on the handhelds that run Windows,
+recognised by their model: ROG Ally and ROG Xbox Ally, MSI Claw, Legion Go and Go S,
+AYANEO, OneXPlayer, GPD Win, Zotac Zone. It is switched in **Options > Console mode**
+(Automatic, On, Off), in the states menu's Sistema tab or with `--console-mode` /
+`--desktop-mode`.
+
+In console mode plumsg:
+
+- starts in full screen, without the menu bar and with the library (which asks for a
+  folder of games if it has none);
+- makes the letters and the windows bigger after the screen's height (125 % on the Steam
+  Deck's 1280x800, 175 % at 1080p). **Options > Interface size** sets it by hand, in
+  console mode or not, from 75 % to 250 %;
+- lets the pad drive every window: the d-pad moves, A presses, B goes back, X jumps to
+  the window's menu bar and holding X switches windows. While the pad is on a window the
+  game waits; B with nothing left to close gives the pad back to the game;
+- shows its own on-screen keyboard while a text box is being typed in without a
+  keyboard (the library's search with Y, a host's address, a cheat code...): the d-pad
+  chooses a key, A types it, B rubs out, Y is a space, X capitals, L1 / R1 move the
+  cursor and Start accepts. It works on Windows handhelds too, where Steam's keyboard
+  is not there; a real keyboard's key hides it;
+- the states menu (left stick click) gains, in its Sistema tab, the library, Open ROM,
+  Controls, Cheats, the game's own options, the whole menu bar (with the pad on it) and
+  Quit plumsg, so that nothing needs a keyboard.
 
 ### If plumsg closes suddenly
 

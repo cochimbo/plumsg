@@ -20,6 +20,7 @@
 #include "instrument_editor.h"
 #include "score_view.h"
 #include "library.h"
+#include "osk.h"
 #include "screenscraper.h"
 #include "settings.h"
 
@@ -151,6 +152,9 @@ public:
     // The game library: a grid of covers that the pad (or the keyboard) can drive.
     void toggleLibrary();
     bool libraryOpen() const { return showLibrary_; }
+    // Puts the keyboard on the library's search box (Y on the pad): in console mode, with
+    // the on-screen keyboard.
+    void focusLibrarySearch() { libraryView_.focusSearch = true; }
     // For screenshots: the library's 3D view holding still at that step (see BoxShelf::pose).
     void poseBoxes(int step) { boxesPose_ = step; }
     void openBios() { showBios_ = true; }
@@ -213,12 +217,22 @@ public:
     // Where the 3D view's console models are, the user's first: each folder ends in a slash.
     void setModelFolders(std::vector<std::string> folders) { modelFolders_ = std::move(folders); }
     // The states menu: a list of the slots that the pad (or the keyboard) can drive.
-    void toggleStateMenu();
+    // `tab`: open it on that tab (0 the slots), else on the one it was left on.
+    void toggleStateMenu(int tab = -1);
     bool stateMenuOpen() const { return stateMenu_.open; }
     void notify(std::string message);
     // A message the user has to acknowledge, drawn inside the window so that it is seen
     // in full screen too.
     void showError(std::string message) { error_ = std::move(message); }
+    // Console mode, for PCs played from the sofa with a pad (Steam Deck, ROG Ally, Legion Go,
+    // Big Picture...): Settings::consoleMode, automatic where consoleModeReason() says, or
+    // --modo-consola for this session.
+    bool consoleMode() const;
+    void forceConsoleMode(bool on) { consoleForced_ = on ? 1 : 0; }
+    // In console mode, the pad is driving one of the windows (Controles, BIOS, the menu
+    // bar...): the game waits and its presses are not the game's.
+    // So does the on-screen keyboard, which takes it to type in a text box.
+    bool padInWindows() const { return padNav_ || osk_.isOpen(); }
 
 private:
     struct Capture {
@@ -284,6 +298,10 @@ private:
     void hideIdleCursor(const UiState& state);
     void finishCapture(int keyOrButton);
     void loadLogo();
+    // The interface's size wanted now (1 is 100 %), from the settings and the window.
+    float wantedScale() const;
+    // Before ImGui's frame: the size, and whether the pad drives the windows (console mode).
+    void prepareFrame();
 
     SDL_Window* window_;
     Settings& settings_;
@@ -336,6 +354,13 @@ private:
     bool pendingGameOptions_ = false;  // one of a game's own buttons changed outside frame()
     InputConfig* gameControls_ = nullptr;  // the buttons the Opciones de este juego window shows
     bool peekMenu_ = false;  // menu bar hidden but shown while the mouse is at the top
+    int consoleForced_ = -1;   // --modo-consola: 1 on, 0 off, -1 as the settings say
+    float scale_ = 1.0f;       // the interface's size the fonts and the style were made at
+    bool padNav_ = false;      // the pad drives ImGui's windows this frame
+    bool focusMenuBar_ = false;  // put the pad on the menu bar's first menu next frame
+    bool menuForPad_ = false;
+    OnScreenKeyboard osk_;       // console mode's, while a text box is being typed in with the pad
+    bool typedOnKeys_ = false;   // the last thing pressed was a real keyboard's: no on-screen one    // the menu bar was hidden and is shown while the pad is on it
     int menuHeight_ = 0;
     Capture capture_;
     struct StateMenu {
