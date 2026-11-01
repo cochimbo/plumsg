@@ -30,5 +30,10 @@ mastersystem.glb, mastersystem-cartridge.glb
   (normal maps 1024x1024) as JPEG, the metallic/roughness textures removed.
   plumsg prints each game's label (or its cover) over the cartridge's own.
 
+gamegear.glb, gamegear-cartridge.glb
+  Sega's Game Gear (the first model) and its cartridge, made for plumsg from their
+  real measurements by tools/models/gamegear.py, which rebuilds them.
+  License: CC0 (public domain).
+
 Your own models: put a .glb with the same name in the "models" folder next to
 plumsg.ini and plumsg uses it instead.

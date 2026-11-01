@@ -326,12 +326,19 @@ struct ModelFile {
 const float kMegaDriveLed[3] = {0.206f, 0.415f, 0.42f};
 // The Master System by dark_igorek, CC BY 4.0, with its two pads plugged in in front (in metres).
 const float kMasterSystemBox[6] = {-0.184f, 0.0f, -0.091f, 0.184f, 0.07f, 0.085f};
+// plumsg's own Game Gear (tools/models/gamegear.py): its shell's bounds, without the
+// buttons standing out of its front, so the screen and the slot fall where ConsoleLayout
+// has them; and its power light, on the front left of the screen.
+const float kGameGearBox[6] = {-0.105f, 0.0f, -0.019f, 0.105f, 0.113f, 0.019f};
+const float kGameGearLed[3] = {-60.0f / 135.0f, 94.0f / 135.0f, 18.75f / 135.0f};
 const ModelFile kModelFiles[] = {
     // The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the
     // dome, its power light on the plate in front of it.
     {ConsoleModel::MegaDrive, "megadrive.glb", 278.0f / 135.0f, 0.0f, {0.206f, 0.43f, -0.306f}, kMegaDriveLed, 12.9f, nullptr},
     {ConsoleModel::MasterSystem, "mastersystem.glb", 365.0f / 135.0f, 0.0f, {ConsoleLayout::kSmsSlotX, ConsoleLayout::kSmsSlotY,
      ConsoleLayout::kSmsSlotZ}, nullptr, 0.0f, kMasterSystemBox},
+    {ConsoleModel::GameGear, "gamegear.glb", 210.0f / 135.0f, 0.0f, {0.0f, ConsoleLayout::kGgSlotY, ConsoleLayout::kGgSlotZ},
+     kGameGearLed, 90.0f, kGameGearBox},
 };
 
 // The cartridges' models: how to turn them to stand with the label to the front, where
@@ -354,6 +361,8 @@ const CartridgeFile kCartridgeFiles[] = {
     // turned on its side in the texture (whose coordinates there run from 1 to 2). The
     // label is a strip along the top, where a cover's title goes.
     {ConsoleSystem::MasterSystem, "mastersystem-cartridge.glb", 90, 0, {1.473f, 0.0f, 1.552f, 0.40f}, {1.473f, 0.0f, 1.552f, 0.40f}, 1, 4.5f, 0.12f},
+    // The Game Gear's, plumsg's own: standing, its label (54 x 36 mm) the whole texture.
+    {ConsoleSystem::GameGear, "gamegear-cartridge.glb", 0, 0, {0, 0, 1, 1}, {0, 0, 1, 1}, 0, 1.5f, 0.45f},
 };
 
 }  // namespace
@@ -867,7 +876,7 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
     switch (s) {
         case ConsoleSystem::GameGear: {
             mesh(ConsoleModel::GameGear, identity());
-            led(L::kGgLed, true);
+            if (!custom_[static_cast<int>(ConsoleModel::GameGear)].vao) led(L::kGgLed, true);
             // The screen shows the game's cover once it is on.
             Part screen;
             screen.model = base * translate(0, L::kGgScreenY, L::kGgScreenZ) * scale(L::kGgScreenW, L::kGgScreenH, 0.002f);
