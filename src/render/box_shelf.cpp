@@ -1033,7 +1033,9 @@ void BoxShelf::build(const std::vector<Item>& items, int selected) {
         p = {p3.x, lerp(p2.y, p3.y, s), p3.z};
     }
     const float turn = system_ == ConsoleSystem::MegaCD ? -90.0f * smooth((t - 0.25f) / 0.5f) : 0.0f;
-    addCartridge(item, translate(p.x, p.y, p.z) * rotateY(cartYaw_) * rotateX(cartPitch_ + turn));
+    // A Game Gear's cartridge goes in with its label to the back, the top of it showing.
+    const float spin = system_ == ConsoleSystem::GameGear ? 180.0f * smooth((t - 0.25f) / 0.5f) : 0.0f;
+    addCartridge(item, translate(p.x, p.y, p.z) * rotateY(cartYaw_ + spin) * rotateX(cartPitch_ + turn));
 }
 
 unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int width, int height, float dt) {
