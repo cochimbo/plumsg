@@ -884,6 +884,10 @@ int main(int argc, char** argv) {
             if (settings.achievements && !capturing) achievements.loadGame(app->console, app->achievementsHash);
             settings.addRecent(path);
             if (!game.own.empty()) ui->notify(trf("Opciones propias de %s", fileName(path).c_str()));
+            if (isLightGun(app->console.padType(1)) && !isLightGun(app->console.chosenPadType(1)))
+                ui->notify(app->console.padType(1) == PadType::Menacer
+                               ? tr("Este juego usa la pistola Menacer: ya está en el puerto 2 (apunta con el ratón)")
+                               : tr("Este juego usa la pistola Justifier: ya está en el puerto 2 (apunta con el ratón)"));
             if (!app->console.loadNotice().empty()) ui->notify(app->console.loadNotice());
             else if (app->console.hasMsuMd()) ui->notify(tr("Música en CD (MSU-MD)"));
             rewind.clear();

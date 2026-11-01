@@ -120,8 +120,54 @@ void MegaDrive::attachCd(std::unique_ptr<CdImage> disc, bool cartridge) {
     setUpSms();
     setUpPaprium();
     setUpSvp();
+    gunGame_ = sms_ ? GunGame{} : gunGameFor(cart_.header().title);
+    applyPadTypes();
     applyRegion();
     powerCycle();
+}
+
+void MegaDrive::applyPadTypes() {
+    for (size_t port = 0; port < 2; ++port) {
+        PadType t = chosenTypes_[port];
+        if (port == 1 && autoControllers_ && isLightGun(gunGame_.type) &&
+            (t == PadType::ThreeButton || t == PadType::SixButton))
+            t = gunGame_.type;
+        io_.setPadType(static_cast<int>(port), t);
+        if (sms_) sms_->setPadType(static_cast<int>(port), chosenTypes_[port]);
+    }
+}
+
+// The games that use a light gun, by a part of their header's overseas name (in capitals,
+// with runs of spaces as one), and Genesis Plus GX's offsets for them. Any other game a
+// gun is plugged in for gets +24 with the Justifier and +82 with the Menacer.
+MegaDrive::GunGame MegaDrive::gunGameFor(const std::string& title) {
+    struct Known {
+        const char* name;
+        PadType type;
+        int x, y;
+    };
+    static const Known kKnown[] = {
+        {"MENACER", PadType::Menacer, 82, 0},  // Menacer 6-Game Cartridge
+        {"T2 ; THE ARCADE GAME", PadType::Menacer, 133, -8},
+        {"BODY COUNT", PadType::Menacer, 68, -24},
+        {"CORPSE KILLER", PadType::Menacer, 64, -8},  // Mega CD and CD 32X
+        {"CRIME PATROL", PadType::Menacer, 61, 0},
+        {"MAD DOG II THE LOST GOLD", PadType::Menacer, 70, 18},
+        {"MAD DOG MCCREE", PadType::Menacer, 49, 0},
+        {"WHO SHOT JOHNNY ROCK?", PadType::Menacer, 60, 30},
+        {"GUN FIGHTERS", PadType::Justifier, 24, 0},  // Lethal Enforcers II
+        {"LETHAL ENFORCERS", PadType::Justifier, 0, 0},
+        {"SNATCHER", PadType::Justifier, 0, 0},
+    };
+    std::string name;
+    for (char c : title) {
+        const char u = (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
+        if (u == ' ' && (name.empty() || name.back() == ' ')) continue;
+        name += u;
+    }
+    for (const Known& k : kKnown)
+        if (name.find(k.name) != std::string::npos) return GunGame{k.type, k.x, k.y};
+    return GunGame{};
 }
 
 void MegaDrive::setCdBios(Region region, std::vector<uint8_t> bios) {
@@ -650,19 +696,21 @@ void MegaDrive::runFrameMd() {
 
 // A light gun pointed at this line sees the beam go by. Where on the line the H counter
 // says is each game's to work out, so this is what Genesis Plus GX found they expect:
-// the Justifier sees pixel x at counter step x / 2 + 24; the Menacer at x / 2 + 82, its
-// x first scaled to the 289 dots (304 with the Mega CD) its games scale back up.
+// pixel x is seen at counter step x / 2 plus the game's offset (gunGameFor), and the
+// Menacer's x is first scaled to the 289 dots (304 with the Mega CD) its games scale
+// back up. Some games also look a few lines above or below the aim.
 void MegaDrive::lightGunLine(int line) {
     const GunState* gun = io_.activeGun();
     const int width = vdp_.h40() ? 320 : 256;
-    if (!gun || gun->y != line || !gun->onScreen(width, vdp_.activeLines())) return;
+    if (!gun || !gun->onScreen(width, vdp_.activeLines())) return;
+    const bool menacer = io_.padType(1) == PadType::Menacer;
+    // A game known to use this gun brings its own offsets.
+    const bool known = gunGame_.type == io_.padType(1);
+    const int y = gun->y + (known ? gunGame_.yOffset : 0);
+    if (y != line || y < 0 || y >= vdp_.activeLines()) return;
     int x = gun->x;
-    int dot = x / 2 + 24;
-    if (io_.padType(1) == PadType::Menacer) {
-        x = x * (mcd_ ? 304 : 289) / 320;
-        dot = x / 2 + 82;
-    }
-    vdp_.lightGunHit(dot);
+    if (menacer) x = x * (mcd_ ? 304 : 289) / 320;
+    vdp_.lightGunHit(x / 2 + (known ? gunGame_.xOffset : menacer ? 82 : 24));
 }
 
 bool MegaDrive::runAhead(int frames) {

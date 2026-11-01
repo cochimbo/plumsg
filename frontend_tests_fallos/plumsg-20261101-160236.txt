@@ -1,0 +1,19 @@
+plumsg d03d039-dirty closed because of a crash.
+
+What happened: the program aborted (SIGABRT)
+Where: -
+Game: roms/juego.md
+
+Stack:
+/tmp/claude-0/buildfe/frontend_tests(+0x3e022)[0x55a0c7e02022]
+/tmp/claude-0/buildfe/frontend_tests(+0x3e26b)[0x55a0c7e0226b]
+/lib/x86_64-linux-gnu/libc.so.6(+0x45330)[0x7fd268445330]
+/lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x11c)[0x7fd26849ec0c]
+/lib/x86_64-linux-gnu/libc.so.6(gsignal+0x1e)[0x7fd26844527e]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0xdf)[0x7fd2684288ff]
+/tmp/claude-0/buildfe/frontend_tests(+0x1d10c)[0x55a0c7de110c]
+/tmp/claude-0/buildfe/frontend_tests(+0x23e4d)[0x55a0c7de7e4d]
+/tmp/claude-0/buildfe/frontend_tests(+0x1f5da)[0x55a0c7de35da]
+/lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca)[0x7fd26842a1ca]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b)[0x7fd26842a28b]
+/tmp/claude-0/buildfe/frontend_tests(+0x1f6e5)[0x55a0c7de36e5]

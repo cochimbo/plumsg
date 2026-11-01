@@ -86,11 +86,24 @@ public:
         io_.setPad(1, p2);
         if (sms_) sms_->setPads(p1, p2);
     }
+    // What is plugged into a port. A pad chosen in the second port gives way to the light
+    // gun of a game known to use one (gunGame()), unless setAutoControllers(false).
     void setPadType(int port, PadType t) {
-        io_.setPadType(port, t);
-        if (sms_) sms_->setPadType(port, t);
+        chosenTypes_[static_cast<size_t>(port & 1)] = t;
+        applyPadTypes();
     }
     PadType padType(int port) const { return io_.padType(port); }
+    PadType chosenPadType(int port) const { return chosenTypes_[static_cast<size_t>(port & 1)]; }
+    // The light gun a Mega Drive or Mega CD game is known to use, found by its header's
+    // name, and how far its own aiming code is from the gun's raw position: the H counter
+    // steps it adds to x / 2, and the lines to the aim's y (what Genesis Plus GX found
+    // each one expects). type is SixButton for any other game.
+    struct GunGame {
+        PadType type = PadType::SixButton;
+        int xOffset = 0, yOffset = 0;
+    };
+    static GunGame gunGameFor(const std::string& title);
+    const GunGame& gunGame() const { return gunGame_; }
     // What the game sees in a port: the type chosen, but for a Master System game, which
     // reads Mega Drive pads and guns as its own pad, and gets a Light Phaser or a paddle
     // in the first port on its own when it needs one (setAutoControllers).
@@ -98,6 +111,7 @@ public:
     void setAutoControllers(bool on) {
         autoControllers_ = on;
         if (sms_) sms_->setAutoControllers(on);
+        applyPadTypes();
     }
     // The light guns, when the second port has one (setPadType(1, Menacer or Justifier)):
     // gun 0, and the Justifier's second gun 1. With a Master System game, the Light
@@ -242,6 +256,7 @@ private:
     void syncSound();  // brings PSG and YM2612 up to now_
     void updateIrq() { cpu_.setIrqLevel(vdp_.irqLevel()); }
     void lightGunLine(int line);
+    void applyPadTypes();  // chosenTypes_ and gunGame_ into the I/O chip
     void applyRegion();
     void configureFor(Region r);  // clocks, PAL/NTSC and version register
     int cdBiosSlot(Region r) const;  // the BIOS for `r`, or with a cartridge any there is; -1 for none
@@ -287,6 +302,8 @@ private:
     std::unique_ptr<Ym2413> opll_;  // the Master System's FM unit, with sms_
     bool smsFmAlways_ = false;
     bool autoControllers_ = true;
+    std::array<PadType, 2> chosenTypes_{PadType::SixButton, PadType::SixButton};
+    GunGame gunGame_;
     bool smsFile_ = false;  // the file loaded is a Master System one by its name
     bool ggFile_ = false;   // ...or a Game Gear one
     std::array<std::vector<uint8_t>, 3> cdBios_;  // Japan, USA, Europe

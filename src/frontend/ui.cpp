@@ -141,6 +141,8 @@ constexpr const char* kLightGunTip =
        "pantalla, movida con el ratón o con el stick izquierdo (o la cruceta) del mando.\n"
        "Gatillo: clic izquierdo o A. Disparar fuera de la pantalla (recargar): clic derecho o C.\n"
        "Start: clic central o Start. Botones A y B de la Menacer: B y X del mando.\n"
+       "Los juegos que la usan (Corpse Killer, Crime Patrol, Mad Dog McCree, Lethal Enforcers...)\n"
+       "la tienen ya en el puerto 2 si ahí hay un mando.\n"
        "Solo los juegos de Mega Drive y Mega CD; en una partida en red se enchufa un mando.");
 
 constexpr const char* kPhaserTip =
