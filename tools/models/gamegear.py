@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(__file__))
 from glb import Glb  # noqa: E402
 from gamegear_front import FRONT_SHAPES, LOGOS  # noqa: E402
-from sdf import box, circle, cut, extrude, flat_normals, mesh, round_rect, smin  # noqa: E402
+from sdf import box, circle, cut, extrude, flat_normals, mesh, round_rect, smax, smin  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "assets", "models")
@@ -36,6 +36,10 @@ FRONT, BACK, GRIP = 16.5, -15.0, -20.0
 TOP = 110.0  # the top of the raised middle, where the slot is
 SLOT_Z0, SLOT_Z1, SLOT_HALF = -12.3, -1.2, 35.5
 JACK_X, WHEEL_X = 44.0, 66.0
+SW_X = 68.0  # the power switch, on top at the right, with its red tab
+RED = (0.75, 0.04, 0.04)
+# Buttons 1 and 2: middle and radius, from the traced front.
+BUTTONS = [(72.45, 58.95, 6.05), (88.2, 71.0, 6.0)]
 
 # The plastics, as the shelf's light shows them (linear colours, like console_models.cpp's).
 CHARCOAL = (0.15, 0.15, 0.158)
@@ -107,11 +111,12 @@ F = {}
 
 
 def speaker_holes():
-    """The speaker's grid of round holes, under the pad."""
+    """The speaker's grid of small round holes, low on the left under the pad."""
     holes = []
-    for row in range(4):
-        for col in range(7 - (row % 2)):
-            holes.append((-92.0 + 2.8 * col + 1.4 * (row % 2), 20.5 - 2.6 * row))
+    for row in range(7):
+        n = 8 - abs(row - 3) // 2
+        for col in range(n):
+            holes.append((-86.5 - 1.9 * (n - 1) / 2 + 1.9 * col + (0.95 if row % 2 else 0), 13.0 + 1.65 * row))
     return holes
 
 
@@ -119,8 +124,11 @@ def body(x, y, z):
     ax = np.abs(x)
     d2 = F["outline"](x, y)
     d = extrude(d2, z, BACK, FRONT, 5.0)
+    # The front's bottom edge rounds over much more softly than the others.
+    chin = np.sqrt(np.maximum(11 - y, 0) ** 2 + np.maximum(z - (FRONT - 11), 0) ** 2) - 11
+    d = smax(d, chin, 2)
     # The grips' backs, where the six AA batteries go, bulging out behind.
-    grip = extrude(np.maximum(d2 + 3.0, 34 - ax), z, GRIP, 0, 10)
+    grip = extrude(np.maximum(np.maximum(d2 + 4.0, 34 - ax), y - 96), z, GRIP, 0, 12)
     d = smin(d, grip, 7)
     # The battery covers' outlines on the back.
     groove = np.abs(round_rect(ax, y, 70, 52, 26, 40, 20)) - 0.4
@@ -132,15 +140,21 @@ def body(x, y, z):
     d = cut(d, extrude(F["grip_line"](x, y) - 0.15, z, FRONT - 0.6, FRONT + 5), 0.2)
     pod = extrude(F["pod"](x, y), z, FRONT - 3, FRONT + 1.0, 0.8)
     d = smin(d, pod, 0.6)
-    d = cut(d, extrude(F["buttons"](x, y), z, FRONT - 0.6, FRONT + 5), 0.4)
+    # 1 and 2 each sit in a raised collar.
+    for c in BUTTONS:
+        r = np.sqrt((x - c[0]) ** 2 + (y - c[1]) ** 2)
+        d = smin(d, extrude(r - c[2] - 1.6, z, FRONT - 1, FRONT + 2.0, 0.9), 0.6)
+        d = cut(d, extrude(r - c[2] - 0.3, z, FRONT + 0.2, FRONT + 6), 0.3)
     d = cut(d, extrude(F["start"](x, y) - 0.3, z, FRONT - 0.5, FRONT + 5), 0.3)
     for hx, hy in speaker_holes():
-        d = cut(d, extrude(circle(x, y, hx, hy, 0.85), z, FRONT - 3, FRONT + 5), 0.2)
+        d = cut(d, extrude(circle(x, y, hx, hy, 0.5), z, FRONT - 3, FRONT + 5), 0.1)
     # On top: the cartridge slot in the raised middle, the power switch's groove at its left,
     # the link port at the right.
     d = cut(d, box(x, y, z, -SLOT_HALF, SLOT_HALF, TOP - 44, TOP + 8, SLOT_Z0, SLOT_Z1, 0.5), 0.8)
-    d = cut(d, box(x, y, z, -61, -42, 104.5, TOP + 8, -3.4, 3.4, 1.0), 0.5)
-    d = cut(d, box(x, y, z, 50, 62, 101, TOP + 8, -2.8, 2.8, 0.6), 0.4)
+    d = smin(d, box(x, y, z, -60, -43, 104, 108.6, -3.2, 3.2, 1.0), 0.6)
+    d = cut(d, box(x, y, z, SW_X - 6.5, SW_X + 6.5, 104.5, TOP + 8, -2.6, 2.6, 0.8), 0.4)
+    # The link port, a slit in the right end.
+    d = cut(d, box(x, y, z, W / 2 - 4, W / 2 + 5, 66, 90, -2.2, 2.2, 0.8), 0.4)
     # Underneath: the headphone socket and the volume wheel's opening; the adaptor's
     # socket on the left end.
     d = cut(d, extrude(np.sqrt((x - JACK_X) ** 2 + z ** 2) - 2.3, y, -5, 7), 0.4)
@@ -158,8 +172,8 @@ def body_colour(v):
     c = np.tile(np.array(CHARCOAL, np.float32), (len(v), 1))
     hole = (np.abs(x) < SLOT_HALF + 0.5) & (y > TOP - 43) & (y < TOP - 1.5) & (z > SLOT_Z0 - 0.5) & (z < SLOT_Z1 + 0.5)
     hole |= (y < 5.5) & ((np.sqrt((x - JACK_X) ** 2 + z ** 2) < 2.4) | ((np.abs(x - WHEEL_X) < 7.2) & (np.abs(z) < 2.6)))
-    hole |= (y > 100) & (y < TOP - 1) & (x > 49.5) & (x < 62.5) & (np.abs(z) < 3)
-    hole |= (x < -74) & (y < 25) & (z > FRONT - 3.2) & (z < FRONT - 0.8)  # the speaker's holes
+    hole |= (x > W / 2 - 4.5) & (y > 65.5) & (y < 90.5) & (np.abs(z) < 2.4)
+    hole |= (x < -74) & (y < 25) & (z > FRONT - 3.2) & (z < FRONT - 0.6)  # the speaker's holes
     c[hole] = HOLE
     return c
 
@@ -258,24 +272,27 @@ def console():
 
     def pad(x, y, z):
         r2 = (x - cx) ** 2 + (y - cy) ** 2
-        disc = extrude(np.sqrt(r2) - rdisc + 0.3, z, FRONT - 2.2, FRONT + 0.6 - 0.0025 * r2, 0.6)
-        arms = extrude(fc(x, y), z, FRONT - 2, FRONT + 1.5 - 0.002 * r2, 0.45)
-        d = smin(disc, arms, 0.5)
-        d = cut(d, extrude(marks(x, y), z, FRONT, FRONT + 3), 0.15)
-        return cut(d, extrude(np.sqrt(r2) - 2.2, z, FRONT + 1.2, FRONT + 4), 0.4)
+        r = np.sqrt(r2)
+        # A shallow dish, its rim standing out, the cross pressed a little out of it.
+        top = FRONT + 0.9 + 0.0045 * r2 - 0.0002 * r2 * r2 / 10
+        disc = extrude(r - rdisc + 0.3, z, FRONT - 2.2, top, 0.7)
+        arms = extrude(fc(x, y), z, FRONT - 2, top + 0.55, 0.35)
+        d = smin(disc, arms, 0.3)
+        d = cut(d, extrude(marks(x, y), z, FRONT, FRONT + 4), 0.15)
+        return d
 
-    add(small(pad, (cx - rdisc - 1, cy - rdisc - 1, FRONT - 2.4), (cx + rdisc + 1, cy + rdisc + 1, FRONT + 2), 0.12, 0.2),
-        PAD, "pad", 0.45)
+    add(small(pad, (cx - rdisc - 1, cy - rdisc - 1, FRONT - 2.4), (cx + rdisc + 1, cy + rdisc + 1, FRONT + 3)), PAD, "pad", 0.45)
     for name in ("button1", "button2"):
         b = shape(name)
         bx, by = b.centroid.x, b.centroid.y
         rb = (b.bounds[2] - b.bounds[0]) / 2
 
         def button(x, y, z, bx=bx, by=by, rb=rb):
+            # Dished on top, its edge rounded, standing a little out of its collar.
             r = np.sqrt((x - bx) ** 2 + (y - by) ** 2)
-            return extrude(r - rb + 0.2, z, FRONT - 0.6, FRONT + 3.0 - 0.02 * r * r, 1.0)
+            return extrude(r - rb + 0.6, z, FRONT, FRONT + 2.3 + 0.022 * r * r, 0.9)
 
-        add(small(button, (bx - rb - 1, by - rb - 1, FRONT - 0.8), (bx + rb + 1, by + rb + 1, FRONT + 3.2)), BLACK, "button", 0.3)
+        add(small(button, (bx - rb - 1, by - rb - 1, FRONT - 0.2), (bx + rb + 1, by + rb + 1, FRONT + 3.6)), BLACK, "button", 0.3)
     # Start: a blue half moon filling its notch in the panel's edge.
     st = shape("start").buffer(-0.7)
     sx, sy = st.centroid.x, st.centroid.y
@@ -308,19 +325,20 @@ def console():
     add(merge(small_print), TEAL, "portable", 0.6)
     # On the case: START beside its button, and 1 and 2 joined by a line over the buttons.
     b1, b2 = shape("button1").centroid, shape("button2").centroid
-    line = sg.LineString([(b1.x - 6.6, b1.y + 6.2), (b1.x - 6.6, b1.y + 7.4), (b2.x - 1.5, b2.y + 9.6), (b2.x + 2.4, b2.y + 9.6)])
+    line = sg.LineString([(b1.x - 6.2, b1.y + 7.6), (b1.x - 6.2, b1.y + 8.6), (b2.x - 2.0, b2.y + 10.6), (b2.x + 1.4, b2.y + 10.6)])
     case_print = [
         text_mesh("START", FONT_BOLD, 1.7, sx + 4.6, sy - 0.6, FRONT + 0.7, anchor="left"),
-        text_mesh("1", FONT_BOLD, 2.0, b1.x - 6.6, b1.y + 5.0, FRONT + 0.7),
-        text_mesh("2", FONT_BOLD, 2.0, b2.x + 3.8, b2.y + 9.4, FRONT + 0.7),
+        text_mesh("1", FONT_BOLD, 2.0, b1.x - 6.0, b1.y + 6.2, FRONT + 0.7),
+        text_mesh("2", FONT_BOLD, 2.0, b2.x + 2.6, b2.y + 9.8, FRONT + 0.7),
         polygon_mesh(line.buffer(0.22, cap_style="flat"), FRONT + 0.7, FRONT + 0.8),
     ]
     add(merge(case_print), PRINT, "printing", 0.6)
 
     print("console: switch and wheel")
-    sw = shape("switch")
-    add(small(lambda x, y, z: box(x, y, z, sw.bounds[0] + 9, sw.bounds[0] + 15, 103.5, sw.bounds[3] - 0.6, -2.6, 2.6, 0.8),
-              (sw.bounds[0] + 8, 102, -3), (sw.bounds[0] + 16, 111, 3)), GREY, "power switch", 0.4)
+    add(small(lambda x, y, z: box(x, y, z, SW_X - 5.5, SW_X - 0.5, 103.5, TOP - 0.2, -2.0, 2.0, 0.6),
+              (SW_X - 7, 102, -3), (SW_X + 1, TOP + 1, 3)), GREY, "power switch", 0.4)
+    add(small(lambda x, y, z: box(x, y, z, SW_X - 4.8, SW_X - 1.2, TOP - 0.6, TOP + 0.1, -1.2, 1.2, 0.3),
+              (SW_X - 6, TOP - 1.5, -2), (SW_X, TOP + 1, 2), 0.08, 0.3), RED, "power mark", 0.4)
 
     def wheel(x, y, z):
         r = np.sqrt((x - WHEEL_X) ** 2 + (y - 5.2) ** 2)
