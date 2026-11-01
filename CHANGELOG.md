@@ -5,6 +5,11 @@ What each version brings, newest first. Installers are on the
 
 ## Unreleased
 
+- The 3D shelf's **Game Gear** is modelled on the real one: its front traced from a
+  drawing of it, with the glass and its SEGA and Game Gear logos, the round pad, 1 and 2
+  dished in their collars, the blue Start in its notch, the speaker's grid, the power
+  switch with its red tab on top; and its own cartridge, which goes in with its label to
+  the back. Both are made by plumsg, rebuilt by `tools/models/gamegear.py`.
 - **Light gun games aim where you point**: Corpse Killer (Mega CD and CD 32X), Crime
   Patrol, Mad Dog McCree I and II, Who Shot Johnny Rock?, Body Count, T2: The Arcade Game
   and the Menacer 6-Game Cartridge get the Menacer in port 2 on their own while a pad is

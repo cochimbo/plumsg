@@ -29,7 +29,7 @@ OUT = os.path.join(HERE, "..", "..", "assets", "models")
 FONT_BOLD = "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
 FONT_REGULAR = "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
 FONT_ITALIC = "/usr/share/fonts/truetype/freefont/FreeSansBoldOblique.ttf"
-CREDIT = "plumsg (made by tools/models/gamegear.py), CC0"
+CREDIT = "plumsg (made by tools/models/gamegear.py)"
 
 # The console's depth: its front face, the back between the grips and the grips' backs.
 FRONT, BACK, GRIP = 16.5, -15.0, -20.0

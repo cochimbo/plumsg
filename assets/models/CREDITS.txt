@@ -32,9 +32,10 @@ mastersystem.glb, mastersystem-cartridge.glb
 
 gamegear.glb, gamegear-cartridge.glb
   Sega's Game Gear (the first model) and its cartridge, made for plumsg from their
-  real measurements by tools/models/gamegear.py, which rebuilds them; the
-  console's front shapes are traced from a line drawing of it.
-  License: CC0 (public domain).
+  real measurements by tools/models/gamegear.py, which rebuilds them. The console's
+  front shapes are traced from the Game Gear drawing of the es-theme-Animatics-DX
+  EmulationStation theme (https://github.com/Snapouille/es-theme-Animatics-DX); SEGA
+  and the Game Gear logo are Sega's trademarks.
 
 Your own models: put a .glb with the same name in the "models" folder next to
 plumsg.ini and plumsg uses it instead.
