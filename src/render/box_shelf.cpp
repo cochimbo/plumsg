@@ -326,12 +326,20 @@ struct ModelFile {
 const float kMegaDriveLed[3] = {0.206f, 0.415f, 0.42f};
 // The Master System by dark_igorek, CC BY 4.0, with its two pads plugged in in front (in metres).
 const float kMasterSystemBox[6] = {-0.184f, 0.0f, -0.091f, 0.184f, 0.07f, 0.085f};
+// plumsg's own Game Gear (tools/models/gamegear.py): its bounds, its power light on the
+// glass left of the screen, its screen (middle and size) and its slot's top.
+const float kGameGearBox[6] = {-0.105f, 0.0f, -0.02f, 0.105f, 0.11f, 0.02f};
+const float kGameGearLed[3] = {-47.5f / 135.0f, 77.4f / 135.0f, 17.75f / 135.0f};
+const float kGameGearScreen[4] = {69.8f / 135.0f, 17.75f / 135.0f, 67.0f / 135.0f, 50.9f / 135.0f};
+const float kGameGearSlotY = 110.0f / 135.0f;
 const ModelFile kModelFiles[] = {
     // The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the
     // dome, its power light on the plate in front of it.
     {ConsoleModel::MegaDrive, "megadrive.glb", 278.0f / 135.0f, 0.0f, {0.206f, 0.43f, -0.306f}, kMegaDriveLed, 12.9f, nullptr},
     {ConsoleModel::MasterSystem, "mastersystem.glb", 365.0f / 135.0f, 0.0f, {ConsoleLayout::kSmsSlotX, ConsoleLayout::kSmsSlotY,
      ConsoleLayout::kSmsSlotZ}, nullptr, 0.0f, kMasterSystemBox},
+    {ConsoleModel::GameGear, "gamegear.glb", 210.0f / 135.0f, 0.0f, {0.0f, kGameGearSlotY, ConsoleLayout::kGgSlotZ},
+     kGameGearLed, 90.0f, kGameGearBox},
 };
 
 // The cartridges' models: how to turn them to stand with the label to the front, where
@@ -354,6 +362,8 @@ const CartridgeFile kCartridgeFiles[] = {
     // turned on its side in the texture (whose coordinates there run from 1 to 2). The
     // label is a strip along the top, where a cover's title goes.
     {ConsoleSystem::MasterSystem, "mastersystem-cartridge.glb", 90, 0, {1.473f, 0.0f, 1.552f, 0.40f}, {1.473f, 0.0f, 1.552f, 0.40f}, 1, 4.5f, 0.12f},
+    // The Game Gear's, plumsg's own: standing, its label (54 x 36 mm) the whole texture.
+    {ConsoleSystem::GameGear, "gamegear-cartridge.glb", 0, 0, {0, 0, 1, 1}, {0, 0, 1, 1}, 0, 1.5f, 0.45f},
 };
 
 }  // namespace
@@ -867,10 +877,14 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
     switch (s) {
         case ConsoleSystem::GameGear: {
             mesh(ConsoleModel::GameGear, identity());
-            led(L::kGgLed, true);
+            // Its own model's screen and slot, or the built-in's.
+            const bool own = custom_[static_cast<int>(ConsoleModel::GameGear)].vao != 0;
+            if (!own) led(L::kGgLed, true);
+            const float sy = own ? kGameGearScreen[0] : L::kGgScreenY, sz = own ? kGameGearScreen[1] : L::kGgScreenZ;
+            const float sw = own ? kGameGearScreen[2] : L::kGgScreenW, sh = own ? kGameGearScreen[3] : L::kGgScreenH;
             // The screen shows the game's cover once it is on.
             Part screen;
-            screen.model = base * translate(0, L::kGgScreenY, L::kGgScreenZ) * scale(L::kGgScreenW, L::kGgScreenH, 0.002f);
+            screen.model = base * translate(0, sy, sz) * scale(sw, sh, 0.002f);
             screen.colour = {0.05f, 0.07f, 0.06f};
             screen.shine = 1.0f;
             if (light > 0 && item.texture) {
@@ -880,7 +894,8 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
                 screen.glow = 0.6f;
             }
             parts_.push_back(screen);
-            return translate(0, kFloorY + L::kGgSlotY + c.h / 2 - c.insert, kConsoleZ + L::kGgSlotZ);
+            const float slotY = own ? kGameGearSlotY : L::kGgSlotY;
+            return translate(0, kFloorY + slotY + c.h / 2 - c.insert, kConsoleZ + L::kGgSlotZ);
         }
         case ConsoleSystem::MasterSystem:
             mesh(ConsoleModel::MasterSystem, identity());
@@ -1018,7 +1033,9 @@ void BoxShelf::build(const std::vector<Item>& items, int selected) {
         p = {p3.x, lerp(p2.y, p3.y, s), p3.z};
     }
     const float turn = system_ == ConsoleSystem::MegaCD ? -90.0f * smooth((t - 0.25f) / 0.5f) : 0.0f;
-    addCartridge(item, translate(p.x, p.y, p.z) * rotateY(cartYaw_) * rotateX(cartPitch_ + turn));
+    // A Game Gear's cartridge goes in with its label to the back, the top of it showing.
+    const float spin = system_ == ConsoleSystem::GameGear ? 180.0f * smooth((t - 0.25f) / 0.5f) : 0.0f;
+    addCartridge(item, translate(p.x, p.y, p.z) * rotateY(cartYaw_ + spin) * rotateX(cartPitch_ + turn));
 }
 
 unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int width, int height, float dt) {
