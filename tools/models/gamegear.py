@@ -21,12 +21,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(__file__))
 from glb import Glb  # noqa: E402
-from gamegear_front import FRONT_SHAPES  # noqa: E402
+from gamegear_front import FRONT_SHAPES, LOGOS  # noqa: E402
 from sdf import box, circle, cut, extrude, flat_normals, mesh, round_rect, smin  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "assets", "models")
 FONT_BOLD = "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
+FONT_REGULAR = "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
 FONT_ITALIC = "/usr/share/fonts/truetype/freefont/FreeSansBoldOblique.ttf"
 CREDIT = "plumsg (made by tools/models/gamegear.py), CC0"
 
@@ -37,18 +38,19 @@ SLOT_Z0, SLOT_Z1, SLOT_HALF = -12.3, -1.2, 35.5
 JACK_X, WHEEL_X = 44.0, 66.0
 
 # The plastics, as the shelf's light shows them (linear colours, like console_models.cpp's).
-CHARCOAL = (0.07, 0.07, 0.076)
-BLACK = (0.042, 0.042, 0.048)
+CHARCOAL = (0.15, 0.15, 0.158)
+BLACK = (0.1, 0.1, 0.106)
 HOLE = (0.008, 0.008, 0.01)
-GLOSS = (0.014, 0.014, 0.017)
-WINDOW = (0.03, 0.03, 0.034)
+GLOSS = (0.075, 0.075, 0.08)
+WINDOW = (0.05, 0.05, 0.055)
 GREY = (0.085, 0.085, 0.095)
-PAD = (0.075, 0.075, 0.082)
-BLUE = (0.05, 0.22, 0.78)
+PAD = (0.1, 0.1, 0.106)
+BLUE = (0.1, 0.26, 0.8)
 PRINT = (0.78, 0.78, 0.8)
-TEAL = (0.12, 0.5, 0.36)
+TEAL = (0.12, 0.48, 0.4)
+LOGO_GREY = (0.62, 0.62, 0.64)
 LENS = (0.25, 0.03, 0.03)
-STRIPES = [(0.8, 0.05, 0.05), (0.05, 0.55, 0.12), (0.06, 0.2, 0.85)]
+STRIPES = [(0.8, 0.03, 0.03), (0.0, 0.6, 0.38), (0.0, 0.42, 0.95)]
 BOARD = (0.06, 0.24, 0.12)
 GOLD = (0.8, 0.62, 0.24)
 
@@ -178,6 +180,18 @@ def text_mesh(s, font, size, cx, cy, z, depth=0.1, anchor="middle"):
     return polygon_mesh(shp, z, z + depth, k, ox, cy - size / 2)
 
 
+def logo_mesh(polys, x0, y0, height, z, ref=None, depth=0.1):
+    """A logo's polygons (outline, holes), scaled to `height` mm (that of `ref`, if given)
+    with its bottom left corner at (x0, y0)."""
+    def build(ps):
+        return sg.MultiPolygon([sg.Polygon(o, h) for o, h in ps]).buffer(0)
+
+    shp = build(polys)
+    bx = build(ref).bounds if ref else shp.bounds
+    k = height / (bx[3] - bx[1])
+    return polygon_mesh(shp, z, z + depth, k, x0 - shp.bounds[0] * k, y0 - bx[1] * k)
+
+
 def polygon_mesh(shp, z0, z1, k=1.0, ox=0.0, oy=0.0):
     polys = shp.geoms if hasattr(shp, "geoms") else [shp]
     vs, fs, off = [], [], 0
@@ -262,37 +276,46 @@ def console():
             return extrude(r - rb + 0.2, z, FRONT - 0.6, FRONT + 3.0 - 0.02 * r * r, 1.0)
 
         add(small(button, (bx - rb - 1, by - rb - 1, FRONT - 0.8), (bx + rb + 1, by + rb + 1, FRONT + 3.2)), BLACK, "button", 0.3)
-    st = shape("start")
+    # Start: a blue half moon filling its notch in the panel's edge.
+    st = shape("start").buffer(-0.7)
     sx, sy = st.centroid.x, st.centroid.y
-    rs = min(st.bounds[2] - st.bounds[0], st.bounds[3] - st.bounds[1]) / 2 - 0.9
+    fs = Field(st)
 
     def start(x, y, z):
-        r = np.sqrt((x - sx) ** 2 + (y - sy) ** 2)
-        return extrude(r - rs, z, FRONT - 0.5, FRONT + 2.0 - 0.02 * r * r, 0.8)
+        r2 = (x - sx) ** 2 + (y - sy) ** 2
+        return extrude(fs(x, y), z, FRONT - 0.5, FRONT + 2.0 - 0.012 * r2, 0.9)
 
-    add(small(start, (sx - rs - 1, sy - rs - 1, FRONT - 0.7), (sx + rs + 1, sy + rs + 1, FRONT + 2.2)), BLUE, "start", 0.25)
+    lo, hi = st.bounds[:2], st.bounds[2:]
+    add(small(start, (lo[0] - 1, lo[1] - 1, FRONT - 0.7), (hi[0] + 1, hi[1] + 1, FRONT + 2.2)), BLUE, "start", 0.25)
     led = shape("led")
     add(polygon_mesh(led, zb + 0.4, zb + 0.55), LENS, "power light", 0.1)
 
     print("console: printing")
     zt = zb + 0.4
-    lx = -52.5  # the logo's middle, left of the screen
-    printed = [
-        text_mesh("GAME", FONT_ITALIC, 3.6, lx, 93.0, zt),
-        text_mesh("GEAR", FONT_ITALIC, 3.6, lx, 88.0, zt),
-        text_mesh("POWER", FONT_BOLD, 1.3, led.centroid.x, led.centroid.y - 3.0, zt),
-        text_mesh("START", FONT_BOLD, 1.8, sx + 9.5, sy, FRONT + 0.7),
-    ]
-    add(merge(printed), PRINT, "printing", 0.6)
-    stripes = []
+    # On the glass, left of the screen: the three ovals over GAME and GEAR, the power
+    # light and POWER under them; right of it SEGA and "portable video game system".
     for i, colour in enumerate(STRIPES):
-        x0 = lx - 7.5 + 4.6 * i
-        bar = sg.Polygon([(x0, 96.6), (x0 + 3.6, 96.6), (x0 + 4.2, 98.4), (x0 + 0.6, 98.4)])
-        add(polygon_mesh(bar, zt, zt + 0.1), colour, "stripe", 0.5)
-    rx = 52.0  # SEGA and the line under it, right of the screen
-    add(text_mesh("SEGA", FONT_BOLD, 4.2, rx, 94.0, zt), PRINT, "logo", 0.6)
-    small_print = [text_mesh(t, FONT_BOLD, 1.25, rx, 88.6 - 2.0 * i, zt) for i, t in enumerate(("PORTABLE", "VIDEO GAME", "SYSTEM"))]
+        add(logo_mesh(LOGOS["ovals"][i], -60.2 + 4.7 * i, 98.6, 4.6, zt, ref=LOGOS["ovals"][0]), colour, "oval", 0.5)
+    printed = [
+        logo_mesh(LOGOS["game"], -60.4, 93.2, 4.6, zt),
+        logo_mesh(LOGOS["gear"], -60.4 + 1.3, 87.6, 4.6, zt),
+        text_mesh("POWER", FONT_BOLD, 1.1, led.centroid.x, led.centroid.y - 2.8, zt),
+    ]
+    add(merge(printed), LOGO_GREY, "logo", 0.6)
+    add(logo_mesh(LOGOS["sega"], 43.2, 94.2, 4.4, zt), LOGO_GREY, "sega", 0.6)
+    small_print = [text_mesh(t, FONT_REGULAR, 1.35, 43.4, 91.2 - 2.1 * i, zt, anchor="left")
+                   for i, t in enumerate(("PORTABLE", "VIDEO GAME", "SYSTEM"))]
     add(merge(small_print), TEAL, "portable", 0.6)
+    # On the case: START beside its button, and 1 and 2 joined by a line over the buttons.
+    b1, b2 = shape("button1").centroid, shape("button2").centroid
+    line = sg.LineString([(b1.x - 6.6, b1.y + 6.2), (b1.x - 6.6, b1.y + 7.4), (b2.x - 1.5, b2.y + 9.6), (b2.x + 2.4, b2.y + 9.6)])
+    case_print = [
+        text_mesh("START", FONT_BOLD, 1.7, sx + 4.6, sy - 0.6, FRONT + 0.7, anchor="left"),
+        text_mesh("1", FONT_BOLD, 2.0, b1.x - 6.6, b1.y + 5.0, FRONT + 0.7),
+        text_mesh("2", FONT_BOLD, 2.0, b2.x + 3.8, b2.y + 9.4, FRONT + 0.7),
+        polygon_mesh(line.buffer(0.22, cap_style="flat"), FRONT + 0.7, FRONT + 0.8),
+    ]
+    add(merge(case_print), PRINT, "printing", 0.6)
 
     print("console: switch and wheel")
     sw = shape("switch")
