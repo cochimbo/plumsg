@@ -82,7 +82,8 @@ public:
     // The mouse dragged by (dx, dy), as parts of the picture: turns the box or cartridge in
     // front, or moves along the shelf.
     void drag(float dx, float dy);
-    // The wheel: up comes closer to the shelf, down steps back until it is all in view.
+    // The wheel (or the pad's right stick): up comes closer to the shelf, down steps back
+    // until it is all in view.
     void zoom(float steps);
     // A or Enter: the next step (takes the box out, its cartridge, into the console).
     void activate();
@@ -133,6 +134,8 @@ private:
     Mat4 cartridgeInBox(const Mat4& box, ConsoleSystem s) const;
     // A closed box standing on the shelf, its spine out.
     void addShelfBox(const Item& item, int index, const Mat4& place);
+    // The lit frame around the chosen box's spine, standing at `spot`.
+    void addSelectionFrame(const Vec3& spot);
     void addShelf();
     // Where box `index` stands on the shelf (its middle), and how big the shelf is.
     Vec3 shelfSpot(int index) const;
@@ -183,6 +186,7 @@ private:
     float eject_ = 0;      // 0 .. 1 the cartridge's way into the console
     float light_ = 0;      // seconds since it went in
     float pull_ = 0;       // the chosen box on the shelf, slid a little out
+    float glowClock_ = 0;  // seconds, for the chosen box's frame to beat
     int pulled_ = -1;      // which one that is
     bool launch_ = false, launched_ = false;
     bool frozen_ = false;  // pose()

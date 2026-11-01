@@ -1510,10 +1510,13 @@ int main(int argc, char** argv) {
         }
 
         const double frameSeconds = 1.0 / app->console.refreshRate();
-        if (cam.pseudo3d && cam.tiltCamera) {
+        float stickX, stickY;
+        input->rightStick(&stickX, &stickY);
+        // In the library the right stick zooms its 3D view; in the game it turns the camera.
+        ui->setRightStick(ui->libraryOpen() ? stickX : 0, ui->libraryOpen() ? stickY : 0);
+        if (cam.pseudo3d && cam.tiltCamera && !ui->libraryOpen()) {
             // The right stick turns the camera at up to 90 degrees a second.
-            float sx, sy;
-            input->rightStick(&sx, &sy);
+            const float sx = stickX, sy = stickY;
             const float step = 90.0f * static_cast<float>(frameSeconds);
             cam.yaw = std::clamp(cam.yaw + sx * step, -kMaxYaw, kMaxYaw);
             cam.tilt = std::clamp(cam.tilt + sy * step, kMinTilt, kMaxTilt);
