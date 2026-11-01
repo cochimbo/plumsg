@@ -417,6 +417,33 @@ void testLightGuns() {
     md.setGun(0, blue);
     for (int i = 0; i < 2; ++i) md.runFrame();
     check(md.peek16(0xFF0004) == shots, "light gun: pointed off the screen it sees nothing");
+
+    // Corpse Killer: the Menacer goes in the second port on its own, with its offsets.
+    check(MegaDrive::gunGameFor("Corpse  killer").type == PadType::Menacer &&
+              MegaDrive::gunGameFor("LETHAL ENFORCERS II GUN FIGHTERS").xOffset == 24 &&
+              MegaDrive::gunGameFor("SONIC THE HEDGEHOG").type == PadType::SixButton,
+          "light gun: the games that use one are found by their header's name");
+    const char* corpse = "CORPSE  KILLER";
+    for (size_t i = 0; i < 48; ++i) e.rom[0x150 + i] = i < std::strlen(corpse) ? static_cast<uint8_t>(corpse[i]) : ' ';
+    MegaDrive ck;
+    ck.setPadType(1, PadType::SixButton);
+    ck.loadRomData(e.rom);
+    check(ck.padType(1) == PadType::Menacer && ck.chosenPadType(1) == PadType::SixButton,
+          "light gun: Corpse Killer gets the Menacer in place of pad 2");
+    GunState aim;
+    aim.x = 100;
+    aim.y = 50;
+    ck.setGun(0, aim);
+    for (int i = 0; i < 4; ++i) ck.runFrame();
+    // x 100 is 90 of the Menacer's 289 dots: step 45 + 64; and 8 lines up.
+    check(ck.peek16(0xFF0002) == ((42 << 8) | 109), "light gun: Corpse Killer's own offsets");
+    ck.setPadType(1, PadType::Justifier);
+    check(ck.padType(1) == PadType::Justifier, "light gun: a gun chosen by hand stays");
+    ck.setPadType(1, PadType::None);
+    check(ck.padType(1) == PadType::None, "light gun: nothing plugged in stays nothing");
+    ck.setPadType(1, PadType::ThreeButton);
+    ck.setAutoControllers(false);
+    check(ck.padType(1) == PadType::ThreeButton, "light gun: without automatic controllers the pad stays");
 }
 
 void testPsg() {

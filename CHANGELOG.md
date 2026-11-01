@@ -3,6 +3,15 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## Unreleased
+
+- **Light gun games aim where you point**: Corpse Killer (Mega CD and CD 32X), Crime
+  Patrol, Mad Dog McCree I and II, Who Shot Johnny Rock?, Body Count, T2: The Arcade Game
+  and the Menacer 6-Game Cartridge get the Menacer in port 2 on their own while a pad is
+  chosen there, and Lethal Enforcers I and II and Snatcher the Justifier, each with the
+  offsets its own aiming code expects (Corpse Killer's shots landed off to one side and
+  some lines below the crosshair with the Menacer's generic offset).
+
 ## 0.1.0-beta.9
 
 - **Master System Light Phaser and paddle** (#73): Consola > Mando 1 or Mando 2 (or a
