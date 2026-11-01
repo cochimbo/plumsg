@@ -2153,6 +2153,14 @@ std::vector<size_t> Ui::visibleGames() {
     }
     // The library is in title order; the other orders keep it among equals, and games
     // with nothing to sort by go last.
+    // The 3D shelf keeps each console's games together (in the consoles' own order) and
+    // each console's in title order, whatever the order chosen for the other views.
+    if (settings_.libraryBoxes) {
+        std::stable_sort(out.begin(), out.end(), [&games](size_t a, size_t b) {
+            return static_cast<int>(games[a].system) < static_cast<int>(games[b].system);
+        });
+        return out;
+    }
     const int sort = settings_.librarySort;
     const bool descending = libraryView_.descending;
     if (sort == 0) {
@@ -2461,6 +2469,7 @@ void Ui::drawLibrary(UiActions& out) {
         ImGui::SetTooltip("%s", tr("Las cajas de los juegos en 3D: ábrelas y lleva el cartucho a la consola para jugar."));
     ImGui::SameLine();
     ImGui::SetNextItemWidth(170);
+    ImGui::BeginDisabled(settings_.libraryBoxes);  // the shelf goes by console, then title
     static const char* const sorts[Settings::kLibrarySorts] = {N_("Por título"), N_("Por consola"), N_("Por año"),
                                                                N_("Por género"), N_("Por desarrolladora")};
     if (ImGui::BeginCombo("##orden", tr(sorts[std::clamp(settings_.librarySort, 0, Settings::kLibrarySorts - 1)]))) {
@@ -2473,14 +2482,18 @@ void Ui::drawLibrary(UiActions& out) {
             }
         ImGui::EndCombo();
     }
+    ImGui::EndDisabled();
+    if (settings_.libraryBoxes && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("%s", tr("En las cajas 3D los juegos van por consola y, en cada una, por título."));
     ImGui::SameLine();
     if (ImGui::Checkbox(tr("Detalles"), &settings_.libraryDetails)) out.settingsChanged = true;
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Un panel a la derecha con la carátula, los datos y la descripción del juego elegido."));
     const std::vector<size_t> visible = visibleGames();
     // A new order (or the data to sort by arriving) keeps the same game chosen.
-    const unsigned order = static_cast<unsigned>(settings_.librarySort) * 2 + libraryView_.descending +
-                           (settings_.librarySort ? gameInfo_.detailsVersion() * 16 : 0);
+    const unsigned order = settings_.libraryBoxes ? 1u
+                                                  : static_cast<unsigned>(settings_.librarySort) * 2 + libraryView_.descending + 2 +
+                                                        (settings_.librarySort ? gameInfo_.detailsVersion() * 16 : 0);
     if (order != libraryView_.order) {
         libraryView_.order = order;
         const auto it = std::find(visible.begin(), visible.end(), libraryView_.selectedGame);
@@ -2725,6 +2738,9 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
         if (!ImGui::IsItemActive() && shelf_->hover(x, y) != BoxShelf::Target::None) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         if (io.MouseWheel != 0) shelf_->zoom(io.MouseWheel);
     }
+    // The pad's right stick zooms too: up comes closer, down steps back, about three of the
+    // wheel's steps a second at full tilt.
+    if (rightStickY_ != 0) shelf_->zoom(-rightStickY_ * 3.0f * io.DeltaTime);
     libraryItem(false, libraryView_.selected);  // the right button opens the game's menu
     if (shelf_->takeLaunch()) libraryView_.load = libraryView_.selected;
     // The chosen game's name under the boxes, and what to do next.
@@ -2732,7 +2748,7 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
         const Library::Game& g = games[visible[static_cast<size_t>(libraryView_.selected)]];
         const char* hint = "";
         switch (shelf_->stage()) {
-            case BoxShelf::Stage::Shelf: hint = tr("Clic o A: sacar la caja   Rueda: zoom   Arrastrar o flechas: moverse"); break;
+            case BoxShelf::Stage::Shelf: hint = tr("Clic o A: sacar la caja   Rueda o stick derecho: zoom   Arrastrar o flechas: moverse"); break;
             case BoxShelf::Stage::Box: hint = tr("Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"); break;
             case BoxShelf::Stage::Cartridge: hint = tr("Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"); break;
             case BoxShelf::Stage::Console: break;

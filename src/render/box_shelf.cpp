@@ -951,6 +951,27 @@ void BoxShelf::addShelf() {
     board(0, bottom + h / 2, z - depth / 2 + 0.01f, w - 2 * kSide, h, 0.02f, inside);
 }
 
+void BoxShelf::addSelectionFrame(const Vec3& s) {
+    // A frame that lights itself around the chosen box's spine, beating slowly, so it can
+    // be told apart from far away too.
+    const float beat = 0.5f + 0.5f * std::sin(glowClock_ * 2 * kPi / 1.2f);
+    // Thicker as the camera steps back, to stay about as wide on screen.
+    const float bar = 0.016f * std::max(1.0f, distance_ / 2.5f), out = bar * 0.75f, front = s.z + kBoxW / 2 + 0.004f;
+    const float w = kBoxD + 2 * out, h = kBoxH + 2 * out;
+    auto add = [&](float x, float y, float sx, float sy) {
+        Part p;
+        p.model = translate(x, y, front) * scale(sx, sy, 0.02f);
+        p.colour = {1.0f, 0.72f, 0.12f};
+        p.glow = 1.2f + 1.3f * beat;
+        p.shine = 0.1f;
+        parts_.push_back(p);
+    };
+    add(s.x, s.y + h / 2 - bar / 2, w, bar);
+    add(s.x, s.y - h / 2 + bar / 2, w, bar);
+    add(s.x - w / 2 + bar / 2, s.y, bar, h);
+    add(s.x + w / 2 - bar / 2, s.y, bar, h);
+}
+
 void BoxShelf::build(const std::vector<Item>& items, int selected) {
     parts_.clear();
     addShelf();
@@ -959,6 +980,7 @@ void BoxShelf::build(const std::vector<Item>& items, int selected) {
         Vec3 s = shelfSpot(i);
         if (i == pulled_) s.z += 0.14f * smooth(pull_);
         addShelfBox(items[static_cast<size_t>(i)], i, translate(s.x, s.y, s.z) * rotateY(90));
+        if (i == selected && state_ == State::Browse) addSelectionFrame(s);
     }
     if (state_ == State::Browse || selected < 0 || selected >= count_) return;
     const Item& item = items[static_cast<size_t>(selected)];
@@ -1016,6 +1038,7 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     if (state_ == State::Browse) stageX_ = shelfSpot(selected_).x;
     if (pulled_ != selected_) pulled_ = selected_, pull_ = 0;
     pull_ = std::min(1.0f, pull_ + dt / 0.25f);
+    glowClock_ = std::fmod(glowClock_ + dt, 1200.0f);
     switch (frozen_ ? State::Browse : state_) {
         case State::Taking:
             take_ = std::min(1.0f, take_ + dt / 0.9f);
@@ -1059,16 +1082,17 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     ensureTarget(width, height);
     aspect_ = static_cast<float>(width) / static_cast<float>(height);
     tanHalf_ = std::tan(kFov * kRad / 2);
-    // The shelf's camera: on the chosen box (and as far as it was dragged), going over to
-    // the whole shelf as it steps back, no further than to see all of it.
+    // The shelf's camera: always on the chosen box (and as far as it was dragged), at any
+    // distance; stepping back goes no further than to see all of the shelf around it.
     float w, h, bottom;
     shelfSize(&w, &h, &bottom);
-    const float fit = std::max(w / aspect_, h) / (2 * tanHalf_) * 1.08f + 0.6f;
+    const Vec3 spot = shelfSpot(selected_);
+    const float spanX = 2 * std::max(spot.x + w / 2, w / 2 - spot.x);
+    const float spanY = 2 * std::max(spot.y - bottom, bottom + h - spot.y);
+    const float fit = std::max(spanX / aspect_, spanY) / (2 * tanHalf_) * 1.08f + 0.6f;
     const float nearest = 1.6f;
     distance_ = std::clamp(distance_, nearest, std::max(fit, 3.0f));
-    const Vec3 spot = shelfSpot(selected_), middle{0, bottom + h / 2, kShelfZ};
-    const float all = smooth((distance_ - nearest) / std::max(0.01f, std::max(fit, 3.0f) - nearest));
-    Vec3 goal{lerp(spot.x + pan_.x, middle.x, all), lerp(spot.y + pan_.y, middle.y, all), kShelfZ + 0.5f};
+    Vec3 goal{spot.x + pan_.x, spot.y + pan_.y, kShelfZ + 0.5f};
     goal.x = std::clamp(goal.x, -w / 2, w / 2);
     goal.y = std::clamp(goal.y, bottom + 0.5f, bottom + std::max(h - 0.5f, 0.5f));
     if (!placed_) look_ = goal;

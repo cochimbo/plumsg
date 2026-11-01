@@ -687,8 +687,8 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
-msgid "Clic o A: sacar la caja   Rueda: zoom   Arrastrar o flechas: moverse"
-msgstr "Click or A: take the box out   Wheel: zoom   Drag or arrows: move"
+msgid "Clic o A: sacar la caja   Rueda o stick derecho: zoom   Arrastrar o flechas: moverse"
+msgstr "Click or A: take the box out   Wheel or right stick: zoom   Drag or arrows: move"
 
 msgid ""
 "Como si no hubiera nada enchufado en el segundo puerto. Algunos juegos lo miran: ESPN\n"
@@ -1165,6 +1165,9 @@ msgstr "Live"
 
 msgid "En esta pista no suena música del YM2612 ni del PSG."
 msgstr "This track plays no YM2612 or PSG music."
+
+msgid "En las cajas 3D los juegos van por consola y, en cada una, por título."
+msgstr "In the 3D boxes the games go by console and, within each one, by title."
 
 msgid "En modo hardcore no se pueden cargar estados"
 msgstr "States cannot be loaded in hardcore mode"

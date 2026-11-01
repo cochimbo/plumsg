@@ -157,6 +157,8 @@ public:
     void focusLibrarySearch() { libraryView_.focusSearch = true; }
     // For screenshots: the library's 3D view holding still at that step (see BoxShelf::pose).
     void poseBoxes(int step) { boxesPose_ = step; }
+    // The pad's right stick (-1 to 1, down positive), which zooms the library's 3D view.
+    void setRightStick(float x, float y) { rightStickX_ = x, rightStickY_ = y; }
     void openBios() { showBios_ = true; }
     // "Buscar carátula..." for the library's game `game`.
     void openCoverSearch(size_t game);
@@ -311,6 +313,7 @@ private:
     bool boxesDragged_ = false;  // the press on the 3D view has moved: no click when it ends
     std::unique_ptr<BoxShelf> shelf_;  // the library's 3D view, made the first time it is shown
     int boxesPose_ = 0;
+    float rightStickX_ = 0, rightStickY_ = 0;
     GameInfo gameInfo_;
     ScreenScraper scraper_;
     std::set<ImWchar> fontExtra_;  // characters beyond the base ranges that texts have needed
