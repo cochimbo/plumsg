@@ -10,27 +10,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Only documentation changed?
+        id: changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash tools/ci/needs-build.sh
       - name: Install SDL2
+        if: steps.changes.outputs.build == 'true'
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - name: Build
+        if: steps.changes.outputs.build == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel
       - name: Core tests
+        if: steps.changes.outputs.build == 'true'
         run: ctest --test-dir build --output-on-failure
       - name: Z80 exerciser (ZEXDOC)
+        if: steps.changes.outputs.build == 'true'
         run: |
           curl -sSfL -o zexdoc.com https://raw.githubusercontent.com/anotherlin/z80emu/master/testfiles/zexdoc.com
           ./build/zex_runner zexdoc.com
       - name: 68000 single-step tests (Tom Harte)
+        if: steps.changes.outputs.build == 'true'
         run: |
           git clone --filter=blob:none --no-checkout https://github.com/SingleStepTests/680x0 harte
           git -C harte sparse-checkout set 68000/v1
           git -C harte checkout e0d5ece9670205cc84a0101081837deb446f86a3
           ./build/m68k_json_runner --cycles --allow-failures 40 harte/68000/v1/*.json.gz
       - name: Screenshot of the test ROM
+        if: steps.changes.outputs.build == 'true'
         run: ./build/rom_runner --test-rom --frames 120 --png test-rom.png
       - uses: actions/upload-artifact@v4
+        if: steps.changes.outputs.build == 'true'
         with:
           name: test-rom-screenshot
           path: test-rom.png
@@ -41,13 +58,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Only documentation changed?
+        id: changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash tools/ci/needs-build.sh
       - name: Build (no frontend)
+        if: steps.changes.outputs.build == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPLUMSG_BUILD_FRONTEND=OFF
           cmake --build build --parallel --target plumsg-headless core_tests
       - name: Headless tests
+        if: steps.changes.outputs.build == 'true'
         run: ctest --test-dir build --output-on-failure -R "headless|core_tests|240p"
       - name: Sample run with an input script
+        if: steps.changes.outputs.build == 'true'
         run: |
           mkdir -p headless-out
           ./build/plumsg-headless --pad-test-rom --frames 120 --out-dir headless-out \
@@ -55,6 +85,7 @@ jobs:
           ./build/plumsg-headless --test-rom --frames 300 --png-every 100 --out-dir headless-out \
             --wav headless-out/test-rom.wav --hash-log headless-out/test-rom-hashes.txt --json headless-out/test-rom.json
       - uses: actions/upload-artifact@v4
+        if: steps.changes.outputs.build == 'true'
         with:
           name: headless-output
           path: headless-out
