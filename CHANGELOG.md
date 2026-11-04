@@ -3,6 +3,15 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 0.1.0-beta.12
+
+- New **Scraping** menu: **ScreenScraper account...** (your screenscraper.fr user name
+  and password, with **Use this account** and a line saying which one is in use), **What
+  to download...** and **Download media for the whole library**, without going through
+  a game's menu.
+- The developer account fields are gone: the one built into the installer is always
+  used, as in other emulators.
+
 ## 0.1.0-beta.11
 
 - **Media come only from ScreenScraper**: covers, screenshots and descriptions are no

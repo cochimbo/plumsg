@@ -173,6 +173,7 @@ void GameInfo::update() {
         if (r.serial != serial_) continue;
         clearTextures();
         sheet_.busy = false;
+        sheet_.known = r.known;
         sheet_.description = std::move(r.description);
         sheet_.status = r.status.empty() ? std::string() : std::string(tr(r.status.c_str()));
         if (!r.pixels.empty()) {
@@ -218,6 +219,7 @@ void GameInfo::loadSheet(const Task& task, Reply& r) {
         r.status = kNotDownloaded;
         return;
     }
+    r.known = true;
     const SsAnswer a = parseSsAnswer(200, text);
     if (!a.games.empty()) r.description = trimmed(a.games[0].text(ssLanguages(language())));
     if (r.description.empty()) r.status = kNoText;

@@ -185,6 +185,10 @@ public:
     // "Medios de ScreenScraper..." for the library's game `game`: what was downloaded of
     // it, and a search to pick the right game.
     void openMedia(size_t game);
+    // The Scraping menu's window: 0 its account tab, 1 what to download.
+    void openScraping(int tab);
+    // Every library game ScreenScraper was not asked about yet (or the account, if it cannot ask).
+    void scrapeLibrary();
     // For screenshots: the window for `game`, downloading its media (mode 1), searching for
     // its title (2) or downloading every game's (3).
     void startMedia(size_t game, int mode);
@@ -270,6 +274,7 @@ private:
     void buildFonts();
     void needGlyphs(const std::string& text);
     void drawMedia(UiActions& out);
+    void drawScraping(UiActions& out);
     void drawMediaFound(const Library::Game& g);
     void drawMediaSearch(const Library::Game& g);
     void drawMediaAccount(UiActions& out);
@@ -385,7 +390,7 @@ private:
         bool tabChanged = false;  // the console tab was changed with the pad or the keyboard
         // The menu of one game (right click, X on the pad or the menu key): its index in
         // the filtered list, the item chosen with the pad or the keys, and a request to open it.
-        // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar carátula, Carátula desde imagen,
+        // Jugar, Trucos, Opciones de este juego, Editor de instrumentos, Buscar en ScreenScraper por nombre, Carátula desde imagen,
         // Portada completa, Etiqueta del cartucho, Medios de ScreenScraper
         static constexpr int kItems = 9;
         int menuGame = -1;
@@ -400,6 +405,8 @@ private:
     } libraryView_;
     // "Medios de ScreenScraper..." for one game of the library.
     bool showMedia_ = false;
+    bool showScraping_ = false;
+    int scrapingTab_ = -1;  // to bring forward
     struct MediaView {
         std::string path;    // the game's ROM
         char query[128] = "";
@@ -408,7 +415,7 @@ private:
         bool autoPick = false;  // pick the game it is (or the first) once the results arrive
         int tab = 0;         // to bring forward: 1 the search
         bool selectTab = false;
-        char user[64] = "", password[64] = "", devId[64] = "", devPassword[96] = "";
+        char user[64] = "", password[64] = "";
     } media_;
     char cheatCode_[64] = "";
     char cheatName_[96] = "";

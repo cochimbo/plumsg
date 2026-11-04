@@ -26,6 +26,7 @@ public:
     struct Sheet {
         std::string path;         // the ROM, empty while there is none
         bool busy = false;        // reading its description and screenshot
+        bool known = false;       // ScreenScraper's media of it were downloaded
         std::string description;  // ScreenScraper's, empty if there is none
         std::string status;       // why there is no description, or empty
         unsigned int snap = 0;    // the screenshot's texture, 0 if there is none
@@ -74,6 +75,7 @@ private:
         ConsoleSystem system = ConsoleSystem::MegaDrive;
         std::shared_ptr<DetailsTable> table;
         std::string description, status;
+        bool known = false;
         std::vector<uint32_t> pixels;
         int width = 0, height = 0;
     };
