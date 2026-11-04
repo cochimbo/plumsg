@@ -3,7 +3,7 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
-## Unreleased
+## 0.1.0-beta.10
 
 - The 3D shelf's **Game Gear** is modelled on the real one: its front traced from a
   drawing of it, with the glass and its SEGA and Game Gear logos, the round pad, 1 and 2
@@ -16,6 +16,11 @@ What each version brings, newest first. Installers are on the
   chosen there, and Lethal Enforcers I and II and Snatcher the Justifier, each with the
   offsets its own aiming code expects (Corpse Killer's shots landed off to one side and
   some lines below the crosshair with the Menacer's generic offset).
+- The 3D shelf zooms in and out with the pad's **right stick**, as with the mouse wheel;
+  the camera stays centred on the chosen box at any distance, and zooming out reaches
+  the whole shelf around it. A pulsing gold frame marks the chosen box's spine, and the
+  3D boxes are grouped by console and, within each, by title (the sort selector is off
+  in that view).
 
 ## 0.1.0-beta.9
 
