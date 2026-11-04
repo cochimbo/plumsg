@@ -3,6 +3,19 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 0.1.0-beta.11
+
+- **Media come only from ScreenScraper**: covers, screenshots and descriptions are no
+  longer downloaded from libretro-thumbnails or Wikipedia. **Download missing covers**
+  is gone (**Download from ScreenScraper** does every game), **Find cover...** in a
+  game's menu now searches ScreenScraper by name, and the details panel shows the
+  screenshot and description ScreenScraper has of the game once its media are
+  downloaded. The library also finds a game's cover and label straight in its
+  ScreenScraper folder, so they show even without the copy in `covers\`. The
+  installer is built with plumsg's ScreenScraper developer account, so nothing has to
+  be typed in to start; your own screenscraper.fr account (Options) gives more requests.
+  Your own pictures (next to the game or with **Cover from image...**) still work.
+
 ## 0.1.0-beta.10
 
 - The 3D shelf's **Game Gear** is modelled on the real one: its front traced from a

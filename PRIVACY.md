@@ -35,10 +35,9 @@ policies apply.
 
 | Feature | Service | What is sent |
 |---|---|---|
-| Box art covers for the library and "Find cover" | thumbnails.libretro.com, raw.githubusercontent.com, api.github.com | The game's name (to look up the image file) |
-| Game details, descriptions and screenshots | raw.githubusercontent.com (libretro-database), Wikipedia (`<language>.wikipedia.org`), libretro-thumbnails | The game's name / title and your interface language |
+| Game details (developer, genre, year...) for the library | raw.githubusercontent.com (libretro-database) | The console's name (one file per console) |
 | Cheats from the internet | raw.githubusercontent.com, api.github.com (libretro-database) | The game's name (to look up the cheat file) |
-| ScreenScraper media (optional, only when you ask for them) | api.screenscraper.fr and its media servers | plumsg's developer account, your ScreenScraper user name and password if you entered them, the game's file name, size and CRC32 (or its title when searching) |
+| ScreenScraper media: covers, screenshots, descriptions... (optional, only when you ask for them) | api.screenscraper.fr and its media servers | plumsg's developer account, your ScreenScraper user name and password if you entered them, the game's file name, size and CRC32 (or its title when searching) |
 | RetroAchievements (optional, off unless you sign in) | retroachievements.org and its media servers | Your user name and password (at sign-in) or token, a hash identifying the loaded game, and the achievements, leaderboard entries and rich presence you earn while playing |
 | Netplay (optional, only when you host or join) | The other player's computer, directly over UDP | Controller inputs and a save state of the game; both players see each other's IP address. There is no relay or matchmaking server |
 

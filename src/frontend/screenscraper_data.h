@@ -104,6 +104,10 @@ std::vector<std::string> ssRegions(const std::string& tags);
 // Languages to prefer for texts: `ui` ("es") first, then English and French.
 std::vector<std::string> ssLanguages(const std::string& ui);
 
+// A game's folder under ScreenScraper's media folder `root`: <root>/<console>/<ROM
+// name>/, ending in a separator ("" if `root` is). `system` is a ConsoleSystem.
+std::string ssGameFolder(const std::string& root, int system, const std::string& stem);
+
 // The media of `kind` that `game` has, in the best region; null if none.
 const SsMedia* ssPickMedia(const SsGame& game, const SsKind& kind, const std::vector<std::string>& regions);
 

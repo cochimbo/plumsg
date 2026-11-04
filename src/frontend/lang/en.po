@@ -36,23 +36,14 @@ msgstr "%d / %d px"
 msgid "%d carpetas"
 msgstr "%d folders"
 
-msgid "%d carátula descargada"
-msgstr "%d cover downloaded"
-
-msgid "%d carátulas descargadas"
-msgstr "%d covers downloaded"
-
 msgid "%d fotogramas"
 msgstr "%d frames"
 
-msgid "%d juegos. %s"
-msgstr "%d games. %s"
+msgid "%d juegos."
+msgstr "%d games."
 
 msgid "%d juegos. Buscando carátulas, quedan %d..."
 msgstr "%d games. Looking for covers, %d left..."
-
-msgid "%d parecidas. Pulsa una para verla."
-msgstr "%d similar. Click one to see it."
 
 msgid "%d resultados. Pulsa uno para verlo."
 msgstr "%d results. Click one to see it."
@@ -227,9 +218,6 @@ msgstr "Open ROM"
 
 msgid "Abrir ROM..."
 msgstr "Open ROM..."
-
-msgid "Abrir en Wikipedia"
-msgstr "Open in Wikipedia"
 
 msgid "Abrir juego"
 msgstr "Open game"
@@ -506,20 +494,8 @@ msgstr ""
 "EA's (NHL 96) or GEMS (Sonic Spinball, Earthworm Jim).\n"
 "It takes a few minutes.%s"
 
-msgid ""
-"Busca las carátulas en libretro-thumbnails (internet) por el nombre de cada juego\n"
-"y las guarda en la carpeta covers de plumsg. También puedes poner tus\n"
-"propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado."
-msgstr ""
-"Looks for the covers in libretro-thumbnails (internet) by each game's name\n"
-"and saves them in plumsg's covers folder. You can also use your\n"
-"own pictures: a .png or .jpg with the same name as the game, next to it."
-
 msgid "Buscando dónde pide el juego la música"
 msgstr "Looking for where the game asks for its music"
-
-msgid "Buscando en Wikipedia..."
-msgstr "Searching Wikipedia..."
 
 msgid "Buscando en la base de trucos de libretro%s"
 msgstr "Searching libretro's cheat database%s"
@@ -536,17 +512,11 @@ msgstr "Search"
 msgid "Buscar (Ctrl+F o Y)"
 msgstr "Search (Ctrl+F or Y)"
 
-msgid "Buscar carátula"
-msgstr "Find cover"
-
 msgid "Buscar carátula..."
 msgstr "Find cover..."
 
 msgid "Buscar en las carpetas de la biblioteca"
 msgstr "Search the library's folders"
-
-msgid "Buscar otra vez"
-msgstr "Search again"
 
 msgid "Buscar otro juego"
 msgstr "Search for another game"
@@ -915,6 +885,9 @@ msgstr ""
 msgid "Descarga otra vez los medios del mismo juego de ScreenScraper."
 msgstr "Downloads the same game's media from ScreenScraper again."
 
+msgid "Descarga sus medios de ScreenScraper para ver su descripción y una captura."
+msgstr "Download its media from ScreenScraper to see its description and a screenshot."
+
 msgid "Descargado"
 msgstr "Downloaded"
 
@@ -923,9 +896,6 @@ msgstr "Downloading the games' data..."
 
 msgid "Descargando: %s..."
 msgstr "Downloading: %s..."
-
-msgid "Descargar carátulas que faltan"
-msgstr "Download missing covers"
 
 msgid "Descargar de ScreenScraper"
 msgstr "Download from ScreenScraper"
@@ -1129,9 +1099,6 @@ msgstr "Choose folder..."
 
 msgid "Elegir imagen"
 msgstr "Choose image"
-
-msgid "Elegir imagen del ordenador..."
-msgstr "Choose image from computer..."
 
 msgid "Elegir instrumentos comparando el sonido"
 msgstr "Choose instruments by comparing the sound"
@@ -1408,8 +1375,8 @@ msgstr "Pad polysynth"
 msgid "Fondos sintetizados"
 msgstr "Synth pad"
 
-msgid "Fuente: Wikipedia, «%s»"
-msgstr "Source: Wikipedia, “%s”"
+msgid "Fuente: ScreenScraper"
+msgstr "Source: ScreenScraper"
 
 msgid "GIF guardado en %s"
 msgstr "GIF saved to %s"
@@ -1997,9 +1964,6 @@ msgstr "CD music (MSU-MD)"
 msgid "Música y baile"
 msgstr "Music and dance"
 
-msgid "Ninguna carátula se parece a ese nombre."
-msgstr "No cover looks like that name."
-
 msgid "Ninguno"
 msgstr "None"
 
@@ -2047,9 +2011,6 @@ msgstr "Does not look like a BIOS: %s"
 
 msgid "No se encuentra \"%s\"."
 msgstr "\"%s\" cannot be found."
-
-msgid "No se ha encontrado este juego en Wikipedia."
-msgstr "This game was not found on Wikipedia."
 
 msgid "No se ha encontrado ninguna BIOS del Mega CD en esas carpetas."
 msgstr "No Mega CD BIOS was found in those folders."
@@ -2102,12 +2063,6 @@ msgstr "The host's game could not be loaded: %s"
 msgid "No se pudo conectar con ScreenScraper. ¿Hay conexión a internet?"
 msgstr "Could not connect to ScreenScraper. Is there an internet connection?"
 
-msgid "No se pudo conectar con Wikipedia."
-msgstr "Could not connect to Wikipedia."
-
-msgid "No se pudo conectar con el servidor de carátulas. ¿Hay conexión a internet?"
-msgstr "Could not connect to the cover server. Is there an internet connection?"
-
 msgid "No se pudo conectar con la base de trucos de libretro."
 msgstr "Could not connect to libretro's cheat database."
 
@@ -2116,9 +2071,6 @@ msgstr "Could not create %s"
 
 msgid "No se pudo crear el socket UDP."
 msgstr "The UDP socket could not be created."
-
-msgid "No se pudo descargar esa carátula."
-msgstr "That cover could not be downloaded."
 
 msgid "No se pudo descargar la lista de trucos. ¿Hay conexión a internet?"
 msgstr "The cheat list could not be downloaded. Is there an internet connection?"
@@ -2149,9 +2101,6 @@ msgstr "Could not read %s"
 
 msgid "No se pudo leer %s."
 msgstr "%s could not be read."
-
-msgid "No se pudo leer la lista de carátulas (error %d)."
-msgstr "The covers list could not be read (error %d)."
 
 msgid "No se pudo leer la lista de trucos de libretro (error %d)."
 msgstr "libretro's cheat list could not be read (error %d)."
@@ -2679,6 +2628,9 @@ msgstr "ScreenScraper does not accept the account: check the user name and passw
 msgid "ScreenScraper no conoce este juego. Búscalo por su nombre."
 msgstr "ScreenScraper does not know this game. Search for it by name."
 
+msgid "ScreenScraper no tiene descripción de este juego."
+msgstr "ScreenScraper has no description of this game."
+
 msgid "ScreenScraper pide además la cuenta del programa, que da a quien la solicita en su foro. Esta versión de plumsg no trae ninguna: si tienes una, ponla aquí."
 msgstr "ScreenScraper also asks for the program's account, which it gives to whoever requests one on its forum. This version of plumsg comes with none: if you have one, enter it here."
 
@@ -3087,17 +3039,11 @@ msgstr "Uses the general value"
 msgid "Usa los de Opciones > Controles."
 msgstr "Uses the ones in Options > Controls."
 
-msgid "Usa un PNG o JPEG tuyo como carátula de este juego."
-msgstr "Use a PNG or JPEG of your own as this game's cover."
-
 msgid "Usar el stick izquierdo como cruceta"
 msgstr "Use the left stick as d-pad"
 
 msgid "Usar esta carpeta"
 msgstr "Use this folder"
-
-msgid "Usar esta carátula"
-msgstr "Use this cover"
 
 msgid "Usar este juego"
 msgstr "Use this game"
@@ -3176,9 +3122,6 @@ msgstr "Voice \"ooh\""
 
 msgid "Voz sintetizada"
 msgstr "Synth voice"
-
-msgid "Vuelve a buscar la descripción y la captura de este juego en internet."
-msgstr "Looks for this game's description and screenshot on the internet again."
 
 msgid "Vídeo"
 msgstr "Video"
@@ -3355,7 +3298,6 @@ msgid ""
 "  --join direccion       unirse a la partida en red de ese anfitrión (IP:puerto)\n"
 "  --library carpeta      abrir la biblioteca de esa carpeta (se puede repetir)\n"
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
-"  --find-cover           con --library: buscar la carátula del primer juego\n"
 "  --list                 con --library: verla como lista en vez de cuadrícula\n"
 "  --boxes                con --library: verla como cajas 3D\n"
 "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
@@ -3389,7 +3331,6 @@ msgstr ""
 "  --join address         join that host's netplay game (IP:port)\n"
 "  --library folder       open the library of that folder (can be repeated)\n"
 "  --bios                 open the Mega CD BIOS window\n"
-"  --find-cover           with --library: find the cover of the first game\n"
 "  --list                 with --library: show it as a list instead of a grid\n"
 "  --boxes                with --library: show it as 3D boxes\n"
 "  --cheats               open the game's cheats, with their internet lists\n"

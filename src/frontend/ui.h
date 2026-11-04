@@ -160,15 +160,12 @@ public:
     // The pad's right stick (-1 to 1, down positive), which zooms the library's 3D view.
     void setRightStick(float x, float y) { rightStickX_ = x, rightStickY_ = y; }
     void openBios() { showBios_ = true; }
-    // "Buscar carátula..." for the library's game `game`.
-    void openCoverSearch(size_t game);
-    // A PNG or JPEG of the user's as the game's cover, for when none is found online; or
+    // A PNG or JPEG of the user's as the game's cover, for when ScreenScraper has none; or
     // the whole sleeve (back, spine and front side by side) or the cartridge's label, for
     // its 3D box.
     enum class CoverImage { Front, Sleeve, Label };
     void chooseCoverImage(size_t game, CoverImage kind = CoverImage::Front);
     void useCoverImage(const std::string& file);
-    bool coverSearchBusy() const { return showCoverSearch_ && (coverSearch_.autoPreview || library_.coverSearch().busy); }
     // The Trucos window, for the game main() handed it.
     void openCheats() { showCheats_ = true; }
     // Its lists from internet are still being looked for (or not asked for yet).
@@ -272,8 +269,6 @@ private:
     void setLibraryView(int view);
     void buildFonts();
     void needGlyphs(const std::string& text);
-    void drawCoverSearch();
-    void startCoverSearch();
     void drawMedia(UiActions& out);
     void drawMediaFound(const Library::Game& g);
     void drawMediaSearch(const Library::Game& g);
@@ -403,16 +398,6 @@ private:
         unsigned order = 0;       // the order last drawn, to keep the chosen game when it changes
         size_t selectedGame = 0;  // the chosen one, as an index into the library's games
     } libraryView_;
-    // "Buscar carátula..." for one game of the library.
-    bool showCoverSearch_ = false;
-    struct CoverSearchView {
-        size_t game = 0;   // index into the library's games
-        std::string path;  // of that game, in case the library is scanned again
-        char query[128] = "";
-        int selected = -1;  // in the list of names
-        bool focus = false;
-        bool autoPreview = false;  // show the closest cover once the names arrive
-    } coverSearch_;
     // "Medios de ScreenScraper..." for one game of the library.
     bool showMedia_ = false;
     struct MediaView {

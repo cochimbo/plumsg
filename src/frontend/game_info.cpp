@@ -11,6 +11,7 @@
 #include "http.h"
 #include "library.h"
 #include "library_names.h"
+#include "screenscraper_data.h"
 
 namespace plumsg {
 
@@ -35,7 +36,6 @@ static_assert(std::size(kInfoSets) == kSystemCount, "one set per console");
 
 const char* const kFields[] = {"developer", "publisher", "genre", "releaseyear", "maxusers"};
 const char* const kMetadat = "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/";
-const char* const kUserAgent = "plumsg (https://github.com/cochimbo/plumsg)";
 constexpr auto kSettle = std::chrono::milliseconds(300);  // before looking for a game picked
 constexpr auto kRetry = std::chrono::minutes(2);          // before downloading a console's data again
 
@@ -54,22 +54,6 @@ bool writeFile(const fs::path& path, const void* data, size_t size) {
     return static_cast<bool>(out);
 }
 
-// The word that makes Wikipedia's search find the game rather than what it is named after.
-const char* gameWord(const std::string& lang) {
-    if (lang == "es") return "videojuego";
-    if (lang == "fr") return "jeu vidéo";
-    if (lang == "pt") return "jogo eletrônico";
-    return "video game";
-}
-
-// A page listing the meanings of a name, not one about the game.
-bool disambiguation(const std::string& extract) {
-    for (const char* s : {"may refer to", "puede referirse a", "puede hacer referencia a", "peut désigner",
-                          "peut faire référence", "pode referir-se", "pode se referir"})
-        if (extract.find(s) != std::string::npos) return true;
-    return false;
-}
-
 std::string trimmed(const std::string& s) {
     const size_t a = s.find_first_not_of(" \t\r\n");
     if (a == std::string::npos) return {};
@@ -77,8 +61,8 @@ std::string trimmed(const std::string& s) {
 }
 
 // Texts for the user, translated on the main thread as they are shown.
-const char* const kOffline = N_("No se pudo conectar con Wikipedia.");
-const char* const kNotFound = N_("No se ha encontrado este juego en Wikipedia.");
+const char* const kNotDownloaded = N_("Descarga sus medios de ScreenScraper para ver su descripción y una captura.");
+const char* const kNoText = N_("ScreenScraper no tiene descripción de este juego.");
 
 }  // namespace
 
@@ -148,16 +132,11 @@ void GameInfo::show(const std::string& path, const std::string& stem, const std:
     nextAt_ = std::chrono::steady_clock::now() + kSettle;
 }
 
-void GameInfo::refresh() {
-    if (sheet_.path.empty() || sheet_.busy) return;
+void GameInfo::refresh(const std::string& path) {
+    if (path.empty() || path != sheet_.path || hasNext_) return;  // not shown, or about to be read anyway
     Task t = next_;
-    if (t.path != sheet_.path) return;
-    const std::string path = sheet_.path;
-    clearTextures();
-    sheet_ = Sheet();
-    sheet_.path = path;
+    if (t.path != path) return;
     sheet_.busy = true;
-    t.refresh = true;
     t.serial = ++serial_;
     ask(std::move(t));
 }
@@ -192,10 +171,9 @@ void GameInfo::update() {
             continue;
         }
         if (r.serial != serial_) continue;
+        clearTextures();
         sheet_.busy = false;
         sheet_.description = std::move(r.description);
-        sheet_.source = std::move(r.source);
-        sheet_.sourceTitle = std::move(r.sourceTitle);
         sheet_.status = r.status.empty() ? std::string() : std::string(tr(r.status.c_str()));
         if (!r.pixels.empty()) {
             sheet_.snap = Library::uploadTexture(sheet_.snap, r.pixels, r.width, r.height);
@@ -231,93 +209,26 @@ std::shared_ptr<DetailsTable> GameInfo::loadDetails(ConsoleSystem s) {
     return table;
 }
 
-// The game's description and screenshot: the ones kept from an earlier look, or found
-// on Wikipedia (in the user's language, else in English) and libretro-thumbnails.
+// The game's description and screenshot, from what ScreenScraper downloaded of it (its
+// ficha.json and captura.png, else the title screen). Nothing is downloaded here.
 void GameInfo::loadSheet(const Task& task, Reply& r) {
-    const fs::path dir = fs::u8path(consoleFolder(task.system));
-    const fs::path sheetFile = dir / fs::u8path(task.stem + ".txt");
-    const fs::path snapFile = dir / fs::u8path(task.stem + ".png");
+    const std::string dir = ssGameFolder(mediaFolder_, static_cast<int>(task.system), task.stem);
     std::string text;
-    bool haveSnap = false;
-    if (!task.refresh && readText(sheetFile, text)) {
-        // "pagina = ...", "url = ...", "captura = si|no", then "---" and the description.
-        std::istringstream in(text);
-        std::string line;
-        while (std::getline(in, line) && line != "---") {
-            const size_t eq = line.find(" = ");
-            if (eq == std::string::npos) continue;
-            const std::string key = line.substr(0, eq), value = line.substr(eq + 3);
-            if (key == "pagina") r.sourceTitle = value;
-            else if (key == "url") r.source = value;
-            else if (key == "captura") haveSnap = value == "si";
-        }
-        r.description = trimmed(std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()));
-        if (r.description.empty()) r.status = kNotFound;
-        std::string image;
-        if (haveSnap && readText(snapFile, image)) {
-            const std::vector<uint8_t> data(image.begin(), image.end());
-            Library::decodeImage(data, r.pixels, &r.width, &r.height);
-        }
+    if (dir.empty() || !readText(fs::u8path(dir + "ficha.json"), text)) {
+        r.status = kNotDownloaded;
         return;
     }
-
-    bool reached = false;
-    std::vector<std::string> langs = {language()};
-    if (langs[0] != "en") langs.push_back("en");
-    for (const std::string& lang : langs) {
-        const std::string host = "https://" + lang + ".wikipedia.org/";
-        const std::string url = host +
-                                "w/api.php?action=query&format=json&formatversion=2&redirects=1&generator=search"
-                                "&gsrlimit=5&gsrsearch=" +
-                                urlEncode(task.title + " " + gameWord(lang)) +
-                                "&prop=extracts&exintro=1&explaintext=1&exlimit=5";
-        std::vector<uint8_t> body;
-        const int status = httpRequest(url, {}, kUserAgent, body);
-        if (status == 0) continue;
-        reached = true;
-        if (status != 200) continue;
-        int best = -1;
-        for (const WikiPage& page : parseWikiSearch(std::string(body.begin(), body.end()))) {
-            const int d = wikiTitleDistance(task.title, page.title);
-            if (d < 0 || (best >= 0 && d >= best)) continue;
-            const std::string extract = trimmed(page.extract);
-            if (extract.empty() || disambiguation(extract)) continue;
-            best = d;
-            r.description = extract;
-            r.sourceTitle = page.title;
-            std::string name = page.title;
-            for (char& c : name)
-                if (c == ' ') c = '_';
-            r.source = host + "wiki/" + urlEncode(name);
-        }
-        if (best >= 0) break;
-    }
-
-    std::vector<uint8_t> image;
-    for (bool github : {false, true}) {
-        bool answered = false;
-        for (const std::string& name : coverNames(task.stem)) {
-            const int status = httpGet(Library::thumbnailsUrl(task.system, "Named_Snaps", github) + urlEncode(name) + ".png", image);
-            if (status == 0) break;
-            answered = true;
-            if (status == 200 && Library::decodeImage(image, r.pixels, &r.width, &r.height)) {
-                haveSnap = writeFile(snapFile, image.data(), image.size());
-                break;
-            }
+    const SsAnswer a = parseSsAnswer(200, text);
+    if (!a.games.empty()) r.description = trimmed(a.games[0].text(ssLanguages(language())));
+    if (r.description.empty()) r.status = kNoText;
+    for (const char* kind : {"captura", "titulo"})
+        for (const char* ext : {".png", ".jpg"}) {
+            std::string image;
+            if (!readText(fs::u8path(dir + kind + ext), image)) continue;
+            const std::vector<uint8_t> data(image.begin(), image.end());
+            if (Library::decodeImage(data, r.pixels, &r.width, &r.height)) return;
             r.pixels.clear();
         }
-        if (answered) break;
-    }
-    if (!haveSnap) r.pixels.clear();
-
-    if (!reached) {
-        r.status = kOffline;  // nothing kept, so it is looked for again next time
-        return;
-    }
-    if (r.description.empty()) r.status = kNotFound;
-    std::string out = "pagina = " + r.sourceTitle + "\nurl = " + r.source + "\ncaptura = " + (haveSnap ? "si" : "no") +
-                      "\n---\n" + r.description + "\n";
-    writeFile(sheetFile, out.data(), out.size());
 }
 
 void GameInfo::work() {

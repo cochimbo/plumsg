@@ -9,8 +9,8 @@
 
 #include "../core/i18n.h"
 #include "../render/gl.h"
-#include "http.h"
 #include "library_names.h"
+#include "screenscraper_data.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
@@ -41,36 +41,9 @@ constexpr int kCoverHeight = 280;  // covers are shrunk to this many pixels tall
 constexpr int kSleeveHeight = 720;  // but a whole sleeve (back, spine and front) to this, for the 3D boxes
 constexpr int kMaxDepth = 3;       // subfolders scanned below the library folder
 
-// The libretro-thumbnails box art of each console, on libretro's server and in its
-// GitHub copy. The list of names comes from the server's index of the folder, or
-// from GitHub's API.
-struct CoverSet {
-    const char* libretro;
-    const char* github;
-    const char* subfolder;  // under the covers folder ("" for the Mega Drive's, as before)
-    const char* list;       // GitHub's tree of the folder
-};
-constexpr CoverSet kCoverSets[] = {
-    {"https://thumbnails.libretro.com/Sega%20-%20Mega%20Drive%20-%20Genesis/Named_Boxarts/",
-     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/master/Named_Boxarts/", "",
-     "https://api.github.com/repos/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/git/trees/master:Named_Boxarts"},
-    {"https://thumbnails.libretro.com/Sega%20-%2032X/Named_Boxarts/",
-     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_32X/master/Named_Boxarts/", "32X",
-     "https://api.github.com/repos/libretro-thumbnails/Sega_-_32X/git/trees/master:Named_Boxarts"},
-    {"https://thumbnails.libretro.com/Sega%20-%20Mega-CD%20-%20Sega%20CD/Named_Boxarts/",
-     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega-CD_-_Sega_CD/master/Named_Boxarts/", "MegaCD",
-     "https://api.github.com/repos/libretro-thumbnails/Sega_-_Mega-CD_-_Sega_CD/git/trees/master:Named_Boxarts"},
-    {"https://thumbnails.libretro.com/Sega%20-%20Master%20System%20-%20Mark%20III/Named_Boxarts/",
-     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Master_System_-_Mark_III/master/Named_Boxarts/",
-     "MasterSystem",
-     "https://api.github.com/repos/libretro-thumbnails/Sega_-_Master_System_-_Mark_III/git/trees/master:Named_Boxarts"},
-    {"https://thumbnails.libretro.com/Sega%20-%20Game%20Gear/Named_Boxarts/",
-     "https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Game_Gear/master/Named_Boxarts/", "GameGear",
-     "https://api.github.com/repos/libretro-thumbnails/Sega_-_Game_Gear/git/trees/master:Named_Boxarts"},
-};
-static_assert(std::size(kCoverSets) == kSystemCount, "one set per console");
-
-const CoverSet& coverSet(ConsoleSystem s) { return kCoverSets[static_cast<int>(s)]; }
+// Each console's subfolder of the covers folder ("" for the Mega Drive's, as before).
+constexpr const char* kCoverSubfolders[] = {"", "32X", "MegaCD", "MasterSystem", "GameGear"};
+static_assert(std::size(kCoverSubfolders) == kSystemCount, "one subfolder per console");
 
 std::string lower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -123,7 +96,7 @@ bool decode(const std::vector<uint8_t>& data, std::vector<uint32_t>& pixels, int
 
 }  // namespace
 
-Library::Library() : worker_([this] { work(); }), searcher_([this] { searchWork(); }) {}
+Library::Library() : worker_([this] { work(); }) {}
 
 Library::~Library() {
     {
@@ -132,9 +105,7 @@ Library::~Library() {
         jobs_.clear();
     }
     wake_.notify_all();
-    searchWake_.notify_all();
     worker_.join();
-    searcher_.join();
 }
 
 void Library::scan(const std::vector<std::string>& folders) {
@@ -200,7 +171,7 @@ void Library::scan(const std::vector<std::string>& folders) {
     });
     for (size_t i = 0; i < games_.size(); ++i) {
         games_[i].cover = Cover::Pending;
-        queue({i, generation_, games_[i].path, games_[i].stem, games_[i].system, false});
+        queue({i, generation_, games_[i].path, games_[i].stem, games_[i].system});
     }
 }
 
@@ -219,38 +190,10 @@ unsigned int Library::uploadTexture(unsigned int texture, const std::vector<uint
     return texture;
 }
 
-std::string Library::thumbnailsUrl(ConsoleSystem s, const std::string& kind, bool github) {
-    std::string url = github ? coverSet(s).github : coverSet(s).libretro;
-    const size_t at = url.rfind("Named_Boxarts/");
-    return url.substr(0, at) + kind + "/";
-}
-
 std::string Library::systemCovers(ConsoleSystem s) const {
-    const char* sub = coverSet(s).subfolder;
+    const char* sub = kCoverSubfolders[static_cast<int>(s)];
     if (coversFolder_.empty() || !*sub) return coversFolder_;
     return (fs::u8path(coversFolder_) / fs::u8path(sub)).u8string() + static_cast<char>(fs::path::preferred_separator);
-}
-
-void Library::downloadMissing() {
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        downloaded_ = notFound_ = 0;
-        offline_ = libretroDown_ = false;
-    }
-    for (size_t i = 0; i < games_.size(); ++i) {
-        if (games_[i].cover != Cover::Missing) continue;
-        games_[i].cover = Cover::Pending;
-        queue({i, generation_, games_[i].path, games_[i].stem, games_[i].system, true});
-    }
-}
-
-std::string Library::downloadStatus() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (offline_) return tr("No se pudo conectar con el servidor de carátulas. ¿Hay conexión a internet?");
-    if (downloaded_ == 0 && notFound_ == 0) return {};
-    std::string s = trf(downloaded_ == 1 ? N_("%d carátula descargada") : N_("%d carátulas descargadas"), downloaded_);
-    if (notFound_) s += trf(", %d sin encontrar", notFound_);
-    return s;
 }
 
 void Library::queue(Job job) {
@@ -260,30 +203,6 @@ void Library::queue(Job job) {
         ++pending_;
     }
     wake_.notify_one();
-}
-
-void Library::askSearch(SearchTask task) {
-    task.serial = ++searchSerial_;
-    search_.busy = true;
-    search_.status.clear();
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        task_ = std::move(task);
-        hasTask_ = true;
-    }
-    searchWake_.notify_one();
-}
-
-void Library::searchCovers(ConsoleSystem s, const std::string& query) {
-    search_.names.clear();
-    askSearch({SearchTask::Names, 0, s, query});
-}
-
-void Library::previewCover(ConsoleSystem s, const std::string& name) { askSearch({SearchTask::Preview, 0, s, name}); }
-
-bool Library::useCover(size_t game) {
-    if (previewImage_.empty()) return false;
-    return saveCover(game, previewImage_, &search_.status);
 }
 
 bool Library::labelFromFile(size_t game, const std::string& file, std::string* error) {
@@ -352,50 +271,11 @@ bool Library::saveCover(size_t game, const std::vector<uint8_t>& image, std::str
         }
     }
     g.cover = Cover::Pending;
-    queue({game, generation_, g.path, g.stem, g.system, false});
+    queue({game, generation_, g.path, g.stem, g.system});
     return true;
 }
 
-void Library::endCoverSearch() {
-    ++searchSerial_;  // a reply still on its way is dropped
-    if (search_.preview) gl::DeleteTextures(1, &search_.preview);
-    search_ = CoverSearch();
-    previewImage_.clear();
-}
-
 void Library::update() {
-    {
-        SearchReply r;
-        bool got = false;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (hasReply_) {
-                r = std::move(reply_);
-                hasReply_ = false;
-                got = true;
-            }
-        }
-        if (got && r.serial == searchSerial_) {
-            search_.busy = false;
-            search_.status = r.status;
-            if (r.kind == SearchTask::Names) {
-                search_.names = std::move(r.names);
-            } else if (!r.pixels.empty()) {
-                if (!search_.preview) gl::GenTextures(1, &search_.preview);
-                gl::BindTexture(gl::TEXTURE_2D, search_.preview);
-                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR);
-                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR);
-                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
-                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
-                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8, r.width, r.height, 0, gl::RGBA, gl::UNSIGNED_BYTE,
-                               r.pixels.data());
-                search_.width = r.width;
-                search_.height = r.height;
-                search_.previewName = r.name;
-                previewImage_ = std::move(r.image);
-            }
-        }
-    }
     // A few per frame: each upload is quick, but dozens at once would stutter the game.
     for (int n = 0; n < 4; ++n) {
         Result r;
@@ -429,11 +309,6 @@ void Library::update() {
 }
 
 void Library::clearTextures() {
-    if (search_.preview) {
-        gl::DeleteTextures(1, &search_.preview);
-        search_.preview = 0;
-        search_.previewName.clear();
-    }
     for (Game& g : games_) {
         if (g.label) {
             gl::DeleteTextures(1, &g.label);
@@ -465,6 +340,22 @@ bool Library::findLocal(const Job& job, std::string* coverPath) const {
             }
         }
     }
+    // What ScreenScraper downloaded of it: the whole sleeve (for the 3D boxes), or the front.
+    return findMedia(job, {"portada-completa", "portada"}, coverPath);
+}
+
+bool Library::findMedia(const Job& job, std::initializer_list<const char*> kinds, std::string* path) const {
+    if (mediaFolder_.empty()) return false;
+    std::error_code ec;
+    const std::string dir = ssGameFolder(mediaFolder_, static_cast<int>(job.system), job.stem);
+    for (const char* kind : kinds)
+        for (const char* ext : {".png", ".jpg"}) {
+            const fs::path p = fs::u8path(dir + kind + ext);
+            if (fs::is_regular_file(p, ec)) {
+                *path = p.u8string();
+                return true;
+            }
+        }
     return false;
 }
 
@@ -484,100 +375,7 @@ bool Library::findLabel(const Job& job, std::string* labelPath) const {
                 return true;
             }
         }
-    return false;
-}
-
-// Tries each candidate name on libretro's server, or on GitHub once that one has
-// failed to answer, and saves the first image found as covers/<rom name>.png.
-bool Library::fetch(const Job& job, std::string* coverPath) {
-    const std::string target = systemCovers(job.system);
-    if (target.empty()) return false;
-    const CoverSet& set = coverSet(job.system);
-    std::vector<uint8_t> body;
-    for (const std::string& name : coverNames(job.stem)) {
-        const std::string file = urlEncode(name) + ".png";
-        bool libretroDown;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (stop_ || offline_) return false;
-            libretroDown = libretroDown_;
-        }
-        int status = libretroDown ? 0 : httpGet(set.libretro + file, body);
-        if (status == 0 && !libretroDown) {
-            std::lock_guard<std::mutex> lock(mutex_);
-            libretroDown_ = libretroDown = true;
-        }
-        if (libretroDown) status = httpGet(set.github + file, body);
-        if (status == 0) {
-            std::lock_guard<std::mutex> lock(mutex_);
-            offline_ = true;
-            return false;
-        }
-        if (status != 200 || !isImage(body)) continue;
-        std::error_code ec;
-        fs::create_directories(fs::u8path(target), ec);
-        const fs::path out = fs::u8path(target + job.stem + ".png");
-        std::ofstream f(out, std::ios::binary);
-        f.write(reinterpret_cast<const char*>(body.data()), static_cast<std::streamsize>(body.size()));
-        if (!f) return false;
-        *coverPath = out.u8string();
-        return true;
-    }
-    return false;
-}
-
-// The names in the console's box art set, from libretro's index of the folder or,
-// if that fails, from GitHub. Kept for the rest of the session.
-bool Library::loadCoverIndex(ConsoleSystem s, std::string* error) {
-    std::vector<std::string>& index = coverIndex_[static_cast<int>(s)];
-    if (!index.empty()) return true;
-    const CoverSet& set = coverSet(s);
-    std::vector<uint8_t> body;
-    int status = 0;
-    for (const char* url : {set.libretro, set.list}) {
-        status = httpGet(url, body);
-        if (status == 200) index = parseCoverList(std::string(body.begin(), body.end()));
-        if (!index.empty()) return true;
-    }
-    *error = status == 0 ? std::string(tr("No se pudo conectar con el servidor de carátulas. ¿Hay conexión a internet?"))
-                         : trf("No se pudo leer la lista de carátulas (error %d).", status);
-    return false;
-}
-
-void Library::searchWork() {
-    for (;;) {
-        SearchTask task;
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            searchWake_.wait(lock, [this] { return stop_ || hasTask_; });
-            if (stop_) return;
-            task = std::move(task_);
-            hasTask_ = false;
-        }
-        SearchReply r;
-        r.kind = task.kind;
-        r.serial = task.serial;
-        r.name = task.text;
-        if (task.kind == SearchTask::Names) {
-            if (loadCoverIndex(task.system, &r.status)) {
-                r.names = similarCoverNames(coverIndex_[static_cast<int>(task.system)], task.text, 60);
-                if (r.names.empty()) r.status = tr("Ninguna carátula se parece a ese nombre.");
-            }
-        } else {
-            const CoverSet& set = coverSet(task.system);
-            const std::string file = urlEncode(task.text) + ".png";
-            int status = httpGet(set.libretro + file, r.image);
-            if (status != 200 || !isImage(r.image)) status = httpGet(set.github + file, r.image);
-            if (status != 200 || !isImage(r.image) || !decode(r.image, r.pixels, &r.width, &r.height)) {
-                r.image.clear();
-                r.pixels.clear();
-                r.status = status == 0 ? tr("No se pudo conectar con el servidor de carátulas. ¿Hay conexión a internet?") : tr("No se pudo descargar esa carátula.");
-            }
-        }
-        std::lock_guard<std::mutex> lock(mutex_);
-        reply_ = std::move(r);
-        hasReply_ = true;
-    }
+    return findMedia(job, {"etiqueta"}, labelPath);
 }
 
 void Library::work() {
@@ -592,9 +390,7 @@ void Library::work() {
         }
         Result r{job.index, job.generation, false, {}, 0, 0, {}, 0, 0};
         std::string cover;
-        bool found = findLocal(job, &cover);
-        bool fetched = false;
-        if (!found && job.download) found = fetched = fetch(job, &cover);
+        const bool found = findLocal(job, &cover);
         std::vector<uint8_t> data;
         if (found) r.found = readAll(fs::u8path(cover), data) && decode(data, r.pixels, &r.width, &r.height);
         std::string label;
@@ -602,10 +398,6 @@ void Library::work() {
             !decode(data, r.label, &r.labelWidth, &r.labelHeight))
             r.label.clear(), r.labelWidth = r.labelHeight = 0;
         std::lock_guard<std::mutex> lock(mutex_);
-        if (job.download) {
-            if (fetched) ++downloaded_;
-            else if (!offline_) ++notFound_;
-        }
         --pending_;
         if (job.generation == generation_) results_.push_back(std::move(r));
     }

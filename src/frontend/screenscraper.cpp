@@ -35,8 +35,6 @@ namespace {
 constexpr long long kRequestGapMs = 1200;  // between two API requests
 constexpr int kBusyRetries = 3;
 
-const char* const kSystemFolders[kSystemCount] = {"MegaDrive", "32X", "MegaCD", "MasterSystem", "GameGear"};
-
 long long nowMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
@@ -139,9 +137,7 @@ std::vector<std::string> ScreenScraper::chosenKinds(const std::vector<std::strin
 }
 
 std::string ScreenScraper::gameFolder(const Rom& rom) const {
-    if (folder_.empty()) return {};
-    return (fs::u8path(folder_) / kSystemFolders[static_cast<int>(rom.system)] / fs::u8path(rom.stem)).u8string() +
-           static_cast<char>(fs::path::preferred_separator);
+    return ssGameFolder(folder_, static_cast<int>(rom.system), rom.stem);
 }
 
 void ScreenScraper::queue(Task task, bool first) {
