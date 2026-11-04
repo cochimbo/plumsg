@@ -406,6 +406,7 @@ private:
     // "Medios de ScreenScraper..." for one game of the library.
     bool showMedia_ = false;
     bool showScraping_ = false;
+    bool scraperFailed_ = false;  // the round's error was already told
     int scrapingTab_ = -1;  // to bring forward
     struct MediaView {
         std::string path;    // the game's ROM

@@ -3,6 +3,18 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 0.1.0-beta.13
+
+- **ScreenScraper says what goes wrong**: when a round of downloads stops (an account
+  ScreenScraper does not take, no connection, the day's requests used up), the reason
+  shows in colour on its own line in the library, in the media window and as a notice,
+  with **ScreenScraper account...** and **Try again** next to it; a refused account says
+  whether it is yours or plumsg's developer account, with the server's own message.
+- **Test the connection** in Scraping > ScreenScraper account... asks ScreenScraper
+  whether it takes the accounts and, with yours, how many requests you have used
+  today; it also runs on its own when you save your account.
+- Spaces or line breaks around an account (pasted with it) no longer break it.
+
 ## 0.1.0-beta.12
 
 - New **Scraping** menu: **ScreenScraper account...** (your screenscraper.fr user name

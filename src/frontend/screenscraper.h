@@ -100,13 +100,22 @@ public:
 
     bool takeForLibrary(ForLibrary& out);
 
+    // "Probar la conexión": asks ScreenScraper about the accounts in use (the user's, if
+    // there is one: its requests today), and keeps what it said.
+    void check();
+    bool checking() const { return checking_; }
+    const std::string& checkStatus() const { return checkStatus_; }
+    bool checkOk() const { return checkOk_; }
+    // The round of downloads stopped on an error (batchStatus() says which).
+    bool batchFailed() const;
+
     // Main thread, once a frame.
     void update();
     void clearTextures();
 
 private:
     struct Task {
-        enum Kind { Show, Download, Search, Preview, Batch } kind = Show;
+        enum Kind { Show, Download, Search, Preview, Batch, Check } kind = Show;
         unsigned serial = 0;
         Rom rom;
         int gameId = 0;
@@ -130,6 +139,7 @@ private:
         std::vector<Image> images;
         std::vector<SsGame> results;
         int previewId = 0;
+        bool ok = false;
     };
 
     void work();
@@ -150,6 +160,8 @@ private:
     Sheet sheet_;
     Search search_;
     int batchTotal_ = 0;
+    bool checking_ = false, checkOk_ = false;  // main thread
+    std::string checkStatus_;
 
     mutable std::mutex mutex_;
     std::condition_variable wake_;

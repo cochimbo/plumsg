@@ -185,6 +185,13 @@ void Ui::drawMedia(UiActions& out) {
             needGlyphs(sheet.status);
             ImGui::TextWrapped("%s", sheet.status.c_str());
         }
+        // The library's round of downloads, if one is going or has stopped on an error.
+        if (const std::string ss = scraper_.batchStatus(); !ss.empty() && (scraper_.batchLeft() > 0 || scraper_.batchFailed())) {
+            if (scraper_.batchFailed()) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.55f, 0.4f, 1.0f));
+            else ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+            ImGui::TextWrapped("%s", ss.c_str());
+            ImGui::PopStyleColor();
+        }
 
         if (ImGui::BeginTabBar("pestanas_medios")) {
             const char* tabs[] = {N_("Descargado"), N_("Buscar otro juego"), N_("Qué descargar"), N_("Cuenta")};
@@ -471,6 +478,23 @@ void Ui::drawMediaAccount(UiActions& out) {
     ImGui::SetCursorPosX(labelW);
     if (settings_.ssUser.empty()) ImGui::TextDisabled("%s", tr("Ahora no se usa ninguna cuenta tuya."));
     else ImGui::TextDisabled("%s", trf("Se usa la cuenta «%s».", settings_.ssUser.c_str()).c_str());
+    // Whether ScreenScraper takes the accounts, without downloading anything.
+    ImGui::SetCursorPosX(labelW);
+    ImGui::BeginDisabled(scraper_.checking());
+    if (ImGui::Button(tr("Probar la conexión"))) {
+        applyScraperSettings();
+        scraper_.check();
+    }
+    ImGui::EndDisabled();
+    if (!scraper_.checkStatus().empty()) {
+        ImGui::SameLine();
+        const ImVec4 color = scraper_.checking() ? ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]
+                             : scraper_.checkOk() ? ImVec4(0.45f, 0.85f, 0.45f, 1.0f)
+                                                  : ImVec4(1.0f, 0.55f, 0.4f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::TextWrapped("%s", scraper_.checkStatus().c_str());
+        ImGui::PopStyleColor();
+    }
     ImGui::Spacing();
     ImGui::TextDisabled("%s", tr("¿No tienes cuenta? Es gratis:"));
     ImGui::SameLine();
@@ -489,6 +513,7 @@ void Ui::drawMediaAccount(UiActions& out) {
     settings_.ssPassword = media_.password;
     applyScraperSettings();
     out.settingsChanged = true;
+    scraper_.check();  // says right away whether ScreenScraper takes it
 }
 
 }  // namespace plumsg
