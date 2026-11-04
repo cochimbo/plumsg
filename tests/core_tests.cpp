@@ -2291,6 +2291,16 @@ void testScreenScraper() {
     check(parseSsAnswer(429, "The maximum threads allowed to leecher users is already used").result == SsAnswer::Busy,
           "screenscraper: too busy");
     check(parseSsAnswer(0, "").result == SsAnswer::Offline, "screenscraper: no connection");
+    // A good answer is not taken for an error by the words in it (the servers' "threadsmin", a synopsis...).
+    const SsAnswer words = parseSsAnswer(200, "{\"header\":{\"success\":\"true\",\"error\":\"\"},\"response\":{"
+                                              "\"serveurs\":{\"threadsmin\":\"1\"},\"ssuser\":{\"requeststoday\":\"3\","
+                                              "\"maxrequestsperday\":\"20000\"},\"jeu\":{\"id\":\"9\",\"synopsis\":[{\"langue\":"
+                                              "\"fr\",\"text\":\"Un quota d'identifiants non trouvés.\"}]}}}");
+    check(words.result == SsAnswer::Ok && words.games.size() == 1 && words.requestsToday == 3,
+          "screenscraper: words in a good answer");
+    check(parseSsAnswer(200, "{\"header\":{\"success\":\"false\",\"error\":\"Votre quota de scrape est dépassé\"}}").result ==
+              SsAnswer::Quota,
+          "screenscraper: a JSON answer that says it failed");
 
     SsCredentials c{"dev id", "p&w", "plumsg", "me", "secret"};
     const std::string url = ssUrl(c, "jeuInfos.php", ssRomParams(0, "Sonic (Europe).zip", 524288, 0xF9394E97u, false));

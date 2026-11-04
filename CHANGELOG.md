@@ -3,6 +3,13 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 0.1.0-beta.14
+
+- **ScreenScraper no longer says the requests ran out when they had not**: a good
+  answer was searched for words like "quota" or "threads" anywhere in it (in the
+  servers' counters or a game's text) and taken for an error. Answers are now read by
+  their fields, and when ScreenScraper really reports a limit its own message is shown.
+
 ## 0.1.0-beta.13
 
 - **ScreenScraper says what goes wrong**: when a round of downloads stops (an account
