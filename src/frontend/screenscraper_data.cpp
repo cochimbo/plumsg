@@ -4,6 +4,8 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
+#include <iterator>
 
 #include "../core/i18n.h"
 #include "library_names.h"
@@ -212,6 +214,13 @@ std::string jsonQuote(const std::string& s) {
         }
     }
     return out + "\"";
+}
+
+std::string ssGameFolder(const std::string& root, int system, const std::string& stem) {
+    static const char* const kFolders[] = {"MegaDrive", "32X", "MegaCD", "MasterSystem", "GameGear"};
+    namespace fs = std::filesystem;
+    if (root.empty() || system < 0 || system >= static_cast<int>(std::size(kFolders))) return {};
+    return (fs::u8path(root) / kFolders[system] / fs::u8path(stem)).u8string() + static_cast<char>(fs::path::preferred_separator);
 }
 
 int screenScraperSystem(int system) {

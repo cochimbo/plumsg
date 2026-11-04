@@ -36,23 +36,14 @@ msgstr "%d / %d px"
 msgid "%d carpetas"
 msgstr "%d dossiers"
 
-msgid "%d carátula descargada"
-msgstr "%d jaquette téléchargée"
-
-msgid "%d carátulas descargadas"
-msgstr "%d jaquettes téléchargées"
-
 msgid "%d fotogramas"
 msgstr "%d images"
 
-msgid "%d juegos. %s"
-msgstr "%d jeux. %s"
+msgid "%d juegos."
+msgstr "%d jeux."
 
 msgid "%d juegos. Buscando carátulas, quedan %d..."
 msgstr "%d jeux. Recherche des jaquettes, encore %d..."
-
-msgid "%d parecidas. Pulsa una para verla."
-msgstr "%d ressemblantes. Cliquez sur l'une pour la voir."
 
 msgid "%d resultados. Pulsa uno para verlo."
 msgstr "%d résultats. Cliquez sur l'un pour le voir."
@@ -227,9 +218,6 @@ msgstr "Ouvrir une ROM"
 
 msgid "Abrir ROM..."
 msgstr "Ouvrir une ROM..."
-
-msgid "Abrir en Wikipedia"
-msgstr "Ouvrir dans Wikipédia"
 
 msgid "Abrir juego"
 msgstr "Ouvrir un jeu"
@@ -506,20 +494,8 @@ msgstr ""
 "d'EA (NHL 96) ou GEMS (Sonic Spinball, Earthworm Jim).\n"
 "Cela prend quelques minutes.%s"
 
-msgid ""
-"Busca las carátulas en libretro-thumbnails (internet) por el nombre de cada juego\n"
-"y las guarda en la carpeta covers de plumsg. También puedes poner tus\n"
-"propias imágenes: un .png o .jpg con el mismo nombre que el juego, a su lado."
-msgstr ""
-"Cherche les jaquettes dans libretro-thumbnails (internet) d'après le nom de chaque jeu\n"
-"et les enregistre dans le dossier covers de plumsg. Vous pouvez aussi mettre vos\n"
-"propres images : un .png ou un .jpg du même nom que le jeu, à côté de lui."
-
 msgid "Buscando dónde pide el juego la música"
 msgstr "Recherche de l'endroit où le jeu demande sa musique"
-
-msgid "Buscando en Wikipedia..."
-msgstr "Recherche sur Wikipédia..."
 
 msgid "Buscando en la base de trucos de libretro%s"
 msgstr "Recherche dans la base de codes de libretro%s"
@@ -536,17 +512,11 @@ msgstr "Chercher"
 msgid "Buscar (Ctrl+F o Y)"
 msgstr "Chercher (Ctrl+F ou Y)"
 
-msgid "Buscar carátula"
-msgstr "Chercher une jaquette"
-
 msgid "Buscar carátula..."
 msgstr "Chercher une jaquette..."
 
 msgid "Buscar en las carpetas de la biblioteca"
 msgstr "Chercher dans les dossiers de la bibliothèque"
-
-msgid "Buscar otra vez"
-msgstr "Chercher à nouveau"
 
 msgid "Buscar otro juego"
 msgstr "Chercher un autre jeu"
@@ -915,6 +885,9 @@ msgstr ""
 msgid "Descarga otra vez los medios del mismo juego de ScreenScraper."
 msgstr "Télécharge à nouveau les médias du même jeu depuis ScreenScraper."
 
+msgid "Descarga sus medios de ScreenScraper para ver su descripción y una captura."
+msgstr "Téléchargez ses médias depuis ScreenScraper pour voir sa description et une capture."
+
 msgid "Descargado"
 msgstr "Téléchargé"
 
@@ -923,9 +896,6 @@ msgstr "Téléchargement des informations des jeux..."
 
 msgid "Descargando: %s..."
 msgstr "Téléchargement : %s..."
-
-msgid "Descargar carátulas que faltan"
-msgstr "Télécharger les jaquettes manquantes"
 
 msgid "Descargar de ScreenScraper"
 msgstr "Télécharger depuis ScreenScraper"
@@ -1129,9 +1099,6 @@ msgstr "Choisir un dossier..."
 
 msgid "Elegir imagen"
 msgstr "Choisir une image"
-
-msgid "Elegir imagen del ordenador..."
-msgstr "Choisir une image de l'ordinateur..."
 
 msgid "Elegir instrumentos comparando el sonido"
 msgstr "Choisir les instruments en comparant le son"
@@ -1408,8 +1375,8 @@ msgstr "Nappe polysynthé"
 msgid "Fondos sintetizados"
 msgstr "Nappes synthé"
 
-msgid "Fuente: Wikipedia, «%s»"
-msgstr "Source : Wikipédia, « %s »"
+msgid "Fuente: ScreenScraper"
+msgstr "Source : ScreenScraper"
 
 msgid "GIF guardado en %s"
 msgstr "GIF enregistré dans %s"
@@ -1997,9 +1964,6 @@ msgstr "Musique CD (MSU-MD)"
 msgid "Música y baile"
 msgstr "Musique et danse"
 
-msgid "Ninguna carátula se parece a ese nombre."
-msgstr "Aucune jaquette ne ressemble à ce nom."
-
 msgid "Ninguno"
 msgstr "Aucun"
 
@@ -2047,9 +2011,6 @@ msgstr "Ne ressemble pas à un BIOS : %s"
 
 msgid "No se encuentra \"%s\"."
 msgstr "\"%s\" est introuvable."
-
-msgid "No se ha encontrado este juego en Wikipedia."
-msgstr "Ce jeu est introuvable sur Wikipédia."
 
 msgid "No se ha encontrado ninguna BIOS del Mega CD en esas carpetas."
 msgstr "Aucun BIOS du Mega CD n'a été trouvé dans ces dossiers."
@@ -2102,12 +2063,6 @@ msgstr "Impossible de charger la partie de l'hôte : %s"
 msgid "No se pudo conectar con ScreenScraper. ¿Hay conexión a internet?"
 msgstr "Impossible de se connecter à ScreenScraper. Y a-t-il une connexion Internet ?"
 
-msgid "No se pudo conectar con Wikipedia."
-msgstr "Impossible de se connecter à Wikipédia."
-
-msgid "No se pudo conectar con el servidor de carátulas. ¿Hay conexión a internet?"
-msgstr "Impossible de se connecter au serveur de jaquettes. Y a-t-il une connexion Internet ?"
-
 msgid "No se pudo conectar con la base de trucos de libretro."
 msgstr "Impossible de se connecter à la base de codes de libretro."
 
@@ -2116,9 +2071,6 @@ msgstr "Impossible de créer %s"
 
 msgid "No se pudo crear el socket UDP."
 msgstr "Impossible de créer le socket UDP."
-
-msgid "No se pudo descargar esa carátula."
-msgstr "Impossible de télécharger cette jaquette."
 
 msgid "No se pudo descargar la lista de trucos. ¿Hay conexión a internet?"
 msgstr "Impossible de télécharger la liste des codes. Y a-t-il une connexion Internet ?"
@@ -2149,9 +2101,6 @@ msgstr "Impossible de lire %s"
 
 msgid "No se pudo leer %s."
 msgstr "Impossible de lire %s."
-
-msgid "No se pudo leer la lista de carátulas (error %d)."
-msgstr "Impossible de lire la liste des jaquettes (erreur %d)."
 
 msgid "No se pudo leer la lista de trucos de libretro (error %d)."
 msgstr "Impossible de lire la liste de codes de libretro (erreur %d)."
@@ -2679,6 +2628,9 @@ msgstr "ScreenScraper refuse le compte : vérifiez l'identifiant et le mot de pa
 msgid "ScreenScraper no conoce este juego. Búscalo por su nombre."
 msgstr "ScreenScraper ne connaît pas ce jeu. Cherchez-le par son nom."
 
+msgid "ScreenScraper no tiene descripción de este juego."
+msgstr "ScreenScraper n’a pas de description de ce jeu."
+
 msgid "ScreenScraper pide además la cuenta del programa, que da a quien la solicita en su foro. Esta versión de plumsg no trae ninguna: si tienes una, ponla aquí."
 msgstr "ScreenScraper demande aussi le compte du logiciel, qu'il donne à qui le demande sur son forum. Cette version de plumsg n'en a pas : si vous en avez un, saisissez-le ici."
 
@@ -3087,17 +3039,11 @@ msgstr "Utilise la valeur générale"
 msgid "Usa los de Opciones > Controles."
 msgstr "Utilise ceux d'Options > Commandes."
 
-msgid "Usa un PNG o JPEG tuyo como carátula de este juego."
-msgstr "Utilisez un PNG ou JPEG à vous comme jaquette de ce jeu."
-
 msgid "Usar el stick izquierdo como cruceta"
 msgstr "Utiliser le stick gauche comme croix"
 
 msgid "Usar esta carpeta"
 msgstr "Utiliser ce dossier"
-
-msgid "Usar esta carátula"
-msgstr "Utiliser cette jaquette"
 
 msgid "Usar este juego"
 msgstr "Utiliser ce jeu"
@@ -3176,9 +3122,6 @@ msgstr "Voix \"ooh\""
 
 msgid "Voz sintetizada"
 msgstr "Voix synthé"
-
-msgid "Vuelve a buscar la descripción y la captura de este juego en internet."
-msgstr "Recherche à nouveau la description et la capture de ce jeu sur internet."
 
 msgid "Vídeo"
 msgstr "Vidéo"
@@ -3355,7 +3298,6 @@ msgid ""
 "  --join direccion       unirse a la partida en red de ese anfitrión (IP:puerto)\n"
 "  --library carpeta      abrir la biblioteca de esa carpeta (se puede repetir)\n"
 "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
-"  --find-cover           con --library: buscar la carátula del primer juego\n"
 "  --list                 con --library: verla como lista en vez de cuadrícula\n"
 "  --boxes                con --library: verla como cajas 3D\n"
 "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
@@ -3389,7 +3331,6 @@ msgstr ""
 "  --join adresse         rejoindre la partie en réseau de cet hôte (IP:port)\n"
 "  --library dossier      ouvrir la bibliothèque de ce dossier (peut être répété)\n"
 "  --bios                 ouvrir la fenêtre des BIOS du Mega CD\n"
-"  --find-cover           avec --library : chercher la jaquette du premier jeu\n"
 "  --list                 avec --library : l'afficher en liste au lieu d'une grille\n"
 "  --boxes                avec --library : l'afficher en boîtes 3D\n"
 "  --cheats               ouvrir les codes du jeu, avec leurs listes d'internet\n"

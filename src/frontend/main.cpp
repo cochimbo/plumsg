@@ -394,11 +394,9 @@ struct CommandLine {
     int filter = -1;         // --filter none|scanlines|crt
     int upscale = -1;        // --upscaling none|xbr|anime4k
     bool fps = false;        // --fps: with the FPS counter on
-    bool downloadCovers = false;  // --download-covers: fetch the library's missing covers
     bool libraryList = false;     // --list: with --library, show it as a list
     int libraryBoxes = -1;        // --boxes [1-4]: with --library, show its 3D boxes (and hold one open at that step)
     bool bios = false;            // --bios: start with the Mega CD BIOS window open
-    bool coverSearch = false;     // --find-cover: with --library, look for the first game's cover
     int media = 0;                // --media [search|all]: with --library, the first game's ScreenScraper media (1 downloaded, 2 searched for, 3 every game's)
     bool cheats = false;          // --cheats: start with the game's Cheats window open
     bool achievements = false;    // --achievements: start with the RetroAchievements window open
@@ -437,7 +435,6 @@ const char* const kHelp = N_(
     "  --join direccion       unirse a la partida en red de ese anfitrión (IP:puerto)\n"
     "  --library carpeta      abrir la biblioteca de esa carpeta (se puede repetir)\n"
     "  --bios                 abrir la ventana de las BIOS del Mega CD\n"
-    "  --find-cover           con --library: buscar la carátula del primer juego\n"
     "  --list                 con --library: verla como lista en vez de cuadrícula\n"
     "  --boxes                con --library: verla como cajas 3D\n"
     "  --cheats               abrir los trucos del juego, con sus listas de internet\n"
@@ -459,8 +456,8 @@ std::string optionName(const std::string& a) {
     static const std::pair<const char*, const char*> kSpanish[] = {
         {"--captura", "--screenshot"}, {"--grabar", "--record"}, {"--cuadros", "--frames"}, {"--vista", "--view"},
         {"--inclinacion", "--tilt"}, {"--giro", "--yaw"}, {"--menu-estados", "--states-menu"},
-        {"--biblioteca", "--library"}, {"--descargar-caratulas", "--download-covers"}, {"--lista", "--list"},
-        {"--buscar-caratula", "--find-cover"}, {"--medios", "--media"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
+        {"--biblioteca", "--library"}, {"--lista", "--list"},
+        {"--medios", "--media"}, {"--trucos", "--cheats"}, {"--logros", "--achievements"},
         {"--opciones-juego", "--game-options"}, {"--instrumentos", "--instruments"}, {"--pista", "--track"}, {"--partitura", "--score"},
         {"--filtro", "--filter"}, {"--reescalado", "--upscaling"}, {"--pantalla-completa", "--fullscreen"},
         {"--modo-consola", "--console-mode"}, {"--modo-escritorio", "--desktop-mode"},
@@ -499,7 +496,6 @@ CommandLine parse(int argc, char** argv) {
         }
         else if (a == "--fps") c.fps = true;
         else if (a == "--library") c.library.push_back(next());
-        else if (a == "--download-covers") c.downloadCovers = true;
         else if (a == "--list") c.libraryList = true;
         else if (a == "--boxes") {
             // Undocumented steps, for screenshots: 1 the box out, 2 its cartridge out, 3 on the way, 4 in the console.
@@ -507,7 +503,6 @@ CommandLine parse(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '4' && !argv[i + 1][1]) c.libraryBoxes = argv[++i][0] - '0';
         }
         else if (a == "--bios") c.bios = true;
-        else if (a == "--find-cover") c.coverSearch = true;
         else if (a == "--media") {
             c.media = 1;
             const std::string mode = i + 1 < argc ? argv[i + 1] : "";
@@ -689,6 +684,8 @@ int main(int argc, char** argv) {
     ui->library().setCoversFolder(paths.covers);
     ui->gameInfo().setFolder(paths.info);
     ui->scraper().setFolder(paths.info + "screenscraper/");
+    ui->library().setMediaFolder(paths.info + "screenscraper/");
+    ui->gameInfo().setMediaFolder(paths.info + "screenscraper/");
     auto audio = std::make_unique<Audio>();
     // RetroAchievements: a screenshot run shows its windows but never logs in.
     Achievements achievements([](const std::string& url, const std::string& post, const std::string& agent,
@@ -949,8 +946,6 @@ int main(int argc, char** argv) {
         applySound();
     }
     int loops = 0;
-    bool downloadCovers = cmd.downloadCovers;
-    bool coverSearch = cmd.coverSearch;
     int media = cmd.media;
     bool sizedForMenu = false;
 
@@ -1697,16 +1692,6 @@ int main(int argc, char** argv) {
         }
         ui->render();
         ++loops;
-        if (downloadCovers && ui->library().pending() == 0 && loops > 5) {
-            ui->library().downloadMissing();
-            downloadCovers = false;
-            loops = 0;
-        }
-        if (coverSearch && ui->libraryOpen() && ui->library().pending() == 0 && loops > 3) {
-            ui->openCoverSearch(0);
-            coverSearch = false;
-            loops = 0;
-        }
         if (media && ui->libraryOpen() && ui->library().pending() == 0 && loops > 3) {
             ui->startMedia(0, media);
             media = 0;
@@ -1715,8 +1700,8 @@ int main(int argc, char** argv) {
         // A screenshot waits a few frames for the window and the popups to settle, and a
         // library one for its covers.
         const bool libraryReady =
-            loops > 3 && (!ui->libraryOpen() || (!downloadCovers && !coverSearch && !media && ui->library().pending() == 0 && loops > 20)) &&
-            !ui->coverSearchBusy() && !ui->mediaBusy() && !ui->cheatsBusy() && !ui->libraryInfoBusy();
+            loops > 3 && (!ui->libraryOpen() || (!media && ui->library().pending() == 0 && loops > 20)) &&
+            !ui->mediaBusy() && !ui->cheatsBusy() && !ui->libraryInfoBusy();
         if (capturing && libraryReady &&
             (framesRun >= cmd.frames || !app->romLoaded || ui->libraryOpen() ||
              (ui->stateMenuOpen() && framesRun >= cmd.frames - 1))) {

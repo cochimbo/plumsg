@@ -104,8 +104,8 @@ First version. What it has:
   neural network.
 - **Cheats**: Game Genie and Action Replay, saved per game, with each game's cheat lists
   from libretro-database to pick from a menu.
-- **Game library** with cover art, downloaded by itself from libretro-thumbnails, with
-  several folders and a tab per console (Mega Drive, 32X and Mega CD).
+- **Game library** with cover art and media from ScreenScraper, with several folders and
+  a tab per console (Mega Drive, 32X, Mega CD, Master System and Game Gear).
 - **Mega CD BIOS**: you say where each region's BIOS is (it does not come with plumsg),
   and each disc starts with its region's.
 - Two-player **netplay** with GGPO-style *rollback*: each player on their own computer,
@@ -227,26 +227,22 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   and `.cue`, `.chd` and `.iso` Mega CD; the `.bin` tracks of a `.cue` do not show up on
   their own. The **All**, **Mega Drive**, **32X**, **Mega CD**, **Master System** and
   **Game Gear** tabs filter by console (with a gamepad, the L and R buttons; with the
-  keyboard, Page Up and Page Down). **Download missing covers** looks them up by each
-  game's name (No-Intro and Redump names, like `Sonic The Hedgehog (USA, Europe).md`,
-  almost always match) in libretro-thumbnails, in each console's set, and saves them in
-  `covers\` next to `states\` (32X ones in `covers\32X\` and Mega CD ones in
-  `covers\MegaCD\`). Your own picture works too: a `.png` or `.jpg` with the game's
-  name next to it, or in a `caratulas` or `covers` folder in the games folder. If one
-  does not appear, or the wrong one does, **Find cover...** in the game's menu (right
-  click, X on the gamepad or the menu key) lets you change the name searched for and
-  lists the covers with similar names (part of the name, a typo or `2` for `II` will do);
-  clicking one shows it, and **Use this cover** saves it as the game's. If folders are
+  keyboard, Page Up and Page Down). Covers are downloaded only from ScreenScraper (see
+  **ScreenScraper media...** below): **Download from ScreenScraper** does every game, and
+  a copy of each cover goes to `covers\` next to `states\` (32X ones in `covers\32X\`
+  and so on). Your own picture works too: a `.png` or `.jpg` with the game's name next
+  to it, in a `caratulas` or `covers` folder in the games folder, or picked with
+  **Cover from image...** in the game's menu (right click, X on the gamepad or the menu
+  key). If the wrong one appears, **Find cover...** in that menu searches ScreenScraper
+  by name to pick the right game. If folders are
   set, the library opens on start when there is no game. **Grid** and **List** switch the
   view (also Select on the gamepad or the V key): the list has title, console, year,
   genre, developer and players columns, and is sorted by clicking its header or with the
   sort drop-down, which works for both. With **Details** ticked, a panel on the right
   shows the chosen game: its cover, a play button, developer, publisher, genre, year and
   players (from libretro-database's metadat files, downloaded once per console; there are
-  none for the Mega CD), a screenshot of the game (from libretro-thumbnails) and its
-  Wikipedia description, in plumsg's language or, failing that, in English, with a link
-  to the page. Everything is kept in `game-info\` next to `covers\`; **Search again**
-  looks up the game's description and screenshot again.
+  none for the Mega CD), and the screenshot and description that ScreenScraper has of it,
+  once its media are downloaded.
 - **ScreenScraper media...** in a game's menu (or in the details panel): what
   [ScreenScraper](https://www.screenscraper.fr) has of the game, found by its ROM's CRC32,
   name and size (a disc by its name), or by its title if that fails: front cover, whole
@@ -580,9 +576,8 @@ On Windows, the `windows-installer.yml` workflow builds the installer with Inno 
 - The emulator also takes screenshots from the command line:
   `plumsg rom.md --3d --tilt 30 --frames 120 --screenshot 3d.png`, with
   `--filter crt` or `--filter scanlines`, or of the library with
-  `plumsg --library folder --download-covers --screenshot library.png`
-  (`--library` can be repeated, `--bios` opens the BIOS window and
-  `--find-cover` the cover search for the library's first game, `--media` its
+  `plumsg --library folder --screenshot library.png`
+  (`--library` can be repeated, `--bios` opens the BIOS window and `--media` the library's first game's
   ScreenScraper media window, downloading them (`--media search` searching for its
   title, `--media all` downloading every game's);
   `plumsg rom.md --cheats --screenshot cheats.png` opens the game's cheats with its list and
@@ -680,7 +675,6 @@ by Naser, also CC BY 4.0; the Master System, its pads and cartridge are
 by dark_igorek, CC BY 4.0. The 32X and Mega CD were
 written using Sega's documentation and [ares](https://github.com/ares-emulator/ares)
 (ISC) code as a reference. The 240p Test Suite in `tests/240p/` is GPL v2 and its SGDK
-library LGPL v3, with their source next to it. Cover art and screenshots come from
-libretro-thumbnails, the cheat lists and game details from libretro-database and the
-descriptions from Wikipedia (CC BY-SA 4.0); they are downloaded when used and are not in
-the repository.
+library LGPL v3, with their source next to it. Cover art, screenshots and descriptions
+come from ScreenScraper, the cheat lists and game details from libretro-database; they
+are downloaded when used and are not in the repository.
