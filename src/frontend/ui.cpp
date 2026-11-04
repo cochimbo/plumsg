@@ -702,6 +702,11 @@ UiActions Ui::frame(const UiState& state) {
     library_.update();
     gameInfo_.update();
     scraper_.update();
+    // A round of downloads that stops on an error says so wherever the user is.
+    if (const bool failed = scraper_.batchFailed(); failed != scraperFailed_) {
+        scraperFailed_ = failed;
+        if (failed) notify(scraper_.batchStatus());
+    }
     for (ScreenScraper::ForLibrary f; scraper_.takeForLibrary(f);) {
         library_.useDownloaded(f.path, f.cover, f.label, f.replace);
         gameInfo_.refresh(f.path);  // its description and screenshot, if it is in the panel
@@ -2507,7 +2512,7 @@ void Ui::drawLibrary(UiActions& out) {
     if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text(tr("%d juegos."), static_cast<int>(visible.size()));
     // Games still without a cover: one click away from ScreenScraper.
-    if (library_.pending() == 0 && scraper_.batchLeft() == 0) {
+    if (library_.pending() == 0 && scraper_.batchLeft() == 0 && !scraper_.batchFailed()) {
         int noCover = 0;
         for (const auto& g : games) noCover += g.cover == Library::Cover::Missing;
         if (noCover > 0) {
@@ -2517,10 +2522,21 @@ void Ui::drawLibrary(UiActions& out) {
             if (ImGui::SmallButton(tr("Descargarlas de ScreenScraper"))) scrapeLibrary();
         }
     }
+    // ScreenScraper's round of downloads, on a line of its own: how it goes, or why it
+    // stopped (the account, the connection...), in colour.
     if (const std::string ss = scraper_.batchStatus(); !ss.empty()) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", ss.c_str());
+        if (scraper_.batchFailed()) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.55f, 0.4f, 1.0f));
+            ImGui::TextWrapped("%s", ss.c_str());
+            ImGui::PopStyleColor();
+            if (ImGui::SmallButton(tr("Cuenta de ScreenScraper..."))) openScraping(0);
+            ImGui::SameLine();
+            if (ImGui::SmallButton(tr("Volver a intentarlo"))) scrapeLibrary();
+        } else {
+            ImGui::TextDisabled("%s", ss.c_str());
+        }
     }
+
     // The covers' size, at the right end of that line: smaller ones fit more to a row.
     if (libraryView == 0) {
         const char* label = tr("Tamaño");

@@ -71,8 +71,18 @@ std::string answerError(const SsAnswer& a) {
         case SsAnswer::Ok: return {};
         case SsAnswer::NotFound: return tr("ScreenScraper no conoce este juego. Búscalo por su nombre.");
         case SsAnswer::Offline: return tr("No se pudo conectar con ScreenScraper. ¿Hay conexión a internet?");
-        case SsAnswer::Login:
-            return tr("ScreenScraper no acepta la cuenta: revisa el usuario y la contraseña (o las credenciales de desarrollador).");
+        case SsAnswer::Login: {
+            // The server says which account it is ("identifiants developpeur" or the user's).
+            std::string low = a.message;
+            for (char& ch : low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            if (low.find("developpeur") != std::string::npos || low.find("développeur") != std::string::npos ||
+                low.find("developer") != std::string::npos)
+                return trf("ScreenScraper no acepta la cuenta de desarrollador de plumsg (%s).", a.message.c_str());
+            return a.message.empty()
+                       ? std::string(tr("ScreenScraper no acepta la cuenta: revisa tu usuario y tu contraseña en Scraping > Cuenta de ScreenScraper..."))
+                       : trf("ScreenScraper no acepta la cuenta (%s): revisa tu usuario y tu contraseña en Scraping > Cuenta de ScreenScraper...",
+                             a.message.c_str());
+        }
         case SsAnswer::Busy:
             return tr("ScreenScraper está muy ocupado ahora mismo. Con una cuenta (es gratis) se puede usar igual; si no, "
                       "prueba dentro de un rato.");
@@ -103,10 +113,17 @@ ScreenScraper::~ScreenScraper() {
     worker_.join();
 }
 
+// Without the spaces and line breaks a pasted account (or secret) may carry.
+static std::string trimmed(const std::string& s) {
+    const size_t a = s.find_first_not_of(" \t\r\n");
+    if (a == std::string::npos) return {};
+    return s.substr(a, s.find_last_not_of(" \t\r\n") - a + 1);
+}
+
 SsCredentials ScreenScraper::builtIn() {
     SsCredentials c;
-    c.devId = PLUMSG_SS_DEVID;
-    c.devPassword = PLUMSG_SS_DEVPASSWORD;
+    c.devId = trimmed(PLUMSG_SS_DEVID);
+    c.devPassword = trimmed(PLUMSG_SS_DEVPASSWORD);
     c.softName = "plumsg";
     return c;
 }
@@ -114,6 +131,8 @@ SsCredentials ScreenScraper::builtIn() {
 void ScreenScraper::setCredentials(const SsCredentials& c) {
     std::lock_guard<std::mutex> lock(mutex_);
     credentials_ = c;
+    for (std::string* f : {&credentials_.devId, &credentials_.devPassword, &credentials_.user, &credentials_.password})
+        *f = trimmed(*f);
 }
 
 SsCredentials ScreenScraper::credentials() const {
@@ -280,6 +299,20 @@ std::string ScreenScraper::batchStatus() const {
     return s;
 }
 
+bool ScreenScraper::batchFailed() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return !batchError_.empty();
+}
+
+void ScreenScraper::check() {
+    if (checking_) return;
+    checking_ = true;
+    checkStatus_ = tr("Probando...");
+    Task t;
+    t.kind = Task::Check;
+    queue(std::move(t), true);
+}
+
 bool ScreenScraper::takeForLibrary(ForLibrary& out) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (forLibrary_.empty()) return false;
@@ -300,6 +333,12 @@ void ScreenScraper::update() {
             if (replies_.empty()) return;
             r = std::move(replies_.front());
             replies_.pop_front();
+        }
+        if (r.kind == Task::Check) {
+            checking_ = false;
+            checkOk_ = r.ok;
+            checkStatus_ = r.status;
+            continue;
         }
         if (r.kind == Task::Search) {
             if (r.serial != searchSerial_) continue;
@@ -420,7 +459,7 @@ SsAnswer ScreenScraper::ask(const std::string& endpoint, const std::string& para
 bool ScreenScraper::fetchGame(const Task& task, std::string* error, bool batch) {
     const Rom& rom = task.rom;
     if (!credentials().usable()) {
-        *error = tr("Falta una cuenta de desarrollador de ScreenScraper: ponla en la pestaña Cuenta.");
+        *error = tr("Esta compilación de plumsg no trae la cuenta de desarrollador de ScreenScraper.");
         return false;
     }
     const int system = static_cast<int>(rom.system);
@@ -577,10 +616,28 @@ void ScreenScraper::work() {
                 const SsAnswer a = ask("jeuRecherche.php", "systemeid=" + std::to_string(screenScraperSystem(static_cast<int>(task.system))) +
                                                                "&recherche=" + urlEncode(task.text));
                 if (!credentials().usable())
-                    r.status = tr("Falta una cuenta de desarrollador de ScreenScraper: ponla en la pestaña Cuenta.");
+                    r.status = tr("Esta compilación de plumsg no trae la cuenta de desarrollador de ScreenScraper.");
                 else if (a.result == SsAnswer::NotFound) r.status = tr("Ningún juego se llama así en ScreenScraper.");
                 else r.status = answerError(a);
                 r.results = a.games;
+                break;
+            }
+            case Task::Check: {
+                const SsCredentials c = credentials();
+                if (!c.usable()) {
+                    r.status = tr("Esta compilación de plumsg no trae la cuenta de desarrollador de ScreenScraper.");
+                    break;
+                }
+                // With the user's account, its own data; without, the servers' (only the program's account).
+                const bool user = !c.user.empty();
+                const SsAnswer a = ask(user ? "ssuserInfos.php" : "ssinfraInfos.php", "");
+                r.ok = a.result == SsAnswer::Ok || a.result == SsAnswer::NotFound;  // no game asked for
+                if (!r.ok) r.status = answerError(a);
+                else if (user && a.maxRequests > 0)
+                    r.status = trf("Conectado con la cuenta «%s»: %d de %d peticiones usadas hoy.", c.user.c_str(),
+                                   std::max(0, a.requestsToday), a.maxRequests);
+                else if (user) r.status = trf("Conectado con la cuenta «%s».", c.user.c_str());
+                else r.status = tr("Conectado (sin cuenta tuya: menos peticiones al día).");
                 break;
             }
             case Task::Preview: {

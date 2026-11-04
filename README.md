@@ -235,7 +235,8 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   **Cover from image...** in the game's menu (right click, X on the gamepad or the menu
   key). If the wrong one appears, **Search ScreenScraper by name...** in that menu picks
   the right game. The **Scraping** menu has your screenscraper.fr account, what to
-  download and **Download media for the whole library**; the line under the toolbar
+  download (with **Test the connection**, which says whether ScreenScraper takes the
+  accounts) and **Download media for the whole library**; the line under the toolbar
   says how many games have no cover yet, with a button to download them. If folders are
   set, the library opens on start when there is no game. **Grid** and **List** switch the
   view (also Select on the gamepad or the V key): the list has title, console, year,

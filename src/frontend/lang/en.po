@@ -675,6 +675,15 @@ msgstr ""
 msgid "Composición"
 msgstr "Composite"
 
+msgid "Conectado (sin cuenta tuya: menos peticiones al día)."
+msgstr "Connected (without an account of yours: fewer requests a day)."
+
+msgid "Conectado con la cuenta «%s»."
+msgstr "Connected with the account “%s”."
+
+msgid "Conectado con la cuenta «%s»: %d de %d peticiones usadas hoy."
+msgstr "Connected with the account “%s”: %d of %d requests used today."
+
 msgid "Conectando con %s"
 msgstr "Connecting to %s"
 
@@ -1313,9 +1322,6 @@ msgstr "The Japanese Mega CD BIOS is missing: choose it in Console > Mega CD BIO
 
 msgid "Falta la función %s"
 msgstr "The function %s is missing"
-
-msgid "Falta una cuenta de desarrollador de ScreenScraper: ponla en la pestaña Cuenta."
-msgstr "A ScreenScraper developer account is missing: enter it in the Account tab."
 
 msgid "Fecha"
 msgstr "Date"
@@ -2396,6 +2402,12 @@ msgstr "Trying %d of %d: %d song"
 msgid "Probando el %d"
 msgstr "Trying number %d"
 
+msgid "Probando..."
+msgstr "Testing..."
+
+msgid "Probar la conexión"
+msgstr "Test the connection"
+
 msgid "Profundidad"
 msgstr "Depth"
 
@@ -2643,8 +2655,14 @@ msgstr "Scraping"
 msgid "ScreenScraper está muy ocupado ahora mismo. Con una cuenta (es gratis) se puede usar igual; si no, prueba dentro de un rato."
 msgstr "ScreenScraper is very busy right now. With an account (it is free) it can be used anyway; otherwise, try again in a while."
 
-msgid "ScreenScraper no acepta la cuenta: revisa el usuario y la contraseña (o las credenciales de desarrollador)."
-msgstr "ScreenScraper does not accept the account: check the user name and password (or the developer credentials)."
+msgid "ScreenScraper no acepta la cuenta (%s): revisa tu usuario y tu contraseña en Scraping > Cuenta de ScreenScraper..."
+msgstr "ScreenScraper does not accept the account (%s): check your user name and password in Scraping > ScreenScraper account..."
+
+msgid "ScreenScraper no acepta la cuenta de desarrollador de plumsg (%s)."
+msgstr "ScreenScraper does not accept plumsg's developer account (%s)."
+
+msgid "ScreenScraper no acepta la cuenta: revisa tu usuario y tu contraseña en Scraping > Cuenta de ScreenScraper..."
+msgstr "ScreenScraper does not accept the account: check your user name and password in Scraping > ScreenScraper account..."
 
 msgid "ScreenScraper no conoce este juego. Búscalo por su nombre."
 msgstr "ScreenScraper does not know this game. Search for it by name."
@@ -3137,6 +3155,9 @@ msgstr "Search again"
 
 msgid "Volver a descargar"
 msgstr "Download again"
+
+msgid "Volver a intentarlo"
+msgstr "Try again"
 
 msgid "Volver a la sugerencia"
 msgstr "Back to the suggestion"
