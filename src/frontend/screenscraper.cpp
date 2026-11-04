@@ -86,7 +86,10 @@ std::string answerError(const SsAnswer& a) {
         case SsAnswer::Busy:
             return tr("ScreenScraper está muy ocupado ahora mismo. Con una cuenta (es gratis) se puede usar igual; si no, "
                       "prueba dentro de un rato.");
-        case SsAnswer::Quota: return tr("Se han acabado las peticiones de hoy de tu cuenta de ScreenScraper.");
+        case SsAnswer::Quota:
+            // The server's own words say which quota (the day's requests, or the failed ones).
+            return a.message.empty() ? std::string(tr("Se han acabado las peticiones de hoy de tu cuenta de ScreenScraper."))
+                                     : trf("ScreenScraper dice que se ha llegado a un límite de hoy: %s", a.message.c_str());
         case SsAnswer::Closed: return tr("La API de ScreenScraper está cerrada por ahora. Prueba más tarde.");
         case SsAnswer::Error: break;
     }

@@ -255,6 +255,34 @@ SsAnswer parseSsAnswer(int httpStatus, const std::string& body) {
     }
     JsonValue j;
     const bool json = parseJson(body, j) && j.isObject();
+    // A JSON answer is read by its fields: its text (a synopsis, the servers' "threads"
+    // counters...) may hold any of the words below. Only its header's error, if it says
+    // it failed, is looked at.
+    if (httpStatus == 200 && json) {
+        const JsonValue& header = j["header"];
+        if (header["success"].text != "false") {
+            a.result = SsAnswer::Ok;
+            a.message.clear();
+            const JsonValue& response = j["response"];
+            const JsonValue& user = response["ssuser"];
+            if (user.isObject()) {
+                if (!user["requeststoday"].text.empty()) a.requestsToday = number(user["requeststoday"].text);
+                if (!user["maxrequestsperday"].text.empty()) a.maxRequests = number(user["maxrequestsperday"].text);
+            }
+            if (response["jeu"].isObject()) {
+                SsGame g = readGame(response["jeu"]);
+                if (g.id) a.games.push_back(std::move(g));
+            }
+            for (const JsonValue& e : response["jeux"].items) {
+                if (!e.isObject()) continue;
+                SsGame g = readGame(e);
+                if (g.id) a.games.push_back(std::move(g));  // an empty search answers [{}]
+            }
+            if (a.games.empty()) a.result = SsAnswer::NotFound;
+            return a;
+        }
+        return parseSsAnswer(500, header["error"].text.empty() ? std::string("error") : header["error"].text);
+    }
     if (httpStatus == 404 || contains(low, "non trouv")) a.result = SsAnswer::NotFound;
     else if (httpStatus == 403 || contains(low, "erreur de login") || contains(low, "identifiants")) a.result = SsAnswer::Login;
     else if (httpStatus == 430 || httpStatus == 431 || contains(low, "quota")) a.result = SsAnswer::Quota;

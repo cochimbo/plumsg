@@ -2652,6 +2652,9 @@ msgstr ""
 msgid "Scraping"
 msgstr "Scraping"
 
+msgid "ScreenScraper dice que se ha llegado a un límite de hoy: %s"
+msgstr "O ScreenScraper diz que um limite de hoje foi atingido: %s"
+
 msgid "ScreenScraper está muy ocupado ahora mismo. Con una cuenta (es gratis) se puede usar igual; si no, prueba dentro de un rato."
 msgstr "O ScreenScraper está muito ocupado agora. Com uma conta (é grátis) pode ser usado na mesma; se não, tente daqui a pouco."
 
