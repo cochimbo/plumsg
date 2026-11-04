@@ -41,7 +41,8 @@ void copy(char* to, size_t size, const std::string& from) { std::snprintf(to, si
 
 void Ui::applyScraperSettings() {
     SsCredentials c = ScreenScraper::builtIn();
-    if (!settings_.ssDevId.empty()) {
+    // One in plumsg.ini (typed in by an older version) only for a build without it.
+    if (!c.usable() && !settings_.ssDevId.empty()) {
         c.devId = settings_.ssDevId;
         c.devPassword = settings_.ssDevPassword;
     }
@@ -72,8 +73,6 @@ void Ui::openMedia(size_t game) {
     media_.selectTab = true;
     copy(media_.user, sizeof media_.user, settings_.ssUser);
     copy(media_.password, sizeof media_.password, settings_.ssPassword);
-    copy(media_.devId, sizeof media_.devId, settings_.ssDevId);
-    copy(media_.devPassword, sizeof media_.devPassword, settings_.ssDevPassword);
     showMedia_ = true;
 }
 
@@ -92,6 +91,48 @@ void Ui::startMedia(size_t game, int mode) {
     } else {
         scraper_.download(romOf(g));
     }
+}
+
+void Ui::scrapeLibrary() {
+    applyScraperSettings();
+    if (!scraper_.credentials().usable()) {
+        openScraping(0);  // nothing can be asked without the developer account
+        return;
+    }
+    std::vector<ScreenScraper::Rom> roms;
+    for (const auto& g : library_.games()) roms.push_back(romOf(g));
+    scraper_.downloadAll(roms);
+}
+
+void Ui::openScraping(int tab) {
+    applyScraperSettings();
+    copy(media_.user, sizeof media_.user, settings_.ssUser);
+    copy(media_.password, sizeof media_.password, settings_.ssPassword);
+    scrapingTab_ = tab;
+    showScraping_ = true;
+}
+
+// Scraping > ...: ScreenScraper's account and what to download, for every game.
+void Ui::drawScraping(UiActions& out) {
+    ImGui::SetNextWindowSize(ImVec2(theme::px(640.0f), theme::px(560.0f)), ImGuiCond_Appearing);
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (!ImGui::Begin((std::string(tr("Scraping")) + "###scraping").c_str(), &showScraping_, ImGuiWindowFlags_NoCollapse)) {
+        ImGui::End();
+        return;
+    }
+    if (ImGui::BeginTabBar("pestanas_scraping")) {
+        const char* tabs[] = {N_("Cuenta"), N_("Qué descargar")};
+        for (int t = 0; t < 2; ++t) {
+            const ImGuiTabItemFlags f = scrapingTab_ == t ? ImGuiTabItemFlags_SetSelected : 0;
+            if (!ImGui::BeginTabItem((std::string(tr(tabs[t])) + "###s" + std::to_string(t)).c_str(), nullptr, f)) continue;
+            if (t == 0) drawMediaAccount(out);
+            else drawMediaKinds(out);
+            ImGui::EndTabItem();
+        }
+        scrapingTab_ = -1;
+        ImGui::EndTabBar();
+    }
+    ImGui::End();
 }
 
 void Ui::drawMedia(UiActions& out) {
@@ -137,7 +178,7 @@ void Ui::drawMedia(UiActions& out) {
         }
         if (!usable) {
             ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.4f, 1.0f), "%s",
-                               tr("Falta una cuenta de desarrollador de ScreenScraper: ponla en la pestaña Cuenta."));
+                               tr("Esta compilación de plumsg no trae la cuenta de desarrollador de ScreenScraper."));
         } else if (sheet.busy) {
             ImGui::TextDisabled("%s", sheet.progress.empty() ? tr("Trabajando...") : sheet.progress.c_str());
         } else if (!sheet.status.empty()) {
@@ -174,7 +215,7 @@ void Ui::drawMediaFound(const Library::Game& g) {
     const ScreenScraper::Sheet& sheet = scraper_.sheet();
     ImGui::BeginChild("descargado", ImVec2(0, 0));
     if (!sheet.known && sheet.media.empty()) {
-        ImGui::TextDisabled("%s", sheet.busy ? "..." : tr("Aún no se ha descargado nada de este juego."));
+        ImGui::TextDisabled("%s", sheet.busy ? "..." : tr("Aún no se ha descargado nada de este juego: pulsa Descargar de ScreenScraper."));
         ImGui::EndChild();
         return;
     }
@@ -399,34 +440,53 @@ void Ui::drawMediaKinds(UiActions& out) {
 }
 
 void Ui::drawMediaAccount(UiActions& out) {
-    ImGui::TextWrapped("%s", tr("Con una cuenta de screenscraper.fr (es gratis) se pueden hacer más peticiones al día, y "
-                                "ScreenScraper sigue respondiendo aunque esté lleno. Se guarda en plumsg.ini."));
-    if (ImGui::SmallButton(tr("Crear una cuenta"))) SDL_OpenURL("https://www.screenscraper.fr/membreinscription.php");
-    // Kept when a field is left, not on every key.
-    bool changed = false;
-    ImGui::SetNextItemWidth(260.0f);
-    ImGui::InputText(tr("Usuario"), media_.user, sizeof media_.user);
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
-    ImGui::SetNextItemWidth(260.0f);
-    ImGui::InputText(tr("Contraseña"), media_.password, sizeof media_.password, ImGuiInputTextFlags_Password);
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    // The user's own account: optional, for more requests a day.
+    ImGui::SeparatorText(tr("Tu cuenta de screenscraper.fr"));
+    ImGui::TextWrapped("%s", tr("Si ya tienes cuenta, escribe aquí tu usuario y tu contraseña de screenscraper.fr: con ella "
+                                "se pueden hacer más peticiones al día, y ScreenScraper sigue respondiendo aunque esté lleno. "
+                                "Se guarda en plumsg.ini."));
     ImGui::Spacing();
-    ImGui::SeparatorText(tr("Cuenta de desarrollador"));
-    const bool builtIn = ScreenScraper::builtIn().usable();
-    ImGui::TextWrapped("%s", builtIn ? tr("Esta versión de plumsg ya trae la suya: déjalo vacío.")
-                                     : tr("ScreenScraper pide además la cuenta del programa, que da a quien la solicita en su "
-                                          "foro. Esta versión de plumsg no trae ninguna: si tienes una, ponla aquí."));
-    ImGui::SetNextItemWidth(260.0f);
-    ImGui::InputText("devid", media_.devId, sizeof media_.devId);
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
-    ImGui::SetNextItemWidth(260.0f);
-    ImGui::InputText("devpassword", media_.devPassword, sizeof media_.devPassword, ImGuiInputTextFlags_Password);
-    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    const float labelW = std::max(ImGui::CalcTextSize(tr("Usuario")).x, ImGui::CalcTextSize(tr("Contraseña")).x) +
+                         ImGui::GetStyle().ItemSpacing.x * 2;
+    auto field = [&](const char* label, const char* id, char* buf, size_t size, ImGuiInputTextFlags flags) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(label);
+        ImGui::SameLine(labelW);
+        ImGui::SetNextItemWidth(theme::px(260.0f));
+        ImGui::InputText(id, buf, size, flags);
+        return ImGui::IsItemDeactivatedAfterEdit();
+    };
+    // Kept when a field is left (or with the button), not on every key.
+    bool changed = field(tr("Usuario"), "##ss_usuario", media_.user, sizeof media_.user, 0);
+    changed |= field(tr("Contraseña"), "##ss_contrasena", media_.password, sizeof media_.password, ImGuiInputTextFlags_Password);
+    ImGui::SetCursorPosX(labelW);
+    changed |= ImGui::Button(tr("Usar esta cuenta"));
+    if (!settings_.ssUser.empty()) {
+        ImGui::SameLine();
+        if (ImGui::Button(tr("Quitar la cuenta"))) {
+            media_.user[0] = media_.password[0] = '\0';
+            changed = true;
+        }
+    }
+    ImGui::SetCursorPosX(labelW);
+    if (settings_.ssUser.empty()) ImGui::TextDisabled("%s", tr("Ahora no se usa ninguna cuenta tuya."));
+    else ImGui::TextDisabled("%s", trf("Se usa la cuenta «%s».", settings_.ssUser.c_str()).c_str());
+    ImGui::Spacing();
+    ImGui::TextDisabled("%s", tr("¿No tienes cuenta? Es gratis:"));
+    ImGui::SameLine();
+    if (ImGui::SmallButton(tr("Crear una cuenta"))) SDL_OpenURL("https://www.screenscraper.fr/membreinscription.php");
+
+    // The program's account is built into releases, as in other emulators: nothing to type.
+    if (!ScreenScraper::builtIn().usable() && settings_.ssDevId.empty()) {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.4f, 1.0f));
+        ImGui::TextWrapped("%s", tr("Esta compilación de plumsg no trae la cuenta de desarrollador de ScreenScraper, así que no "
+                                    "puede descargar nada. Los instaladores publicados sí la traen."));
+        ImGui::PopStyleColor();
+    }
     if (!changed) return;
     settings_.ssUser = media_.user;
     settings_.ssPassword = media_.password;
-    settings_.ssDevId = media_.devId;
-    settings_.ssDevPassword = media_.devPassword;
     applyScraperSettings();
     out.settingsChanged = true;
 }

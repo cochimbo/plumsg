@@ -264,6 +264,9 @@ msgstr "Agogo grave"
 msgid "Agudos"
 msgstr "Aigus"
 
+msgid "Ahora no se usa ninguna cuenta tuya."
+msgstr "Aucun de vos comptes n’est utilisé."
+
 msgid "Ajustar"
 msgstr "Ajuster"
 
@@ -375,8 +378,8 @@ msgstr "Ajouter un dossier..."
 msgid "Año"
 msgstr "Année"
 
-msgid "Aún no se ha descargado nada de este juego."
-msgstr "Rien n'a encore été téléchargé pour ce jeu."
+msgid "Aún no se ha descargado nada de este juego: pulsa Descargar de ScreenScraper."
+msgstr "Rien n’a encore été téléchargé pour ce jeu : appuyez sur Télécharger depuis ScreenScraper."
 
 msgid "BIOS del Mega CD"
 msgstr "BIOS du Mega CD"
@@ -512,8 +515,8 @@ msgstr "Chercher"
 msgid "Buscar (Ctrl+F o Y)"
 msgstr "Chercher (Ctrl+F ou Y)"
 
-msgid "Buscar carátula..."
-msgstr "Chercher une jaquette..."
+msgid "Buscar en ScreenScraper por nombre..."
+msgstr "Chercher sur ScreenScraper par nom..."
 
 msgid "Buscar en las carpetas de la biblioteca"
 msgstr "Chercher dans les dossiers de la bibliothèque"
@@ -672,9 +675,6 @@ msgstr ""
 msgid "Composición"
 msgstr "Composition"
 
-msgid "Con una cuenta de screenscraper.fr (es gratis) se pueden hacer más peticiones al día, y ScreenScraper sigue respondiendo aunque esté lleno. Se guarda en plumsg.ini."
-msgstr "Avec un compte screenscraper.fr (gratuit), on peut faire plus de requêtes par jour, et ScreenScraper continue de répondre même quand il est plein. Il est enregistré dans plumsg.ini."
-
 msgid "Conectando con %s"
 msgstr "Connexion à %s"
 
@@ -768,8 +768,8 @@ msgstr ""
 msgid "Cuenta"
 msgstr "Compte"
 
-msgid "Cuenta de desarrollador"
-msgstr "Compte développeur"
+msgid "Cuenta de ScreenScraper..."
+msgstr "Compte ScreenScraper..."
 
 msgid "Cuenta..."
 msgstr "Compte..."
@@ -900,8 +900,14 @@ msgstr "Téléchargement : %s..."
 msgid "Descargar de ScreenScraper"
 msgstr "Télécharger depuis ScreenScraper"
 
+msgid "Descargar medios de toda la biblioteca"
+msgstr "Télécharger les médias de toute la bibliothèque"
+
 msgid "Descargar: %s"
 msgstr "Télécharger : %s"
+
+msgid "Descargarlas de ScreenScraper"
+msgstr "Les télécharger depuis ScreenScraper"
 
 msgid "Descripción"
 msgstr "Description"
@@ -1206,8 +1212,11 @@ msgstr "En attente de l'autre joueur sur le port %d. En attendant, vous pouvez c
 msgid "Esperando notas... (la batería no se escribe: no tiene notas)"
 msgstr "En attente de notes... (la batterie ne s'écrit pas : elle n'a pas de notes)"
 
-msgid "Esta versión de plumsg ya trae la suya: déjalo vacío."
-msgstr "Cette version de plumsg a déjà le sien : laissez vide."
+msgid "Esta compilación de plumsg no trae la cuenta de desarrollador de ScreenScraper, así que no puede descargar nada. Los instaladores publicados sí la traen."
+msgstr "Cette version de plumsg n’inclut pas le compte développeur ScreenScraper, elle ne peut donc rien télécharger. Les installateurs publiés l’incluent."
+
+msgid "Esta compilación de plumsg no trae la cuenta de desarrollador de ScreenScraper."
+msgstr "Cette version de plumsg n’inclut pas le compte développeur ScreenScraper."
 
 msgid "Estado"
 msgstr "État"
@@ -2237,6 +2246,9 @@ msgstr "Arrêter ScreenScraper"
 msgid "Parar emulación"
 msgstr "Arrêter l'émulation"
 
+msgid "Parar la descarga"
+msgstr "Arrêter le téléchargement"
+
 msgid "Parar la grabación"
 msgstr "Arrêter l'enregistrement"
 
@@ -2442,8 +2454,14 @@ msgstr ""
 msgid "Quitar"
 msgstr "Retirer"
 
+msgid "Quitar la cuenta"
+msgstr "Retirer le compte"
+
 msgid "Qué descargar"
 msgstr "Que télécharger"
+
+msgid "Qué descargar..."
+msgstr "Que télécharger..."
 
 msgid "Quítalo para no oír este instrumento (también en la Partitura)."
 msgstr "Décochez-la pour ne plus entendre cet instrument (dans la Partition aussi)."
@@ -2619,6 +2637,9 @@ msgstr ""
 "CRT : en plus, l'écran un peu bombé, le masque de couleurs et les coins\n"
 "plus sombres. Seulement dans la vue 2D ; c'est plus joli en plein écran."
 
+msgid "Scraping"
+msgstr "Scraping"
+
 msgid "ScreenScraper está muy ocupado ahora mismo. Con una cuenta (es gratis) se puede usar igual; si no, prueba dentro de un rato."
 msgstr "ScreenScraper est très chargé en ce moment. Avec un compte (gratuit) on peut l'utiliser quand même ; sinon, réessayez plus tard."
 
@@ -2630,9 +2651,6 @@ msgstr "ScreenScraper ne connaît pas ce jeu. Cherchez-le par son nom."
 
 msgid "ScreenScraper no tiene descripción de este juego."
 msgstr "ScreenScraper n’a pas de description de ce jeu."
-
-msgid "ScreenScraper pide además la cuenta del programa, que da a quien la solicita en su foro. Esta versión de plumsg no trae ninguna: si tienes una, ponla aquí."
-msgstr "ScreenScraper demande aussi le compte du logiciel, qu'il donne à qui le demande sur son forum. Cette version de plumsg n'en a pas : si vous en avez un, saisissez-le ici."
 
 msgid "ScreenScraper respondió con un error."
 msgstr "ScreenScraper a répondu par une erreur."
@@ -2657,6 +2675,9 @@ msgstr "La connexion avec l'autre joueur a été perdue."
 
 msgid "Se han acabado las peticiones de hoy de tu cuenta de ScreenScraper."
 msgstr "Votre compte ScreenScraper a épuisé ses requêtes du jour."
+
+msgid "Se usa la cuenta «%s»."
+msgstr "Compte utilisé : « %s »."
 
 msgid "Sección de metales"
 msgstr "Section de cuivres"
@@ -2688,6 +2709,9 @@ msgstr "Shehnai"
 
 msgid "Si"
 msgstr "Si"
+
+msgid "Si ya tienes cuenta, escribe aquí tu usuario y tu contraseña de screenscraper.fr: con ella se pueden hacer más peticiones al día, y ScreenScraper sigue respondiendo aunque esté lleno. Se guarda en plumsg.ini."
+msgstr "Si vous avez déjà un compte, saisissez ici votre identifiant et votre mot de passe screenscraper.fr : il permet plus de requêtes par jour, et ScreenScraper continue de répondre même quand il est saturé. Il est enregistré dans plumsg.ini."
 
 msgid "Silbato corto"
 msgstr "Sifflet court"
@@ -2969,6 +2993,9 @@ msgstr "Codes trouvés sur internet"
 msgid "Trucos..."
 msgstr "Codes de triche..."
 
+msgid "Tu cuenta de screenscraper.fr"
+msgstr "Votre compte screenscraper.fr"
+
 msgid "Tu mejor marca: %s"
 msgstr "Votre meilleur score : %s"
 
@@ -3044,6 +3071,9 @@ msgstr "Utiliser le stick gauche comme croix"
 
 msgid "Usar esta carpeta"
 msgstr "Utiliser ce dossier"
+
+msgid "Usar esta cuenta"
+msgstr "Utiliser ce compte"
 
 msgid "Usar este juego"
 msgstr "Utiliser ce jeu"
@@ -3386,6 +3416,15 @@ msgstr "« %s » : %d fichiers téléchargés."
 
 msgid "«%s»: ScreenScraper no tiene imágenes de este juego."
 msgstr "« %s » : ScreenScraper n'a pas d'images de ce jeu."
+
+msgid "· %d sin carátula"
+msgstr "· %d sans jaquette"
+
+msgid "· %d sin carátulas"
+msgstr "· %d sans jaquette"
+
+msgid "¿No tienes cuenta? Es gratis:"
+msgstr "Pas de compte ? C’est gratuit :"
 
 msgid "¿Quitar lo elegido a mano en todos los instrumentos de esta pista?"
 msgstr "Retirer ce qui a été choisi à la main pour tous les instruments de cette piste ?"

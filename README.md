@@ -233,8 +233,10 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   and so on). Your own picture works too: a `.png` or `.jpg` with the game's name next
   to it, in a `caratulas` or `covers` folder in the games folder, or picked with
   **Cover from image...** in the game's menu (right click, X on the gamepad or the menu
-  key). If the wrong one appears, **Find cover...** in that menu searches ScreenScraper
-  by name to pick the right game. If folders are
+  key). If the wrong one appears, **Search ScreenScraper by name...** in that menu picks
+  the right game. The **Scraping** menu has your screenscraper.fr account, what to
+  download and **Download media for the whole library**; the line under the toolbar
+  says how many games have no cover yet, with a button to download them. If folders are
   set, the library opens on start when there is no game. **Grid** and **List** switch the
   view (also Select on the gamepad or the V key): the list has title, console, year,
   genre, developer and players columns, and is sorted by clicking its header or with the

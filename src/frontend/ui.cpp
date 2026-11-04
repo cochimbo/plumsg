@@ -708,6 +708,7 @@ UiActions Ui::frame(const UiState& state) {
     }
     if (showLibrary_) drawLibrary(out);
     if (showMedia_) drawMedia(out);
+    if (showScraping_) drawScraping(out);
     if (showBios_) drawBios(out);
     if (showNetplay_) drawNetplay(state, out);
     if (achievements_ && achievements_->drawWindows()) out.achievementsChanged = out.settingsChanged = true;
@@ -803,7 +804,7 @@ void Ui::drawCrosshairs(const UiState& state) {
 // the system pointer when it is None.
 void Ui::hideIdleCursor(const UiState& state) {
     const bool windowOpen = showControls_ || showVideo_ || showAbout_ || showCheats_ || showGameOptions_ || showLibrary_ ||
-                            showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
+                            showScraping_ || showBios_ || showNetplay_ || stateMenu_.open || browser_.isOpen() ||
                             (editor_ && editor_->isOpen()) || score_.isOpen() || (achievements_ && achievements_->windowOpen()) ||
                             !error_.empty() || capture_.active ||
                             ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) || ImGui::GetIO().WantCaptureMouse;
@@ -991,6 +992,21 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         ImGui::EndDisabled();
         ImGui::Separator();
         if (ImGui::MenuItem(tr("BIOS del Mega CD..."), nullptr, showBios_)) showBios_ = true;
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu(tr("Scraping"))) {
+        if (ImGui::MenuItem(tr("Cuenta de ScreenScraper..."))) openScraping(0);
+        if (ImGui::MenuItem(tr("Qué descargar..."))) openScraping(1);
+        ImGui::Separator();
+        // Every game of the library that has nothing downloaded yet.
+        const bool running = scraper_.batchLeft() > 0;
+        if (running) {
+            if (ImGui::MenuItem(tr("Parar la descarga"))) scraper_.cancelAll();
+        } else if (ImGui::MenuItem(tr("Descargar medios de toda la biblioteca"), nullptr, false, !settings_.libraryFolders.empty())) {
+            showLibrary_ = true;
+            if (!library_.scanned() || library_.folders() != settings_.libraryFolders) rescanLibrary();
+            scrapeLibrary();
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu(tr("Red"))) {
@@ -2398,17 +2414,7 @@ void Ui::drawLibrary(UiActions& out) {
     if (scraper_.batchLeft() > 0) {
         if (ImGui::Button(tr("Parar ScreenScraper"))) scraper_.cancelAll();
     } else if (ImGui::Button(tr("Descargar de ScreenScraper"))) {
-        if (!scraper_.credentials().usable()) {
-            // Nothing can be asked without an account: its tab, for the first game.
-            if (!games.empty()) {
-                openMedia(0);
-                media_.tab = 3;
-            }
-        } else {
-            std::vector<ScreenScraper::Rom> roms;
-            for (const auto& g : games) roms.push_back({g.path, g.stem, g.title, g.tags, g.system});
-            scraper_.downloadAll(roms);
-        }
+        scrapeLibrary();
     }
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Busca en ScreenScraper (internet) cada juego que aún no tenga sus medios: portada completa,\n"
@@ -2500,6 +2506,17 @@ void Ui::drawLibrary(UiActions& out) {
         libraryView_.selectedGame = visible[static_cast<size_t>(libraryView_.selected)];
     if (library_.pending() > 0) ImGui::Text(tr("%d juegos. Buscando carátulas, quedan %d..."), static_cast<int>(visible.size()), library_.pending());
     else ImGui::Text(tr("%d juegos."), static_cast<int>(visible.size()));
+    // Games still without a cover: one click away from ScreenScraper.
+    if (library_.pending() == 0 && scraper_.batchLeft() == 0) {
+        int noCover = 0;
+        for (const auto& g : games) noCover += g.cover == Library::Cover::Missing;
+        if (noCover > 0) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", trf(noCover == 1 ? N_("· %d sin carátula") : N_("· %d sin carátulas"), noCover).c_str());
+            ImGui::SameLine();
+            if (ImGui::SmallButton(tr("Descargarlas de ScreenScraper"))) scrapeLibrary();
+        }
+    }
     if (const std::string ss = scraper_.batchStatus(); !ss.empty()) {
         ImGui::SameLine();
         ImGui::TextDisabled("%s", ss.c_str());
@@ -2554,7 +2571,7 @@ void Ui::drawLibrary(UiActions& out) {
             ImGui::TextDisabled("%s", g.title.c_str());
             ImGui::Separator();
             static const char* items[LibraryView::kItems] = {N_("Jugar"), N_("Trucos..."), N_("Opciones de este juego..."),
-                                                             N_("Editor de instrumentos..."), N_("Buscar carátula..."),
+                                                             N_("Editor de instrumentos..."), N_("Buscar en ScreenScraper por nombre..."),
                                                              N_("Carátula desde imagen..."), N_("Portada completa..."),
                                                              N_("Etiqueta del cartucho..."), N_("Medios de ScreenScraper...")};
             int picked = libraryView_.menuAction;
@@ -2569,7 +2586,7 @@ void Ui::drawLibrary(UiActions& out) {
                     out.openEditor = true;
                     showLibrary_ = false;
                     break;
-                case 4: startMedia(visible[static_cast<size_t>(n)], 2); break;  // ScreenScraper's search
+                case 4: startMedia(visible[static_cast<size_t>(n)], 2); break;  // ScreenScraper's search by name
                 case 5: chooseCoverImage(visible[static_cast<size_t>(n)]); break;
                 case 6: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Sleeve); break;
                 case 7: chooseCoverImage(visible[static_cast<size_t>(n)], CoverImage::Label); break;
@@ -2932,8 +2949,9 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
         ImGui::TextDisabled("%s", tr("Fuente: ScreenScraper"));
     } else {
         ImGui::TextWrapped("%s", sheet.status.c_str());
+        if (!sheet.known && ImGui::Button(tr("Descargar de ScreenScraper"))) startMedia(visible[static_cast<size_t>(n)], 1);
     }
-    if (ImGui::SmallButton(tr("Medios de ScreenScraper..."))) openMedia(visible[static_cast<size_t>(n)]);
+    if (ImGui::Button(tr("Medios de ScreenScraper..."))) openMedia(visible[static_cast<size_t>(n)]);
 }
 
 void Ui::chooseCoverImage(size_t game, CoverImage kind) {
