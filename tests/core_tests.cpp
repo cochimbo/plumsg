@@ -33,6 +33,7 @@
 #include "frontend/game_info_data.h"
 #include "frontend/library_names.h"
 #include "frontend/screenscraper_data.h"
+#include "frontend/texture_cache.h"
 #include "mars/mars_program.h"
 #include "megacd/megacd_program.h"
 #include "megacd32x/megacd32x_program.h"
@@ -3718,6 +3719,54 @@ void testSmsSongExtract() {
     std::filesystem::remove(path);
 }
 
+// The library's cover cache: QOI back to the same pixels, every kind of step in it
+// (runs, the index, small and larger changes, alpha), and a file read back by its key.
+void testTextureCache() {
+    const int w = 61, h = 37;
+    std::vector<uint32_t> px(static_cast<size_t>(w) * h);
+    uint32_t seed = 12345;
+    for (size_t i = 0; i < px.size(); ++i) {
+        seed = seed * 1103515245u + 12345u;
+        const uint32_t kind = (seed >> 16) % 6;
+        const uint32_t prev = i ? px[i - 1] : 0xFF000000u;
+        if (kind == 0) px[i] = prev;                                   // a run
+        else if (kind == 1 && i > 20) px[i] = px[i - 17];              // probably in the index
+        else if (kind == 2) px[i] = (prev & 0xFF000000u) | ((prev + 0x010101u) & 0xFFFFFFu);  // a small step
+        else if (kind == 3) px[i] = (prev & 0xFF000000u) | ((prev + 0x0A0C0Eu) & 0xFFFFFFu);  // a larger one
+        else if (kind == 4) px[i] = (seed & 0x00FFFFFFu) | (((seed >> 8) & 1) ? 0x80000000u : 0xFF000000u);
+        else px[i] = seed;
+    }
+    for (size_t i = 0; i < 100; ++i) px[500 + i] = 0xFF336699u;  // longer than a run can say
+    const std::vector<uint8_t> qoi = TextureCache::encodeQoi(px, w, h);
+    std::vector<uint32_t> back;
+    int bw = 0, bh = 0;
+    check(TextureCache::decodeQoi(qoi.data(), qoi.size(), back, &bw, &bh) && bw == w && bh == h && back == px,
+          "texture cache: QOI gives back the same pixels");
+    check(!TextureCache::decodeQoi(qoi.data(), qoi.size() / 2, back, &bw, &bh), "texture cache: a cut QOI is refused");
+
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path dir = fs::temp_directory_path(ec) / "plumsg-texture-cache-test";
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    const std::string source = (dir / "cover.png").u8string();
+    { std::ofstream(fs::u8path(source), std::ios::binary) << "not really a png"; }
+    TextureCache cache;
+    cache.setFolder((dir / "cache").u8string() + "/");
+    const uint64_t key = TextureCache::key(source, 7);
+    check(key != 0 && key != TextureCache::key(source, 8) && TextureCache::key((dir / "none.png").u8string(), 7) == 0,
+          "texture cache: the key depends on the file and how it was shrunk");
+    check(!cache.load(key, back, &bw, &bh), "texture cache: nothing cached yet");
+    cache.store(key, px, w, h);
+    back.clear();
+    check(cache.load(key, back, &bw, &bh) && back == px, "texture cache: read back from disk");
+    cache.prune({key});
+    check(cache.load(key, back, &bw, &bh), "texture cache: prune keeps what is used");
+    cache.prune({});
+    check(!cache.load(key, back, &bw, &bh), "texture cache: prune deletes what is not");
+    fs::remove_all(dir, ec);
+}
+
 int main() {
     testHeader();
     testSmd();
@@ -3769,6 +3818,7 @@ int main() {
     testSmsVgm();
     testSmsRoland();
     testSmsSongExtract();
+    testTextureCache();
     testSh2();
     testMars();
     testMarsResetButton();

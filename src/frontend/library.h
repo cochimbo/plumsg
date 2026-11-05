@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../core/system.h"
+#include "texture_cache.h"
 
 namespace plumsg {
 
@@ -19,8 +20,9 @@ namespace plumsg {
 // Covers are looked for in the user's own covers folder, next to the ROMs (same name
 // .png/.jpg, or in a caratulas, covers or boxart folder there) and in what was
 // downloaded from ScreenScraper, the only place plumsg downloads them from (see
-// ScreenScraper). A worker thread finds and decodes the covers; update() turns the
-// decoded ones into OpenGL textures on the main thread.
+// ScreenScraper). A few worker threads find and decode the covers (or read them back,
+// already decoded and shrunk, from the TextureCache); update() turns the decoded ones
+// into OpenGL textures on the main thread.
 class Library {
 public:
     // For the detail panel's screenshots: a cover's decoding (shrunk to the covers'
@@ -55,6 +57,9 @@ public:
     // ScreenScraper's media folder (ScreenScraper::setFolder's): a game's cover and label
     // are looked for there too, last.
     void setMediaFolder(const std::string& folder) { mediaFolder_ = folder; }
+    // Where the decoded covers are kept between runs (ending in a separator), see
+    // TextureCache. Set before scan().
+    void setCacheFolder(const std::string& folder) { cache_.setFolder(folder); }
     // Lists the games of `folders` and starts looking for their covers. The .bin
     // tracks a .cue points to are part of that disc, not games of their own.
     void scan(const std::vector<std::string>& folders);
@@ -64,6 +69,9 @@ public:
 
     // How many covers are still being looked for.
     int pending() const { return pending_.load(); }
+    // Looks for the covers of these games (indices into games()) before the others',
+    // the first one first: the ones on screen.
+    void prioritize(const std::vector<size_t>& games);
 
     // Uses an image of the user's own (PNG or JPEG, "Carátula desde imagen..." in its
     // menu) as `game`'s cover, copied to the covers folder like a downloaded one.
@@ -77,8 +85,9 @@ public:
     // sleeve) and a label, either may be empty. Unless `replace`, only where the game has
     // none, or a sleeve where it only has a front.
     void useDownloaded(const std::string& path, const std::vector<uint8_t>& cover, const std::vector<uint8_t>& label, bool replace);
-    // Main thread, once a frame: uploads a few decoded covers as textures.
-    void update();
+    // Main thread, once a frame: uploads as many decoded covers as textures as fit in
+    // `budgetMs` milliseconds (at least one).
+    void update(int budgetMs = 3);
     void clearTextures();
 
 private:
@@ -99,6 +108,9 @@ private:
     };
 
     void work();
+    // Reads and decodes the image at `path`, from the cache if it is there; *key is
+    // its key in the cache (0 if it has none).
+    bool loadImage(const std::string& path, std::vector<uint32_t>& pixels, int* width, int* height, uint64_t* key) const;
     bool findLocal(const Job& job, std::string* coverPath) const;
     bool findLabel(const Job& job, std::string* labelPath) const;
     // The first of `kinds` (portada.png...) in the game's ScreenScraper folder.
@@ -123,7 +135,11 @@ private:
     std::deque<Result> results_;
     std::atomic<int> pending_{0};
     bool stop_ = false;
-    std::thread worker_;
+    std::vector<std::thread> workers_;
+    TextureCache cache_;
+    // The cache's images this scan used: once all its covers are in, the rest are deleted.
+    std::vector<uint64_t> usedKeys_;
+    bool pruned_ = true;
 };
 
 }  // namespace plumsg

@@ -713,7 +713,8 @@ UiActions Ui::frame(const UiState& state) {
     if (showAbout_) drawAbout();
     if (showCheats_) drawCheats(state, out);
     if (showGameOptions_) drawGameOptions(state, out);
-    library_.update();
+    // With no game running, the covers can take more of each frame.
+    library_.update(state.romLoaded && !state.paused ? 3 : 10);
     gameInfo_.update();
     scraper_.update();
     // A round of downloads that stops on an error says so wherever the user is.
@@ -2188,6 +2189,7 @@ void Ui::toggleLibrary() {
 void Ui::rescanLibrary() {
     library_.scan(settings_.libraryFolders);
     libraryView_.selected = 0;
+    coversFirstFor_ = -1;
     libraryView_.scroll = true;
 }
 
@@ -2601,6 +2603,21 @@ void Ui::drawLibrary(UiActions& out) {
     const float full = ImGui::GetContentRegionAvail().x;
     const float panelW = settings_.libraryDetails ? std::clamp(full * 0.3f, 280.0f, 460.0f) : 0.0f;
     ImGui::BeginChild("juegos", ImVec2(panelW > 0 ? full - panelW - style.ItemSpacing.x : 0.0f, 0.0f));
+    // While covers are still being looked for, the ones around the chosen game (what is on
+    // screen) go first, the nearest first.
+    if (library_.pending() > 0 && !visible.empty() &&
+        (libraryView_.selected != coversFirstFor_ || visible.size() != coversFirstCount_)) {
+        coversFirstFor_ = libraryView_.selected;
+        coversFirstCount_ = visible.size();
+        const int n = static_cast<int>(visible.size());
+        const int at = std::clamp(libraryView_.selected, 0, n - 1);
+        std::vector<size_t> first;
+        for (int d = 0; d <= 48; ++d) {
+            if (at + d < n) first.push_back(visible[static_cast<size_t>(at + d)]);
+            if (d > 0 && at - d >= 0) first.push_back(visible[static_cast<size_t>(at - d)]);
+        }
+        library_.prioritize(first);
+    }
     if (settings_.libraryBoxes) drawLibraryBoxes(visible);
     else if (settings_.libraryList) drawLibraryList(visible);
     else drawLibraryGrid(visible);

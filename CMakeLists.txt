@@ -228,6 +228,7 @@ add_executable(plumsg WIN32
   src/frontend/osk.cpp
   src/frontend/theme.cpp
   src/frontend/library.cpp
+  src/frontend/texture_cache.cpp
   src/frontend/library_names.cpp
   src/frontend/game_info.cpp
   src/frontend/game_info_data.cpp
@@ -338,7 +339,7 @@ endif()  # PLUMSG_BUILD_FRONTEND
 if(PLUMSG_BUILD_TESTS)
   enable_testing()
   add_executable(core_tests tests/core_tests.cpp src/frontend/library_names.cpp src/frontend/game_info_data.cpp
-                 src/frontend/screenscraper_data.cpp)
+                 src/frontend/screenscraper_data.cpp src/frontend/texture_cache.cpp)
   target_include_directories(core_tests PRIVATE tests)
   target_compile_definitions(core_tests PRIVATE PLUMSG_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")
   target_link_libraries(core_tests PRIVATE plumsg_core plumsg_achievements)
