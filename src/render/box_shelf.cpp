@@ -406,6 +406,10 @@ const float kGameGearBox[6] = {-0.105f, 0.0f, -0.02f, 0.105f, 0.11f, 0.02f};
 const float kGameGearLed[3] = {-47.5f / 135.0f, 77.4f / 135.0f, 17.75f / 135.0f};
 const float kGameGearScreen[4] = {69.8f / 135.0f, 17.75f / 135.0f, 67.0f / 135.0f, 50.9f / 135.0f};
 const float kGameGearSlotY = 110.0f / 135.0f;
+// plumsg's own Mega-CD (tools/models/megacd.py), 280 mm wide like the Mega Drive on it:
+// its body's bounds (the cover at its right stands out of them), also the tray's, which
+// is saved closed in the same place.
+const float kMegaCdBox[6] = {-0.14f, 0.0f, -0.10733f, 0.14f, 0.0672f, 0.10733f};
 const ModelFile kModelFiles[] = {
     // The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the
     // dome, its power light on the plate in front of it.
@@ -414,7 +418,22 @@ const ModelFile kModelFiles[] = {
      ConsoleLayout::kSmsSlotZ}, nullptr, 0.0f, kMasterSystemBox},
     {ConsoleModel::GameGear, "gamegear.glb", 210.0f / 135.0f, 0.0f, {0.0f, kGameGearSlotY, ConsoleLayout::kGgSlotZ},
      kGameGearLed, 90.0f, kGameGearBox},
+    {ConsoleModel::MegaCD, "megacd.glb", 280.0f / 135.0f, 0.0f, {0, 0, 0}, nullptr, 0.0f, kMegaCdBox},
+    {ConsoleModel::MegaCDTray, "megacd-tray.glb", 280.0f / 135.0f, 0.0f, {0, 0, 0}, nullptr, 0.0f, kMegaCdBox},
 };
+
+// Where things are on plumsg's own Mega-CD, in the millimetres megacd.py measures in
+// (scaled by kOwnCd to the real size, 13.5 cm = 1): its height, where the Mega Drive stands
+// on it (flat on its top, its right side in the cover at the right), how far the tray comes
+// out, where the disc lies on it, closed, and its READY and ACCESS windows (middle, size).
+constexpr float kOwnCd = 280.0f / 300.0f / 135.0f;
+constexpr float kOwnCdHeight = 72.0f * kOwnCd;
+constexpr float kOwnCdMdX = -0.5f * kOwnCd, kOwnCdMdZ = -4.0f * kOwnCd;
+constexpr float kOwnTrayTravel = 140.0f * kOwnCd;
+constexpr float kOwnDisc[3] = {-44.0f * kOwnCd, 38.0f * kOwnCd, 26.5f * kOwnCd};
+constexpr float kOwnReady[4] = {56.2f * kOwnCd, 38.85f * kOwnCd, 23.0f * kOwnCd, 6.3f * kOwnCd};
+constexpr float kOwnAccess[4] = {103.95f * kOwnCd, 38.85f * kOwnCd, 23.9f * kOwnCd, 6.3f * kOwnCd};
+constexpr float kOwnLightsZ = 114.9f * kOwnCd;
 
 // The cartridges' models: how to turn them to stand with the label to the front, where
 // their texture has the label (which a scan replaces) and the picture in it (which a
@@ -1179,6 +1198,24 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
             return translate(L::kSmsSlotX, kFloorY + L::kSmsSlotY + c.h / 2 - c.insert, kConsoleZ + L::kSmsSlotZ);
         case ConsoleSystem::MegaCD: {
             // The Mega-CD under the Mega Drive, its tray sliding out of the front.
+            if (custom_[static_cast<int>(ConsoleModel::MegaCD)].vao && custom_[static_cast<int>(ConsoleModel::MegaCDTray)].vao) {
+                mesh(ConsoleModel::MegaCD, identity());
+                mesh(ConsoleModel::MegaDrive, translate(kOwnCdMdX, kOwnCdHeight, kOwnCdMdZ));
+                const float out = kOwnTrayTravel * tray;
+                mesh(ConsoleModel::MegaCDTray, translate(0, 0, out));
+                // READY lights green once the disc is in, ACCESS red while it is read.
+                if (light > 0) {
+                    for (const float* w : {kOwnReady, kOwnAccess}) {
+                        Part p;
+                        p.model = base * translate(w[0], w[1], kOwnLightsZ) * scale(w[2], w[3], 0.002f);
+                        p.colour = w == kOwnReady ? Vec3{0.45f, 0.8f, 0.55f} : Vec3{0.9f, 0.5f, 0.35f};
+                        p.glow = 0.12f * light;
+                        p.shine = 0.6f;
+                        parts_.push_back(p);
+                    }
+                }
+                return translate(kOwnDisc[0], kFloorY + kOwnDisc[1] + 0.006f, kConsoleZ + kOwnDisc[2] + out) * rotateX(-90);
+            }
             mesh(ConsoleModel::MegaCD, identity());
             mesh(ConsoleModel::MegaDrive, translate(L::kCdMdX, L::kCdHeight, L::kCdMdZ));
             led(L::kCdLed, true);

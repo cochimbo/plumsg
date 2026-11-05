@@ -37,6 +37,11 @@ gamegear.glb, gamegear-cartridge.glb
   EmulationStation theme (https://github.com/Snapouille/es-theme-Animatics-DX); SEGA
   and the Game Gear logo are Sega's trademarks.
 
+megacd.glb, megacd-tray.glb
+  Sega's first Mega-CD (the one with the motorised tray) and its tray, made for plumsg
+  from photos of a real one by tools/models/megacd.py, which rebuilds them. SEGA and
+  MEGA-CD are Sega's trademarks.
+
 television.glb
   "Television 01" by Gabriel Radić, from Poly Haven.
   Source: https://polyhaven.com/a/Television_01

@@ -22,6 +22,12 @@ What each version brings, newest first. Installers are on the
   the first American games keep it. Their whole sleeves are cut where they really are.
 - **Zoom on the box and the cartridge**: the wheel (or the right stick) comes closer to
   the box, the cartridge or the manual taken out, not only on the shelf.
+- **The Mega CD in the 3D view is the real first model**, made from photos of one: its
+  glossy front with the tray's door (MEGA-CD on it), SEGA, the Mega-CD player badge, the
+  READY and ACCESS windows (they light up once the disc is in) and the lights under them;
+  the plate on top with its slots, the connector rising at the right that the Mega Drive
+  plugs into, the grille and sockets on the back and the lock on the left side. The tray
+  slides out from behind its door, as on the real one.
 - **Turn the box and the cartridge every way with the pad**: the left stick turns the box
   or the cartridge taken out freely, all the way round in any direction (upside down too),
   while the right stick zooms; dragging with the mouse no longer stops at 60 degrees
