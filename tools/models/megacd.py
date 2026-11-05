@@ -74,6 +74,9 @@ def body(x, y, z):
     back = np.sqrt(np.maximum(y - (TOP - 5), 0) ** 2 + np.maximum(-z - (D / 2 - 5), 0) ** 2) - 5
     front = np.sqrt(np.maximum(y - (TOP - 11), 0) ** 2 + np.maximum(z - (FRONT - 11), 0) ** 2) - 11
     d = smax(smax(smax(d, top, 1.5), back, 1.5), front, 1.5)
+    # And the front's bottom edge curls under, so the feet show in front of it.
+    chin = np.sqrt(np.maximum(FEET + 9 - y, 0) ** 2 + np.maximum(z - (FRONT - 9), 0) ** 2) - 9
+    d = smax(d, chin, 1.5)
     # The lower half is set in a little, the seam a groove around the sides and back.
     lower = extrude(round_rect(x, z, 0, -1, W / 2 - 1.2, D / 2 - 0.2, 9), y, FEET - 2, SEAM, 0.6)
     d = cut(d, smax(-lower, extrude(round_rect(x, z, 0, 0, W / 2 + 5, D / 2 + 5, 10), y, FEET - 2, SEAM - 0.01), 0.1), 0.5)
@@ -89,7 +92,7 @@ def body(x, y, z):
         d = cut(d, box(x, y, z, sx - 0.9, sx + 0.9, FEET - 1, FEET + 3.2, FRONT - 3, FRONT + 5, 0.3), 0.2)
     # The feet: wide rounded pads at the front, smaller ones at the back.
     for fx in (-100.0, 96.0):
-        d = smin(d, extrude(round_rect(x, z, fx, 88, 28, 18, 10), y, 0, FEET + 1), 0.8)
+        d = smin(d, extrude(round_rect(x, z, fx, 93, 28, 18, 10), y, 0, FEET + 1.5, 1.5), 0.8)
     for fx in (-100.0, 97.0):
         d = smin(d, extrude(round_rect(x, z, fx, -92, 26, 14, 6), y, 0, FEET + 1), 0.8)
     # On top: the plate the Mega Drive stands on (a shallow step), its slots and holes,
@@ -144,8 +147,8 @@ def connector(x, y, z):
     """The cover on the right side that the Mega Drive's right side goes into: a thick
     plate up to near its top, a shallow panel on its outside, and the block on its inside
     that plugs into the Mega Drive's expansion port (hidden in it once it is on)."""
-    plate = box(x, y, z, W / 2 - 1.5, W / 2 + 17, SEAM + 2, CONN_TOP, CONN_Z0, CONN_Z1, 8.0)
-    d = cut(plate, box(x, y, z, W / 2 + 15.8, W / 2 + 22, SEAM + 10, CONN_TOP - 9, CONN_Z0 + 10, CONN_Z1 - 10, 4.0), 0.6)
+    plate = box(x, y, z, W / 2 - 1.5, W / 2 + 17, FEET + 5, CONN_TOP, CONN_Z0, CONN_Z1, 8.0)
+    d = cut(plate, box(x, y, z, W / 2 + 15.8, W / 2 + 22, FEET + 14, CONN_TOP - 9, CONN_Z0 + 10, CONN_Z1 - 10, 4.0), 0.6)
     blk = box(x, y, z, CONN_X, W / 2, TOP - 1, TOP + 18, CONN_Z0 + 16, CONN_Z1 - 16, 1.5)
     d = smin(d, blk, 1.0)
     d = cut(d, box(x, y, z, CONN_X - 2, CONN_X + 7, TOP + 6, TOP + 11, CONN_Z0 + 20, CONN_Z1 - 20, 0.5), 0.2)
@@ -254,7 +257,7 @@ def console():
     v, f, n = mesh(body, (-W / 2, 0, -D / 2), (W / 2, TOP, D / 2), 0.45, keep=0.07)
     g.add(v * to_m, f, n, g.material("body", (1, 1, 1), roughness=0.45), colours=body_colour(v))
     print("mega-cd: connector and lock")
-    add(small(connector, (CONN_X - 3, SEAM, CONN_Z0 - 2), (W / 2 + 19, CONN_TOP + 1, CONN_Z1 + 2), 0.35, 0.1), BLACK, "connector", 0.4)
+    add(small(connector, (CONN_X - 3, FEET + 3, CONN_Z0 - 2), (W / 2 + 19, CONN_TOP + 1, CONN_Z1 + 2), 0.35, 0.1), BLACK, "connector", 0.4)
     add(small(lock, (-W / 2 - 1, 38, 84), (-W / 2 + 5, 56, 104), 0.25, 0.2), BLACK, "lock", 0.4)
     pins = []
     for i in range(30):
