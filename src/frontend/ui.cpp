@@ -459,6 +459,18 @@ bool Ui::handleEvent(const SDL_Event& e) {
     if (browser_.isOpen() && browser_.handleEvent(e)) return true;
     if (stateMenu_.open && handleStateMenu(e)) return true;
     if (showLibrary_ && handleLibrary(e)) return true;
+    // With no game running and no window taking the pad, the empty screen has nothing for
+    // it: A, B, Start or Back open the library again, so a pad alone never gets stuck there.
+    if (!showLibrary_ && !romLoaded_ && !padNav_ && !stateMenu_.open && !browser_.isOpen() && !osk_.isOpen() &&
+        e.type == SDL_CONTROLLERBUTTONDOWN) {
+        switch (e.cbutton.button) {
+            case SDL_CONTROLLER_BUTTON_A: case SDL_CONTROLLER_BUTTON_B:
+            case SDL_CONTROLLER_BUTTON_START: case SDL_CONTROLLER_BUTTON_BACK:
+                toggleLibrary();
+                return true;
+            default: break;
+        }
+    }
     ImGui_ImplSDL2_ProcessEvent(&e);
     // The pad on a window (console mode): ImGui reads it by itself, and its presses are not
     // the game's nor hotkeys, but for the states menu's.
@@ -663,6 +675,7 @@ void Ui::prepareFrame() {
 
 UiActions Ui::frame(const UiState& state) {
     UiActions out;
+    romLoaded_ = state.romLoaded;
     out.settingsChanged = pendingSave_;
     pendingSave_ = false;
     out.gameOptionsChanged = pendingGameOptions_;
@@ -2012,7 +2025,9 @@ void Ui::drawOverlays(const UiState& state) {
     if (!state.romLoaded) {
         // Behind every window, so it never shows through the option windows.
         // The marquee above the hint, as wide as it is or 60% of the window if narrower.
-        const char* hint = tr("Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)");
+        const char* hint = SDL_NumJoysticks() > 0
+                               ? tr("Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10 o A en el mando)")
+                               : tr("Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)");
         const ImVec2 size = ImGui::CalcTextSize(hint);
         const float logoW = logoTexture_ ? std::min(static_cast<float>(logoWidth_), vp->Size.x * 0.6f) : 0.0f;
         const float logoH = logoTexture_ ? logoW * logoHeight_ / logoWidth_ : 0.0f;
@@ -2227,8 +2242,9 @@ void Ui::setLibraryView(int view) {
 
 // While the library is open it owns the pad and the keyboard (except while typing in
 // the search box): the arrows move through the grid, A (or Enter) plays the game, B
-// (or Esc) closes it, Y (or Ctrl+F) goes to the search box, and the shoulder buttons
-// (or Page Up and Page Down) change the console tab.
+// goes back to the game if one is running (Esc closes it always), Y (or Ctrl+F) goes to the search
+// box, Back changes the view, and the shoulder buttons (or Page Up and Page Down) change
+// the console tab.
 bool Ui::handleLibrary(const SDL_Event& e) {
     if (e.type != SDL_KEYDOWN && e.type != SDL_CONTROLLERBUTTONDOWN && e.type != SDL_KEYUP &&
         e.type != SDL_CONTROLLERBUTTONUP && e.type != SDL_TEXTINPUT)
@@ -2336,7 +2352,11 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         case Left: sel = std::max(0, sel - side); break;
         case Right: sel = std::min(count - 1, sel + side); break;
         case Play: if (count > 0) libraryView_.load = sel; break;
-        case Close: showLibrary_ = false; break;
+        // B goes back to the game; with none running there is nowhere to go back to, and
+        // closing it would leave a pad alone on an empty screen (Esc still closes it).
+        case Close:
+            if (romLoaded_ || e.type == SDL_KEYDOWN) showLibrary_ = false;
+            break;
         case Search: libraryView_.focusSearch = true; break;
         case Menu:
             if (count > 0) {
@@ -2549,8 +2569,12 @@ void Ui::drawLibrary(UiActions& out) {
         if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("El tamaño de las carátulas: más pequeñas caben más en cada fila."));
     }
-    theme::hint(tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-                   "B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"));
+    // B only closes it with a game to go back to (handleLibrary); Esc always does.
+    theme::hint(romLoaded_
+                    ? tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
+                         "B o Esc: volver al juego   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D")
+                    : tr("Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
+                         "Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"));
     ImGui::Separator();
 
     if (games.empty()) ImGui::TextDisabled("%s", tr("No hay juegos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd, .iso) en estas carpetas."));

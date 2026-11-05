@@ -315,6 +315,9 @@ msgstr "Iniciando o jogo"
 msgid "Arrastra una ROM a la ventana o usa Archivo > Abrir ROM."
 msgstr "Arraste uma ROM para a janela ou use Arquivo > Abrir ROM."
 
+msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10 o A en el mando)"
+msgstr "Arraste uma ROM aqui, use Arquivo > Abrir ROM ou abra a biblioteca (F10 ou A no controle)"
+
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Arraste uma ROM aqui, use Arquivo > Abrir ROM ou abra a biblioteca (F10)"
 
@@ -1355,10 +1358,17 @@ msgstr "Setas  direcional;  A S D  botões A B C;  Q W E  botões X Y Z"
 
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
+"B o Esc: volver al juego   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
 msgstr ""
 "Setas ou direcional: escolher   A ou Enter: jogar   X, botão direito ou tecla de menu: truques, opções e instrumentos\n"
-"B ou Esc: fechar   L / R ou Page Up / Page Down: console   Select ou V: grade, lista ou caixas 3D"
+"B ou Esc: voltar ao jogo   L / R ou Page Up / Page Down: console   Select ou V: grade, lista ou caixas 3D"
+
+msgid ""
+"Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
+"Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
+msgstr ""
+"Setas ou direcional: escolher   A ou Enter: jogar   X, botão direito ou tecla de menu: truques, opções e instrumentos\n"
+"Esc: fechar   L / R ou Page Up / Page Down: console   Select ou V: grade, lista ou caixas 3D"
 
 msgid "Fondo (fan art)"
 msgstr "Fundo (fan art)"
