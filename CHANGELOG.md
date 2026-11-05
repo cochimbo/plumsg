@@ -28,6 +28,8 @@ What each version brings, newest first. Installers are on the
 - **No more flicker on the edges** of the boxes while moving along the shelf: the 3D view
   is drawn with 4x multisampling and shrunk through mipmaps.
 - The window's title shows the version: **plumsg 0.1.0-beta.15**.
+- **The pad no longer gets locked out of the library**: with no game running, B no longer
+  closes it (Esc still does), and on the start screen A, B, Start or Back open it.
 
 ## 0.1.0-beta.14
 
