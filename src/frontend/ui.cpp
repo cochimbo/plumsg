@@ -2855,6 +2855,9 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
     // The pad's right stick zooms too: up comes closer, down steps back, about three of the
     // wheel's steps a second at full tilt.
     if (rightStickY_ != 0) shelf_->zoom(-rightStickY_ * 3.0f * io.DeltaTime);
+    // The left stick turns the box or cartridge out every way, up to 180 degrees a second:
+    // pushed up its top goes away, as when dragging up.
+    if (leftStickX_ != 0 || leftStickY_ != 0) shelf_->turn(leftStickX_ * 180.0f * io.DeltaTime, leftStickY_ * 180.0f * io.DeltaTime);
     libraryItem(false, libraryView_.selected);  // the right button opens the game's menu
     if (shelf_->takeLaunch()) libraryView_.load = libraryView_.selected;
     // The chosen game's name under the boxes, and what to do next.
@@ -2863,10 +2866,10 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
         const char* hint = "";
         switch (shelf_->stage()) {
             case BoxShelf::Stage::Shelf: hint = tr("Clic o A: sacar la caja   Rueda o stick derecho: zoom   Arrastrar o flechas: moverse"); break;
-            case BoxShelf::Stage::Box: hint = tr("Arrastrar: girarla   Rueda: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"); break;
+            case BoxShelf::Stage::Box: hint = tr("Arrastrar o stick izquierdo: girarla   Rueda o stick derecho: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"); break;
             case BoxShelf::Stage::Cartridge:
-                hint = !manualFile_.empty() ? tr("Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Rueda: zoom   B: guardarlo")
-                                            : tr("Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo");
+                hint = !manualFile_.empty() ? tr("Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Stick izquierdo: girarlo   Rueda o stick derecho: zoom   B: guardarlo")
+                                            : tr("Arrastrar o stick izquierdo: girarlo   Rueda o stick derecho: zoom   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo");
                 break;
             case BoxShelf::Stage::Manual:
                 hint = !manual_.error().empty() ? manual_.error().c_str()

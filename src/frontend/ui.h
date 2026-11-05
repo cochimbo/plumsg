@@ -160,6 +160,8 @@ public:
     void poseBoxes(int step) { boxesPose_ = step; }
     // The pad's right stick (-1 to 1, down positive), which zooms the library's 3D view.
     void setRightStick(float x, float y) { rightStickX_ = x, rightStickY_ = y; }
+    // The pad's left stick, the same way, which turns the box or cartridge out in that view.
+    void setLeftStick(float x, float y) { leftStickX_ = x, leftStickY_ = y; }
     void openBios() { showBios_ = true; }
     // A PNG or JPEG of the user's as the game's cover, for when ScreenScraper has none; or
     // the whole sleeve (back, spine and front side by side) or the cartridge's label, for
@@ -315,7 +317,7 @@ private:
     bool boxesDragged_ = false;  // the press on the 3D view has moved: no click when it ends
     std::unique_ptr<BoxShelf> shelf_;  // the library's 3D view, made the first time it is shown
     int boxesPose_ = 0;
-    float rightStickX_ = 0, rightStickY_ = 0;
+    float rightStickX_ = 0, rightStickY_ = 0, leftStickX_ = 0, leftStickY_ = 0;
     GameInfo gameInfo_;
     ScreenScraper scraper_;
     // The chosen game's manual in the 3D view, and whether it has one (looked for again

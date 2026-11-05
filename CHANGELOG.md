@@ -22,6 +22,10 @@ What each version brings, newest first. Installers are on the
   the first American games keep it. Their whole sleeves are cut where they really are.
 - **Zoom on the box and the cartridge**: the wheel (or the right stick) comes closer to
   the box, the cartridge or the manual taken out, not only on the shelf.
+- **Turn the box and the cartridge every way with the pad**: the left stick turns the box
+  or the cartridge taken out freely, all the way round in any direction (upside down too),
+  while the right stick zooms; dragging with the mouse no longer stops at 60 degrees
+  either. Let go and they turn back to face you.
 - **32X cartridges** are wider than tall (111 x 72 mm), as they really are, and go into a
   wider slot.
 - **Master System cartridges** lie straight in their boxes (their model came turned).

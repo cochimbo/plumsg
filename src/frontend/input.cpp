@@ -336,16 +336,24 @@ std::vector<std::string> Input::padNames() const {
     return names;
 }
 
-void Input::rightStick(float* x, float* y) const {
+void Input::firstStick(int axisX, int axisY, float* x, float* y) const {
     *x = *y = 0;
     for (auto* p : pads_) {
-        const int ax = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTX);
-        const int ay = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTY);
+        const int ax = SDL_GameControllerGetAxis(p, static_cast<SDL_GameControllerAxis>(axisX));
+        const int ay = SDL_GameControllerGetAxis(p, static_cast<SDL_GameControllerAxis>(axisY));
         if (std::abs(ax) < config_.stickDeadzone && std::abs(ay) < config_.stickDeadzone) continue;
         *x = static_cast<float>(ax) / 32767.0f;
         *y = static_cast<float>(ay) / 32767.0f;
         return;
     }
+}
+
+void Input::rightStick(float* x, float* y) const {
+    firstStick(SDL_CONTROLLER_AXIS_RIGHTX, SDL_CONTROLLER_AXIS_RIGHTY, x, y);
+}
+
+void Input::leftStick(float* x, float* y) const {
+    firstStick(SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY, x, y);
 }
 
 void Input::leftStick(int player, float* x, float* y) const {

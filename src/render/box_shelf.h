@@ -98,6 +98,11 @@ public:
     // The mouse dragged by (dx, dy), as parts of the picture: turns the box or cartridge in
     // front, or moves along the shelf.
     void drag(float dx, float dy);
+    // Turns the box or cartridge in front `yaw` degrees around the screen's vertical (to the
+    // right for positive) and `pitch` around its horizontal (its top towards the viewer for
+    // positive), however it is already turned, so that it can be seen from every side (the
+    // pad's left stick). Nothing elsewhere.
+    void turn(float yaw, float pitch);
     // The wheel (or the pad's right stick): up comes closer to the shelf, down steps back
     // until it is all in view; with a box, a cartridge or a manual out, closer to it.
     void zoom(float steps);
@@ -135,6 +140,8 @@ private:
     struct Vec3 {
         float x = 0, y = 0, z = 0;
     };
+    // A turn, as a unit quaternion (w, x, y, z).
+    using Quat = std::array<float, 4>;
     // One shape of the scene: a unit cube or cylinder placed by `model`.
     struct Part {
         Mat4 model;
@@ -259,8 +266,8 @@ private:
     float bookShift_ = 0;          // the camera across, to frame a closed cover or a last page
     Vec3 readPan_;                 // dragged over a page close up
     ConsoleSystem system_ = ConsoleSystem::MegaDrive;  // of the chosen game
-    // Turned by dragging (degrees): the box out and its cartridge.
-    float boxYaw_ = 0, boxPitch_ = 0, cartYaw_ = 0, cartPitch_ = 0;
+    // Turned by dragging or the left stick, freely: the box out and its cartridge.
+    Quat boxTurn_{1, 0, 0, 0}, cartTurn_{1, 0, 0, 0};
     // The shelf's camera: how far back it is, what it looks at and how far it was dragged.
     float distance_ = 3.0f;
     Vec3 look_, pan_;

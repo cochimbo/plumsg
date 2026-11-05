@@ -80,6 +80,9 @@ public:
     // Right stick of the first pad that has it pushed past the dead zone, each axis -1..1
     // (y positive down); 0,0 when none is. Turns the pseudo-3D camera.
     void rightStick(float* x, float* y) const;
+    // The left stick of the first pad that has it pushed, the same way: turns what the
+    // library's 3D view has out in front.
+    void leftStick(float* x, float* y) const;
     // The left stick of the player's pad the same way, for a light gun's crosshair.
     void leftStick(int player, float* x, float* y) const;
 
@@ -93,6 +96,8 @@ public:
     std::vector<std::string> padNames() const;
 
 private:
+    // The first pad's stick (SDL's axes) pushed past the dead zone; 0,0 when none is.
+    void firstStick(int axisX, int axisY, float* x, float* y) const;
     std::array<bool, InputConfig::kButtons> buttonsDown(int player, bool useKeyboard) const;
 
     InputConfig config_;

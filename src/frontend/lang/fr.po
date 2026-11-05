@@ -327,11 +327,11 @@ msgstr "Glissez une ROM ici, utilisez Fichier > Ouvrir une ROM ou ouvrez la bibl
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Glissez une ROM ici, utilisez Fichier > Ouvrir une ROM ou ouvrez la bibliothèque (F10)"
 
-msgid "Arrastrar: girarla   Rueda: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
-msgstr "Glisser : la tourner   Molette : zoom   Clic sur la boîte ou A : sortir la cartouche   Clic ailleurs ou B : la ranger"
+msgid "Arrastrar o stick izquierdo: girarla   Rueda o stick derecho: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
+msgstr "Glisser ou stick gauche : la tourner   Molette ou stick droit : zoom   Clic sur la boîte ou A : sortir la cartouche   Clic ailleurs ou B : la ranger"
 
-msgid "Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
-msgstr "Glisser : la tourner   Clic sur la cartouche ou A : jouer   Clic ailleurs ou B : la ranger"
+msgid "Arrastrar o stick izquierdo: girarlo   Rueda o stick derecho: zoom   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
+msgstr "Glisser ou stick gauche : la tourner   Molette ou stick droit : zoom   Clic sur la cartouche ou A : jouer   Clic ailleurs ou B : la ranger"
 
 msgid "Arriba"
 msgstr "Haut"
@@ -672,8 +672,8 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
-msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Rueda: zoom   B: guardarlo"
-msgstr "Clic sur la cartouche ou A : jouer   Clic sur le manuel ou flèche gauche : le lire   Molette : zoom   B : la ranger"
+msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Stick izquierdo: girarlo   Rueda o stick derecho: zoom   B: guardarlo"
+msgstr "Clic sur la cartouche ou A : jouer   Clic sur le manuel ou flèche gauche : le lire   Stick gauche : la tourner   Molette ou stick droit : zoom   B : la ranger"
 
 msgid "Clic en una página o flechas: pasar páginas   Rueda: zoom   Arrastrar: moverse   B: cerrarlo"
 msgstr "Clic sur une page ou flèches : tourner les pages   Molette : zoom   Glisser : se déplacer   B : le fermer"
