@@ -257,7 +257,17 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   to `game-info\screenscraper\<console>\<ROM name>\` with `ficha.json`, and the sleeve
   and the label also become the game's cover and the label of its 3D cartridge.
   **Download from ScreenScraper** in the library does every game not done yet, one at a
-  time. ScreenScraper needs the program's developer account (built in, or typed in the
+  time. Downloading again adds only what a game is missing (straight from its
+  `ficha.json`, without asking ScreenScraper for the game again: quick, for example to
+  add the manuals), or overwrites all of it, as chosen in **Scraping > What to
+  download...**; the **Scraping** menu has both for the whole library.
+- **Manuals in the 3D boxes**: with a box open, a click on the manual in its lid (or the
+  left arrow) brings it out in front, open at its pages. A click on the right page (the
+  right arrow, A, Page Down or RB) turns to the next ones, on the left page (left arrow,
+  Page Up or LB) back; the wheel zooms in and dragging moves over the page. The pages
+  are drawn from the PDF ScreenScraper has (`manual.pdf`) with PDFium. The wheel also
+  zooms in on a box or a cartridge taken out. A Mega CD's box takes the shape of its
+  cover: the tall case of the first American games, or a jewel case. ScreenScraper needs the program's developer account (built in, or typed in the
   **Account** tab) and, optionally, your free screenscraper.fr account for more requests
   a day; the password is kept in `plumsg.ini`, since ScreenScraper asks for it with every
   request.
@@ -663,7 +673,9 @@ Own code under the [MIT License](LICENSE). Libraries: SDL2 (zlib), Dear ImGui (M
 `src/render/anime4k_shaders.h`, generated with `tools/anime4k.py`), the xBR shader written
 following Hyllian's xbr-lv2 (MIT), libchdr (BSD-3-Clause, for `.chd` files), TinySoundFont
 (MIT, in `third_party/tsf`), cgltf (MIT, in `third_party/cgltf`), rcheevos (MIT, for RetroAchievements), minimp3 (CC0, in
-`third_party/minimp3`) and stb_vorbis (public domain or MIT, in `third_party/stb`). The
+`third_party/minimp3`), stb_vorbis (public domain or MIT, in `third_party/stb`) and PDFium
+(BSD-3-Clause and Apache 2.0, the prebuilt `pdfium.dll` of bblanchon/pdfium-binaries, which reads
+the manuals; its licenses go in `pdfium-licenses` in the installation). The
 interface's typeface is Chakra Petch (SIL Open Font License 1.1, in
 `src/frontend/assets/fonts` with its license). The included
 SoundFont is GeneralUser GS by S. Christian Collins, with its own free license

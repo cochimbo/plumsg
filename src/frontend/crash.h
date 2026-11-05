@@ -17,4 +17,10 @@ void setCrashContext(const std::string& game);
 // ended well. Marks it as told.
 std::string takeCrashReport(const std::string& dir);
 
+// The version this build is (the release's own, or git describe), as About shows it.
+const char* appVersion();
+
+// The window's name with no game: "plumsg 0.1.0-beta.15".
+std::string appTitle();
+
 }  // namespace plumsg

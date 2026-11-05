@@ -208,6 +208,7 @@ void Settings::parse(std::istream& in, Settings& s) {
             else if (key == "dev_id") s.ssDevId = value;
             else if (key == "dev_password") s.ssDevPassword = value;
             else if (key == "media") s.ssMedia = value;
+            else if (key == "overwrite") s.ssOverwrite = yes(value);
         } else if (section == "recent") {
             if (key == "rom" && !value.empty() && s.recent.size() < kMaxRecent) s.recent.push_back(value);
             else if (key == "last_folder") s.lastFolder = value;
@@ -339,11 +340,13 @@ void Settings::write(std::ostream& out) const {
         << "# The screenscraper.fr account for the library's media (ScreenScraper asks for the password\n"
         << "# with every request, so it is kept here). dev_id and dev_password: a developer account, only\n"
         << "# if this build of plumsg has none of its own. media: the kinds to download, with commas.\n"
+        << "# overwrite: downloading again replaces every file (no: only what is missing is added).\n"
         << "user = " << ssUser << "\n"
         << "password = " << ssPassword << "\n"
         << "dev_id = " << ssDevId << "\n"
         << "dev_password = " << ssDevPassword << "\n"
         << "media = " << ssMedia << "\n"
+        << "overwrite = " << flag(ssOverwrite) << "\n"
         << "\n[recent]\n";
     if (!lastFolder.empty()) out << "last_folder = " << lastFolder << "\n";
     for (const auto& r : recent) out << "rom = " << r << "\n";

@@ -210,6 +210,9 @@ msgstr "Abra uma ROM para salvar um perfil 3D próprio para ela."
 msgid "Abre una ROM, o elige un juego en la biblioteca con el botón derecho."
 msgstr "Abra uma ROM, ou escolha um jogo na biblioteca com o botão direito."
 
+msgid "Abriendo el manual..."
+msgstr "A abrir o manual..."
+
 msgid "Abrir .vgm..."
 msgstr "Abrir .vgm..."
 
@@ -276,6 +279,9 @@ msgstr "Ajustes"
 msgid "Al principio"
 msgstr "Do início"
 
+msgid "Al volver a descargar"
+msgstr "Ao voltar a descarregar"
+
 msgid "Alojar"
 msgstr "Hospedar"
 
@@ -318,8 +324,8 @@ msgstr "Arraste uma ROM para a janela ou use Arquivo > Abrir ROM."
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Arraste uma ROM aqui, use Arquivo > Abrir ROM ou abra a biblioteca (F10)"
 
-msgid "Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
-msgstr "Arrastar: girá-la   Clique na caixa ou A: tirar o cartucho   Clique fora ou B: devolvê-la"
+msgid "Arrastrar: girarla   Rueda: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
+msgstr "Arrastar: rodá-la   Roda: zoom   Clique na caixa ou A: tirar o cartucho   Clique fora ou B: devolvê-la"
 
 msgid "Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
 msgstr "Arrastar: girá-lo   Clique no cartucho ou A: jogar   Clique fora ou B: guardá-lo"
@@ -374,6 +380,9 @@ msgstr "Adicionar"
 
 msgid "Añadir carpeta..."
 msgstr "Adicionar pasta..."
+
+msgid "Añadir solo lo que falte (rápido: no vuelve a pedir el juego)"
+msgstr "Adicionar só o que falta (rápido: não volta a pedir o jogo)"
 
 msgid "Año"
 msgstr "Ano"
@@ -660,6 +669,12 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
+msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Rueda: zoom   B: guardarlo"
+msgstr "Clique no cartucho ou A: jogar   Clique no manual ou seta esquerda: lê-lo   Roda: zoom   B: guardá-lo"
+
+msgid "Clic en una página o flechas: pasar páginas   Rueda: zoom   Arrastrar: moverse   B: cerrarlo"
+msgstr "Clique numa página ou setas: virar páginas   Roda: zoom   Arrastar: mover-se   B: fechá-lo"
+
 msgid "Clic o A: sacar la caja   Rueda o stick derecho: zoom   Arrastrar o flechas: moverse"
 msgstr "Clique ou A: tirar a caixa   Roda ou stick direito: zoom   Arrastar ou setas: mover-se"
 
@@ -909,8 +924,8 @@ msgstr "A descarregar: %s..."
 msgid "Descargar de ScreenScraper"
 msgstr "Descarregar do ScreenScraper"
 
-msgid "Descargar medios de toda la biblioteca"
-msgstr "Baixar mídias de toda a biblioteca"
+msgid "Descargar lo que falte en toda la biblioteca"
+msgstr "Descarregar o que falta em toda a biblioteca"
 
 msgid "Descargar: %s"
 msgstr "Descarregar: %s"
@@ -1083,6 +1098,12 @@ msgstr ""
 "rato ao longo da imagem, ou com o stick esquerdo (ou a cruz). Botão: clique\n"
 "esquerdo, A ou B. Os jogos que precisam dele já o têm na porta 1 se aí houver um\n"
 "comando. Só jogos de Master System; numa partida em rede liga-se um comando."
+
+msgid "El manual no es un PDF que se pueda abrir."
+msgstr "O manual não é um PDF que se possa abrir."
+
+msgid "El manual no tiene páginas."
+msgstr "O manual não tem páginas."
 
 msgid "El otro jugador ha salido de la partida."
 msgstr "O outro jogador saiu da partida."
@@ -1322,6 +1343,9 @@ msgstr "Falta a BIOS do Mega CD do Japão: escolha-a em Console > BIOS do Mega C
 
 msgid "Falta la función %s"
 msgstr "Falta a função %s"
+
+msgid "Falta pdfium.dll junto a plumsg: sin ella no se pueden leer los manuales."
+msgstr "Falta o pdfium.dll junto ao plumsg: sem ele não se podem ler os manuais."
 
 msgid "Fecha"
 msgstr "Data"
@@ -2804,6 +2828,9 @@ msgstr "Sistema"
 msgid "Sitar"
 msgstr "Cítara"
 
+msgid "Sobrescribir todos los medios"
+msgstr "Substituir todos os ficheiros"
+
 msgid "Sol"
 msgstr "Sol"
 
@@ -3158,6 +3185,9 @@ msgstr "Procurar de novo"
 
 msgid "Volver a descargar"
 msgstr "Descarregar de novo"
+
+msgid "Volver a descargar todo en toda la biblioteca"
+msgstr "Voltar a descarregar tudo em toda a biblioteca"
 
 msgid "Volver a intentarlo"
 msgstr "Tentar de novo"

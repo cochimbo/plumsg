@@ -248,7 +248,7 @@ void mega32x(Builder& b) {
            {{0.12f, 0.3f}, {0.17f, 0.12f}, {0.24f, 0.02f}, {0.27f, 0}, {0.6f, 0}, {0.66f, 0.03f}, {0.71f, 0.08f},
             {0.74f, 0.14f}, {0.75f, 0.2f}},
            kBlack, false, 12);
-    slot(b, 0, 0, L::k32xSlotY, 0.57f, 0.14f);
+    slot(b, 0, 0, L::k32xSlotY, 0.85f, 0.14f);
     // The "32X" badge on the front and the vents on its shoulders.
     b.front(0.0f, 0.46f, 0.37f, 0.4f, 0.13f, 0.03f, 0.004f, kRed);
     b.front(0.0f, 0.46f, 0.37f, 0.3f, 0.06f, 0.01f, 0.006f, kSilver);
@@ -360,8 +360,9 @@ void recess(Builder& b, const CartridgeShape& c) {
 
 CartridgeShape cartridgeShape(ConsoleSystem s) {
     switch (s) {
-        // 32X: 72 x 111 x 16 mm, upright.
-        case ConsoleSystem::Mega32X: return {mm(72), mm(111), mm(16), mm(58), mm(66), mm(10), mm(36), mm(76)};
+        // 32X: 111 x 72 x 16 mm, wider than tall like a Mega Drive's and as wide all the way
+        // down, its label (with the yellow 32X band) over the upper part.
+        case ConsoleSystem::Mega32X: return {mm(111), mm(72), mm(16), mm(70), mm(41), mm(8), mm(18), mm(114)};
         // Master System: 108 x 69 x 16 mm, wider than tall.
         case ConsoleSystem::MasterSystem: return {mm(108), mm(69), mm(16), mm(92), mm(40), mm(-4), mm(28), mm(112)};
         // Game Gear: 66 x 68 x 10 mm; the lower half goes into the console.
@@ -378,13 +379,12 @@ void buildCartridgeModel(ConsoleSystem s, std::vector<float>& out) {
     const float t = c.d / 2;
     switch (s) {
         case ConsoleSystem::Mega32X:
-            // Narrower where it goes in, chamfered at the top.
-            b.prismZ(-t, t, {{mm(-33), mm(-55.5f)}, {mm(33), mm(-55.5f)}, {mm(33), mm(-20)}, {mm(-33), mm(-20)}}, kShell);
-            b.prismZ(-t, t, {{mm(-33), mm(-20)}, {mm(33), mm(-20)}, {mm(36), mm(-17)}, {mm(36), mm(49)}, {mm(30), mm(55.5f)},
-                             {mm(-30), mm(55.5f)}, {mm(-36), mm(49)}, {mm(-36), mm(-17)}}, kShell);
-            ribs(b, 28, 46, 53, 4, c.d, 1);
-            ribs(b, 30, 30, 52, 8, c.d, -1);
-            contacts(b, 30, mm(-55.5f), 30, 2.0f, 1.6f);
+            // A slab with its corners rounded off; the grooves to hold it by under the label.
+            b.prismZ(-t, t, {{mm(-53), mm(-36)}, {mm(53), mm(-36)}, {mm(55.5f), mm(-33.5f)}, {mm(55.5f), mm(31)}, {mm(50.5f), mm(36)},
+                             {mm(-50.5f), mm(36)}, {mm(-55.5f), mm(31)}, {mm(-55.5f), mm(-33.5f)}}, kShell);
+            ribs(b, 46, -30, -20, 3, c.d, 1);
+            ribs(b, 50, -8, 30, 8, c.d, -1);
+            contacts(b, 34, mm(-36), 32, 2.0f, 1.6f);
             break;
         case ConsoleSystem::MasterSystem:
             b.prismZ(-t, t, {{mm(-52), mm(-34.5f)}, {mm(52), mm(-34.5f)}, {mm(54), mm(-32.5f)}, {mm(54), mm(33)}, {mm(52.5f), mm(34.5f)},

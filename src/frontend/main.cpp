@@ -269,7 +269,7 @@ struct App {
         romLoaded = true;
         loadCheats();
         if (window) {
-            std::string title = "plumsg - " + fileName(path);
+            std::string title = appTitle() + " - " + fileName(path);
             const std::string& name = console.cartridge().header().title;
             if (!name.empty()) title += " (" + name + ")";
             SDL_SetWindowTitle(window, title.c_str());
@@ -288,7 +288,7 @@ struct App {
         hostsBattery = false;
         cheats.clear();
         console.setCheats({});
-        if (window) SDL_SetWindowTitle(window, "plumsg");
+        if (window) SDL_SetWindowTitle(window, appTitle().c_str());
         refreshSlots();
     }
 
@@ -498,9 +498,9 @@ CommandLine parse(int argc, char** argv) {
         else if (a == "--library") c.library.push_back(next());
         else if (a == "--list") c.libraryList = true;
         else if (a == "--boxes") {
-            // Undocumented steps, for screenshots: 1 the box out, 2 its cartridge out, 3 on the way, 4 in the console.
+            // Undocumented steps, for screenshots: 1 the box out, 2 its cartridge out, 3 on the way, 4 in the console, 5 its manual read.
             c.libraryBoxes = 0;
-            if (i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '4' && !argv[i + 1][1]) c.libraryBoxes = argv[++i][0] - '0';
+            if (i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '5' && !argv[i + 1][1]) c.libraryBoxes = argv[++i][0] - '0';
         }
         else if (a == "--bios") c.bios = true;
         else if (a == "--media") {
@@ -636,7 +636,7 @@ int main(int argc, char** argv) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_Window* window = SDL_CreateWindow("plumsg", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+    SDL_Window* window = SDL_CreateWindow(appTitle().c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                           cmd.windowW > 0 ? cmd.windowW : pictureWidth(settings) * settings.windowScale,
                                           cmd.windowH > 0 ? cmd.windowH : 224 * settings.windowScale,
                                           SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);

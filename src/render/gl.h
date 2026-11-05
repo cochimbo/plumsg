@@ -69,6 +69,9 @@ constexpr GLenum FRAMEBUFFER_COMPLETE = 0x8CD5;
 constexpr GLenum COLOR_ATTACHMENT0 = 0x8CE0;
 constexpr GLenum DEPTH_ATTACHMENT = 0x8D00;
 constexpr GLenum FRAMEBUFFER = 0x8D40;
+constexpr GLenum RENDERBUFFER = 0x8D41;
+constexpr GLenum READ_FRAMEBUFFER = 0x8CA8;
+constexpr GLenum DRAW_FRAMEBUFFER = 0x8CA9;
 
 #define PLUMSG_GL_FUNCTIONS(X)                                                                         \
     X(void, ActiveTexture, (GLenum))                                                                   \
@@ -76,6 +79,12 @@ constexpr GLenum FRAMEBUFFER = 0x8D40;
     X(void, AttachShader, (GLuint, GLuint))                                                            \
     X(void, BindBuffer, (GLenum, GLuint))                                                              \
     X(void, BindFramebuffer, (GLenum, GLuint))                                                         \
+    X(void, BindRenderbuffer, (GLenum, GLuint))                                                        \
+    X(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum)) \
+    X(void, DeleteRenderbuffers, (GLsizei, const GLuint*))                                             \
+    X(void, FramebufferRenderbuffer, (GLenum, GLenum, GLenum, GLuint))                                 \
+    X(void, GenRenderbuffers, (GLsizei, GLuint*))                                                      \
+    X(void, RenderbufferStorageMultisample, (GLenum, GLsizei, GLenum, GLsizei, GLsizei))               \
     X(void, BindTexture, (GLenum, GLuint))                                                             \
     X(void, BindVertexArray, (GLuint))                                                                 \
     X(void, BlendFunc, (GLenum, GLenum))                                                               \
