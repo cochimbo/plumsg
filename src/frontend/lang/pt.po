@@ -327,11 +327,11 @@ msgstr "Arraste uma ROM aqui, use Arquivo > Abrir ROM ou abra a biblioteca (F10 
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Arraste uma ROM aqui, use Arquivo > Abrir ROM ou abra a biblioteca (F10)"
 
-msgid "Arrastrar: girarla   Rueda: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
-msgstr "Arrastar: rodá-la   Roda: zoom   Clique na caixa ou A: tirar o cartucho   Clique fora ou B: devolvê-la"
+msgid "Arrastrar o stick izquierdo: girarla   Rueda o stick derecho: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
+msgstr "Arrastar ou stick esquerdo: rodá-la   Roda ou stick direito: zoom   Clique na caixa ou A: tirar o cartucho   Clique fora ou B: devolvê-la"
 
-msgid "Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
-msgstr "Arrastar: girá-lo   Clique no cartucho ou A: jogar   Clique fora ou B: guardá-lo"
+msgid "Arrastrar o stick izquierdo: girarlo   Rueda o stick derecho: zoom   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
+msgstr "Arrastar ou stick esquerdo: girá-lo   Roda ou stick direito: zoom   Clique no cartucho ou A: jogar   Clique fora ou B: guardá-lo"
 
 msgid "Arriba"
 msgstr "Cima"
@@ -672,8 +672,8 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
-msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Rueda: zoom   B: guardarlo"
-msgstr "Clique no cartucho ou A: jogar   Clique no manual ou seta esquerda: lê-lo   Roda: zoom   B: guardá-lo"
+msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Stick izquierdo: girarlo   Rueda o stick derecho: zoom   B: guardarlo"
+msgstr "Clique no cartucho ou A: jogar   Clique no manual ou seta esquerda: lê-lo   Stick esquerdo: girá-lo   Roda ou stick direito: zoom   B: guardá-lo"
 
 msgid "Clic en una página o flechas: pasar páginas   Rueda: zoom   Arrastrar: moverse   B: cerrarlo"
 msgstr "Clique numa página ou setas: virar páginas   Roda: zoom   Arrastar: mover-se   B: fechá-lo"

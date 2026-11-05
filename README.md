@@ -265,8 +265,9 @@ the general ones). **Back to the general ones** removes them. They are saved in 
   left arrow) brings it out in front, open at its pages. A click on the right page (the
   right arrow, A, Page Down or RB) turns to the next ones, on the left page (left arrow,
   Page Up or LB) back; the wheel zooms in and dragging moves over the page. The pages
-  are drawn from the PDF ScreenScraper has (`manual.pdf`) with PDFium. The wheel also
-  zooms in on a box or a cartridge taken out. A Mega CD's box takes the shape of its
+  are drawn from the PDF ScreenScraper has (`manual.pdf`) with PDFium. The wheel (or the
+  pad's right stick) also zooms in on a box or a cartridge taken out, and the left stick
+  (or dragging) turns it every way. A Mega CD's box takes the shape of its
   cover: the tall case of the first American games, or a jewel case. ScreenScraper needs the program's developer account (built in, or typed in the
   **Account** tab) and, optionally, your free screenscraper.fr account for more requests
   a day; the password is kept in `plumsg.ini`, since ScreenScraper asks for it with every

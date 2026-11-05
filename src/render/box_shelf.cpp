@@ -176,6 +176,37 @@ Mat4 rotateZ(float degrees) {
     return {c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 }
 
+// Turns as unit quaternions (w, x, y, z), the same ways as rotateX and rotateY.
+using Quat = std::array<float, 4>;
+constexpr Quat kNoTurn{1, 0, 0, 0};
+
+Quat operator*(const Quat& a, const Quat& b) {
+    return {a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3], a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
+            a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1], a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0]};
+}
+
+Quat normalized(const Quat& q) {
+    const float n = std::sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+    return n > 0 ? Quat{q[0] / n, q[1] / n, q[2] / n, q[3] / n} : kNoTurn;
+}
+
+Quat quatX(float degrees) { return {std::cos(degrees * kRad / 2), std::sin(degrees * kRad / 2), 0, 0}; }
+Quat quatY(float degrees) { return {std::cos(degrees * kRad / 2), 0, std::sin(degrees * kRad / 2), 0}; }
+
+// From `a` (t = 0) to `b` (t = 1) the short way round.
+Quat towards(const Quat& a, Quat b, float t) {
+    if (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3] < 0) b = {-b[0], -b[1], -b[2], -b[3]};
+    return normalized({a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t});
+}
+
+Mat4 rotation(const Quat& q) {
+    const float w = q[0], x = q[1], y = q[2], z = q[3];
+    return {1 - 2 * (y * y + z * z), 2 * (x * y + w * z),     2 * (x * z - w * y),     0,
+            2 * (x * y - w * z),     1 - 2 * (x * x + z * z), 2 * (y * z + w * x),     0,
+            2 * (x * z + w * y),     2 * (y * z - w * x),     1 - 2 * (x * x + y * y), 0,
+            0,                       0,                       0,                       1};
+}
+
 Mat4 perspective(float fovY, float aspect, float zNear, float zFar) {
     const float f = 1.0f / std::tan(fovY / 2);
     Mat4 m{};
@@ -543,7 +574,7 @@ void BoxShelf::ensureTarget(int width, int height) {
 void BoxShelf::reset() {
     state_ = State::Browse;
     take_ = open_ = eject_ = light_ = 0;
-    boxYaw_ = boxPitch_ = cartYaw_ = cartPitch_ = 0;
+    boxTurn_ = cartTurn_ = kNoTurn;
     launch_ = launched_ = false;
     frozen_ = false;
     zoom_ = zoomShown_ = 1;
@@ -707,12 +738,8 @@ BoxShelf::Target BoxShelf::hover(float x, float y) {
 void BoxShelf::drag(float dx, float dy) {
     switch (state_) {
         case State::Held:
-            boxYaw_ += dx * 360;
-            boxPitch_ = std::clamp(boxPitch_ + dy * 180, -60.0f, 60.0f);
-            break;
         case State::Open:
-            cartYaw_ += dx * 360;
-            cartPitch_ = std::clamp(cartPitch_ + dy * 180, -60.0f, 60.0f);
+            turn(dx * 360, dy * 180);
             break;
         case State::Reading: {
             // Close up, the page follows the pointer.
@@ -733,6 +760,14 @@ void BoxShelf::drag(float dx, float dy) {
         }
         default: break;
     }
+}
+
+void BoxShelf::turn(float yaw, float pitch) {
+    Quat* q = state_ == State::Held ? &boxTurn_ : state_ == State::Open ? &cartTurn_ : nullptr;
+    if (!q || (yaw == 0 && pitch == 0)) return;
+    // Around the screen's axes (the world's: the camera looks straight at what is out), so
+    // each push turns it the same way on screen whatever side of it is showing.
+    *q = normalized(quatY(yaw) * quatX(pitch) * *q);
 }
 
 void BoxShelf::zoom(float steps) {
@@ -880,7 +915,7 @@ BoxShelf::Mat4 BoxShelf::heldBox() const {
     const Vec3 out{s.x, s.y, kShelfZ + 1.1f}, front{stageX_ - 0.35f * smooth(open_), 0.1f, 0};
     const Vec3 a{lerp(s.x, out.x, t1), lerp(s.y, out.y, t1), lerp(s.z, out.z, t1)};
     const Vec3 p{lerp(a.x, front.x, t2), lerp(a.y, front.y, t2), lerp(a.z, front.z, t2)};
-    return translate(p.x, p.y, p.z) * rotateY(90 * (1 - t2) + boxYaw_) * rotateX(boxPitch_);
+    return translate(p.x, p.y, p.z) * rotateY(90 * (1 - t2)) * rotation(boxTurn_);
 }
 
 BoxShelf::Mat4 BoxShelf::heldCartridge() const {
@@ -890,7 +925,7 @@ BoxShelf::Mat4 BoxShelf::heldCartridge() const {
     if (s <= 0) return in;
     const Vec3 out{stageX_ + 0.45f, 0.1f, 1.3f};
     const Vec3 p{lerp(in[12], out.x, s), lerp(in[13], out.y, s) + std::sin(s * kPi) * 0.25f, lerp(in[14], out.z, s)};
-    return translate(p.x, p.y, p.z) * rotateY(cartYaw_ * s) * rotateX(cartPitch_ * s);
+    return translate(p.x, p.y, p.z) * rotation(towards(kNoTurn, cartTurn_, s));
 }
 
 BoxShelf::Mat4 BoxShelf::cartridgeInBox(const Mat4& box, ConsoleSystem s, const Size& size) const {
@@ -1282,7 +1317,7 @@ void BoxShelf::build(const std::vector<Item>& items, int selected) {
     const float turn = system_ == ConsoleSystem::MegaCD ? -90.0f * smooth((t - 0.25f) / 0.5f) : 0.0f;
     // A Game Gear's cartridge goes in with its label to the back, the top of it showing.
     const float spin = system_ == ConsoleSystem::GameGear ? 180.0f * smooth((t - 0.25f) / 0.5f) : 0.0f;
-    addCartridge(item, translate(p.x, p.y, p.z) * rotateY(cartYaw_ + spin) * rotateX(cartPitch_ + turn));
+    addCartridge(item, translate(p.x, p.y, p.z) * rotateY(spin) * rotation(cartTurn_) * rotateX(turn));
 }
 
 void BoxShelf::addManual(const Item& item, const Mat4& lidManual) {
@@ -1459,15 +1494,10 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
         bookShift_ += (shift - bookShift_) * (frozen_ || state_ != State::Reading ? 1 : k * 0.5f);
     }
     // What is no longer held turns back to face the viewer.
-    auto settle = [&](float& yaw, float& pitch) {
-        yaw = std::remainder(yaw, 360.0f);
-        const float k = std::exp(-7 * dt);
-        yaw *= k;
-        pitch *= k;
-    };
-    if (state_ != State::Held && !frozen_) settle(boxYaw_, boxPitch_);
+    auto settle = [&](Quat& q) { q = towards(kNoTurn, q, std::exp(-7 * dt)); };
+    if (state_ != State::Held && !frozen_) settle(boxTurn_);
     if (state_ != State::Open && state_ != State::Reading && state_ != State::ManualOut && state_ != State::ManualBack && !frozen_)
-        settle(cartYaw_, cartPitch_);
+        settle(cartTurn_);
 
     ensureTarget(width, height);
     aspect_ = static_cast<float>(width) / static_cast<float>(height);
