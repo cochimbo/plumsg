@@ -210,6 +210,9 @@ msgstr "Ouvrez une ROM pour lui sauvegarder un profil 3D propre."
 msgid "Abre una ROM, o elige un juego en la biblioteca con el botón derecho."
 msgstr "Ouvrez une ROM, ou choisissez un jeu dans la bibliothèque avec le bouton droit."
 
+msgid "Abriendo el manual..."
+msgstr "Ouverture du manuel..."
+
 msgid "Abrir .vgm..."
 msgstr "Ouvrir un .vgm..."
 
@@ -276,6 +279,9 @@ msgstr "Réglages"
 msgid "Al principio"
 msgstr "Au début"
 
+msgid "Al volver a descargar"
+msgstr "En retéléchargeant"
+
 msgid "Alojar"
 msgstr "Héberger"
 
@@ -318,8 +324,8 @@ msgstr "Glissez une ROM dans la fenêtre ou utilisez Fichier > Ouvrir une ROM."
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Glissez une ROM ici, utilisez Fichier > Ouvrir une ROM ou ouvrez la bibliothèque (F10)"
 
-msgid "Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
-msgstr "Glisser : la tourner   Clic sur la boîte ou A : sortir la cartouche   Clic ailleurs ou B : la ranger"
+msgid "Arrastrar: girarla   Rueda: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
+msgstr "Glisser : la tourner   Molette : zoom   Clic sur la boîte ou A : sortir la cartouche   Clic ailleurs ou B : la ranger"
 
 msgid "Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
 msgstr "Glisser : la tourner   Clic sur la cartouche ou A : jouer   Clic ailleurs ou B : la ranger"
@@ -374,6 +380,9 @@ msgstr "Ajouter"
 
 msgid "Añadir carpeta..."
 msgstr "Ajouter un dossier..."
+
+msgid "Añadir solo lo que falte (rápido: no vuelve a pedir el juego)"
+msgstr "Ajouter seulement ce qui manque (rapide : le jeu n'est pas redemandé)"
 
 msgid "Año"
 msgstr "Année"
@@ -660,6 +669,12 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
+msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Rueda: zoom   B: guardarlo"
+msgstr "Clic sur la cartouche ou A : jouer   Clic sur le manuel ou flèche gauche : le lire   Molette : zoom   B : la ranger"
+
+msgid "Clic en una página o flechas: pasar páginas   Rueda: zoom   Arrastrar: moverse   B: cerrarlo"
+msgstr "Clic sur une page ou flèches : tourner les pages   Molette : zoom   Glisser : se déplacer   B : le fermer"
+
 msgid "Clic o A: sacar la caja   Rueda o stick derecho: zoom   Arrastrar o flechas: moverse"
 msgstr "Clic ou A : sortir la boîte   Molette ou stick droit : zoom   Glisser ou flèches : se déplacer"
 
@@ -909,8 +924,8 @@ msgstr "Téléchargement : %s..."
 msgid "Descargar de ScreenScraper"
 msgstr "Télécharger depuis ScreenScraper"
 
-msgid "Descargar medios de toda la biblioteca"
-msgstr "Télécharger les médias de toute la bibliothèque"
+msgid "Descargar lo que falte en toda la biblioteca"
+msgstr "Télécharger ce qui manque pour toute la bibliothèque"
 
 msgid "Descargar: %s"
 msgstr "Télécharger : %s"
@@ -1083,6 +1098,12 @@ msgstr ""
 "la souris sur la largeur de l'image, ou avec le stick gauche (ou la croix). Bouton : clic\n"
 "gauche, A ou B. Les jeux qui en ont besoin l'ont déjà dans le port 1 s'il y a une\n"
 "manette. Jeux Master System uniquement ; en partie en réseau, une manette est branchée."
+
+msgid "El manual no es un PDF que se pueda abrir."
+msgstr "Le manuel n'est pas un PDF qui peut être ouvert."
+
+msgid "El manual no tiene páginas."
+msgstr "Le manuel n'a pas de pages."
 
 msgid "El otro jugador ha salido de la partida."
 msgstr "L'autre joueur a quitté la partie."
@@ -1322,6 +1343,9 @@ msgstr "Il manque le BIOS du Mega CD japonais : choisissez-le dans Console > BIO
 
 msgid "Falta la función %s"
 msgstr "Il manque la fonction %s"
+
+msgid "Falta pdfium.dll junto a plumsg: sin ella no se pueden leer los manuales."
+msgstr "pdfium.dll manque à côté de plumsg : sans elle, les manuels ne peuvent pas être lus."
 
 msgid "Fecha"
 msgstr "Date"
@@ -2804,6 +2828,9 @@ msgstr "Système"
 msgid "Sitar"
 msgstr "Sitar"
 
+msgid "Sobrescribir todos los medios"
+msgstr "Écraser tous les médias"
+
 msgid "Sol"
 msgstr "Sol"
 
@@ -3158,6 +3185,9 @@ msgstr "Chercher à nouveau"
 
 msgid "Volver a descargar"
 msgstr "Télécharger à nouveau"
+
+msgid "Volver a descargar todo en toda la biblioteca"
+msgstr "Tout retélécharger pour toute la bibliothèque"
 
 msgid "Volver a intentarlo"
 msgstr "Réessayer"

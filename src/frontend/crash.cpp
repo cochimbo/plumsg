@@ -247,4 +247,8 @@ std::string takeCrashReport(const std::string& dir) {
     return s.str();
 }
 
+const char* appVersion() { return PLUMSG_VERSION; }
+
+std::string appTitle() { return std::string("plumsg ") + PLUMSG_VERSION; }
+
 }  // namespace plumsg

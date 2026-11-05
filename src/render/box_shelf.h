@@ -17,7 +17,13 @@ namespace plumsg {
 // opens its lid on the hinge at the left, like a Mega Drive case, and brings its cartridge
 // (the disc for the Mega CD) out, which dragging turns as well; a click on the cartridge
 // puts it into the slot of the game's console, whose light comes on, and then the game is
-// played (takeLaunch()). A click anywhere else goes a step back.
+// played (takeLaunch()). With the box open, a click on the manual in its lid (or Left)
+// brings it out in front to be read: a click on its right page (Right, A) turns to the
+// next pages, on its left one (Left) back. The wheel zooms in on the box, the cartridge
+// and the manual too. A click anywhere else goes a step back.
+//
+// A Mega CD's box takes the shape of its cover: the tall one of the first American
+// games, or a jewel case, thin and almost square, of the rest.
 //
 // It draws with OpenGL 3.3 into a texture of its own, which the library shows as an
 // image; clicks on that image are passed back as points from 0 to 1.
@@ -32,14 +38,23 @@ public:
         // The cartridge's label (the disc's on the Mega CD); without one the cover's front.
         unsigned int label = 0;
         int labelWidth = 0, labelHeight = 0;
+        // It has a manual to read (only looked at for the chosen game).
+        bool manual = false;
+    };
+    // A page of the chosen game's manual, as far as it has been drawn (texture 0 until then).
+    struct Page {
+        unsigned int texture = 0;
+        int width = 0, height = 0;
     };
     // What the mouse is over.
-    enum class Target { None, Box, Cartridge };
-    // What is in front: the shelf, a box taken out, its cartridge out, or the console.
-    enum class Stage { Shelf, Box, Cartridge, Console };
+    enum class Target { None, Box, Cartridge, Manual, Page };
+    // What is in front: the shelf, a box taken out, its cartridge out, its manual being
+    // read, or the console.
+    enum class Stage { Shelf, Box, Cartridge, Manual, Console };
 
-    // Where the front starts across a cover (0 to 1): 0 unless it is a whole sleeve.
-    static float coverFront(int width, int height);
+    // Where the front starts across a cover (0 to 1): 0 unless it is a whole sleeve (back,
+    // spine and front). A Mega CD's front may be as wide as tall (a jewel case's).
+    static float coverFront(int width, int height, ConsoleSystem system = ConsoleSystem::MegaDrive);
 
     BoxShelf();
     ~BoxShelf();
@@ -59,7 +74,7 @@ public:
     // turned `labelTurn` quarter turns there; `pictureAspect` is the picture's width / height,
     // and a cover shows there its part `pictureMiddle` of the way down.
     void setCartridgeModel(ConsoleSystem system, const GltfModel& model, float turnX, float turnZ, const float labelArea[4],
-                           const float pictureArea[4], int labelTurn, float pictureAspect, float pictureMiddle);
+                           const float pictureArea[4], int labelTurn, float pictureAspect, float pictureMiddle, float turnY = 0);
     // Loads the consoles' and cartridges' models that plumsg knows how to place
     // (megadrive.glb, mastersystem.glb and their cartridges), from the first of `folders`
     // that has each. Those it cannot read keep the built-in model.
@@ -83,8 +98,19 @@ public:
     // front, or moves along the shelf.
     void drag(float dx, float dy);
     // The wheel (or the pad's right stick): up comes closer to the shelf, down steps back
-    // until it is all in view.
+    // until it is all in view; with a box, a cartridge or a manual out, closer to it.
     void zoom(float steps);
+    // The chosen game's manual: one entry a page (empty while it is not known how many).
+    void setManual(std::vector<Page> pages);
+    // The manual's pages that are shown now or soon, first to last, to have them drawn.
+    void manualPages(int* first, int* last) const;
+    // With the box open, brings the manual out to read it (false if it has none).
+    bool openManual();
+    // Turns the manual's pages: 1 forwards, -1 back.
+    void turnPage(int direction);
+    // Left and Right: the manual when the box is open, its pages while it is read. False
+    // if they have nothing to do here.
+    bool side(int direction);
     // A or Enter: the next step (takes the box out, its cartridge, into the console).
     void activate();
     // B or Esc: a step back. False on the shelf.
@@ -103,7 +129,7 @@ public:
     void pose(int step);
 
 private:
-    enum class State { Browse, Taking, Held, Returning, Opening, Open, Closing, Ejecting, Inserted };
+    enum class State { Browse, Taking, Held, Returning, Opening, Open, Closing, Ejecting, Inserted, ManualOut, Reading, ManualBack };
     using Mat4 = std::array<float, 16>;
     struct Vec3 {
         float x = 0, y = 0, z = 0;
@@ -126,16 +152,29 @@ private:
         bool reflect = true;  // seen in the floor
         int box = -1;         // the item whose box this is part of, for clicks
         bool cartridge = false;
+        bool manual = false;  // the manual in the lid, or one of its pages out
         bool hidden = false;  // only there for clicks
     };
 
+    // A box's size: a Mega Drive's case, or the one a Mega CD's cover asks for.
+    struct Size {
+        float w = 1.0f, h = 1.4f, d = 0.2f;
+    };
+    static Size boxSize(const Item& item);
     void build(const std::vector<Item>& items, int selected);
-    void addBox(const std::vector<Item>& items, int index, const Mat4& place, float lid);
-    Mat4 cartridgeInBox(const Mat4& box, ConsoleSystem s) const;
+    // The manual out of the box, on its way (read_) or open at its pages.
+    void addManual(const Item& item, const Mat4& lidManual);
+    // Its pages' size, and where its spine is while it is read.
+    void manualSize(float* w, float* h) const;
+    Vec3 manualSpot() const;
+    int lastSpread() const;
+    // Returns where the manual lies in its lid (its middle, unscaled).
+    Mat4 addBox(const std::vector<Item>& items, int index, const Mat4& place, float lid, bool withManual);
+    Mat4 cartridgeInBox(const Mat4& box, ConsoleSystem s, const Size& size) const;
     // A closed box standing on the shelf, its spine out.
     void addShelfBox(const Item& item, int index, const Mat4& place);
     // The lit frame around the chosen box's spine, standing at `spot`.
-    void addSelectionFrame(const Vec3& spot);
+    void addSelectionFrame(const Vec3& spot, const Size& size);
     void addShelf();
     // Where box `index` stands on the shelf (its middle), and how big the shelf is.
     Vec3 shelfSpot(int index) const;
@@ -178,6 +217,10 @@ private:
     Custom custom_[kCartCustom + kSystemCount];
     void upload(Custom& c, const GltfModel& model);
     gl::GLuint fbo_ = 0, colour_ = 0, depth_ = 0;
+    // Drawn first with 4 samples a pixel, then resolved into colour_: the boxes' thin
+    // edges no longer shimmer as they move.
+    gl::GLuint msFbo_ = 0, msColour_ = 0, msDepth_ = 0;
+    bool multisample_ = false;
     int width_ = 0, height_ = 0;
 
     State state_ = State::Browse;
@@ -192,6 +235,21 @@ private:
     bool frozen_ = false;  // pose()
     bool placed_ = false;  // the camera has been put on the chosen box once
     int selected_ = 0, count_ = 0, columns_ = 1, rows_ = 1;
+    // Each box's size and where it stands across the shelf; the widest row.
+    std::vector<Size> sizes_;
+    std::vector<float> spotX_;
+    float rowWidth_ = 0;
+    Size held_;  // the chosen box's
+    // Closer to what is out in front (1: as framed), and as far as the camera has got.
+    float zoom_ = 1, zoomShown_ = 1;
+    // The manual: on its way out (0 in the lid .. 1 in front), the pages shown (0 the
+    // cover, n pages 2n-1 and 2n), a page turning (turn_ 0 .. 1, turnDir_ +1 or -1).
+    float read_ = 0, turn_ = 0;
+    int spread_ = 0, turnDir_ = 0;
+    bool manual_ = false;          // the chosen game has one
+    std::vector<Page> pages_;
+    float bookShift_ = 0;          // the camera across, to frame a closed cover or a last page
+    Vec3 readPan_;                 // dragged over a page close up
     ConsoleSystem system_ = ConsoleSystem::MegaDrive;  // of the chosen game
     // Turned by dragging (degrees): the box out and its cartridge.
     float boxYaw_ = 0, boxPitch_ = 0, cartYaw_ = 0, cartPitch_ = 0;

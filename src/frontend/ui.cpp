@@ -394,6 +394,7 @@ Ui::~Ui() {
     library_.clearTextures();
     gameInfo_.clearTextures();
     scraper_.clearTextures();
+    manual_.clearTextures();
     if (logoTexture_) gl::DeleteTextures(1, &logoTexture_);
     if (iconTexture_) gl::DeleteTextures(1, &iconTexture_);
     ImGui_ImplOpenGL3_Shutdown();
@@ -1003,14 +1004,21 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
         if (ImGui::MenuItem(tr("Cuenta de ScreenScraper..."))) openScraping(0);
         if (ImGui::MenuItem(tr("Qué descargar..."))) openScraping(1);
         ImGui::Separator();
-        // Every game of the library that has nothing downloaded yet.
+        // Every game of the library: what it is missing, or all of it again.
         const bool running = scraper_.batchLeft() > 0;
         if (running) {
             if (ImGui::MenuItem(tr("Parar la descarga"))) scraper_.cancelAll();
-        } else if (ImGui::MenuItem(tr("Descargar medios de toda la biblioteca"), nullptr, false, !settings_.libraryFolders.empty())) {
-            showLibrary_ = true;
-            if (!library_.scanned() || library_.folders() != settings_.libraryFolders) rescanLibrary();
-            scrapeLibrary();
+        } else {
+            // Only what is missing (quick, from what was found before), or all of it again.
+            bool all = false;
+            bool go = ImGui::MenuItem(tr("Descargar lo que falte en toda la biblioteca"), nullptr, false, !settings_.libraryFolders.empty());
+            if (ImGui::MenuItem(tr("Volver a descargar todo en toda la biblioteca"), nullptr, false, !settings_.libraryFolders.empty()))
+                go = all = true;
+            if (go) {
+                showLibrary_ = true;
+                if (!library_.scanned() || library_.folders() != settings_.libraryFolders) rescanLibrary();
+                scrapeLibrary(all ? 1 : 0);
+            }
         }
         ImGui::EndMenu();
     }
@@ -2299,6 +2307,11 @@ bool Ui::handleLibrary(const SDL_Event& e) {
         }
         return true;
     }
+    // While a manual is read, Page Up/Down and the shoulders turn its pages too.
+    if (settings_.libraryBoxes && shelf_ && shelf_->stage() == BoxShelf::Stage::Manual && (action == PrevTab || action == NextTab)) {
+        shelf_->turnPage(action == NextTab ? 1 : -1);
+        return true;
+    }
     if (action == PrevTab || action == NextTab) {
         // Tabs: -1 (all), then each console; wraps around.
         int tab = settings_.librarySystem + 1 + (action == NextTab ? 1 : -1);
@@ -2323,6 +2336,8 @@ bool Ui::handleLibrary(const SDL_Event& e) {
             return true;
         }
         if (action == Close && shelf_->back()) return true;
+        // Left opens the manual of an open box; Left and Right turn its pages.
+        if ((action == Left || action == Right) && shelf_->side(action == Right ? 1 : -1)) return true;
         if (shelf_->busy() && action != Close && action != Search && action != Menu) return true;
     }
     const int count = static_cast<int>(visibleGames().size());
@@ -2672,7 +2687,7 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
         const ImVec2 box(pos.x + 6, pos.y + 6);
         if (g.texture && g.height > 0) {
             // Of a whole sleeve (back, spine and front), only the front.
-            const float u0 = BoxShelf::coverFront(g.width, g.height);
+            const float u0 = BoxShelf::coverFront(g.width, g.height, g.system);
             const float gw = static_cast<float>(g.width) * (1 - u0);
             float w = coverW, h = coverW * static_cast<float>(g.height) / gw;
             if (h > coverH) {
@@ -2735,7 +2750,38 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
     items.reserve(visible.size());
     for (size_t i : visible) {
         const Library::Game& g = games[i];
-        items.push_back({g.texture, g.width, g.height, g.system, g.label, g.labelWidth, g.labelHeight});
+        items.push_back({g.texture, g.width, g.height, g.system, g.label, g.labelWidth, g.labelHeight, false});
+    }
+    // The chosen game's manual, from what ScreenScraper downloaded of it.
+    const int chosen = libraryView_.selected;
+    if (chosen >= 0 && chosen < static_cast<int>(visible.size())) {
+        const Library::Game& g = games[visible[static_cast<size_t>(chosen)]];
+        const double now = ImGui::GetTime();
+        if (g.path != manualFor_ || now - manualChecked_ > 3.0) {
+            manualFor_ = g.path;
+            manualChecked_ = now;
+            const std::string dir = scraper_.gameFolder({g.path, g.stem, g.title, g.tags, g.system});
+            std::error_code ec;
+            manualFile_ = !dir.empty() && std::filesystem::is_regular_file(std::filesystem::u8path(dir + "manual.pdf"), ec)
+                              ? dir + "manual.pdf" : std::string();
+        }
+        items[static_cast<size_t>(chosen)].manual = !manualFile_.empty();
+        // Opened with the box, so that its cover is in the lid.
+        const BoxShelf::Stage stage = shelf_->stage();
+        if (stage == BoxShelf::Stage::Cartridge || stage == BoxShelf::Stage::Manual) manual_.open(manualFile_);
+        manual_.update();
+        int first = 0, last = 0;
+        shelf_->manualPages(&first, &last);
+        manual_.want(first, last);
+        std::vector<BoxShelf::Page> pages;
+        if (manual_.path() == manualFile_ && manual_.pageCount() > 0) {
+            pages.resize(static_cast<size_t>(manual_.pageCount()));
+            for (int i = 0; i < manual_.pageCount(); ++i) {
+                const ManualReader::Page p = manual_.page(i);
+                pages[static_cast<size_t>(i)] = {p.texture, p.width, p.height};
+            }
+        }
+        shelf_->setManual(std::move(pages));
     }
     // Drawn at twice the window's pixels and shrunk, for smooth edges.
     const ImGuiIO& io = ImGui::GetIO();
@@ -2776,8 +2822,16 @@ void Ui::drawLibraryBoxes(const std::vector<size_t>& visible) {
         const char* hint = "";
         switch (shelf_->stage()) {
             case BoxShelf::Stage::Shelf: hint = tr("Clic o A: sacar la caja   Rueda o stick derecho: zoom   Arrastrar o flechas: moverse"); break;
-            case BoxShelf::Stage::Box: hint = tr("Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"); break;
-            case BoxShelf::Stage::Cartridge: hint = tr("Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"); break;
+            case BoxShelf::Stage::Box: hint = tr("Arrastrar: girarla   Rueda: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"); break;
+            case BoxShelf::Stage::Cartridge:
+                hint = !manualFile_.empty() ? tr("Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Rueda: zoom   B: guardarlo")
+                                            : tr("Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo");
+                break;
+            case BoxShelf::Stage::Manual:
+                hint = !manual_.error().empty() ? manual_.error().c_str()
+                       : manual_.pageCount() < 0 ? tr("Abriendo el manual...")
+                                                 : tr("Clic en una página o flechas: pasar páginas   Rueda: zoom   Arrastrar: moverse   B: cerrarlo");
+                break;
             case BoxShelf::Stage::Console: break;
         }
         const float line = ImGui::GetTextLineHeightWithSpacing();
@@ -2905,7 +2959,7 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
     };
     ImGui::Spacing();
     if (g.texture && g.width > 0 && g.height > 0) {
-        image(g.texture, g.width, g.height, coverMax, BoxShelf::coverFront(g.width, g.height));
+        image(g.texture, g.width, g.height, coverMax, BoxShelf::coverFront(g.width, g.height, g.system));
     } else {
         const ImVec2 a = ImGui::GetCursorScreenPos();
         const float h = std::min(width * 1.4f, coverMax);
@@ -3002,7 +3056,8 @@ void Ui::useCoverImage(const std::string& file) {
                 int w = 0, h = 0, channels = 0;
                 std::ifstream in(std::filesystem::u8path(file), std::ios::binary);
                 const std::vector<unsigned char> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-                if (stbi_info_from_memory(data.data(), static_cast<int>(data.size()), &w, &h, &channels) && BoxShelf::coverFront(w, h) <= 0)
+                if (stbi_info_from_memory(data.data(), static_cast<int>(data.size()), &w, &h, &channels) &&
+                    BoxShelf::coverFront(w, h, games[i].system) <= 0)
                     notify(tr("Esa imagen no es una portada completa (contraportada, lomo y portada): se usa como portada."));
             }
             break;

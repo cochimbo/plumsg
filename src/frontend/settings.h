@@ -111,6 +111,8 @@ struct Settings {
     std::string ssUser, ssPassword;
     std::string ssDevId, ssDevPassword;
     std::string ssMedia;
+    // Downloading a game again overwrites what it has (else only what is missing is added).
+    bool ssOverwrite = false;
 
     void addRecent(const std::string& path);
     void removeRecent(const std::string& path);

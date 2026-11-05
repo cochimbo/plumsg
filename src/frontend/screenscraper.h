@@ -76,6 +76,9 @@ public:
     // Which kinds to download (SsKind ids); empty: the ones with byDefault.
     void setKinds(std::vector<std::string> kinds);
     std::string gameFolder(const Rom& rom) const;
+    // Downloading again: every chosen file anew (true), or only those it has not got yet,
+    // from the game's ficha.json if it has one, without asking ScreenScraper for it again.
+    void setOverwrite(bool overwrite) { overwrite_ = overwrite; }
     // The language of the texts ("es").
     void setLanguage(const std::string& language) { language_ = language; }
 
@@ -91,8 +94,9 @@ public:
     // Forgets the window's game and search, and frees their textures.
     void close();
 
-    // Every game of `roms` that has no ficha.json yet, one after another.
-    void downloadAll(const std::vector<Rom>& roms);
+    // Every game of `roms` one after another: with overwrite, all of them; else those
+    // that have no ficha.json yet or miss some of the chosen kinds that ScreenScraper has.
+    void downloadAll(const std::vector<Rom>& roms, bool overwrite);
     void cancelAll();
     int batchLeft() const;
     int batchTotal() const { return batchTotal_; }
@@ -119,6 +123,7 @@ private:
         unsigned serial = 0;
         Rom rom;
         int gameId = 0;
+        bool overwrite = false;
         std::vector<std::string> kinds;
         std::string text;
         ConsoleSystem system = ConsoleSystem::MegaDrive;
@@ -152,9 +157,13 @@ private:
     bool fetchGame(const Task& task, std::string* error, bool batch);
     void readFolder(const Rom& rom, Reply& reply) const;
     std::vector<std::string> chosenKinds(const std::vector<std::string>& asked) const;
+    // The chosen kinds the game's folder has not got and its ficha.json says ScreenScraper
+    // has (all of them if there is no ficha.json); `known` says whether there was one.
+    std::vector<std::string> missingKinds(const Rom& rom, bool* known) const;
 
     std::string folder_;
     std::string language_ = "es";
+    bool overwrite_ = false;
     unsigned serial_ = 0;  // of the window's game; replies for another one are dropped
     unsigned searchSerial_ = 0;
     Sheet sheet_;

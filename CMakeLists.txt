@@ -235,6 +235,7 @@ add_executable(plumsg WIN32
   src/frontend/screenscraper.cpp
   src/frontend/screenscraper_data.cpp
   src/frontend/ui_media.cpp
+  src/frontend/manual.cpp
   src/frontend/cheat_database.cpp
   src/frontend/languages.cpp
   src/frontend/achievements_ui.cpp

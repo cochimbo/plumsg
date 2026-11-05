@@ -353,6 +353,7 @@ struct CartridgeFile {
     int labelTurn;
     float pictureAspect;  // width / height
     float pictureMiddle;  // how far down the cover the part shown on it is centred
+    float turnY = 0;      // first, to straighten a model that comes turned in its file
 };
 const CartridgeFile kCartridgeFiles[] = {
     // The Mega Drive's by Naser, CC BY 4.0: the picture and title above the "MEGA DRIVE"
@@ -360,8 +361,9 @@ const CartridgeFile kCartridgeFiles[] = {
     {ConsoleSystem::MegaDrive, "megadrive-cartridge.glb", 0, 0, {0.125f, 0.617f, 0.623f, 0.967f}, {0.125f, 0.662f, 0.623f, 0.967f}, 0, 1.8f, 0.45f},
     // The Master System's, from dark_igorek's model: lying on its back, its label (R-Type's)
     // turned on its side in the texture (whose coordinates there run from 1 to 2). The
-    // label is a strip along the top, where a cover's title goes.
-    {ConsoleSystem::MasterSystem, "mastersystem-cartridge.glb", 90, 0, {1.473f, 0.0f, 1.552f, 0.40f}, {1.473f, 0.0f, 1.552f, 0.40f}, 1, 4.5f, 0.12f},
+    // label is a strip along the top, where a cover's title goes. The file has it turned
+    // 7.8 degrees, which would leave it crooked in its box.
+    {ConsoleSystem::MasterSystem, "mastersystem-cartridge.glb", 90, 0, {1.473f, 0.0f, 1.552f, 0.40f}, {1.473f, 0.0f, 1.552f, 0.40f}, 1, 4.5f, 0.12f, -7.8f},
     // The Game Gear's, plumsg's own: standing, its label (54 x 36 mm) the whole texture.
     {ConsoleSystem::GameGear, "gamegear-cartridge.glb", 0, 0, {0, 0, 1, 1}, {0, 0, 1, 1}, 0, 1.5f, 0.45f},
 };
@@ -374,7 +376,7 @@ void BoxShelf::loadConsoleModels(const std::vector<std::string>& folders) {
             GltfModel model;
             std::string error;
             if (!loadGltf(folder + f.file, model, &error)) continue;
-            setCartridgeModel(f.system, model, f.turnX, f.turnZ, f.label, f.picture, f.labelTurn, f.pictureAspect, f.pictureMiddle);
+            setCartridgeModel(f.system, model, f.turnX, f.turnZ, f.label, f.picture, f.labelTurn, f.pictureAspect, f.pictureMiddle, f.turnY);
             break;
         }
     }
@@ -394,11 +396,11 @@ void BoxShelf::loadConsoleModels(const std::vector<std::string>& folders) {
 }
 
 void BoxShelf::setCartridgeModel(ConsoleSystem system, const GltfModel& model, float turnX, float turnZ, const float labelArea[4],
-                                 const float pictureArea[4], int labelTurn, float pictureAspect, float pictureMiddle) {
+                                 const float pictureArea[4], int labelTurn, float pictureAspect, float pictureMiddle, float turnY) {
     Custom& c = custom_[kCartCustom + static_cast<int>(system)];
     upload(c, model);
     // Turned to stand, then centred and stretched to the cartridge's real size.
-    const Mat4 turn = rotateZ(turnZ) * rotateX(turnX);
+    const Mat4 turn = rotateZ(turnZ) * rotateX(turnX) * rotateY(turnY);
     float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
     for (int k = 0; k < 8; ++k) {
         const float p[3] = {(k & 1) ? model.max[0] : model.min[0], (k & 2) ? model.max[1] : model.min[1], (k & 4) ? model.max[2] : model.min[2]};
@@ -429,6 +431,9 @@ BoxShelf::~BoxShelf() {
         if (!c.textures.empty()) gl::DeleteTextures(static_cast<gl::GLsizei>(c.textures.size()), c.textures.data());
     }
     if (fbo_) gl::DeleteFramebuffers(1, &fbo_);
+    if (msFbo_) gl::DeleteFramebuffers(1, &msFbo_);
+    if (msColour_) gl::DeleteRenderbuffers(1, &msColour_);
+    if (msDepth_) gl::DeleteRenderbuffers(1, &msDepth_);
     if (colour_) gl::DeleteTextures(1, &colour_);
     if (depth_) gl::DeleteTextures(1, &depth_);
     if (vbo_) gl::DeleteBuffers(1, &vbo_);
@@ -459,6 +464,24 @@ void BoxShelf::ensureTarget(int width, int height) {
     gl::BindFramebuffer(gl::FRAMEBUFFER, fbo_);
     gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, colour_, 0);
     gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, depth_, 0);
+    // The picture shrinks to the window through its mipmaps, averaged properly.
+    gl::BindTexture(gl::TEXTURE_2D, colour_);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
+    gl::GenerateMipmap(gl::TEXTURE_2D);
+    if (!msFbo_) {
+        gl::GenFramebuffers(1, &msFbo_);
+        gl::GenRenderbuffers(1, &msColour_);
+        gl::GenRenderbuffers(1, &msDepth_);
+    }
+    gl::BindRenderbuffer(gl::RENDERBUFFER, msColour_);
+    gl::RenderbufferStorageMultisample(gl::RENDERBUFFER, 4, gl::RGBA8, width, height);
+    gl::BindRenderbuffer(gl::RENDERBUFFER, msDepth_);
+    gl::RenderbufferStorageMultisample(gl::RENDERBUFFER, 4, gl::DEPTH_COMPONENT24, width, height);
+    gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
+    gl::BindFramebuffer(gl::FRAMEBUFFER, msFbo_);
+    gl::FramebufferRenderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, msColour_);
+    gl::FramebufferRenderbuffer(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::RENDERBUFFER, msDepth_);
+    multisample_ = gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE;
     gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
 }
 
@@ -468,6 +491,10 @@ void BoxShelf::reset() {
     boxYaw_ = boxPitch_ = cartYaw_ = cartPitch_ = 0;
     launch_ = launched_ = false;
     frozen_ = false;
+    zoom_ = zoomShown_ = 1;
+    read_ = turn_ = 0;
+    spread_ = turnDir_ = 0;
+    readPan_ = {};
 }
 
 void BoxShelf::pose(int step) {
@@ -475,8 +502,10 @@ void BoxShelf::pose(int step) {
     if (step <= 0) return;
     take_ = 1;
     open_ = step >= 2 ? 1.0f : 0.0f;
-    state_ = step == 1 ? State::Held : step == 2 ? State::Open : step == 3 ? State::Ejecting : State::Inserted;
+    state_ = step == 1 ? State::Held : step == 2 ? State::Open : step == 3 ? State::Ejecting : step == 4 ? State::Inserted : State::Reading;
     eject_ = step == 3 ? 0.6f : step == 4 ? 1.0f : 0.0f;
+    // 5: the manual out, at its first pages.
+    if (step >= 5) read_ = 1, spread_ = 1;
     frozen_ = true;
 }
 
@@ -491,17 +520,72 @@ void BoxShelf::activate() {
             state_ = State::Ejecting;
             eject_ = 0;
             break;
+        case State::Reading: turnPage(1); return;
         default: break;
     }
+    zoom_ = 1;
+}
+
+bool BoxShelf::openManual() {
+    if (state_ != State::Open || !manual_) return false;
+    state_ = State::ManualOut;
+    zoom_ = 1;
+    readPan_ = {};
+    spread_ = turnDir_ = 0;
+    return true;
+}
+
+int BoxShelf::lastSpread() const { return static_cast<int>(pages_.size()) / 2; }
+
+void BoxShelf::turnPage(int direction) {
+    if (state_ != State::Reading || pages_.empty()) return;
+    // A turn on its way ends at once, for quick presses.
+    if (turnDir_) {
+        spread_ += turnDir_;
+        turnDir_ = 0;
+    }
+    const int to = spread_ + (direction > 0 ? 1 : -1);
+    if (to < 0 || to > lastSpread()) return;
+    turnDir_ = direction > 0 ? 1 : -1;
+    turn_ = 0;
+}
+
+bool BoxShelf::side(int direction) {
+    if (state_ == State::Reading) {
+        turnPage(direction);
+        return true;
+    }
+    if (state_ == State::Open && direction < 0) return openManual();
+    return state_ != State::Browse;
+}
+
+void BoxShelf::setManual(std::vector<Page> pages) {
+    pages_ = std::move(pages);
+    if (!frozen_ && spread_ > lastSpread()) spread_ = lastSpread(), turnDir_ = 0;
+}
+
+void BoxShelf::manualPages(int* first, int* last) const {
+    // The cover for the lid; around the pages open, the next ones and those before.
+    if (state_ != State::ManualOut && state_ != State::Reading && state_ != State::ManualBack) {
+        *first = 0;
+        *last = 0;
+        return;
+    }
+    const int s = spread_ + (turnDir_ > 0 ? 1 : 0);
+    *first = std::max(0, 2 * s - 3);
+    *last = 2 * s + 2;
 }
 
 bool BoxShelf::back() {
     switch (state_) {
         case State::Browse: return false;
         case State::Taking:
-        case State::Held: state_ = State::Returning; return true;
+        case State::Held: state_ = State::Returning; zoom_ = 1; return true;
         case State::Opening:
-        case State::Open: state_ = State::Closing; return true;
+        case State::Open: state_ = State::Closing; zoom_ = 1; return true;
+        case State::ManualOut:
+        case State::Reading: state_ = State::ManualBack; zoom_ = 1; return true;
+        case State::ManualBack: return true;
         default: return true;  // on its way into the console
     }
 }
@@ -514,7 +598,10 @@ BoxShelf::Stage BoxShelf::stage() const {
         case State::Held:
         case State::Closing: return Stage::Box;
         case State::Opening:
-        case State::Open: return Stage::Cartridge;
+        case State::Open:
+        case State::ManualBack: return Stage::Cartridge;
+        case State::ManualOut:
+        case State::Reading: return Stage::Manual;
         default: return Stage::Console;
     }
 }
@@ -538,7 +625,13 @@ int BoxShelf::click(float x, float y) {
             else back();
             return -1;
         case State::Open:
-            if (p && p->cartridge) activate();
+            if (p && p->manual) openManual();
+            else if (p && p->cartridge) activate();
+            else back();
+            return -1;
+        case State::Reading:
+            // The right page goes on, the left one back.
+            if (p && p->manual) turnPage(x >= 0.5f ? 1 : -1);
             else back();
             return -1;
         default: return -1;
@@ -550,7 +643,8 @@ BoxShelf::Target BoxShelf::hover(float x, float y) {
     switch (state_) {
         case State::Browse: return p && p->box >= 0 ? Target::Box : Target::None;
         case State::Held: return p && p->box == selected_ ? Target::Box : Target::None;
-        case State::Open: return p && p->cartridge ? Target::Cartridge : Target::None;
+        case State::Open: return p && p->manual ? Target::Manual : p && p->cartridge ? Target::Cartridge : Target::None;
+        case State::Reading: return p && p->manual ? Target::Page : Target::None;
         default: return Target::None;
     }
 }
@@ -565,6 +659,16 @@ void BoxShelf::drag(float dx, float dy) {
             cartYaw_ += dx * 360;
             cartPitch_ = std::clamp(cartPitch_ + dy * 180, -60.0f, 60.0f);
             break;
+        case State::Reading: {
+            // Close up, the page follows the pointer.
+            if (zoom_ <= 1.01f) break;
+            float pw, ph;
+            manualSize(&pw, &ph);
+            const float across = 2 * std::max(2 * pw / aspect_, ph) * 1.08f / zoomShown_;
+            readPan_.x = std::clamp(readPan_.x - dx * across * aspect_, -pw, pw);
+            readPan_.y = std::clamp(readPan_.y + dy * across, -ph / 2, ph / 2);
+            break;
+        }
         case State::Browse: {
             // The shelf follows the pointer, as far as the picture is wide at its distance.
             const float across = 2 * distance_ * tanHalf_;
@@ -577,8 +681,14 @@ void BoxShelf::drag(float dx, float dy) {
 }
 
 void BoxShelf::zoom(float steps) {
-    if (state_ != State::Browse) return;
-    distance_ *= std::pow(0.85f, steps);  // the most is set by render, once it knows the shelf
+    if (state_ == State::Browse) {
+        distance_ *= std::pow(0.85f, steps);  // the most is set by render, once it knows the shelf
+        return;
+    }
+    // On what is out in front: up to 4 times closer (5 on a page), a little further back.
+    if (state_ == State::Held || state_ == State::Open || state_ == State::Reading)
+        zoom_ = std::clamp(zoom_ / std::pow(0.85f, steps), 0.75f, state_ == State::Reading ? 5.0f : 4.0f);
+    if (zoom_ <= 1.0f) readPan_ = {};
 }
 
 const BoxShelf::Part* BoxShelf::pick(float x, float y) const {
@@ -590,7 +700,7 @@ const BoxShelf::Part* BoxShelf::pick(float x, float y) const {
     const Part* best = nullptr;
     float bestT = 1e30f;
     for (const Part& p : parts_) {
-        if ((p.box < 0 && !p.cartridge) || (p.cartridge && p.custom >= 0)) continue;
+        if ((p.box < 0 && !p.cartridge && !p.manual) || (p.cartridge && p.custom >= 0)) continue;
         const Mat4 inv = affineInverse(p.model);
         const float o[3] = {inv[0] * eye_.x + inv[4] * eye_.y + inv[8] * eye_.z + inv[12],
                             inv[1] * eye_.x + inv[5] * eye_.y + inv[9] * eye_.z + inv[13],
@@ -610,8 +720,8 @@ const BoxShelf::Part* BoxShelf::pick(float x, float y) const {
             t1 = std::min(t1, tb);
             hit = t0 <= t1;
         }
-        // The cartridge wins over the box it lies in.
-        const float t = p.cartridge ? t0 - 0.05f : t0;
+        // The cartridge and the manual win over the box they lie in.
+        const float t = p.cartridge || p.manual ? t0 - 0.05f : t0;
         if (hit && t < bestT) {
             bestT = t;
             best = &p;
@@ -648,18 +758,63 @@ void BoxShelf::camera(Vec3* eye, Vec3* target) const {
     };
     *eye = mix(shelfEye, eyes);
     *target = mix(shelfTarget, targets);
+    // Closer to what is out in front.
+    if (take_ > 0 && zoomShown_ != 1) {
+        const Vec3 t = *target;
+        *eye = {t.x + (eye->x - t.x) / zoomShown_, t.y + (eye->y - t.y) / zoomShown_, t.z + (eye->z - t.z) / zoomShown_};
+    }
+    // The manual being read: its two pages fill the picture.
+    const float r = smooth(read_);
+    if (r > 0) {
+        float pw, ph;
+        manualSize(&pw, &ph);
+        const Vec3 b = manualSpot();
+        const float dist = std::max(2 * pw / aspect_, ph) * 1.08f / (2 * tanHalf_) / zoomShown_;
+        const Vec3 t{b.x + bookShift_ + readPan_.x, b.y + readPan_.y, b.z};
+        *eye = {lerp(eye->x, t.x, r), lerp(eye->y, t.y, r), lerp(eye->z, t.z + dist, r)};
+        *target = {lerp(target->x, t.x, r), lerp(target->y, t.y, r), lerp(target->z, t.z, r)};
+    }
 }
 
+void BoxShelf::manualSize(float* w, float* h) const {
+    *h = held_.h * 0.88f;
+    // As its pages are once they are known; until then, as the lid.
+    float aspect = held_.w * 0.86f / *h;
+    if (!pages_.empty() && pages_[0].width > 0 && pages_[0].height > 0)
+        aspect = std::clamp(static_cast<float>(pages_[0].width) / static_cast<float>(pages_[0].height), 0.4f, 2.0f);
+    *w = *h * aspect;
+}
+
+BoxShelf::Vec3 BoxShelf::manualSpot() const { return {stageX_ - 0.1f, 0.1f, 1.9f}; }
+
 void BoxShelf::shelfSize(float* width, float* height, float* bottom) const {
-    *width = static_cast<float>(columns_) * kSpacing + 2 * kSide + 0.06f;
+    *width = rowWidth_ + 2 * kSide + 0.06f;
     *height = kPlinth + static_cast<float>(rows_) * kRowH + kBoard;
     *bottom = kFloorY;
 }
 
 BoxShelf::Vec3 BoxShelf::shelfSpot(int index) const {
     const int c = index % columns_, r = index / columns_;
-    return {(static_cast<float>(c) - static_cast<float>(columns_ - 1) / 2) * kSpacing,
-            kFloorY + kPlinth + static_cast<float>(rows_ - 1 - r) * kRowH + kBoxH / 2 + 0.002f, kShelfZ};
+    const bool known = index >= 0 && index < static_cast<int>(spotX_.size());
+    const float x = known ? spotX_[static_cast<size_t>(index)] : (static_cast<float>(c) - static_cast<float>(columns_ - 1) / 2) * kSpacing;
+    const float h = known ? sizes_[static_cast<size_t>(index)].h : kBoxH;
+    // Standing on its board, whatever its height.
+    return {x, kFloorY + kPlinth + static_cast<float>(rows_ - 1 - r) * kRowH + h / 2 + 0.002f, kShelfZ};
+}
+
+BoxShelf::Size BoxShelf::boxSize(const Item& item) {
+    Size s;
+    if (item.system != ConsoleSystem::MegaCD || !item.texture || item.width <= 0 || item.height <= 0) return s;
+    // The front's shape, from the cover (half of a whole sleeve, less the spine).
+    const float w = static_cast<float>(item.width), h = static_cast<float>(item.height);
+    const float f = coverFront(item.width, item.height, item.system);
+    const float aspect = (f > 0 ? w * (1 - f) : w) / h;
+    if (aspect < 0.85f) return s;  // the tall box, as a Mega Drive's
+    // A jewel case: 14.2 x 12.5 x 1 cm.
+    s.h = 12.5f / 13.5f;
+    s.w = std::clamp(aspect * s.h, 0.8f, 1.25f);
+    s.d = 0.075f;
+    return s;
 }
 
 BoxShelf::Mat4 BoxShelf::heldBox() const {
@@ -675,7 +830,7 @@ BoxShelf::Mat4 BoxShelf::heldBox() const {
 
 BoxShelf::Mat4 BoxShelf::heldCartridge() const {
     // Lifted out of the box and up in front of it, facing the viewer.
-    const Mat4 in = cartridgeInBox(heldBox(), system_);
+    const Mat4 in = cartridgeInBox(heldBox(), system_, held_);
     const float s = smooth((open_ - 0.35f) / 0.65f);
     if (s <= 0) return in;
     const Vec3 out{stageX_ + 0.45f, 0.1f, 1.3f};
@@ -683,17 +838,25 @@ BoxShelf::Mat4 BoxShelf::heldCartridge() const {
     return translate(p.x, p.y, p.z) * rotateY(cartYaw_ * s) * rotateX(cartPitch_ * s);
 }
 
-BoxShelf::Mat4 BoxShelf::cartridgeInBox(const Mat4& box, ConsoleSystem s) const {
-    // The disc on its hub in the upper half; a cartridge lies in the lower half, its label
-    // to the front and its contacts down, as in the console.
-    if (s == ConsoleSystem::MegaCD) return box * translate(0, 0.16f, -kBoxD / 2 + kWall + 0.02f);
+BoxShelf::Mat4 BoxShelf::cartridgeInBox(const Mat4& box, ConsoleSystem s, const Size& size) const {
+    // The disc on its hub in the upper half (in the middle of a jewel case); a cartridge
+    // lies in the lower half, its label to the front and its contacts down, as in the console.
+    if (s == ConsoleSystem::MegaCD) return box * translate(0, size.h > 1.2f ? 0.16f : 0.0f, -size.d / 2 + kWall + 0.02f);
     const CartridgeShape c = cartridgeShape(s);
-    return box * translate(0, -kBoxH / 2 + kWall + 0.1f + c.h / 2, -kBoxD / 2 + kWall + 0.006f + c.d / 2);
+    return box * translate(0, -size.h / 2 + kWall + 0.1f + c.h / 2, -size.d / 2 + kWall + 0.006f + c.d / 2);
 }
 
-float BoxShelf::coverFront(int width, int height) {
-    if (width <= 0 || height <= 0 || width < height * 6 / 5) return 0;
-    return std::clamp(1 - kBoxW / kBoxH * static_cast<float>(height) / static_cast<float>(width), 0.0f, 0.9f);
+float BoxShelf::coverFront(int width, int height, ConsoleSystem system) {
+    if (width <= 0 || height <= 0) return 0;
+    const float w = static_cast<float>(width), h = static_cast<float>(height);
+    if (system == ConsoleSystem::MegaCD) {
+        // A jewel case's front is about as wide as tall, so a sleeve is told by being well
+        // wider; its front is half of it but for the spine (about an eighth of its height).
+        if (w < h * 1.35f) return 0;
+        return std::clamp(1 - (w - 0.12f * h) / 2 / w, 0.0f, 0.9f);
+    }
+    if (width < height * 6 / 5) return 0;
+    return std::clamp(1 - kBoxW / kBoxH * h / w, 0.0f, 0.9f);
 }
 
 namespace {
@@ -704,9 +867,9 @@ struct Sleeve {
     std::array<float, 4> front{0, 0, 1, 1}, spine{0, 0, 0, 1}, back{0, 0, 0, 1};
 };
 
-Sleeve sleeve(int width, int height) {
+Sleeve sleeve(int width, int height, ConsoleSystem system) {
     Sleeve s;
-    const float f = BoxShelf::coverFront(width, height);
+    const float f = BoxShelf::coverFront(width, height, system);
     if (f <= 0) return s;
     const float side = 1 - f;  // the front's width, and the back's
     s.front = {f, 0, 1, 1};
@@ -722,9 +885,18 @@ void BoxShelf::addCartridge(const Item& item, const Mat4& place) {
     p.cartridge = true;
     // Its own label, or else the cover's front.
     const unsigned int art = item.label ? item.label : item.texture;
-    p.texRect = item.label ? std::array<float, 4>{0, 0, 1, 1} : sleeve(item.width, item.height).front;
+    p.texRect = item.label ? std::array<float, 4>{0, 0, 1, 1} : sleeve(item.width, item.height, item.system).front;
     if (item.system == ConsoleSystem::MegaCD) {
         // A 12 cm disc, 1.2 mm thick, its label printed with the cover; the hole in the middle.
+        // A jewel case's square front shows a whole disc's worth of it.
+        if (!item.label && boxSize(item).h < 1.2f) {
+            std::array<float, 4>& r = p.texRect;
+            const float fw = (r[2] - r[0]) * static_cast<float>(item.width), fh = static_cast<float>(item.height);
+            if (fw > fh) {
+                const float cut = (1 - fh / fw) * (r[2] - r[0]) / 2;
+                r[0] += cut, r[2] -= cut;
+            }
+        }
         p.model = place * scale(0.889f, 0.889f, 0.009f);
         p.colour = {0.78f, 0.79f, 0.84f};
         p.shine = 1.0f;
@@ -785,8 +957,10 @@ void BoxShelf::addCartridge(const Item& item, const Mat4& place) {
     parts_.push_back(p);
 }
 
-void BoxShelf::addBox(const std::vector<Item>& items, int index, const Mat4& place, float lid) {
+BoxShelf::Mat4 BoxShelf::addBox(const std::vector<Item>& items, int index, const Mat4& place, float lid, bool withManual) {
     const Item& item = items[static_cast<size_t>(index)];
+    const Size S = boxSize(item);
+    const float bw = S.w, bh = S.h, bd = S.d;  // this box's own
     auto add = [&](const Mat4& m, Vec3 colour, float shine, int texFaces = 0) {
         Part p;
         p.model = place * m;
@@ -798,18 +972,18 @@ void BoxShelf::addBox(const std::vector<Item>& items, int index, const Mat4& pla
         parts_.push_back(p);
     };
     const Vec3 plastic{0.045f, 0.045f, 0.055f};
-    const float inner = kBoxD - kWall;
+    const float inner = bd - kWall;
     // With a whole sleeve its back and spine go round the tray.
-    const Sleeve cover = sleeve(item.width, item.height);
+    const Sleeve cover = sleeve(item.width, item.height, item.system);
     const bool wrap = cover.spine[2] > cover.spine[0];
     // The tray: its back and four walls, open at the front.
-    add(translate(0, 0, -kBoxD / 2 + kWall / 2) * scale(kBoxW, kBoxH, kWall), plastic, 0.6f, wrap ? 1 << 5 : 0);
+    add(translate(0, 0, -bd / 2 + kWall / 2) * scale(bw, bh, kWall), plastic, 0.6f, wrap ? 1 << 5 : 0);
     parts_.back().texRect = cover.back;
-    add(translate(-kBoxW / 2 + kWall / 2, 0, -kWall / 2) * scale(kWall, kBoxH, inner), plastic, 0.6f, wrap ? 1 << 1 : 0);
+    add(translate(-bw / 2 + kWall / 2, 0, -kWall / 2) * scale(kWall, bh, inner), plastic, 0.6f, wrap ? 1 << 1 : 0);
     parts_.back().texRect = cover.spine;
-    add(translate(kBoxW / 2 - kWall / 2, 0, -kWall / 2) * scale(kWall, kBoxH, inner), plastic, 0.6f);
-    add(translate(0, kBoxH / 2 - kWall / 2, -kWall / 2) * scale(kBoxW - 2 * kWall, kWall, inner), plastic, 0.6f);
-    add(translate(0, -kBoxH / 2 + kWall / 2, -kWall / 2) * scale(kBoxW - 2 * kWall, kWall, inner), plastic, 0.6f);
+    add(translate(bw / 2 - kWall / 2, 0, -kWall / 2) * scale(kWall, bh, inner), plastic, 0.6f);
+    add(translate(0, bh / 2 - kWall / 2, -kWall / 2) * scale(bw - 2 * kWall, kWall, inner), plastic, 0.6f);
+    add(translate(0, -bh / 2 + kWall / 2, -kWall / 2) * scale(bw - 2 * kWall, kWall, inner), plastic, 0.6f);
     // Without a cover the lid takes the console's colour.
     Vec3 lidColour{0.16f, 0.17f, 0.2f};
     switch (item.system) {
@@ -819,16 +993,28 @@ void BoxShelf::addBox(const std::vector<Item>& items, int index, const Mat4& pla
         case ConsoleSystem::MegaCD: lidColour = {0.1f, 0.2f, 0.4f}; break;
         default: break;
     }
-    const Mat4 hinge = translate(-kBoxW / 2, 0, kBoxD / 2 - kWall / 2) * rotateY(-lid * kLidOpen);
-    add(hinge * translate(kBoxW / 2, 0, 0) * scale(kBoxW, kBoxH, kWall), item.texture ? plastic : lidColour, 0.7f, 1 << 4);
+    const Mat4 hinge = translate(-bw / 2, 0, bd / 2 - kWall / 2) * rotateY(-lid * kLidOpen);
+    add(hinge * translate(bw / 2, 0, 0) * scale(bw, bh, kWall), item.texture ? plastic : lidColour, 0.7f, 1 << 4);
     parts_.back().texRect = cover.front;
-    if (lid <= 0.001f) return;
-    // Inside: the manual on the lid, the holder and the game.
-    add(hinge * translate(kBoxW / 2, 0, -kWall / 2 - 0.004f) * scale(kBoxW * 0.86f, kBoxH * 0.88f, 0.006f),
-        {0.86f, 0.84f, 0.78f}, 0.1f, 1 << 5);
-    parts_.back().texRect = cover.front;
-    add(translate(0, 0, -kBoxD / 2 + kWall + 0.003f) * scale(kBoxW - 2 * kWall, kBoxH - 2 * kWall, 0.006f),
+    const Mat4 manual = hinge * translate(bw / 2, 0, -kWall / 2 - 0.004f);
+    if (lid <= 0.001f) return place * manual;
+    // Inside: the manual on the lid (its own cover once it is drawn), the holder and the game.
+    if (withManual) {
+        add(manual * scale(bw * 0.86f, bh * 0.88f, 0.006f), {0.86f, 0.84f, 0.78f}, 0.1f, 1 << 5);
+        parts_.back().texRect = cover.front;
+        if (item.manual && index == selected_) {
+            parts_.back().manual = true;
+            if (!pages_.empty() && pages_[0].texture) {
+                parts_.back().texture = pages_[0].texture;
+                parts_.back().texFaces = 1 << 5;
+                parts_.back().texRect = {0, 0, 1, 1};
+                parts_.back().colour = {1, 1, 1};
+            }
+        }
+    }
+    add(translate(0, 0, -bd / 2 + kWall + 0.003f) * scale(bw - 2 * kWall, bh - 2 * kWall, 0.006f),
         {0.11f, 0.11f, 0.13f}, 0.3f);
+    return place * manual;
 }
 
 BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, float tray) {
@@ -890,7 +1076,7 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
             if (light > 0 && item.texture) {
                 screen.texture = item.texture;
                 screen.texFaces = 1 << 4;
-                screen.texRect = sleeve(item.width, item.height).front;
+                screen.texRect = sleeve(item.width, item.height, item.system).front;
                 screen.glow = 0.6f;
             }
             parts_.push_back(screen);
@@ -930,16 +1116,18 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
 void BoxShelf::addShelfBox(const Item& item, int index, const Mat4& place) {
     // Closed, only its spine shows: the sleeve's, or the edge of the cover next to it.
     Part p;
-    p.model = place * scale(kBoxW, kBoxH, kBoxD);
+    const Size S = index < static_cast<int>(sizes_.size()) ? sizes_[static_cast<size_t>(index)] : Size{};
+    const float bw = S.w, bd = S.d;
+    p.model = place * scale(S.w, S.h, S.d);
     p.colour = {0.045f, 0.045f, 0.055f};
     p.shine = 0.6f;
     p.box = index;
     if (item.texture) {
-        const Sleeve cover = sleeve(item.width, item.height);
+        const Sleeve cover = sleeve(item.width, item.height, item.system);
         p.texture = item.texture;
         p.texFaces = 1 << 1;
         if (cover.spine[2] > cover.spine[0]) p.texRect = cover.spine;
-        else p.texRect = {cover.front[0], cover.front[1], cover.front[0] + (cover.front[2] - cover.front[0]) * kBoxD / kBoxW,
+        else p.texRect = {cover.front[0], cover.front[1], cover.front[0] + (cover.front[2] - cover.front[0]) * bd / bw,
                           cover.front[3]};
     }
     parts_.push_back(p);
@@ -966,13 +1154,14 @@ void BoxShelf::addShelf() {
     board(0, bottom + h / 2, z - depth / 2 + 0.01f, w - 2 * kSide, h, 0.02f, inside);
 }
 
-void BoxShelf::addSelectionFrame(const Vec3& s) {
+void BoxShelf::addSelectionFrame(const Vec3& s, const Size& size) {
+    const float bw = size.w, bh = size.h, bd = size.d;
     // A frame that lights itself around the chosen box's spine, beating slowly, so it can
     // be told apart from far away too.
     const float beat = 0.5f + 0.5f * std::sin(glowClock_ * 2 * kPi / 1.2f);
     // Thicker as the camera steps back, to stay about as wide on screen.
-    const float bar = 0.016f * std::max(1.0f, distance_ / 2.5f), out = bar * 0.75f, front = s.z + kBoxW / 2 + 0.004f;
-    const float w = kBoxD + 2 * out, h = kBoxH + 2 * out;
+    const float bar = 0.016f * std::max(1.0f, distance_ / 2.5f), out = bar * 0.75f, front = s.z + bw / 2 + 0.004f;
+    const float w = bd + 2 * out, h = bh + 2 * out;
     auto add = [&](float x, float y, float sx, float sy) {
         Part p;
         p.model = translate(x, y, front) * scale(sx, sy, 0.02f);
@@ -995,16 +1184,18 @@ void BoxShelf::build(const std::vector<Item>& items, int selected) {
         Vec3 s = shelfSpot(i);
         if (i == pulled_) s.z += 0.14f * smooth(pull_);
         addShelfBox(items[static_cast<size_t>(i)], i, translate(s.x, s.y, s.z) * rotateY(90));
-        if (i == selected && state_ == State::Browse) addSelectionFrame(s);
+        if (i == selected && state_ == State::Browse) addSelectionFrame(s, sizes_[static_cast<size_t>(i)]);
     }
     if (state_ == State::Browse || selected < 0 || selected >= count_) return;
     const Item& item = items[static_cast<size_t>(selected)];
     const Mat4 box = heldBox();
     const float lid = smooth(open_ / 0.6f);
-    addBox(items, selected, box, lid);
+    const bool reading = state_ == State::ManualOut || state_ == State::Reading || state_ == State::ManualBack;
+    const Mat4 lidManual = addBox(items, selected, box, lid, !reading);
     const bool ejecting = state_ == State::Ejecting || state_ == State::Inserted;
     if (!ejecting) {
         if (lid > 0.001f) addCartridge(item, heldCartridge());
+        if (reading) addManual(item, lidManual);
         return;
     }
     // The console comes up through the floor while the cartridge leaves the box.
@@ -1038,6 +1229,78 @@ void BoxShelf::build(const std::vector<Item>& items, int selected) {
     addCartridge(item, translate(p.x, p.y, p.z) * rotateY(cartYaw_ + spin) * rotateX(cartPitch_ + turn));
 }
 
+void BoxShelf::addManual(const Item& item, const Mat4& lidManual) {
+    float pw, ph;
+    manualSize(&pw, &ph);
+    const Vec3 b = manualSpot();
+    const int count = static_cast<int>(pages_.size());
+    auto page = [&](int i) { return i >= 0 && i < count ? pages_[static_cast<size_t>(i)] : Page{}; };
+    // A sheet of paper: its page on the front (face 4) or the back (face 5), white until drawn.
+    auto sheet = [&](const Mat4& m, int index, int face) {
+        Part p;
+        p.model = m;
+        p.manual = true;
+        p.reflect = false;
+        p.shine = 0.04f;
+        p.glow = 0.06f;
+        const Page pg = page(index);
+        p.colour = pg.texture ? Vec3{1, 1, 1} : Vec3{0.93f, 0.92f, 0.88f};
+        p.texture = pg.texture;
+        p.texFaces = pg.texture ? 1 << face : 0;
+        parts_.push_back(p);
+    };
+    const float r = smooth(read_);
+    if (state_ != State::Reading) {
+        // Closed, from the lid to the right of where its spine will be, its cover to the front.
+        const float lw = held_.w * 0.86f, lh = held_.h * 0.88f;
+        const Vec3 to{b.x + pw / 2, b.y, b.z};
+        const Vec3 p{lerp(lidManual[12], to.x, r), lerp(lidManual[13], to.y, r) + std::sin(r * kPi) * 0.15f,
+                     lerp(lidManual[14], to.z, r)};
+        const Mat4 m = translate(p.x, p.y, p.z) * rotateY(lerp(-kLidOpen, -180.0f, r)) *
+                       scale(lerp(lw, pw, r), lerp(lh, ph, r), 0.006f);
+        if (page(0).texture) sheet(m, 0, 5);
+        else {
+            // Not drawn yet: as it looked in the lid.
+            Part p;
+            p.model = m;
+            p.manual = true;
+            p.colour = {0.86f, 0.84f, 0.78f};
+            p.shine = 0.1f;
+            p.texture = item.texture;
+            p.texFaces = item.texture ? 1 << 5 : 0;
+            p.texRect = sleeve(item.width, item.height, item.system).front;
+            parts_.push_back(p);
+        }
+        return;
+    }
+    // Open at spread_: page 2s-1 on the left, 2s on the right. A page turning forwards
+    // shows the next ones under it; backwards, the ones before.
+    int left = 2 * spread_ - 1, right = 2 * spread_;
+    if (turnDir_ > 0) right += 2;
+    if (turnDir_ < 0) left -= 2;
+    const float paper = 0.004f;
+    auto flat = [&](int index, float side) {
+        if (index < 0 || index >= count) return;
+        // The cover's board under it, a little bigger.
+        Part back;
+        back.model = translate(b.x + side * (pw / 2 + 0.006f), b.y, b.z - paper) * scale(pw + 0.012f, ph + 0.016f, paper);
+        back.colour = {0.12f, 0.12f, 0.14f};
+        back.shine = 0.2f;
+        back.reflect = false;
+        parts_.push_back(back);
+        sheet(translate(b.x + side * pw / 2, b.y, b.z) * scale(pw, ph, paper), index, 4);
+    };
+    flat(left, -1);
+    flat(right, 1);
+    if (turnDir_ == 0) return;
+    // The leaf over the spine: its front was the right page, its back the left one.
+    const int front = turnDir_ > 0 ? 2 * spread_ : 2 * spread_ - 2;
+    const float t = smooth(turn_), angle = 180 * (turnDir_ > 0 ? t : 1 - t);
+    const Mat4 leaf = translate(b.x, b.y, b.z + paper * 1.5f) * rotateY(-angle) * translate(pw / 2, 0, 0);
+    sheet(leaf * translate(0, 0, 0.0006f) * scale(pw, ph, 0.001f), front, 4);
+    sheet(leaf * translate(0, 0, -0.0006f) * scale(pw, ph, 0.001f), front + 1, 5);
+}
+
 unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int width, int height, float dt) {
     if (!program_ || width <= 0 || height <= 0) return 0;
     dt = std::clamp(dt, 0.0f, 0.1f);
@@ -1052,6 +1315,27 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     columns_ = std::clamp(static_cast<int>(std::lround(std::sqrt(n * kRowH * 1.6f / kSpacing))), std::min(count_, 8), std::max(1, count_));
     columns_ = std::max(1, columns_);
     rows_ = std::max(1, (count_ + columns_ - 1) / columns_);
+    // Each box's size, and the rows laid out with them side by side.
+    sizes_.resize(static_cast<size_t>(count_));
+    spotX_.resize(static_cast<size_t>(count_));
+    for (int i = 0; i < count_; ++i) sizes_[static_cast<size_t>(i)] = boxSize(items[static_cast<size_t>(i)]);
+    rowWidth_ = 0;
+    for (int first = 0; first < count_; first += columns_) {
+        const int last = std::min(count_, first + columns_);
+        float w = 0;
+        for (int i = first; i < last; ++i) w += sizes_[static_cast<size_t>(i)].d + (kSpacing - kBoxD);
+        // A row of Mega Drive boxes keeps its old spacing; the shelf is as wide as a full one.
+        rowWidth_ = std::max(rowWidth_, w);
+        float x = -w / 2;
+        for (int i = first; i < last; ++i) {
+            const float step = sizes_[static_cast<size_t>(i)].d + (kSpacing - kBoxD);
+            spotX_[static_cast<size_t>(i)] = x + step / 2;
+            x += step;
+        }
+    }
+    held_ = count_ > 0 ? sizes_[static_cast<size_t>(selected_)] : Size{};
+    manual_ = count_ > 0 && items[static_cast<size_t>(selected_)].manual;
+    if (!manual_ && (state_ == State::ManualOut || state_ == State::Reading)) state_ = State::ManualBack;
     if (state_ == State::Browse) stageX_ = shelfSpot(selected_).x;
     if (pulled_ != selected_) pulled_ = selected_, pull_ = 0;
     pull_ = std::min(1.0f, pull_ + dt / 0.25f);
@@ -1084,7 +1368,39 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
             light_ += dt;
             if (light_ > 0.8f) launch_ = true;
             break;
+        case State::ManualOut:
+            read_ = std::min(1.0f, read_ + dt / 0.8f);
+            if (read_ >= 1) state_ = State::Reading;
+            break;
+        case State::ManualBack:
+            read_ = std::max(0.0f, read_ - dt / 0.6f);
+            if (read_ <= 0) {
+                state_ = State::Open;
+                turnDir_ = 0;
+                readPan_ = {};
+            }
+            break;
+        case State::Reading:
+            if (turnDir_) {
+                turn_ = std::min(1.0f, turn_ + dt / 0.45f);
+                if (turn_ >= 1) {
+                    spread_ += turnDir_;
+                    turnDir_ = 0;
+                }
+            }
+            break;
         default: break;
+    }
+    // The camera eases to the zoom asked for; on a closed cover or a last page alone it
+    // frames that page instead of the spine.
+    {
+        const float k = 1 - std::exp(-12 * dt);
+        zoomShown_ += (zoom_ - zoomShown_) * (frozen_ ? 1 : k);
+        float pw, ph;
+        manualSize(&pw, &ph);
+        const int s = spread_ + turnDir_;
+        const float shift = s == 0 ? pw / 2 : 2 * s >= static_cast<int>(pages_.size()) ? -pw / 2 : 0.0f;
+        bookShift_ += (shift - bookShift_) * (frozen_ || state_ != State::Reading ? 1 : k * 0.5f);
     }
     // What is no longer held turns back to face the viewer.
     auto settle = [&](float& yaw, float& pitch) {
@@ -1094,7 +1410,8 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
         pitch *= k;
     };
     if (state_ != State::Held && !frozen_) settle(boxYaw_, boxPitch_);
-    if (state_ != State::Open && !frozen_) settle(cartYaw_, cartPitch_);
+    if (state_ != State::Open && state_ != State::Reading && state_ != State::ManualOut && state_ != State::ManualBack && !frozen_)
+        settle(cartYaw_, cartPitch_);
 
     ensureTarget(width, height);
     aspect_ = static_cast<float>(width) / static_cast<float>(height);
@@ -1137,7 +1454,7 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     view[14] = forward_.x * eye_.x + forward_.y * eye_.y + forward_.z * eye_.z;
     viewProj_ = perspective(kFov * kRad, aspect_, 0.1f, 150.0f) * view;
 
-    gl::BindFramebuffer(gl::FRAMEBUFFER, fbo_);
+    gl::BindFramebuffer(gl::FRAMEBUFFER, multisample_ ? msFbo_ : fbo_);
     gl::Viewport(0, 0, width, height);
     gl::Disable(gl::SCISSOR_TEST);
     gl::Disable(gl::CULL_FACE);
@@ -1235,7 +1552,15 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
 
     gl::BindVertexArray(0);
     gl::Disable(gl::DEPTH_TEST);
+    if (multisample_) {
+        gl::BindFramebuffer(gl::READ_FRAMEBUFFER, msFbo_);
+        gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, fbo_);
+        gl::BlitFramebuffer(0, 0, width, height, 0, 0, width, height, gl::COLOR_BUFFER_BIT, gl::NEAREST);
+    }
     gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+    gl::BindTexture(gl::TEXTURE_2D, colour_);
+    gl::GenerateMipmap(gl::TEXTURE_2D);
+    gl::BindTexture(gl::TEXTURE_2D, 0);
     return colour_;
 }
 

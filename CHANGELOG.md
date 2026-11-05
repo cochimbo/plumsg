@@ -3,6 +3,32 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 0.1.0-beta.15
+
+- **Read the manuals in the 3D view**: with a box open, a click on the manual in its lid
+  (or the left arrow) brings it out in front, open like a booklet. A click on the right
+  page, the right arrow, A, Page Down or RB turns to the next pages (with the page turning
+  over), the left page, the left arrow, Page Up or LB back; the wheel zooms in and dragging
+  moves over the page. The pages come from the PDF ScreenScraper has of the game, drawn
+  by PDFium (`pdfium.dll`, now in the installer).
+- **Download only what is missing, or everything again**: in **Scraping > What to
+  download...**, downloading a game again either adds only what it is missing (read from
+  what was found the first time, without asking ScreenScraper for the game again, so
+  adding the manuals to a whole library is quick) or overwrites all of its media. The
+  **Scraping** menu has **Download what is missing for the whole library** and
+  **Download everything again for the whole library**.
+- **Mega CD boxes with their real shape**: a game whose cover is about as wide as tall
+  gets a jewel case (thin and almost square) instead of a Mega Drive box; the tall ones of
+  the first American games keep it. Their whole sleeves are cut where they really are.
+- **Zoom on the box and the cartridge**: the wheel (or the right stick) comes closer to
+  the box, the cartridge or the manual taken out, not only on the shelf.
+- **32X cartridges** are wider than tall (111 x 72 mm), as they really are, and go into a
+  wider slot.
+- **Master System cartridges** lie straight in their boxes (their model came turned).
+- **No more flicker on the edges** of the boxes while moving along the shelf: the 3D view
+  is drawn with 4x multisampling and shrunk through mipmaps.
+- The window's title shows the version: **plumsg 0.1.0-beta.15**.
+
 ## 0.1.0-beta.14
 
 - **ScreenScraper no longer says the requests ran out when they had not**: a good

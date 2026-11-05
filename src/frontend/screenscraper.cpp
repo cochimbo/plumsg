@@ -158,6 +158,32 @@ std::vector<std::string> ScreenScraper::chosenKinds(const std::vector<std::strin
     return out;
 }
 
+std::vector<std::string> ScreenScraper::missingKinds(const Rom& rom, bool* known) const {
+    const std::string dir = gameFolder(rom);
+    std::vector<std::string> out;
+    SsGame game;
+    std::vector<uint8_t> data;
+    *known = false;
+    if (readAll(fs::u8path(dir + "ficha.json"), data)) {
+        SsAnswer a = parseSsAnswer(200, std::string(data.begin(), data.end()));
+        if (!a.games.empty()) {
+            *known = true;
+            game = std::move(a.games[0]);
+        }
+    }
+    const std::vector<std::string> regions = ssRegions(rom.tags);
+    std::error_code ec;
+    for (const std::string& id : chosenKinds({})) {
+        const SsKind* k = ssKind(id);
+        if (!k) continue;
+        bool have = false;
+        for (const char* ext : {".png", ".jpg", ".mp4", ".pdf"}) have = have || fs::is_regular_file(fs::u8path(dir + id + ext), ec);
+        // What ScreenScraper does not have of a known game is not missing.
+        if (!have && (!*known || ssPickMedia(game, *k, regions))) out.push_back(id);
+    }
+    return out;
+}
+
 std::string ScreenScraper::gameFolder(const Rom& rom) const {
     return ssGameFolder(folder_, static_cast<int>(rom.system), rom.stem);
 }
@@ -209,6 +235,7 @@ void ScreenScraper::download(const Rom& rom, int gameId, std::vector<std::string
     t.rom = rom;
     t.gameId = gameId;
     t.kinds = std::move(kinds);
+    t.overwrite = overwrite_;
     // After the Show already queued, ahead of a round of downloads.
     std::lock_guard<std::mutex> lock(mutex_);
     auto at = tasks_.begin();
@@ -260,20 +287,23 @@ void ScreenScraper::close() {
     search_ = Search();
 }
 
-void ScreenScraper::downloadAll(const std::vector<Rom>& roms) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    batchError_.clear();
-    batchDone_ = batchMissed_ = 0;
-    int added = 0;
-    std::error_code ec;
+void ScreenScraper::downloadAll(const std::vector<Rom>& roms, bool overwrite) {
+    // Only what is missing: a game that has all of it is left alone.
+    std::vector<Task> add;
     for (const Rom& r : roms) {
-        if (fs::is_regular_file(fs::u8path(gameFolder(r) + "ficha.json"), ec)) continue;
+        bool known = false;
+        if (!overwrite && missingKinds(r, &known).empty()) continue;
         Task t;
         t.kind = Task::Batch;
         t.rom = r;
-        tasks_.push_back(std::move(t));
-        ++added;
+        t.overwrite = overwrite;
+        add.push_back(std::move(t));
     }
+    std::lock_guard<std::mutex> lock(mutex_);
+    batchError_.clear();
+    batchDone_ = batchMissed_ = 0;
+    const int added = static_cast<int>(add.size());
+    for (Task& t : add) tasks_.push_back(std::move(t));
     batchLeft_ += added;
     batchTotal_ = batchLeft_;
     wake_.notify_one();
@@ -467,7 +497,24 @@ bool ScreenScraper::fetchGame(const Task& task, std::string* error, bool batch) 
     }
     const int system = static_cast<int>(rom.system);
     SsAnswer a;
-    if (task.gameId) {
+    // Only what is missing: of a game already known, straight from its ficha.json, without
+    // asking ScreenScraper about it again.
+    std::vector<std::string> kinds = chosenKinds(task.kinds);
+    if (!task.overwrite && task.kinds.empty()) {
+        bool known = false;
+        kinds = missingKinds(rom, &known);
+        if (known) {
+            std::vector<uint8_t> old;
+            if (readAll(fs::u8path(gameFolder(rom) + "ficha.json"), old)) {
+                SsAnswer before = parseSsAnswer(200, std::string(old.begin(), old.end()));
+                if (!before.games.empty() && (!task.gameId || before.games[0].id == task.gameId)) a = std::move(before);
+                else kinds = chosenKinds({});  // another game: all of it
+            }
+        }
+    }
+    if (a.result == SsAnswer::Ok && !a.games.empty()) {
+        // Known already.
+    } else if (task.gameId) {
         setProgress(tr("Pidiendo los datos del juego..."));
         a = ask("jeuInfos.php", "systemeid=" + std::to_string(screenScraperSystem(system)) + "&gameid=" + std::to_string(task.gameId));
     } else {
@@ -537,7 +584,7 @@ bool ScreenScraper::fetchGame(const Task& task, std::string* error, bool batch) 
     lib.replace = !batch;
     std::vector<uint8_t> front;
     int got = 0;
-    for (const std::string& id : chosenKinds(task.kinds)) {
+    for (const std::string& id : kinds) {
         const SsKind* k = ssKind(id);
         if (!k) continue;
         {

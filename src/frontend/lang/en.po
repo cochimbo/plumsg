@@ -210,6 +210,9 @@ msgstr "Open a ROM to save a 3D profile of its own."
 msgid "Abre una ROM, o elige un juego en la biblioteca con el botón derecho."
 msgstr "Open a ROM, or pick a game in the library with the right button."
 
+msgid "Abriendo el manual..."
+msgstr "Opening the manual..."
+
 msgid "Abrir .vgm..."
 msgstr "Open .vgm..."
 
@@ -276,6 +279,9 @@ msgstr "Settings"
 msgid "Al principio"
 msgstr "To the start"
 
+msgid "Al volver a descargar"
+msgstr "When downloading again"
+
 msgid "Alojar"
 msgstr "Host"
 
@@ -318,8 +324,8 @@ msgstr "Drag a ROM onto the window or use File > Open ROM."
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Drag a ROM here, use File > Open ROM or open the library (F10)"
 
-msgid "Arrastrar: girarla   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
-msgstr "Drag: turn it   Click the box or A: take the cartridge out   Click elsewhere or B: put it back"
+msgid "Arrastrar: girarla   Rueda: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
+msgstr "Drag: turn it   Wheel: zoom   Click the box or A: take the cartridge out   Click elsewhere or B: put it back"
 
 msgid "Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
 msgstr "Drag: turn it   Click the cartridge or A: play   Click elsewhere or B: put it away"
@@ -374,6 +380,9 @@ msgstr "Add"
 
 msgid "Añadir carpeta..."
 msgstr "Add folder..."
+
+msgid "Añadir solo lo que falte (rápido: no vuelve a pedir el juego)"
+msgstr "Only add what is missing (quick: the game is not asked for again)"
 
 msgid "Año"
 msgstr "Year"
@@ -660,6 +669,12 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
+msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Rueda: zoom   B: guardarlo"
+msgstr "Click the cartridge or A: play   Click the manual or left arrow: read it   Wheel: zoom   B: put it away"
+
+msgid "Clic en una página o flechas: pasar páginas   Rueda: zoom   Arrastrar: moverse   B: cerrarlo"
+msgstr "Click a page or arrows: turn pages   Wheel: zoom   Drag: move   B: close it"
+
 msgid "Clic o A: sacar la caja   Rueda o stick derecho: zoom   Arrastrar o flechas: moverse"
 msgstr "Click or A: take the box out   Wheel or right stick: zoom   Drag or arrows: move"
 
@@ -909,8 +924,8 @@ msgstr "Downloading: %s..."
 msgid "Descargar de ScreenScraper"
 msgstr "Download from ScreenScraper"
 
-msgid "Descargar medios de toda la biblioteca"
-msgstr "Download media for the whole library"
+msgid "Descargar lo que falte en toda la biblioteca"
+msgstr "Download what is missing for the whole library"
 
 msgid "Descargar: %s"
 msgstr "Download: %s"
@@ -1083,6 +1098,12 @@ msgstr ""
 "mouse across the picture, or with the left stick (or d-pad). Button: left\n"
 "click, A or B. Games that need it already have it in port 1 if a pad is\n"
 "there. Master System games only; in a netplay game a pad is plugged in."
+
+msgid "El manual no es un PDF que se pueda abrir."
+msgstr "The manual is not a PDF that can be opened."
+
+msgid "El manual no tiene páginas."
+msgstr "The manual has no pages."
 
 msgid "El otro jugador ha salido de la partida."
 msgstr "The other player has left the game."
@@ -1322,6 +1343,9 @@ msgstr "The Japanese Mega CD BIOS is missing: choose it in Console > Mega CD BIO
 
 msgid "Falta la función %s"
 msgstr "The function %s is missing"
+
+msgid "Falta pdfium.dll junto a plumsg: sin ella no se pueden leer los manuales."
+msgstr "pdfium.dll is missing next to plumsg: without it manuals cannot be read."
 
 msgid "Fecha"
 msgstr "Date"
@@ -2804,6 +2828,9 @@ msgstr "System"
 msgid "Sitar"
 msgstr "Sitar"
 
+msgid "Sobrescribir todos los medios"
+msgstr "Overwrite all the media"
+
 msgid "Sol"
 msgstr "G"
 
@@ -3158,6 +3185,9 @@ msgstr "Search again"
 
 msgid "Volver a descargar"
 msgstr "Download again"
+
+msgid "Volver a descargar todo en toda la biblioteca"
+msgstr "Download everything again for the whole library"
 
 msgid "Volver a intentarlo"
 msgstr "Try again"

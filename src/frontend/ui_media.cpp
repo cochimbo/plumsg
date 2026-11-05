@@ -55,6 +55,7 @@ void Ui::applyScraperSettings() {
         if (ssKind(k)) kinds.push_back(k);
     if (kinds.empty() && !settings_.ssMedia.empty()) kinds.push_back("ninguno");  // none chosen, not the usual ones
     scraper_.setKinds(kinds);
+    scraper_.setOverwrite(settings_.ssOverwrite);
     scraper_.setLanguage(language());
 }
 
@@ -83,7 +84,7 @@ void Ui::startMedia(size_t game, int mode) {
     if (mode == 3) {
         std::vector<ScreenScraper::Rom> roms;
         for (const auto& other : library_.games()) roms.push_back(romOf(other));
-        scraper_.downloadAll(roms);
+        scraper_.downloadAll(roms, settings_.ssOverwrite);
     } else if (mode == 2) {
         media_.tab = 1;
         media_.autoPick = true;
@@ -93,7 +94,7 @@ void Ui::startMedia(size_t game, int mode) {
     }
 }
 
-void Ui::scrapeLibrary() {
+void Ui::scrapeLibrary(int overwrite) {
     applyScraperSettings();
     if (!scraper_.credentials().usable()) {
         openScraping(0);  // nothing can be asked without the developer account
@@ -101,7 +102,7 @@ void Ui::scrapeLibrary() {
     }
     std::vector<ScreenScraper::Rom> roms;
     for (const auto& g : library_.games()) roms.push_back(romOf(g));
-    scraper_.downloadAll(roms);
+    scraper_.downloadAll(roms, overwrite < 0 ? settings_.ssOverwrite : overwrite == 1);
 }
 
 void Ui::openScraping(int tab) {
@@ -419,6 +420,17 @@ void Ui::drawMediaSearch(const Library::Game& g) {
 }
 
 void Ui::drawMediaKinds(UiActions& out) {
+    // What a game that has already been downloaded gets the next time.
+    ImGui::SeparatorText(tr("Al volver a descargar"));
+    int mode = settings_.ssOverwrite ? 1 : 0;
+    bool modeChanged = ImGui::RadioButton(tr("Añadir solo lo que falte (rápido: no vuelve a pedir el juego)"), &mode, 0);
+    modeChanged |= ImGui::RadioButton(tr("Sobrescribir todos los medios"), &mode, 1);
+    if (modeChanged) {
+        settings_.ssOverwrite = mode == 1;
+        applyScraperSettings();
+        out.settingsChanged = true;
+    }
+    ImGui::SeparatorText(tr("Qué descargar"));
     ImGui::TextWrapped("%s", tr("Lo que se descarga de cada juego. Los vídeos y los manuales ocupan mucho, así que no se "
                                 "descargan si no los marcas (cada juego los puede descargar aparte)."));
     std::vector<std::string> chosen;
