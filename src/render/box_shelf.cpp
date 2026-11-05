@@ -80,6 +80,8 @@ uniform int uFloor;
 uniform float uFloorY;
 uniform vec3 uBackground;
 uniform vec4 uFloorFade;  // where the floor is brightest (x, z) and how far it fades out
+uniform int uMatte;       // the room around the shelf
+uniform float uFloorTile; // how far the floor's texture repeats
 in vec3 vWorld;
 in vec3 vNormal;
 in vec2 vUv;
@@ -89,6 +91,12 @@ out vec4 outColor;
 void main() {
     if (uFloor == 1) {
         float r = length(vWorld.xz - uFloorFade.xy);
+        if (uTexFaces != 0) {
+            // The room's parquet, in the lamp light around what is looked at.
+            vec3 wood = texture(uImage, vWorld.xz / uFloorTile).rgb;
+            outColor = vec4(mix(wood * 0.95, wood * 0.5, smoothstep(uFloorFade.z, uFloorFade.w * 1.6, r)), 0.86);
+            return;
+        }
         outColor = vec4(mix(uColour, uBackground, smoothstep(uFloorFade.z, uFloorFade.w, r)), 0.84);
         return;
     }
@@ -121,7 +129,10 @@ void main() {
     float ambient = textured ? 0.45 : 0.34;
     // A cool light from behind outlines the black plastics against the dark.
     float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * max(dot(n, normalize(vec3(0.2, 0.5, -0.8))) + 0.6, 0.0);
+    if (uMatte == 1) rim = 0.0;
     vec3 c = base * (ambient + 0.75 * diffuse + fill) + vec3(spec) + base * uGlow + vec3(0.16, 0.18, 0.24) * rim;
+    // The room's light comes from low down: its walls darken towards the ceiling.
+    if (uMatte == 1) c *= 1.0 - 0.35 * smoothstep(uFloorY + 9.0, uFloorY + 20.0, vWorld.y);
     if (uMirror == 1) c *= 0.4 * (1.0 - smoothstep(0.0, 1.1, uFloorY - vWorld.y));
     outColor = vec4(c, 1.0);
 }
@@ -273,6 +284,38 @@ void BoxShelf::vertexArray(const std::vector<float>& v, gl::GLuint* vao, gl::GLu
     gl::BindVertexArray(0);
 }
 
+void BoxShelf::addRoom() {
+    // A few dozen pieces, laid out again each frame for the shelf as it is.
+    float w, h, bottom;
+    shelfSize(&w, &h, &bottom);
+    const float back = kShelfZ - 0.03f - (kBoxW + 0.12f) / 2 - 0.02f;
+    room_.clear();
+    buildRoom(w, h, bottom, back, room_);
+    for (const RoomPiece& r : room_) {
+        Part p;
+        p.matte = true;
+        p.colour = {r.colour[0], r.colour[1], r.colour[2]};
+        p.shine = r.shine;
+        p.glow = r.glow;
+        p.reflect = r.reflect;
+        p.cylinder = r.cylinder;
+        if (r.television) {
+            const Custom& tv = custom_[kRoomCustom];
+            if (!tv.vao) continue;
+            p.custom = kRoomCustom;
+            p.model = r.model * tv.fit;
+        } else {
+            std::copy(r.model.begin(), r.model.end(), p.model.begin());
+        }
+        if (r.texture >= 0) {
+            p.texture = roomTextures_.get(r.texture);
+            p.texFaces = r.texFaces;
+            p.texRect = r.texRect;
+        }
+        parts_.push_back(p);
+    }
+}
+
 void BoxShelf::upload(Custom& c, const GltfModel& model) {
     if (c.vao) gl::DeleteVertexArrays(1, &c.vao);
     if (c.vbo) gl::DeleteBuffers(1, &c.vbo);
@@ -377,6 +420,18 @@ void BoxShelf::loadConsoleModels(const std::vector<std::string>& folders) {
             setCartridgeModel(f.system, model, f.turnX, f.turnZ, f.label, f.picture, f.labelTurn, f.pictureAspect, f.pictureMiddle);
             break;
         }
+    }
+    // The room's television, stood on its foot and scaled to its real width.
+    for (const std::string& folder : folders) {
+        GltfModel model;
+        std::string error;
+        if (!loadGltf(folder + "television.glb", model, &error)) continue;
+        Custom& c = custom_[kRoomCustom];
+        upload(c, model);
+        const float cx = (model.min[0] + model.max[0]) / 2, cz = (model.min[2] + model.max[2]) / 2;
+        const float k = model.max[0] > model.min[0] ? kTelevisionWidth / (model.max[0] - model.min[0]) : 1;
+        c.fit = scale(k, k, k) * translate(-cx, -model.min[1], -cz);
+        break;
     }
     for (const ModelFile& m : kModelFiles) {
         for (const std::string& folder : folders) {
@@ -990,6 +1045,7 @@ void BoxShelf::addSelectionFrame(const Vec3& s) {
 void BoxShelf::build(const std::vector<Item>& items, int selected) {
     parts_.clear();
     addShelf();
+    addRoom();
     for (int i = 0; i < count_; ++i) {
         if (i == selected && state_ != State::Browse) continue;
         Vec3 s = shelfSpot(i);
@@ -1169,6 +1225,8 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     const gl::GLint uShine = gl::GetUniformLocation(program_, "uShine");
     const gl::GLint uMirror = gl::GetUniformLocation(program_, "uMirror");
     const gl::GLint uFloor = gl::GetUniformLocation(program_, "uFloor");
+    const gl::GLint uMatte = gl::GetUniformLocation(program_, "uMatte");
+    gl::Uniform1f(gl::GetUniformLocation(program_, "uFloorTile"), kParquetTile);
     gl::Uniform3f(gl::GetUniformLocation(program_, "uBackground"), kBackground[0], kBackground[1], kBackground[2]);
     // The floor lit around what is looked at, further the further back the camera is.
     const float reach = std::max(1.0f, std::sqrt((target.x - eye_.x) * (target.x - eye_.x) + (target.y - eye_.y) * (target.y - eye_.y) +
@@ -1181,6 +1239,7 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
         gl::Uniform4f(uTexRect, p.texRect[0], p.texRect[1], p.texRect[2], p.texRect[3]);
         gl::Uniform1f(uGlow, p.glow);
         gl::Uniform1f(uShine, p.shine);
+        gl::Uniform1i(uMatte, p.matte ? 1 : 0);
         if (p.texFaces) gl::BindTexture(gl::TEXTURE_2D, p.texture);
         if (p.hidden) return;
         if (p.custom >= 0) {
@@ -1228,6 +1287,8 @@ unsigned int BoxShelf::render(const std::vector<Item>& items, int selected, int 
     Part floor;
     floor.model = translate(target.x, kFloorY - 0.005f, 0) * scale(120.0f, 0.01f, 120.0f);
     floor.colour = {0.1f, 0.1f, 0.115f};
+    floor.texture = roomTextures_.get(kParquet);
+    floor.texFaces = 1;
     drawPart(floor);
     gl::Disable(gl::BLEND);
     gl::Uniform1i(uFloor, 0);

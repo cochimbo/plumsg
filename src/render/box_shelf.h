@@ -8,6 +8,7 @@
 #include "console_models.h"
 #include "gl.h"
 #include "gltf_model.h"
+#include "room.h"
 
 namespace plumsg {
 
@@ -127,6 +128,7 @@ private:
         int box = -1;         // the item whose box this is part of, for clicks
         bool cartridge = false;
         bool hidden = false;  // only there for clicks
+        bool matte = false;   // the room around: no cool rim light, darker towards the ceiling
     };
 
     void build(const std::vector<Item>& items, int selected);
@@ -137,6 +139,8 @@ private:
     // The lit frame around the chosen box's spine, standing at `spot`.
     void addSelectionFrame(const Vec3& spot);
     void addShelf();
+    // The living room around the shelf (room.h).
+    void addRoom();
     // Where box `index` stands on the shelf (its middle), and how big the shelf is.
     Vec3 shelfSpot(int index) const;
     void shelfSize(float* width, float* height, float* bottom) const;
@@ -175,7 +179,11 @@ private:
     };
     // The consoles' (by ConsoleModel), then the cartridges' (by ConsoleSystem).
     static constexpr int kCartCustom = static_cast<int>(ConsoleModel::Count);
-    Custom custom_[kCartCustom + kSystemCount];
+    // Then the room's television (room.h).
+    static constexpr int kRoomCustom = kCartCustom + kSystemCount;
+    Custom custom_[kRoomCustom + 1];
+    RoomTextures roomTextures_;
+    std::vector<RoomPiece> room_;
     void upload(Custom& c, const GltfModel& model);
     gl::GLuint fbo_ = 0, colour_ = 0, depth_ = 0;
     int width_ = 0, height_ = 0;
