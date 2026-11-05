@@ -365,8 +365,9 @@ CartridgeShape cartridgeShape(ConsoleSystem s) {
         case ConsoleSystem::Mega32X: return {mm(111), mm(72), mm(16), mm(70), mm(41), mm(8), mm(18), mm(114)};
         // Master System: 108 x 69 x 16 mm, wider than tall.
         case ConsoleSystem::MasterSystem: return {mm(108), mm(69), mm(16), mm(92), mm(40), mm(-4), mm(28), mm(112)};
-        // Game Gear: 66 x 68 x 10 mm; the lower half goes into the console.
-        case ConsoleSystem::GameGear: return {mm(66), mm(68), mm(10), mm(54), mm(36), mm(12), mm(36), mm(70)};
+        // Game Gear: 66 x 68 x 10 mm; it goes in down to its label's top third, the ridges
+        // and the top of the label showing above the console.
+        case ConsoleSystem::GameGear: return {mm(66), mm(68), mm(10), mm(55.6f), mm(38.4f), mm(5), mm(47), mm(70)};
         // Mega Drive (the European and American mould): 108 wide at the top, 95 where it
         // goes into the slot, 70 tall, 17 thick.
         default: return {mm(108), mm(70), mm(17), mm(82), mm(52), mm(-2), mm(30), mm(100)};
@@ -396,7 +397,8 @@ void buildCartridgeModel(ConsoleSystem s, std::vector<float>& out) {
         case ConsoleSystem::GameGear:
             b.prismZ(-t, t, {{mm(-31), mm(-34)}, {mm(31), mm(-34)}, {mm(33), mm(-32)}, {mm(33), mm(30)}, {mm(29), mm(34)},
                              {mm(-29), mm(34)}, {mm(-33), mm(30)}, {mm(-33), mm(-32)}}, kShell);
-            ribs(b, 26, -24, -12, 4, c.d, -1);
+            // The three ridges to pull it out by, above the label.
+            ribs(b, 12.5f, 26.4f, 29.8f, 3, c.d, 1);
             contacts(b, 24, mm(-34), 23, 2.0f, 1.2f);
             break;
         default:
