@@ -1,6 +1,7 @@
 #include "library.h"
 
 #include <algorithm>
+#include <chrono>
 #include <iterator>
 #include <cctype>
 #include <filesystem>
@@ -40,6 +41,9 @@ namespace {
 constexpr int kCoverHeight = 280;  // covers are shrunk to this many pixels tall
 constexpr int kSleeveHeight = 720;  // but a whole sleeve (back, spine and front) to this, for the 3D boxes
 constexpr int kMaxDepth = 3;       // subfolders scanned below the library folder
+// What decides how an image in the cache was shrunk: a change to decode() changes it, and
+// the images cached before are not used (and are deleted by the next prune).
+constexpr uint32_t kCacheVariant = 1u << 28 | static_cast<uint32_t>(kSleeveHeight) << 14 | static_cast<uint32_t>(kCoverHeight);
 
 // Each console's subfolder of the covers folder ("" for the Mega Drive's, as before).
 constexpr const char* kCoverSubfolders[] = {"", "32X", "MegaCD", "MasterSystem", "GameGear"};
@@ -96,7 +100,13 @@ bool decode(const std::vector<uint8_t>& data, std::vector<uint32_t>& pixels, int
 
 }  // namespace
 
-Library::Library() : worker_([this] { work(); }) {}
+Library::Library() {
+    // A sleeve's PNG takes some 25 ms to decode: several at once, but leaving a core free
+    // for the game and the interface.
+    const unsigned cores = std::thread::hardware_concurrency();
+    const unsigned n = std::clamp(cores > 1 ? cores - 1 : 1u, 1u, 4u);
+    for (unsigned i = 0; i < n; ++i) workers_.emplace_back([this] { work(); });
+}
 
 Library::~Library() {
     {
@@ -105,7 +115,7 @@ Library::~Library() {
         jobs_.clear();
     }
     wake_.notify_all();
-    worker_.join();
+    for (std::thread& t : workers_) t.join();
 }
 
 void Library::scan(const std::vector<std::string>& folders) {
@@ -117,7 +127,9 @@ void Library::scan(const std::vector<std::string>& folders) {
         pending_ -= static_cast<int>(jobs_.size());
         jobs_.clear();
         results_.clear();
+        usedKeys_.clear();
     }
+    pruned_ = false;
     folders_ = folders;
     scanned_ = true;
     std::vector<fs::path> files;
@@ -194,6 +206,19 @@ std::string Library::systemCovers(ConsoleSystem s) const {
     const char* sub = kCoverSubfolders[static_cast<int>(s)];
     if (coversFolder_.empty() || !*sub) return coversFolder_;
     return (fs::u8path(coversFolder_) / fs::u8path(sub)).u8string() + static_cast<char>(fs::path::preferred_separator);
+}
+
+void Library::prioritize(const std::vector<size_t>& games) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (jobs_.empty()) return;
+    // The last one first, each put at the front, so that the first ends up first.
+    for (auto g = games.rbegin(); g != games.rend(); ++g) {
+        const auto it = std::find_if(jobs_.begin(), jobs_.end(), [&](const Job& j) { return j.index == *g; });
+        if (it == jobs_.end() || it == jobs_.begin()) continue;
+        Job job = std::move(*it);
+        jobs_.erase(it);
+        jobs_.push_front(std::move(job));
+    }
 }
 
 void Library::queue(Job job) {
@@ -275,13 +300,24 @@ bool Library::saveCover(size_t game, const std::vector<uint8_t>& image, std::str
     return true;
 }
 
-void Library::update() {
-    // A few per frame: each upload is quick, but dozens at once would stutter the game.
-    for (int n = 0; n < 4; ++n) {
+void Library::update(int budgetMs) {
+    // Each upload is quick, but dozens of sleeves at once would stutter the game.
+    using Clock = std::chrono::steady_clock;
+    const Clock::time_point start = Clock::now();
+    for (int n = 0; n == 0 || Clock::now() - start < std::chrono::milliseconds(budgetMs); ++n) {
         Result r;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (results_.empty()) return;
+            if (results_.empty()) {
+                // Every cover of this scan is in: what else is in the cache is of no use.
+                if (!pruned_ && pending_ == 0 && scanned_) {
+                    pruned_ = true;
+                    std::vector<uint64_t> keep = usedKeys_;
+                    std::sort(keep.begin(), keep.end());
+                    cache_.prune(keep);
+                }
+                return;
+            }
             r = std::move(results_.front());
             results_.pop_front();
         }
@@ -294,14 +330,7 @@ void Library::update() {
         if (!r.label.empty()) g.label = uploadTexture(g.label, r.label, r.labelWidth, r.labelHeight);
         g.labelWidth = r.labelWidth;
         g.labelHeight = r.labelHeight;
-        if (g.texture) gl::DeleteTextures(1, &g.texture);
-        gl::GenTextures(1, &g.texture);
-        gl::BindTexture(gl::TEXTURE_2D, g.texture);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
-        gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8, r.width, r.height, 0, gl::RGBA, gl::UNSIGNED_BYTE, r.pixels.data());
+        g.texture = uploadTexture(g.texture, r.pixels, r.width, r.height);
         g.width = r.width;
         g.height = r.height;
         g.cover = Cover::Ready;
@@ -378,6 +407,18 @@ bool Library::findLabel(const Job& job, std::string* labelPath) const {
     return findMedia(job, {"etiqueta"}, labelPath);
 }
 
+bool Library::loadImage(const std::string& path, std::vector<uint32_t>& pixels, int* width, int* height, uint64_t* key) const {
+    *key = cache_.folder().empty() ? 0 : TextureCache::key(path, kCacheVariant);
+    if (*key && cache_.load(*key, pixels, width, height)) return true;
+    std::vector<uint8_t> data;
+    if (!readAll(fs::u8path(path), data) || !decode(data, pixels, width, height)) {
+        *key = 0;
+        return false;
+    }
+    if (*key) cache_.store(*key, pixels, *width, *height);
+    return true;
+}
+
 void Library::work() {
     for (;;) {
         Job job;
@@ -389,17 +430,18 @@ void Library::work() {
             jobs_.pop_front();
         }
         Result r{job.index, job.generation, false, {}, 0, 0, {}, 0, 0};
+        uint64_t coverKey = 0, labelKey = 0;
         std::string cover;
-        const bool found = findLocal(job, &cover);
-        std::vector<uint8_t> data;
-        if (found) r.found = readAll(fs::u8path(cover), data) && decode(data, r.pixels, &r.width, &r.height);
+        if (findLocal(job, &cover)) r.found = loadImage(cover, r.pixels, &r.width, &r.height, &coverKey);
         std::string label;
-        if (r.found && findLabel(job, &label) && readAll(fs::u8path(label), data) &&
-            !decode(data, r.label, &r.labelWidth, &r.labelHeight))
+        if (r.found && findLabel(job, &label) && !loadImage(label, r.label, &r.labelWidth, &r.labelHeight, &labelKey))
             r.label.clear(), r.labelWidth = r.labelHeight = 0;
         std::lock_guard<std::mutex> lock(mutex_);
         --pending_;
-        if (job.generation == generation_) results_.push_back(std::move(r));
+        if (job.generation != generation_) continue;
+        if (coverKey) usedKeys_.push_back(coverKey);
+        if (labelKey) usedKeys_.push_back(labelKey);
+        results_.push_back(std::move(r));
     }
 }
 

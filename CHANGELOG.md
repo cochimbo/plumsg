@@ -27,6 +27,12 @@ What each version brings, newest first. Installers are on the
 - **Master System cartridges** lie straight in their boxes (their model came turned).
 - **No more flicker on the edges** of the boxes while moving along the shelf: the 3D view
   is drawn with 4x multisampling and shrunk through mipmaps.
+- **The covers come in at once**: they are kept, already decoded, in a cache
+  (`cache/covers` beside `plumsg.ini`, losslessly as QOI), so the next start reads them
+  several times quicker than decoding every PNG again; they are decoded by up to four
+  threads, the ones around the chosen game first, and more of them are uploaded each frame
+  while no game is running. A cover replaced or no longer in the library leaves the cache
+  on its own.
 - The window's title shows the version: **plumsg 0.1.0-beta.15**.
 - **The pad no longer gets locked out of the library**: with no game running, B no longer
   closes it (Esc still does), and on the start screen A, B, Start or Back open it.

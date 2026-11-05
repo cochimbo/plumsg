@@ -682,6 +682,11 @@ int main(int argc, char** argv) {
     app->profilesDir = paths.profiles;
     app->cheatsDir = paths.cheats;
     ui->library().setCoversFolder(paths.covers);
+    // The covers as decoded, so that the next start does not decode them again: in
+    // cache/covers beside the covers folder.
+    ui->library().setCacheFolder(
+        (std::filesystem::u8path(paths.covers).parent_path().parent_path() / "cache" / "covers").u8string() +
+        static_cast<char>(std::filesystem::path::preferred_separator));
     ui->gameInfo().setFolder(paths.info);
     ui->scraper().setFolder(paths.info + "screenscraper/");
     ui->library().setMediaFolder(paths.info + "screenscraper/");

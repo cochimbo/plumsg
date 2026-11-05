@@ -412,6 +412,9 @@ private:
         unsigned order = 0;       // the order last drawn, to keep the chosen game when it changes
         size_t selectedGame = 0;  // the chosen one, as an index into the library's games
     } libraryView_;
+    // The chosen game and the filtered list's size the covers were last put first for.
+    int coversFirstFor_ = -1;
+    size_t coversFirstCount_ = 0;
     // "Medios de ScreenScraper..." for one game of the library.
     bool showMedia_ = false;
     bool showScraping_ = false;
