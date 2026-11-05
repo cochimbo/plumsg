@@ -14,13 +14,18 @@ import sys
 
 import numpy as np
 import shapely.geometry as sg
+from shapely import affinity
 
 sys.path.insert(0, os.path.dirname(__file__))
 from glb import Glb  # noqa: E402
 from gamegear import FONT_BOLD, FONT_ITALIC, FONT_REGULAR, logo_mesh, merge, polygon_mesh, small, text_mesh  # noqa: E402
 from gamegear_front import LOGOS  # noqa: E402
+from megacd_front import LOGOS as PRINTED  # noqa: E402
 from sdf import box, circle, cut, extrude, mesh, round_rect, smax, smin  # noqa: E402
 
+# The shapes below are measured on the photos, in their own millimetres; the real one is
+# as wide as the Mega Drive that sits on it (280 mm), so the files are scaled to that.
+SCALE = 280.0 / 300.0
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "assets", "models")
 CREDIT = "plumsg (made by tools/models/megacd.py)"
@@ -35,7 +40,8 @@ PANEL = (-135.5, 12.5, 135.5, 60.5)
 DOOR = (-116.5, 31.0, 28.5, 52.0)
 # The connector that rises at the right, its face (where the Mega Drive's right side
 # meets it) and its length along z.
-CONN_X, CONN_Z0, CONN_Z1, CONN_TOP = 128.0, -68.0, 6.0, TOP + 24.0
+# It covers the Mega Drive's right side, nearly up to its top.
+CONN_X, CONN_Z0, CONN_Z1, CONN_TOP = 128.0, -78.0, 22.0, TOP + 52.0
 # READY and ACCESS: the windows the lights shine through (x0, y0, x1, y1).
 READY = (44.7, 35.7, 67.7, 42.0)
 ACCESS = (92.0, 35.7, 115.9, 42.0)
@@ -94,7 +100,7 @@ def body(x, y, z):
         d = cut(d, box(x, y, z, x0, x1, TOP - 4, TOP + 5, z0, z1, 3.5), 0.4)
     for hx, hz in ((-58.5, -71), (33.5, -70), (-74.5, 52), (76.5, 54)):
         d = cut(d, box(x, y, z, hx - 6, hx + 6, TOP - 8, TOP + 5, hz - 10, hz + 10, 0.6), 0.3)
-    d = smin(d, box(x, y, z, 12, 40, TOP - 2, TOP + 1.2, -64, -49, 7.4), 0.6)
+    d = cut(d, extrude(np.abs(round_rect(x, z, 26, -56.5, 14, 7.5, 7.4)) - 0.4, y, TOP - 0.5, TOP + 5), 0.2)
     d = cut(d, extrude(circle(x, z, 6.5, -14, 1.6), y, TOP - 3, TOP + 5), 0.2)
     # The vents along the back's top edge, right of the middle.
     for i in range(16):
@@ -135,14 +141,14 @@ def lock(x, y, z):
 
 
 def connector(x, y, z):
-    """The plate on the right side and the block on top of it that the Mega Drive plugs
-    into, with its mouth facing left."""
-    plate = box(x, y, z, W / 2 - 1, W / 2 + 6, SEAM + 2, CONN_TOP, CONN_Z0, CONN_Z1, 2.5)
-    blk = box(x, y, z, CONN_X, W / 2 + 2, TOP - 1, TOP + 18, CONN_Z0 + 6, CONN_Z1 - 6, 1.5)
-    d = smin(plate, blk, 1.0)
-    d = cut(d, box(x, y, z, CONN_X - 2, CONN_X + 7, TOP + 6, TOP + 11, CONN_Z0 + 10, CONN_Z1 - 10, 0.5), 0.2)
-    for sz in (CONN_Z0 + 5, CONN_Z1 - 5):
-        d = cut(d, extrude(circle(y, z, CONN_TOP - 4, sz, 1.4), x, W / 2 + 4, W / 2 + 8), 0.2)
+    """The cover on the right side that the Mega Drive's right side goes into: a thick
+    plate up to near its top, a shallow panel on its outside, and the block on its inside
+    that plugs into the Mega Drive's expansion port (hidden in it once it is on)."""
+    plate = box(x, y, z, W / 2 - 1.5, W / 2 + 17, SEAM + 2, CONN_TOP, CONN_Z0, CONN_Z1, 8.0)
+    d = cut(plate, box(x, y, z, W / 2 + 15.8, W / 2 + 22, SEAM + 10, CONN_TOP - 9, CONN_Z0 + 10, CONN_Z1 - 10, 4.0), 0.6)
+    blk = box(x, y, z, CONN_X, W / 2, TOP - 1, TOP + 18, CONN_Z0 + 16, CONN_Z1 - 16, 1.5)
+    d = smin(d, blk, 1.0)
+    d = cut(d, box(x, y, z, CONN_X - 2, CONN_X + 7, TOP + 6, TOP + 11, CONN_Z0 + 20, CONN_Z1 - 20, 0.5), 0.2)
     return d
 
 
@@ -154,15 +160,21 @@ def front_printing(g, add):
     zt = zp
     # SEGA under the door, the gold Mega-CD player badge right of it.
     add(logo_mesh(LOGOS["sega"], -112.0, 21.6, 4.6, zt, depth=0.12), PRINT, "sega", 0.5)
-    badge = [
-        text_mesh("MEGA", FONT_ITALIC, 2.2, 6.2, 25.6, zt, 0.12, anchor="left"),
-        text_mesh("PLAYER", FONT_BOLD, 0.9, 19.0, 18.9, zt, 0.12, anchor="left"),
-    ]
-    rings = sg.Point(12.5, 21.0).buffer(3.2).union(sg.Point(18.5, 23.0).buffer(3.2))
-    letters = sg.Point(12.5, 21.0).buffer(2.0).union(sg.Point(18.5, 23.0).buffer(2.0))
-    badge.append(polygon_mesh(rings.difference(letters), zt, zt + 0.12))
+    # The badge: MEGA (traced), two discs flying right with C and D on them, PLAYER.
+    badge = [traced("badge", zt, zt + 0.12, keep=lambda p: p.centroid.y > 24.3 and p.centroid.x < 20)]
+    discs, boxes = [], []
+    for cx, cy, letter in ((13.6, 21.0, "C"), (21.6, 23.4, "D")):
+        e = sg.Point(0, 0).buffer(1, quad_segs=24)
+        e = affinity.rotate(affinity.scale(e, 6.4, 2.5), 22, origin=(0, 0))
+        discs.append(affinity.translate(e, cx, cy))
+        boxes.append((sg.box(cx - 1.6, cy - 1.7, cx + 1.6, cy + 1.7), letter, cx, cy))
+    gold = sg.MultiPolygon(discs).buffer(0).difference(sg.MultiPolygon([b for b, _, _, _ in boxes]).buffer(0))
+    badge.append(polygon_mesh(gold, zt, zt + 0.12))
+    badge.append(text_mesh("PLAYER", FONT_ITALIC, 1.0, 22.0, 18.9, zt, 0.12))
+    for b, letter, cx, cy in boxes:
+        badge.append(polygon_mesh(b.exterior.buffer(0.18), zt, zt + 0.12))
+        badge.append(text_mesh(letter, FONT_BOLD, 2.4, cx, cy, zt, 0.12))
     add(merge(badge), GOLD, "badge", 0.35)
-    add(merge([text_mesh("C", FONT_BOLD, 2.6, 12.5, 21.0, zt), text_mesh("D", FONT_BOLD, 2.6, 18.5, 23.0, zt)]), GOLD, "badge letters", 0.35)
     # The lights' box: its outline, READY and ACCESS, the Compact Disc mark.
     outline = sg.box(36.2, 30.8, 132.5, 47.2).buffer(2.5).exterior.buffer(0.22)
     lines = [polygon_mesh(outline, zt, zt + 0.1)]
@@ -173,15 +185,9 @@ def front_printing(g, add):
     add(merge(lines), LINE, "lines", 0.5)
     for name, (x0, y0, x1, y1) in (("ready", READY), ("access", ACCESS)):
         add(polygon_mesh(sg.box(x0, y0, x1, y1).buffer(0.8).buffer(-0.8), zt, zt + 0.15), WINDOW, name, 0.3)
-    labels = [
-        text_mesh("READY", FONT_BOLD, 3.0, (READY[0] + READY[2]) / 2, (READY[1] + READY[3]) / 2, zt + 0.15, 0.6),
-        text_mesh("ACCESS", FONT_BOLD, 3.0, (ACCESS[0] + ACCESS[2]) / 2, (ACCESS[1] + ACCESS[3]) / 2, zt + 0.15, 0.6),
-    ]
+    labels = [traced("ready", zt + 0.15, zt + 0.75), traced("access", zt + 0.15, zt + 0.75)]
     add(merge(labels), (0.015, 0.015, 0.02), "labels", 0.4)
-    cd = [
-        text_mesh("disc", FONT_BOLD, 5.6, 79.8, 37.6, zt, 0.12),
-        text_mesh("COMPACT", FONT_BOLD, 0.9, 82.6, 42.6, zt, 0.12),
-    ]
+    cd = [traced("disc", zt, zt + 0.12)]
     printed = cd + [
         text_mesh("CD", FONT_REGULAR, 1.3, 45.6, 25.0, zt, 0.1),
         text_mesh("ACCESS", FONT_REGULAR, 1.3, 45.6, 23.2, zt, 0.1),
@@ -228,9 +234,17 @@ def turn(part):
     return v, f, n
 
 
+def traced(name, z0, z1, keep=None):
+    """A logo traced from the photos, at its place on the front."""
+    ps = [sg.Polygon(o, h) for o, h in PRINTED[name]]
+    if keep:
+        ps = [p for p in ps if keep(p)]
+    return polygon_mesh(sg.MultiPolygon(ps).buffer(0), z0, z1)
+
+
 def console():
     g = Glb()
-    to_m = 1 / 1000.0
+    to_m = SCALE / 1000.0
 
     def add(part, colour, name, shine=0.5, colours=None):
         v, f, n = part
@@ -240,11 +254,11 @@ def console():
     v, f, n = mesh(body, (-W / 2, 0, -D / 2), (W / 2, TOP, D / 2), 0.45, keep=0.07)
     g.add(v * to_m, f, n, g.material("body", (1, 1, 1), roughness=0.45), colours=body_colour(v))
     print("mega-cd: connector and lock")
-    add(small(connector, (CONN_X - 3, SEAM, CONN_Z0 - 2), (W / 2 + 8, CONN_TOP + 1, CONN_Z1 + 2), 0.3, 0.12), BLACK, "connector", 0.4)
+    add(small(connector, (CONN_X - 3, SEAM, CONN_Z0 - 2), (W / 2 + 19, CONN_TOP + 1, CONN_Z1 + 2), 0.35, 0.1), BLACK, "connector", 0.4)
     add(small(lock, (-W / 2 - 1, 38, 84), (-W / 2 + 5, 56, 104), 0.25, 0.2), BLACK, "lock", 0.4)
     pins = []
     for i in range(30):
-        pz = CONN_Z0 + 11.5 + i * (CONN_Z1 - CONN_Z0 - 23) / 29
+        pz = CONN_Z0 + 21.5 + i * (CONN_Z1 - CONN_Z0 - 43) / 29
         for py in (TOP + 7.3, TOP + 9.7):
             pins.append(polygon_mesh(sg.box(pz - 0.45, py - 0.35, pz + 0.45, py + 0.35), 0, 1))
     pv, pf, pn = merge(pins)
@@ -261,15 +275,15 @@ def console():
 
 
 # The tray: the door, then the bed of the disc behind it.
-TRAY_W, TRAY_D = 136.0, 160.0
+TRAY_W, TRAY_D = 142.0, 170.0
 TRAY_BED = 38.0  # the top of the bed, where the disc lies
-DISC_Z = FRONT - 2.5 - 82.0
+DISC_Z = FRONT - 3.5 - 85.0  # the disc (12 cm, 128.6 of these mm) in its bed
 
 
 def tray(x, y, z):
     cx = (DOOR[0] + DOOR[2]) / 2
     plate = box(x, y, z, cx - TRAY_W / 2, cx + TRAY_W / 2, 33, TRAY_BED + 1.2, FRONT - 2.5 - TRAY_D, FRONT - 2.5, 1.0)
-    d = cut(plate, extrude(circle(x, z, cx, DISC_Z, 61), y, TRAY_BED, TRAY_BED + 5), 0.4)
+    d = cut(plate, extrude(circle(x, z, cx, DISC_Z, 65.5), y, TRAY_BED, TRAY_BED + 5), 0.4)
     # The middle, open for the spindle, and the slot the laser reads through.
     d = cut(d, extrude(circle(x, z, cx, DISC_Z, 11), y, 30, 45), 0.3)
     d = cut(d, box(x, y, z, cx - 10, cx + 10, 30, 45, DISC_Z - 60, DISC_Z - 12, 3), 0.3)
@@ -279,7 +293,7 @@ def tray(x, y, z):
 
 def tray_model():
     g = Glb()
-    to_m = 1 / 1000.0
+    to_m = SCALE / 1000.0
     print("tray")
     cx = (DOOR[0] + DOOR[2]) / 2
     lo = (cx - TRAY_W / 2 - 1, DOOR[1] - 1, FRONT - 3.5 - TRAY_D)
@@ -291,11 +305,7 @@ def tray_model():
     frame = sg.box(DOOR[0] + 1.8, DOOR[1] + 1.8, DOOR[2] - 1.8, DOOR[3] - 1.8).exterior.buffer(0.25)
     v, f, n = polygon_mesh(frame, zf, zf + 0.08)
     g.add(v * to_m, f, n, g.material("door line", (0.06, 0.06, 0.07), roughness=0.3))
-    title = text_mesh("MEGA-CD", FONT_ITALIC, 5.4, -45.0, 41.6, zf, 0.12)
-    v, f, n = title
-    # Wider than the font, like the real logo.
-    v = v.copy()
-    v[:, 0] = -45.0 + (v[:, 0] + 45.0) * 1.35
+    v, f, n = traced("megacd", zf, zf + 0.12)
     g.add(v * to_m, f, n, g.material("title", PRINT, roughness=0.5))
     path = os.path.join(OUT, "megacd-tray.glb")
     g.save(path, CREDIT)
