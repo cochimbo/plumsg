@@ -345,6 +345,7 @@ private:
     bool showAbout_ = false;
     bool showCheats_ = false;
     bool showLibrary_ = false;
+    bool romLoaded_ = false;  // a game is running: B in the library goes back to it
     bool showBios_ = false;
     bool showNetplay_ = false;
     bool showGameOptions_ = false;

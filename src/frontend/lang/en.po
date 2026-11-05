@@ -321,6 +321,9 @@ msgstr "Starting the game"
 msgid "Arrastra una ROM a la ventana o usa Archivo > Abrir ROM."
 msgstr "Drag a ROM onto the window or use File > Open ROM."
 
+msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10 o A en el mando)"
+msgstr "Drag a ROM here, use File > Open ROM or open the library (F10 or A on the pad)"
+
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Drag a ROM here, use File > Open ROM or open the library (F10)"
 
@@ -1379,10 +1382,17 @@ msgstr "Arrows  d-pad;  A S D  buttons A B C;  Q W E  buttons X Y Z"
 
 msgid ""
 "Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
-"B o Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
+"B o Esc: volver al juego   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
 msgstr ""
 "Arrows or d-pad: choose   A or Enter: play   X, right button or menu key: cheats, options and instruments\n"
-"B or Esc: close   L / R or Page Up / Page Down: console   Select or V: grid, list or 3D boxes"
+"B or Esc: back to the game   L / R or Page Up / Page Down: console   Select or V: grid, list or 3D boxes"
+
+msgid ""
+"Flechas o cruceta: elegir   A o Intro: jugar   X, botón derecho o tecla de menú: trucos, opciones e instrumentos\n"
+"Esc: cerrar   L / R o RePág / AvPág: consola   Select o V: cuadrícula, lista o cajas 3D"
+msgstr ""
+"Arrows or d-pad: choose   A or Enter: play   X, right button or menu key: cheats, options and instruments\n"
+"Esc: close   L / R or Page Up / Page Down: console   Select or V: grid, list or 3D boxes"
 
 msgid "Fondo (fan art)"
 msgstr "Background (fan art)"
