@@ -367,7 +367,7 @@ CartridgeShape cartridgeShape(ConsoleSystem s) {
         case ConsoleSystem::MasterSystem: return {mm(108), mm(69), mm(16), mm(92), mm(40), mm(-4), mm(28), mm(112)};
         // Game Gear: 66 x 68 x 10 mm; it goes in down to its label's top third, the ridges
         // and the top of the label showing above the console.
-        case ConsoleSystem::GameGear: return {mm(66), mm(68), mm(10), mm(54), mm(38.4f), mm(5), mm(47), mm(70)};
+        case ConsoleSystem::GameGear: return {mm(66), mm(68), mm(10), mm(55.6f), mm(38.4f), mm(5), mm(47), mm(70)};
         // Mega Drive (the European and American mould): 108 wide at the top, 95 where it
         // goes into the slot, 70 tall, 17 thick.
         default: return {mm(108), mm(70), mm(17), mm(82), mm(52), mm(-2), mm(30), mm(100)};

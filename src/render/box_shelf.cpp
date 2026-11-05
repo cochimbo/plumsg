@@ -407,8 +407,8 @@ const CartridgeFile kCartridgeFiles[] = {
     // label is a strip along the top, where a cover's title goes. The file has it turned
     // 7.8 degrees, which would leave it crooked in its box.
     {ConsoleSystem::MasterSystem, "mastersystem-cartridge.glb", 90, 0, {1.473f, 0.0f, 1.552f, 0.40f}, {1.473f, 0.0f, 1.552f, 0.40f}, 1, 4.5f, 0.12f, -7.8f},
-    // The Game Gear's, plumsg's own: standing, its label (54 x 38.4 mm) the whole texture.
-    {ConsoleSystem::GameGear, "gamegear-cartridge.glb", 0, 0, {0, 0, 1, 1}, {0, 0, 1, 1}, 0, 1.4f, 0.45f},
+    // The Game Gear's, plumsg's own: standing, its label (55.6 x 38.4 mm) the whole texture.
+    {ConsoleSystem::GameGear, "gamegear-cartridge.glb", 0, 0, {0, 0, 1, 1}, {0, 0, 1, 1}, 0, 1.45f, 0.45f},
 };
 
 }  // namespace

@@ -361,9 +361,10 @@ def console():
 # flat panel with "MADE IN JAPAN" on a plate, a small hole and the screw in its washer;
 # the board's contacts at the bottom.
 CW, CH, CD = 66.0, 68.0, 10.0
-LABEL = (-27.0, -14.2, 27.0, 24.2)  # x0, y0, x1, y1 of its label, on the front
-U_IN, U_TOP, U_END = 27.4, 31.2, 9.5  # the U's inside half width, its bar's underside, where its arms end
-FACE = 0.9  # how far the rest of the front is below the U
+LABEL = (-27.8, -14.2, 27.8, 24.2)  # x0, y0, x1, y1 of its label, on the front
+U_IN, U_TOP, U_END = 28.4, 30.2, 13.0  # the U's inside half width, its bar's underside, where its arms end
+ARCH = 6.5  # the radius of the U's inside corners: an arch over the label
+FACE = 1.8  # how far the U, the handle, stands out of the rest of the front
 PILL = (0.0, -23.6, 13.2, 4.1)  # the SEGA pill: middle, half sizes
 SCREW = (0.0, -12.3)
 SHELL = (0.085, 0.087, 0.093)
@@ -378,28 +379,29 @@ def cartridge_shell(x, y, z):
     for sx in (1, -1):
         d = cut(d, box(x, y, z, sx * CW / 2 - 1.0 if sx > 0 else -CW / 2 - 2, sx * CW / 2 + 2 if sx > 0 else -CW / 2 + 1.0,
                        U_END - 2.2, U_END, -t - 1, t + 1, 0.3), 0.3)
-    # The front below the U.
-    lower = smax(box(x, y, z, -CW, CW, -CH, U_END, t - FACE, t + 2), -box(x, y, z, -CW, -U_IN, -CH, U_END + 0.01, -t, t + 2), 0.01)
-    lower = smax(lower, -box(x, y, z, U_IN, CW, -CH, U_END + 0.01, -t, t + 2), 0.01)
-    inner = box(x, y, z, -U_IN, U_IN, -CH, CH, t - FACE, t + 2, 0.0)
-    below_u = smin(lower, smax(inner, box(x, y, z, -CW, CW, -CH, U_TOP, -t, t + 2), 0.01), 0.01)
-    d = cut(d, below_u, 0.35)
-    # Inside the U, sunk further: the label's recess with its top corners round, and the
-    # three ridges above it.
+    # The front is FACE below the U, which stands out as a handle: along the top and down
+    # both sides, its inside an arch with round corners, its edges rounded over.
+    d = smax(d, z - (t - FACE), 0.3)
+    outer = round_rect(x, y, 0, (U_END + CH / 2) / 2, CW / 2, (CH / 2 - U_END) / 2, 0.9)
+    arch = round_rect(x, y, 0, (U_END - 20 + U_TOP) / 2, U_IN, (U_TOP - U_END + 20) / 2, ARCH)
+    handle = extrude(np.maximum(outer, -arch), z, t - FACE - 1, t, 1.0)
+    d = smin(d, handle, 0.5)
+    # Inside the arch, sunk into the front: the label's recess, its top corners round
+    # like the arch, and the three ridges above the label.
     lx0, ly0, lx1, ly1 = LABEL
-    well = extrude(round_rect(x, y, 0, (ly0 - 0.4 + U_TOP) / 2, U_IN, (U_TOP - ly0 + 0.4) / 2, 3.2), z, t - 1.3, t + 2)
+    well = extrude(round_rect(x, y, 0, (ly0 - 0.4 + U_TOP) / 2, U_IN, (U_TOP - ly0 + 0.4) / 2, ARCH), z, t - FACE - 0.5, t + 2)
     d = cut(d, well, 0.25)
     for i in range(3):
-        yy = 26.4 + 1.7 * i
-        d = smin(d, box(x, y, z, -12.5, 12.5, yy - 0.42, yy + 0.42, t - 1.6, t - FACE - 0.1, 0.35), 0.15)
+        yy = 25.2 + 1.6 * i
+        d = smin(d, box(x, y, z, -12.5, 12.5, yy - 0.42, yy + 0.42, t - FACE - 1, t - FACE - 0.05, 0.35), 0.15)
     # The pill under the label, sunk; its SEGA is a part of its own.
     px, py, hx, hy = PILL
-    d = cut(d, extrude(round_rect(x, y, px, py, hx, hy, hy), z, t - FACE - 0.45, t + 2), 0.2)
+    d = cut(d, extrude(round_rect(x, y, px, py, hx, hy, hy), z, t - FACE - 0.4, t + 2), 0.2)
     # The seam between the two halves, round the sides and the top.
     seam = smax(extrude(round_rect(x, y, 0, 0, CW / 2 + 1, CH / 2 + 1, 1), z, -1.75, -1.45), -box(x, y, z, -CW / 2 + 0.25, CW / 2 - 0.25, -CH / 2 + 0.25, CH / 2 - 0.25, -t, t), 0.01)
     d = cut(d, seam, 0.0)
     # The opening at the bottom for the contacts.
-    d = cut(d, box(x, y, z, -26.5, 26.5, -CH / 2 - 2, -CH / 2 + 6.5, -3.4, 3.4, 0.4), 0.3)
+    d = cut(d, box(x, y, z, -26.5, 26.5, -CH / 2 - 2, -CH / 2 + 6.5, -2.6, 2.6, 0.4), 0.3)
     # The back: its panel a little sunk down to the band across the bottom, the plate,
     # the small hole and the screw's well.
     d = cut(d, box(x, y, z, -29.2, 29.2, -19.6, CH / 2 + 2, -t - 2, -t + 0.3, 0.3), 0.2)
@@ -467,14 +469,14 @@ def cartridge():
     bx = shp.bounds
     height = 4.6
     width = (bx[2] - bx[0]) * height / (bx[3] - bx[1])
-    zf = t - FACE - 0.45
+    zf = t - FACE - 0.4
     lv, lf, ln = logo_mesh(sega, px - width / 2, py - height / 2, height, zf - 0.05, depth=0.4)
     g.add(lv * to_m, lf, ln, g.material("sega", RELIEF, roughness=0.45), uvs=far(lv))
     mv, mf, mn = mirrored(text_mesh("MADE IN JAPAN", FONT_REGULAR, 2.1, 0, 20.7, t - 0.32, depth=0.22))
     g.add(mv * to_m, mf, mn, g.material("print", RELIEF, roughness=0.45), uvs=far(mv))
     # The label, in its recess: v runs up, as the shelf reads it.
     x0, y0, x1, y1 = LABEL
-    z = t - 1.25
+    z = t - FACE - 0.45
     lv = np.array([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]], np.float32)
     uv = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], np.float32)
     tex = g.image(label_image().transpose(Image.FLIP_TOP_BOTTOM))
