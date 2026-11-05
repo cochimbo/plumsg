@@ -327,11 +327,11 @@ msgstr "Drag a ROM here, use File > Open ROM or open the library (F10 or A on th
 msgid "Arrastra una ROM aquí, usa Archivo > Abrir ROM o abre la biblioteca (F10)"
 msgstr "Drag a ROM here, use File > Open ROM or open the library (F10)"
 
-msgid "Arrastrar: girarla   Rueda: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
-msgstr "Drag: turn it   Wheel: zoom   Click the box or A: take the cartridge out   Click elsewhere or B: put it back"
+msgid "Arrastrar o stick izquierdo: girarla   Rueda o stick derecho: zoom   Clic en la caja o A: sacar el cartucho   Clic fuera o B: devolverla"
+msgstr "Drag or left stick: turn it   Wheel or right stick: zoom   Click the box or A: take the cartridge out   Click elsewhere or B: put it back"
 
-msgid "Arrastrar: girarlo   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
-msgstr "Drag: turn it   Click the cartridge or A: play   Click elsewhere or B: put it away"
+msgid "Arrastrar o stick izquierdo: girarlo   Rueda o stick derecho: zoom   Clic en el cartucho o A: jugar   Clic fuera o B: guardarlo"
+msgstr "Drag or left stick: turn it   Wheel or right stick: zoom   Click the cartridge or A: play   Click elsewhere or B: put it away"
 
 msgid "Arriba"
 msgstr "Up"
@@ -672,8 +672,8 @@ msgstr "Claves"
 msgid "Clavinet"
 msgstr "Clavinet"
 
-msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Rueda: zoom   B: guardarlo"
-msgstr "Click the cartridge or A: play   Click the manual or left arrow: read it   Wheel: zoom   B: put it away"
+msgid "Clic en el cartucho o A: jugar   Clic en el manual o flecha izquierda: leerlo   Stick izquierdo: girarlo   Rueda o stick derecho: zoom   B: guardarlo"
+msgstr "Click the cartridge or A: play   Click the manual or left arrow: read it   Left stick: turn it   Wheel or right stick: zoom   B: put it away"
 
 msgid "Clic en una página o flechas: pasar páginas   Rueda: zoom   Arrastrar: moverse   B: cerrarlo"
 msgstr "Click a page or arrows: turn pages   Wheel: zoom   Drag: move   B: close it"

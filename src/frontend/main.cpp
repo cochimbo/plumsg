@@ -1514,6 +1514,10 @@ int main(int argc, char** argv) {
         input->rightStick(&stickX, &stickY);
         // In the library the right stick zooms its 3D view; in the game it turns the camera.
         ui->setRightStick(ui->libraryOpen() ? stickX : 0, ui->libraryOpen() ? stickY : 0);
+        // And the left one turns the box or cartridge taken out there.
+        float leftX = 0, leftY = 0;
+        if (ui->libraryOpen()) input->leftStick(&leftX, &leftY);
+        ui->setLeftStick(leftX, leftY);
         if (cam.pseudo3d && cam.tiltCamera && !ui->libraryOpen()) {
             // The right stick turns the camera at up to 90 degrees a second.
             const float sx = stickX, sy = stickY;
