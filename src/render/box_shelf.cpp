@@ -375,6 +375,9 @@ const float kGameGearBox[6] = {-0.105f, 0.0f, -0.02f, 0.105f, 0.11f, 0.02f};
 const float kGameGearLed[3] = {-47.5f / 135.0f, 77.4f / 135.0f, 17.75f / 135.0f};
 const float kGameGearScreen[4] = {69.8f / 135.0f, 17.75f / 135.0f, 67.0f / 135.0f, 50.9f / 135.0f};
 const float kGameGearSlotY = 110.0f / 135.0f;
+// plumsg's own Mega-CD (tools/models/megacd.py): its body's bounds (the connector at its
+// right stands out of them), also the tray's, which is saved closed in the same place.
+const float kMegaCdBox[6] = {-0.15f, 0.0f, -0.115f, 0.15f, 0.072f, 0.115f};
 const ModelFile kModelFiles[] = {
     // The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the
     // dome, its power light on the plate in front of it.
@@ -383,7 +386,20 @@ const ModelFile kModelFiles[] = {
      ConsoleLayout::kSmsSlotZ}, nullptr, 0.0f, kMasterSystemBox},
     {ConsoleModel::GameGear, "gamegear.glb", 210.0f / 135.0f, 0.0f, {0.0f, kGameGearSlotY, ConsoleLayout::kGgSlotZ},
      kGameGearLed, 90.0f, kGameGearBox},
+    {ConsoleModel::MegaCD, "megacd.glb", 300.0f / 135.0f, 0.0f, {0, 0, 0}, nullptr, 0.0f, kMegaCdBox},
+    {ConsoleModel::MegaCDTray, "megacd-tray.glb", 300.0f / 135.0f, 0.0f, {0, 0, 0}, nullptr, 0.0f, kMegaCdBox},
 };
+
+// Where things are on plumsg's own Mega-CD (13.5 cm = 1): its height, where the Mega
+// Drive stands on it (against the connector at the right), how far the tray comes out,
+// where the disc lies on it, closed, and its READY and ACCESS windows (middle, size).
+constexpr float kOwnCdHeight = 72.0f / 135.0f;
+constexpr float kOwnCdMdX = -12.0f / 135.0f, kOwnCdMdZ = -6.0f / 135.0f;
+constexpr float kOwnTrayTravel = 135.0f / 135.0f;
+constexpr float kOwnDisc[3] = {-44.0f / 135.0f, 38.0f / 135.0f, 30.5f / 135.0f};
+constexpr float kOwnReady[4] = {56.2f / 135.0f, 38.85f / 135.0f, 23.0f / 135.0f, 6.3f / 135.0f};
+constexpr float kOwnAccess[4] = {103.95f / 135.0f, 38.85f / 135.0f, 23.9f / 135.0f, 6.3f / 135.0f};
+constexpr float kOwnLightsZ = 114.9f / 135.0f;
 
 // The cartridges' models: how to turn them to stand with the label to the front, where
 // their texture has the label (which a scan replaces) and the picture in it (which a
@@ -1144,6 +1160,24 @@ BoxShelf::Mat4 BoxShelf::addConsole(const Item& item, float light, float rise, f
             return translate(L::kSmsSlotX, kFloorY + L::kSmsSlotY + c.h / 2 - c.insert, kConsoleZ + L::kSmsSlotZ);
         case ConsoleSystem::MegaCD: {
             // The Mega-CD under the Mega Drive, its tray sliding out of the front.
+            if (custom_[static_cast<int>(ConsoleModel::MegaCD)].vao && custom_[static_cast<int>(ConsoleModel::MegaCDTray)].vao) {
+                mesh(ConsoleModel::MegaCD, identity());
+                mesh(ConsoleModel::MegaDrive, translate(kOwnCdMdX, kOwnCdHeight, kOwnCdMdZ));
+                const float out = kOwnTrayTravel * tray;
+                mesh(ConsoleModel::MegaCDTray, translate(0, 0, out));
+                // READY lights green once the disc is in, ACCESS red while it is read.
+                if (light > 0) {
+                    for (const float* w : {kOwnReady, kOwnAccess}) {
+                        Part p;
+                        p.model = base * translate(w[0], w[1], kOwnLightsZ) * scale(w[2], w[3], 0.002f);
+                        p.colour = w == kOwnReady ? Vec3{0.3f, 0.85f, 0.5f} : Vec3{0.95f, 0.35f, 0.15f};
+                        p.glow = 0.55f * light;
+                        p.shine = 0.6f;
+                        parts_.push_back(p);
+                    }
+                }
+                return translate(kOwnDisc[0], kFloorY + kOwnDisc[1] + 0.006f, kConsoleZ + kOwnDisc[2] + out) * rotateX(-90);
+            }
             mesh(ConsoleModel::MegaCD, identity());
             mesh(ConsoleModel::MegaDrive, translate(L::kCdMdX, L::kCdHeight, L::kCdMdZ));
             led(L::kCdLed, true);
