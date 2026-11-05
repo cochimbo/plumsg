@@ -242,6 +242,7 @@ add_executable(plumsg WIN32
   src/render/gl.cpp
   src/render/gl_renderers.cpp
   src/render/box_shelf.cpp
+  src/render/room.cpp
   src/render/console_models.cpp
   src/render/gltf_model.cpp
   src/render/upscale.cpp

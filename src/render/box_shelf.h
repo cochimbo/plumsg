@@ -8,6 +8,7 @@
 #include "console_models.h"
 #include "gl.h"
 #include "gltf_model.h"
+#include "room.h"
 
 namespace plumsg {
 
@@ -154,6 +155,7 @@ private:
         bool cartridge = false;
         bool manual = false;  // the manual in the lid, or one of its pages out
         bool hidden = false;  // only there for clicks
+        bool matte = false;   // the room around: no cool rim light, darker towards the ceiling
     };
 
     // A box's size: a Mega Drive's case, or the one a Mega CD's cover asks for.
@@ -176,6 +178,8 @@ private:
     // The lit frame around the chosen box's spine, standing at `spot`.
     void addSelectionFrame(const Vec3& spot, const Size& size);
     void addShelf();
+    // The living room around the shelf (room.h).
+    void addRoom();
     // Where box `index` stands on the shelf (its middle), and how big the shelf is.
     Vec3 shelfSpot(int index) const;
     void shelfSize(float* width, float* height, float* bottom) const;
@@ -214,7 +218,11 @@ private:
     };
     // The consoles' (by ConsoleModel), then the cartridges' (by ConsoleSystem).
     static constexpr int kCartCustom = static_cast<int>(ConsoleModel::Count);
-    Custom custom_[kCartCustom + kSystemCount];
+    // Then the room's television (room.h).
+    static constexpr int kRoomCustom = kCartCustom + kSystemCount;
+    Custom custom_[kRoomCustom + 1];
+    RoomTextures roomTextures_;
+    std::vector<RoomPiece> room_;
     void upload(Custom& c, const GltfModel& model);
     gl::GLuint fbo_ = 0, colour_ = 0, depth_ = 0;
     // Drawn first with 4 samples a pixel, then resolved into colour_: the boxes' thin

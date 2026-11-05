@@ -37,5 +37,14 @@ gamegear.glb, gamegear-cartridge.glb
   EmulationStation theme (https://github.com/Snapouille/es-theme-Animatics-DX); SEGA
   and the Game Gear logo are Sega's trademarks.
 
+television.glb
+  "Television 01" by Gabriel Radić, from Poly Haven.
+  Source: https://polyhaven.com/a/Television_01
+  License: CC0 1.0 (public domain), https://creativecommons.org/publicdomain/zero/1.0/
+  Changes: the 1K textures packed into one .glb, the metallic/roughness texture left
+  out. It stands in the living room around the 3D shelf; the rest of the room (walls,
+  floor, rug, window, lamp, cabinet, video recorder and poster) is drawn by plumsg's
+  own code (src/render/room.cpp).
+
 Your own models: put a .glb with the same name in the "models" folder next to
 plumsg.ini and plumsg uses it instead.
