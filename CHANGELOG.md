@@ -25,6 +25,10 @@ What each version brings, newest first. Installers are on the
 - **32X cartridges** are wider than tall (111 x 72 mm), as they really are, and go into a
   wider slot.
 - **Master System cartridges** lie straight in their boxes (their model came turned).
+- **Game Gear cartridges like the real ones**: the raised U along the top with the
+  three ridges to pull it out by, the label in its recess, SEGA in relief in its pill and,
+  on the back, MADE IN JAPAN, the screw in its washer and the small hole. In the console it
+  goes in down to the top of its label, as a real one does, instead of standing half out.
 - **No more flicker on the edges** of the boxes while moving along the shelf: the 3D view
   is drawn with 4x multisampling and shrunk through mipmaps.
 - **The covers come in at once**: they are kept, already decoded, in a cache

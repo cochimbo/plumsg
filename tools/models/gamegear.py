@@ -355,32 +355,78 @@ def console():
     print("power light at", led.centroid.x, led.centroid.y)
 
 
-# The cartridge: 66 x 68 x 10 mm; the lower part, narrower, goes into the console.
+# The cartridge: 66 x 68 x 10 mm, as square as it looks, from photos of real ones. On the
+# front a raised U along the top and down both sides holds the ridges to pull it out by
+# and the label's top; under the label, "SEGA" in relief in a sunken pill. On the back a
+# flat panel with "MADE IN JAPAN" on a plate, a small hole and the screw in its washer;
+# the board's contacts at the bottom.
 CW, CH, CD = 66.0, 68.0, 10.0
-LABEL = (-27.0, -6.0, 27.0, 30.0)  # x0, y0, x1, y1 of its label, on the front
+LABEL = (-27.0, -14.2, 27.0, 24.2)  # x0, y0, x1, y1 of its label, on the front
+U_IN, U_TOP, U_END = 27.4, 31.2, 9.5  # the U's inside half width, its bar's underside, where its arms end
+FACE = 0.9  # how far the rest of the front is below the U
+PILL = (0.0, -23.6, 13.2, 4.1)  # the SEGA pill: middle, half sizes
+SCREW = (0.0, -12.3)
+SHELL = (0.085, 0.087, 0.093)
+RELIEF = (0.13, 0.13, 0.138)
+WASHER = (0.42, 0.42, 0.43)
 
 
 def cartridge_shell(x, y, z):
     t = CD / 2
-    upper = extrude(round_rect(x, y, 0, 15, CW / 2, 19, 4.5), z, -t, t, 1.3)
-    lower = extrude(round_rect(x, y, 0, -16.5, CW / 2 - 2, 17.5, 2.0), z, -t, t, 1.0)
-    d = smin(upper, lower, 1.5)
-    # The label's recess on the front, the opening at the bottom for the contacts.
-    d = cut(d, box(x, y, z, LABEL[0] - 0.6, LABEL[2] + 0.6, LABEL[1] - 0.6, LABEL[3] + 0.6, t - 0.5, t + 2, 0.6), 0.25)
+    d = box(x, y, z, -CW / 2, CW / 2, -CH / 2, CH / 2, -t, t, 0.9)
+    # The notches on both sides where the U's arms end.
+    for sx in (1, -1):
+        d = cut(d, box(x, y, z, sx * CW / 2 - 1.0 if sx > 0 else -CW / 2 - 2, sx * CW / 2 + 2 if sx > 0 else -CW / 2 + 1.0,
+                       U_END - 2.2, U_END, -t - 1, t + 1, 0.3), 0.3)
+    # The front below the U.
+    lower = smax(box(x, y, z, -CW, CW, -CH, U_END, t - FACE, t + 2), -box(x, y, z, -CW, -U_IN, -CH, U_END + 0.01, -t, t + 2), 0.01)
+    lower = smax(lower, -box(x, y, z, U_IN, CW, -CH, U_END + 0.01, -t, t + 2), 0.01)
+    inner = box(x, y, z, -U_IN, U_IN, -CH, CH, t - FACE, t + 2, 0.0)
+    below_u = smin(lower, smax(inner, box(x, y, z, -CW, CW, -CH, U_TOP, -t, t + 2), 0.01), 0.01)
+    d = cut(d, below_u, 0.35)
+    # Inside the U, sunk further: the label's recess with its top corners round, and the
+    # three ridges above it.
+    lx0, ly0, lx1, ly1 = LABEL
+    well = extrude(round_rect(x, y, 0, (ly0 - 0.4 + U_TOP) / 2, U_IN, (U_TOP - ly0 + 0.4) / 2, 3.2), z, t - 1.3, t + 2)
+    d = cut(d, well, 0.25)
+    for i in range(3):
+        yy = 26.4 + 1.7 * i
+        d = smin(d, box(x, y, z, -12.5, 12.5, yy - 0.42, yy + 0.42, t - 1.6, t - FACE - 0.1, 0.35), 0.15)
+    # The pill under the label, sunk; its SEGA is a part of its own.
+    px, py, hx, hy = PILL
+    d = cut(d, extrude(round_rect(x, y, px, py, hx, hy, hy), z, t - FACE - 0.45, t + 2), 0.2)
+    # The seam between the two halves, round the sides and the top.
+    seam = smax(extrude(round_rect(x, y, 0, 0, CW / 2 + 1, CH / 2 + 1, 1), z, -1.75, -1.45), -box(x, y, z, -CW / 2 + 0.25, CW / 2 - 0.25, -CH / 2 + 0.25, CH / 2 - 0.25, -t, t), 0.01)
+    d = cut(d, seam, 0.0)
+    # The opening at the bottom for the contacts.
     d = cut(d, box(x, y, z, -26.5, 26.5, -CH / 2 - 2, -CH / 2 + 6.5, -3.4, 3.4, 0.4), 0.3)
-    # Ridges across the back to hold it by, a groove across the front under the label.
-    for i in range(6):
-        yy = 18.0 + 2.6 * i
-        d = smin(d, box(x, y, z, -25, 25, yy - 0.55, yy + 0.55, -t - 0.55, -t + 0.4, 0.4), 0.3)
-    d = cut(d, box(x, y, z, -24, 24, -12.6, -11.4, t - 0.4, t + 2, 0.4), 0.2)
-    # The screw's hole at the back.
-    d = cut(d, extrude(circle(x, y, 0, -20, 1.8), z, -t - 2, -t + 1.5), 0.3)
+    # The back: its panel a little sunk down to the band across the bottom, the plate,
+    # the small hole and the screw's well.
+    d = cut(d, box(x, y, z, -29.2, 29.2, -19.6, CH / 2 + 2, -t - 2, -t + 0.3, 0.3), 0.2)
+    d = cut(d, box(x, y, z, -12.6, 12.6, 18.6, 22.8, -t - 2, -t + 0.5, 0.2), 0.1)
+    d = smin(d, box(x, y, z, -12.0, 12.0, 19.1, 22.3, -t + 0.3, -t + 0.75, 0.1), 0.05)
+    d = cut(d, extrude(circle(x, y, 0, 0.3, 0.6), z, -t - 2, -t + 2.5), 0.15)
+    d = cut(d, extrude(circle(x, y, SCREW[0], SCREW[1], 3.9), z, -t - 2, -t + 1.4), 0.2)
     return d
+
+
+def cartridge_washer(x, y, z):
+    t = CD / 2
+    ring = extrude(circle(x, y, SCREW[0], SCREW[1], 3.6), z, -t + 0.5, -t + 1.4, 0.3)
+    return cut(ring, extrude(circle(x, y, SCREW[0], SCREW[1], 2.0), z, -t - 1, -t + 1.2), 0.2)
+
+
+def cartridge_screw(x, y, z):
+    t = CD / 2
+    head = extrude(circle(x, y, SCREW[0], SCREW[1], 2.05), z, -t + 1.0, -t + 1.6, 0.4)
+    slot_ = box(x, y, z, SCREW[0] - 1.4, SCREW[0] + 1.4, SCREW[1] - 0.25, SCREW[1] + 0.25, -t, -t + 1.2)
+    slot2 = box(x, y, z, SCREW[0] - 0.25, SCREW[0] + 0.25, SCREW[1] - 1.4, SCREW[1] + 1.4, -t, -t + 1.2)
+    return cut(cut(head, slot_, 0.1), slot2, 0.1)
 
 
 def label_image():
     """The label a cartridge wears when a game has neither a scan nor a cover."""
-    w, h = 540, 360
+    w, h = 540, 380
     im = Image.new("RGB", (w, h), (236, 236, 232))
     d = ImageDraw.Draw(im)
     d.rectangle([0, 0, w, 70], fill=(20, 24, 30))
@@ -390,24 +436,52 @@ def label_image():
     return im
 
 
+def mirrored(part):
+    """A part made facing +z, turned to face -z (for the back)."""
+    v, f, n = part
+    v = v.copy()
+    v[:, 0] = -v[:, 0]
+    v[:, 2] = -v[:, 2]
+    n = n.copy()
+    n[:, 0] = -n[:, 0]
+    n[:, 2] = -n[:, 2]
+    return v, f, n
+
+
 def cartridge():
     g = Glb()
     to_m = 1 / 1000.0
+    t = CD / 2
+    far = lambda v: np.full((len(v), 2), 4.0, np.float32)  # noqa: E731  away from the label's 0..1
     print("cartridge: shell")
-    v, f, n = mesh(cartridge_shell, (-CW / 2, -CH / 2, -CD / 2 - 0.6), (CW / 2, CH / 2, CD / 2), 0.2, keep=0.1)
-    # Texture coordinates away from the label's (0..1), so only the label shows a game's.
-    far = np.full((len(v), 2), 4.0, np.float32)
-    g.add(v * to_m, f, n, g.material("shell", BLACK, roughness=0.55), uvs=far)
+    v, f, n = mesh(cartridge_shell, (-CW / 2, -CH / 2, -t), (CW / 2, CH / 2, t), 0.15, keep=0.07)
+    g.add(v * to_m, f, n, g.material("shell", SHELL, roughness=0.6), uvs=far(v))
+    v, f, n = small(cartridge_washer, (-5, SCREW[1] - 5, -t - 0.5), (5, SCREW[1] + 5, -t + 2), 0.1, 0.3)
+    g.add(v * to_m, f, n, g.material("washer", WASHER, roughness=0.5), uvs=far(v))
+    v, f, n = small(cartridge_screw, (-3, SCREW[1] - 3, -t - 0.5), (3, SCREW[1] + 3, -t + 2), 0.08, 0.3)
+    g.add(v * to_m, f, n, g.material("screw", BLACK, roughness=0.4), uvs=far(v))
+    # SEGA in relief in its pill, and MADE IN JAPAN on the back's plate.
+    px, py, hx, hy = PILL
+    sega = LOGOS["sega"]
+    shp = sg.MultiPolygon([sg.Polygon(o, h) for o, h in sega]).buffer(0)
+    bx = shp.bounds
+    height = 4.6
+    width = (bx[2] - bx[0]) * height / (bx[3] - bx[1])
+    zf = t - FACE - 0.45
+    lv, lf, ln = logo_mesh(sega, px - width / 2, py - height / 2, height, zf - 0.05, depth=0.4)
+    g.add(lv * to_m, lf, ln, g.material("sega", RELIEF, roughness=0.45), uvs=far(lv))
+    mv, mf, mn = mirrored(text_mesh("MADE IN JAPAN", FONT_REGULAR, 2.1, 0, 20.7, t - 0.32, depth=0.22))
+    g.add(mv * to_m, mf, mn, g.material("print", RELIEF, roughness=0.45), uvs=far(mv))
     # The label, in its recess: v runs up, as the shelf reads it.
     x0, y0, x1, y1 = LABEL
-    z = CD / 2 - 0.45
+    z = t - 1.25
     lv = np.array([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]], np.float32)
     uv = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], np.float32)
     tex = g.image(label_image().transpose(Image.FLIP_TOP_BOTTOM))
     g.add(lv * to_m, [[0, 1, 2], [0, 2, 3]], np.tile([0, 0, 1], (4, 1)), g.material("label", (1, 1, 1), tex, 0.4), uvs=uv)
     # The board and its contacts, both sides, 2 mm apart.
     board = plate(-25.8, -CH / 2 + 0.6, 25.8, -CH / 2 + 9, 0.3, -0.6, 0.6)
-    g.add(board[0] * to_m, board[1], board[2], g.material("board", BOARD, roughness=0.6), uvs=np.full((len(board[0]), 2), 4.0))
+    g.add(board[0] * to_m, board[1], board[2], g.material("board", BOARD, roughness=0.6), uvs=far(board[0]))
     pads = []
     for i in range(23):
         cx = -22.0 + 2.0 * i
@@ -416,7 +490,7 @@ def cartridge():
             m.apply_translation((cx, -CH / 2 + 3.6, side * 0.63))
             pads.append(flat_normals(m.vertices, m.faces))
     pv, pf, pn = merge(pads)
-    g.add(pv * to_m, pf, pn, g.material("contacts", GOLD, roughness=0.25), uvs=np.full((len(pv), 2), 4.0))
+    g.add(pv * to_m, pf, pn, g.material("contacts", GOLD, roughness=0.25), uvs=far(pv))
     path = os.path.join(OUT, "gamegear-cartridge.glb")
     g.save(path, CREDIT)
     print(path, os.path.getsize(path) // 1024, "KB")
