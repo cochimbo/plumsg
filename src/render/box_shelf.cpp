@@ -410,6 +410,9 @@ const float kGameGearSlotY = 110.0f / 135.0f;
 // its body's bounds (the cover at its right stands out of them), also the tray's, which
 // is saved closed in the same place.
 const float kMegaCdBox[6] = {-0.14f, 0.0f, -0.10733f, 0.14f, 0.0672f, 0.10733f};
+// plumsg's own 32X (tools/models/mega32x.py): its origin is where it meets the Mega
+// Drive's slot, under the middle of its own slot, whose mouth is 65 mm over it.
+const float kMega32xBox[6] = {-0.105f, 0.0f, -0.06f, 0.105f, 0.068f, 0.06f};
 const ModelFile kModelFiles[] = {
     // The Mega Drive by synthetic worlds (Jon Blenky), CC BY 4.0: its slot is behind the
     // dome, its power light on the plate in front of it.
@@ -418,6 +421,7 @@ const ModelFile kModelFiles[] = {
      ConsoleLayout::kSmsSlotZ}, nullptr, 0.0f, kMasterSystemBox},
     {ConsoleModel::GameGear, "gamegear.glb", 210.0f / 135.0f, 0.0f, {0.0f, kGameGearSlotY, ConsoleLayout::kGgSlotZ},
      kGameGearLed, 90.0f, kGameGearBox},
+    {ConsoleModel::Mega32X, "mega32x.glb", 210.0f / 135.0f, 0.0f, {0, 65.0f / 135.0f, 0}, nullptr, 0.0f, kMega32xBox},
     {ConsoleModel::MegaCD, "megacd.glb", 280.0f / 135.0f, 0.0f, {0, 0, 0}, nullptr, 0.0f, kMegaCdBox},
     {ConsoleModel::MegaCDTray, "megacd-tray.glb", 280.0f / 135.0f, 0.0f, {0, 0, 0}, nullptr, 0.0f, kMegaCdBox},
 };

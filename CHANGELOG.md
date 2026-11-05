@@ -32,6 +32,10 @@ What each version brings, newest first. Installers are on the
   or the cartridge taken out freely, all the way round in any direction (upside down too),
   while the right stick zooms; dragging with the mouse no longer stops at 60 degrees
   either. Let go and they turn back to face you.
+- **The 32X in the 3D view is the real one**, made from photos: its head rounded at both
+  ends, glossy above the wave across its front and matt below, the MEGA DRIVE 32X badge
+  with SEGA in its arch, the raised track around its slot, the vents at both ends and the
+  plug that goes into the Mega Drive's slot, sitting on the dome as on the real console.
 - **32X cartridges** are wider than tall (111 x 72 mm), as they really are, and go into a
   wider slot.
 - **Master System cartridges** lie straight in their boxes (their model came turned).

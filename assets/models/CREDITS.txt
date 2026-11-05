@@ -42,6 +42,11 @@ megacd.glb, megacd-tray.glb
   from photos of a real one by tools/models/megacd.py, which rebuilds them. SEGA and
   MEGA-CD are Sega's trademarks.
 
+mega32x.glb
+  Sega's 32X (the Mega Drive's), made for plumsg from photos of a real one by
+  tools/models/mega32x.py, which rebuilds it; its badge is traced from a photo
+  (tools/models/mega32x_front.py). SEGA, MEGA DRIVE and 32X are Sega's trademarks.
+
 television.glb
   "Television 01" by Gabriel Radić, from Poly Haven.
   Source: https://polyhaven.com/a/Television_01
