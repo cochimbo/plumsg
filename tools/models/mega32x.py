@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from glb import Glb  # noqa: E402
 from gamegear import logo_mesh, merge, polygon_mesh  # noqa: E402
 from gamegear_front import LOGOS  # noqa: E402
-from mega32x_front import BADGE, PANEL  # noqa: E402
+from mega32x_front import BADGE  # noqa: E402
 from sdf import box, cut, extrude, mesh, round_rect, smax, smin  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -36,12 +36,13 @@ PLUG = -34.0
 # The raised track around the slot on top, the slot in it.
 TRACK_TOP = TOP + 6.0
 SLOT_HALF, SLOT_Z = 60.0, 7.0
-# The wave between the glossy top and the matt bottom: high at the ends, low in the
-# middle of the front, under the badge.
+# The wave between the glossy cap and the matt skirt under it: high at the ends and the
+# back, swooping down in the middle of the front, under the badge.
 
 
-def wave(x):
-    return BOTTOM + 30.0 - 17.0 * np.exp(-(x / 62.0) ** 2)
+def wave(x, z):
+    front = np.clip((z - ZC) / (D / 2), 0, 1) ** 1.5
+    return BOTTOM + 27.0 - 19.0 * np.exp(-(x / 58.0) ** 2) * front
 
 
 GLOSS = (0.028, 0.028, 0.032)
@@ -62,14 +63,17 @@ def footprint(x, z, grow=0.0):
 
 def head(x, y, z):
     f = footprint(x, z)
-    # The top rounds over softly all round; the bottom edge less.
-    d = extrude(f, y, BOTTOM, TOP, 3.0)
-    roof = np.sqrt(np.maximum(f + 16, 0) ** 2 + np.maximum(y - (TOP - 16), 0) ** 2) - 16
-    d = smax(d, roof, 2.0)
-    # Below the wave the matt half stands out a little further, its edge a step.
-    lower = np.maximum(extrude(footprint(x, z, 3.0), y, BOTTOM, TOP, 2.0), y - wave(x))
-    d = smin(d, lower, 0.6)
-    d = cut(d, np.maximum(np.abs(y - wave(x)) - 0.35, -(footprint(x, z) + 2.2)), 0.2)
+    # The glossy cap, its top rounding over in a wide curve all round.
+    cap = extrude(f, y, BOTTOM, TOP, 3.0)
+    roof = np.sqrt(np.maximum(f + 22, 0) ** 2 + np.maximum(y - (TOP - 22), 0) ** 2) - 22
+    d = smax(cap, roof, 2.0)
+    # The matt skirt under the wave, leaning out as it rises, its top a rounded lip that
+    # stands out of the cap.
+    w = wave(x, z)
+    t = np.clip((y - BOTTOM) / (w - BOTTOM), 0, 1)
+    skirt = np.maximum(np.maximum(footprint(x, z, 0.8 + 2.6 * t), BOTTOM - y), y - w)
+    lip = np.sqrt(np.maximum(footprint(x, z, 3.4) + 1.6, 0) ** 2 + np.maximum(y - (w - 1.6), 0) ** 2) - 1.6
+    d = smin(d, smax(skirt, lip, 0.3), 0.5)
     # The track around the slot, its inner step, and the slot.
     track = extrude(round_rect(x, z, 0, SLOT_Z, 78, 27, 26), y, TOP - 6, TRACK_TOP, 2.5)
     d = smin(d, track, 2.0)
@@ -91,7 +95,7 @@ def head(x, y, z):
 def colour(v):
     x, y, z = v[:, 0], v[:, 1], v[:, 2]
     c = np.tile(np.array(GLOSS, np.float32), (len(v), 1))
-    c[y < wave(x) + 0.2] = MATT
+    c[y < wave(x, z) + 0.2] = MATT
     hole = (np.abs(x) < SLOT_HALF + 0.3) & (np.abs(z - SLOT_Z) < 9.3) & (y < TRACK_TOP - 3.2)
     hole |= (np.abs(x) > W / 2 - 14) & (y > TOP - 25) & (y < TOP - 10) & (z > ZC + 7) & (z < ZC + 25) & (np.abs(x) < W / 2 - 0.8)
     c[hole] = HOLE
@@ -124,6 +128,37 @@ def on_front(part, lift, cx, cy, tilt):
     return v.astype(np.float32), f, n.astype(np.float32)
 
 
+def mirror(p):
+    return affinity.scale(p, -1, 1, origin=(0, 0))
+
+
+def badge_shapes():
+    """The badge from its trace, straightened: the photo shows it turned about 6 degrees.
+    Its outline and the arch round SEGA are made even on both sides; MEGA DRIVE and 32X
+    are the traced letters, centred. Returns the panel, its lines and the letters."""
+    turn = lambda p: affinity.rotate(p, 6.3, origin=(0, 0))  # noqa: E731
+    shapes = [turn(sg.Polygon(o, h)) for o, h in BADGE]
+    rings = [p for p in shapes if p.area > 80]
+    frame = max(rings, key=lambda p: p.area)
+    outer = sg.Polygon(frame.exterior)
+    dx = -(outer.bounds[0] + outer.bounds[2]) / 2
+    outer = affinity.translate(outer, dx, 0)
+    outer = outer.intersection(mirror(outer)).buffer(0.3).buffer(-0.3)
+    ring = outer.difference(outer.buffer(-0.75))
+    # The arch round SEGA: the hole of the frame lowest down, made even, and its line.
+    arch = min((sg.Polygon(h) for h in frame.interiors), key=lambda p: p.centroid.y)
+    arch = affinity.translate(arch, dx, 0)
+    arch = arch.intersection(mirror(arch)).buffer(0.3).buffer(-0.3)
+    ring = ring.union(arch.buffer(0.75).difference(arch).intersection(outer))
+    letters = [p for p in shapes if p.area <= 80 and p.area > 1.5 and p.centroid.y > -4]
+    group = sg.MultiPolygon(letters).buffer(0)
+    lx = -(group.bounds[0] + group.bounds[2]) / 2
+    # Smoothed a little: the photo's grain leaves their edges wavy.
+    group = affinity.translate(group, lx, 0).buffer(0.25).buffer(-0.45).buffer(0.2).simplify(0.05)
+    panel = outer.buffer(-0.4)
+    return panel, ring, group
+
+
 def console():
     g = Glb()
     to_m = 1 / 1000.0
@@ -136,7 +171,7 @@ def console():
     v, f, n = mesh(head, (-W / 2 - 3, PLUG, ZC - D / 2 - 3), (W / 2 + 3, TRACK_TOP, ZC + D / 2 + 22), 0.35, keep=0.08)
     # Glossy above the wave, matt below: two materials.
     tri = v[f].mean(axis=1)
-    low = tri[:, 1] < wave(tri[:, 0])
+    low = tri[:, 1] < wave(tri[:, 0], tri[:, 2])
     cols = colour(v)
     for sel, name, shine in ((~low, "glossy", 0.12), (low, "matt", 0.6)):
         used, faces = np.unique(f[sel], return_inverse=True)
@@ -152,20 +187,11 @@ def console():
     print("32x: badge")
     # The badge: its grey panel, then the white lines and MEGA DRIVE 32X traced from a
     # photo, and SEGA (the clean logo) in the arch at its bottom.
-    cy, tilt = TOP - 13.0, 48.0
-    panel = sg.Polygon(PANEL).buffer(-0.6)
+    cy, tilt = BOTTOM + 27.0, 30.0
+    panel, ring, letters = badge_shapes()
     add(on_front(polygon_mesh(panel, 0, 0.2), 0.1, 0, cy, tilt), PANEL_GREY, "badge panel", 0.3)
-    keep = []
-    for o, h in BADGE:
-        p = sg.Polygon(o, h)
-        c = p.centroid
-        if not panel.buffer(1.5).contains(c):
-            continue
-        if -11 < c.x < 13 and -14 < c.y < -4.5 and p.area < 25:
-            continue  # the traced SEGA, blurred: the clean logo instead
-        keep.append(p)
-    lines = polygon_mesh(sg.MultiPolygon(keep).buffer(0), 0, 0.15)
-    sega = logo_mesh(LOGOS["sega"], -8.6, -12.6, 5.2, 0, depth=0.15)
+    lines = polygon_mesh(ring.union(letters).buffer(0), 0, 0.15)
+    sega = logo_mesh(LOGOS["sega"], -8.28, -12.4, 5.0, 0, depth=0.15)
     add(on_front(merge([lines, sega]), 0.3, 0, cy, tilt), WHITE, "badge print", 0.5)
 
     path = os.path.join(OUT, "mega32x.glb")
