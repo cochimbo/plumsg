@@ -27,11 +27,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "assets", "models")
 CREDIT = "plumsg (made by tools/models/mega32x.py)"
 
-# The head: 210 x 106 mm, from 5 mm over the Mega Drive's slot to 62; its middle lies
-# 10 mm behind the slot. The plug goes 34 mm down into the Mega Drive.
-W, D = 210.0, 106.0
-ZC = -10.0
+# The head: 210 x 136 mm, from 5 mm over the Mega Drive's slot to 62 at the back; its
+# middle lies 5 mm behind the slot. The plug goes 34 mm down into the Mega Drive.
+W, D = 210.0, 136.0
+ZC = -5.0
 BOTTOM, TOP = 5.0, 62.0
+# The top is wide and glossy: flat round the slot, then sloping down to the front, where
+# the badge lies on it facing up. It starts sloping SLOPE_Z mm in front of the slot and
+# drops DROP mm by the front.
+SLOPE_Z, DROP = 22.0, 17.0
 PLUG = -34.0
 # The raised track around the slot on top, the slot in it.
 TRACK_TOP = TOP + 6.0
@@ -40,16 +44,24 @@ SLOT_HALF, SLOT_Z = 60.0, 7.0
 # back, swooping down in the middle of the front, under the badge.
 
 
+def top_y(z):
+    """The top's height at z: flat round the slot, then sloping down to the front."""
+    s = np.clip((z - SLOT_Z - SLOPE_Z) / (ZC + D / 2 + 6 - SLOT_Z - SLOPE_Z), 0, 1)
+    return TOP - DROP * s ** 1.4
+
+
 def wave(x, z):
+    """Where the glossy top meets the matt sides: a band below the top's edge, dipping
+    lower in the middle of the front."""
     front = np.clip((z - ZC) / (D / 2), 0, 1) ** 1.5
-    return BOTTOM + 27.0 - 19.0 * np.exp(-(x / 58.0) ** 2) * front
+    return top_y(z) - 14.0 - 9.0 * np.exp(-(x / 60.0) ** 2) * front
 
 
 GLOSS = (0.028, 0.028, 0.032)
 MATT = (0.07, 0.07, 0.074)
 HOLE = (0.006, 0.006, 0.008)
-PANEL_GREY = (0.07, 0.07, 0.075)
-WHITE = (0.82, 0.82, 0.8)
+PANEL_GREY = (0.13, 0.125, 0.115)
+WHITE = (0.95, 0.95, 0.92)
 FLAP = (0.05, 0.05, 0.056)
 CONTACT = (0.55, 0.5, 0.42)
 
@@ -63,9 +75,11 @@ def footprint(x, z, grow=0.0):
 
 def head(x, y, z):
     f = footprint(x, z)
-    # The glossy cap: an upright front and ends, its top edge rounding over.
-    cap = extrude(f, y, BOTTOM, TOP, 3.0)
-    roof = np.sqrt(np.maximum(f + 13, 0) ** 2 + np.maximum(y - (TOP - 13), 0) ** 2) - 13
+    # The glossy cap: its top flat round the slot and sloping to the front, its edge all
+    # round rolling over into the sides.
+    ty = top_y(z)
+    cap = np.maximum(extrude(f, y, BOTTOM, TOP, 3.0), (y - ty) * 0.95)
+    roof = np.sqrt(np.maximum(f + 10, 0) ** 2 + np.maximum(y - (ty - 10), 0) ** 2) - 10
     d = smax(cap, roof, 2.0)
     # The matt skirt under the wave, leaning out as it rises, its top a rounded lip that
     # stands out of the cap.
@@ -82,7 +96,7 @@ def head(x, y, z):
     # The vents at both ends: four slits each, high up towards the front.
     for side in (-1, 1):
         for i in range(4):
-            yy = TOP - 24 + 3.4 * i
+            yy = TOP - 22 + 3.4 * i
             ex = side * W / 2
             d = cut(d, box(x, y, z, ex - 12, ex + 12, yy - 0.75, yy + 0.75, ZC + 8, ZC + 24, 0.6), 0.3)
     # The plug underneath, a block that goes into the Mega Drive's slot; a wider foot
@@ -97,35 +111,35 @@ def colour(v):
     c = np.tile(np.array(GLOSS, np.float32), (len(v), 1))
     c[y < wave(x, z) + 0.2] = MATT
     hole = (np.abs(x) < SLOT_HALF + 0.3) & (np.abs(z - SLOT_Z) < 9.3) & (y < TRACK_TOP - 3.2)
-    hole |= (np.abs(x) > W / 2 - 14) & (y > TOP - 27) & (y < TOP - 12) & (z > ZC + 7) & (z < ZC + 25) & (np.abs(x) < W / 2 - 0.8)
+    hole |= (np.abs(x) > W / 2 - 14) & (y > TOP - 25) & (y < TOP - 10) & (z > ZC + 7) & (z < ZC + 25) & (np.abs(x) < W / 2 - 0.8)
     c[hole] = HOLE
     return c
 
 
-def front_z(x, y):
-    """Where the head's front is, at (x, y): a search along z from the front."""
-    lo = np.full(np.shape(x), ZC, float)
-    hi = np.full(np.shape(x), ZC + D, float)
+def top_at(x, z):
+    """The top's surface height at (x, z): a search down from above."""
+    lo = np.full(np.shape(x), BOTTOM, float)
+    hi = np.full(np.shape(x), TRACK_TOP + 5, float)
     for _ in range(40):
         mid = (lo + hi) / 2
-        inside = head(x, y, mid) < 0
+        inside = head(x, mid, z) < 0
         lo = np.where(inside, mid, lo)
         hi = np.where(inside, hi, mid)
     return lo
 
 
-def on_front(part, lift, cx, cy, tilt):
-    """A flat part made facing +z around (0, 0), laid on the front at (cx, cy) and lifted
-    `lift` mm off it; tilt leans its top back, as the front does there."""
+def on_top(part, lift, cx, cz, slope):
+    """A flat part made facing +z around (0, 0), laid on the top at (cx, cz), its own up
+    towards the back, lifted `lift` mm off it; slope is how the top falls there."""
     v, f, n = part
-    v = v.copy()
-    t = np.radians(tilt)
-    x, y = v[:, 0] + cx, cy + v[:, 1] * np.cos(t)
-    z = front_z(x, y) + lift + v[:, 2]
-    v = np.stack([x, y, z], axis=1)
-    n = n.copy()
-    n[:, 1], n[:, 2] = n[:, 1] * np.cos(t) + n[:, 2] * np.sin(t), n[:, 2] * np.cos(t) - n[:, 1] * np.sin(t)
-    return v.astype(np.float32), f, n.astype(np.float32)
+    a = np.radians(slope)
+    x, z = v[:, 0] + cx, cz - v[:, 1] * np.cos(a)
+    y = top_at(x, z) + lift + v[:, 2]
+    out = np.stack([x, y, z], axis=1)
+    # Its normal: up, leaning forward with the slope; its own y towards the back.
+    m = np.array([[1, 0, 0], [0, np.sin(a), -np.cos(a)], [0, np.cos(a), np.sin(a)]])
+    nn = n @ m.T
+    return out.astype(np.float32), f, nn.astype(np.float32)
 
 
 def mirror(p):
@@ -187,13 +201,13 @@ def console():
     print("32x: badge")
     # The badge: its grey panel, then the white lines and MEGA DRIVE 32X traced from a
     # photo, and SEGA (the clean logo) in the arch at its bottom.
-    # Upright on the front, facing the viewer, as on the real one.
-    cy, tilt = BOTTOM + 26.0, 6.0
+    # It lies on the top's slope in front of the slot, facing up, as on the real one.
+    cz, slope = SLOT_Z + 48.0, 22.0
     panel, ring, letters = badge_shapes()
-    add(on_front(polygon_mesh(panel, 0, 0.2), 0.1, 0, cy, tilt), PANEL_GREY, "badge panel", 0.3)
+    add(on_top(polygon_mesh(panel, 0, 0.2), 0.35, 0, cz, slope), PANEL_GREY, "badge panel", 0.3)
     lines = polygon_mesh(ring.union(letters).buffer(0), 0, 0.15)
     sega = logo_mesh(LOGOS["sega"], -8.28, -12.4, 5.0, 0, depth=0.15)
-    add(on_front(merge([lines, sega]), 0.3, 0, cy, tilt), WHITE, "badge print", 0.5)
+    add(on_top(merge([lines, sega]), 0.6, 0, cz, slope), WHITE, "badge print", 0.5)
 
     path = os.path.join(OUT, "mega32x.glb")
     g.save(path, CREDIT)
