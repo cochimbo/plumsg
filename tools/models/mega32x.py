@@ -27,15 +27,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "assets", "models")
 CREDIT = "plumsg (made by tools/models/mega32x.py)"
 
-# The head: 210 x 136 mm, from 5 mm over the Mega Drive's slot to 62 at the back; its
-# middle lies 5 mm behind the slot. The plug goes 34 mm down into the Mega Drive.
-W, D = 210.0, 136.0
-ZC = -5.0
-BOTTOM, TOP = 5.0, 62.0
-# The top is wide and glossy: flat round the slot, then sloping down to the front, where
-# the badge lies on it facing up. It starts sloping SLOPE_Z mm in front of the slot and
+# The head: 210 x 104 mm (and the bulge in the middle of its front), from 17 mm over the
+# Mega Drive's slot to 62; its middle lies 14 mm in front of the slot. Seen from above,
+# the slot's track takes its back half and the badge lies on the top just in front of
+# it. The plug goes 34 mm down into the Mega Drive.
+W, D = 210.0, 104.0
+ZC = 14.0
+BOTTOM, TOP = 17.0, 62.0
+# The top is wide and glossy: flat round the slot, then falling gently to the front, the
+# badge lying on it facing up. It starts falling SLOPE_Z mm in front of the slot and
 # drops DROP mm by the front.
-SLOPE_Z, DROP = 22.0, 17.0
+SLOPE_Z, DROP = 18.0, 7.0
 PLUG = -34.0
 # The raised track around the slot on top, the slot in it.
 TRACK_TOP = TOP + 6.0
@@ -46,7 +48,7 @@ SLOT_HALF, SLOT_Z = 60.0, 7.0
 
 def top_y(z):
     """The top's height at z: flat round the slot, then sloping down to the front."""
-    s = np.clip((z - SLOT_Z - SLOPE_Z) / (ZC + D / 2 + 6 - SLOT_Z - SLOPE_Z), 0, 1)
+    s = np.clip((z - SLOT_Z - SLOPE_Z) / (ZC + D / 2 + 8 - SLOT_Z - SLOPE_Z), 0, 1)
     return TOP - DROP * s ** 1.4
 
 
@@ -89,9 +91,9 @@ def head(x, y, z):
     lip = np.sqrt(np.maximum(footprint(x, z, 3.4) + 1.6, 0) ** 2 + np.maximum(y - (w - 1.6), 0) ** 2) - 1.6
     d = smin(d, smax(skirt, lip, 0.3), 0.5)
     # The track around the slot, its inner step, and the slot.
-    track = extrude(round_rect(x, z, 0, SLOT_Z, 78, 27, 26), y, TOP - 6, TRACK_TOP, 2.5)
+    track = extrude(round_rect(x, z, 0, SLOT_Z, 76, 23, 22), y, TOP - 6, TRACK_TOP, 2.5)
     d = smin(d, track, 2.0)
-    d = cut(d, extrude(round_rect(x, z, 0, SLOT_Z, 70, 19.5, 19), y, TRACK_TOP - 3.0, TRACK_TOP + 5, 1.0), 0.6)
+    d = cut(d, extrude(round_rect(x, z, 0, SLOT_Z, 69, 16, 15), y, TRACK_TOP - 3.0, TRACK_TOP + 5, 1.0), 0.6)
     d = cut(d, box(x, y, z, -SLOT_HALF, SLOT_HALF, PLUG - 5, TRACK_TOP + 5, SLOT_Z - 9, SLOT_Z + 9, 1.5), 0.4)
     # The vents at both ends: four slits each, high up towards the front.
     for side in (-1, 1):
@@ -102,7 +104,7 @@ def head(x, y, z):
     # The plug underneath, a block that goes into the Mega Drive's slot; a wider foot
     # under the head where it meets it.
     d = smin(d, box(x, y, z, -50, 50, PLUG, BOTTOM + 2, -9.5, 9.5, 1.5), 0.6)
-    d = smin(d, box(x, y, z, -58, 58, 0, BOTTOM + 2, -22, 22, 2.0), 1.0)
+    d = smin(d, box(x, y, z, -62, 62, 0, BOTTOM + 2, -26, 26, 3.0), 1.0)
     return d
 
 
@@ -202,7 +204,7 @@ def console():
     # The badge: its grey panel, then the white lines and MEGA DRIVE 32X traced from a
     # photo, and SEGA (the clean logo) in the arch at its bottom.
     # It lies on the top's slope in front of the slot, facing up, as on the real one.
-    cz, slope = SLOT_Z + 48.0, 22.0
+    cz, slope = SLOT_Z + 39.0, 8.0
     panel, ring, letters = badge_shapes()
     add(on_top(polygon_mesh(panel, 0, 0.2), 0.35, 0, cz, slope), PANEL_GREY, "badge panel", 0.3)
     lines = polygon_mesh(ring.union(letters).buffer(0), 0, 0.15)
