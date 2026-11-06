@@ -3,6 +3,41 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 0.1.0-beta.16
+
+- **An 80s living room around the shelf** in the 3D view: papered walls over a wooden
+  dado, a parquet floor with a rug, a window with curtains, a floor lamp, a poster and a
+  walnut cabinet with a television and a video recorder. The room grows with the shelf.
+- **The Mega CD in the 3D view is the real first model**, made from photos of one: its
+  glossy front with the tray's door (MEGA-CD on it), SEGA, the Mega-CD player badge, the
+  READY and ACCESS windows (they light up once the disc is in) and the lights under them;
+  the plate on top with its slots, the connector rising at the right that the Mega Drive
+  plugs into, the grille and sockets on the back and the lock on the left side. The tray
+  slides out from behind its door, as on the real one, and fits a 12 cm disc. It is as wide
+  as the Mega Drive, which sits flat on it with its right side inside the cover.
+- **Turn the box and the cartridge every way with the pad**: the left stick turns the box
+  or the cartridge taken out freely, all the way round in any direction (upside down too),
+  while the right stick zooms; dragging with the mouse no longer stops at 60 degrees
+  either. Let go and they turn back to face you.
+- **The 32X in the 3D view is the real one**, made from photos: its head rounded at both
+  ends, glossy above the wave across its front and matt below, the MEGA DRIVE 32X badge
+  with SEGA in its arch, the raised track around its slot, the vents at both ends and the
+  plug that goes into the Mega Drive's slot, sitting on the dome as on the real console.
+  The badge lies on its flat top in front of the slot and the head stands on a visible neck.
+- **Game Gear cartridges like the real ones**: the handle, an arch standing out along the top with the
+  three ridges to pull it out by, the label in its recess, SEGA in relief in its pill and,
+  on the back, MADE IN JAPAN, the screw in its washer and the small hole. In the console it
+  goes in down to the top of its label, as a real one does, instead of standing half out.
+- **The covers come in at once**: they are kept, already decoded, in a cache
+  (`cache/covers` beside `plumsg.ini`, losslessly as QOI), so the next start reads them
+  several times quicker than decoding every PNG again; they are decoded by up to four
+  threads, the ones around the chosen game first, and more of them are uploaded each frame
+  while no game is running. A cover replaced or no longer in the library leaves the cache
+  on its own.
+- **Master System cartridges at their real size**: they were drawn smaller than the
+  console's slot (85% as wide and 70% as tall) and now fill it as they should.
+- The window's title shows the version: **plumsg 0.1.0-beta.16**.
+
 ## 0.1.0-beta.15
 
 - **Read the manuals in the 3D view**: with a box open, a click on the manual in its lid
@@ -22,35 +57,11 @@ What each version brings, newest first. Installers are on the
   the first American games keep it. Their whole sleeves are cut where they really are.
 - **Zoom on the box and the cartridge**: the wheel (or the right stick) comes closer to
   the box, the cartridge or the manual taken out, not only on the shelf.
-- **The Mega CD in the 3D view is the real first model**, made from photos of one: its
-  glossy front with the tray's door (MEGA-CD on it), SEGA, the Mega-CD player badge, the
-  READY and ACCESS windows (they light up once the disc is in) and the lights under them;
-  the plate on top with its slots, the connector rising at the right that the Mega Drive
-  plugs into, the grille and sockets on the back and the lock on the left side. The tray
-  slides out from behind its door, as on the real one.
-- **Turn the box and the cartridge every way with the pad**: the left stick turns the box
-  or the cartridge taken out freely, all the way round in any direction (upside down too),
-  while the right stick zooms; dragging with the mouse no longer stops at 60 degrees
-  either. Let go and they turn back to face you.
-- **The 32X in the 3D view is the real one**, made from photos: its head rounded at both
-  ends, glossy above the wave across its front and matt below, the MEGA DRIVE 32X badge
-  with SEGA in its arch, the raised track around its slot, the vents at both ends and the
-  plug that goes into the Mega Drive's slot, sitting on the dome as on the real console.
 - **32X cartridges** are wider than tall (111 x 72 mm), as they really are, and go into a
   wider slot.
 - **Master System cartridges** lie straight in their boxes (their model came turned).
-- **Game Gear cartridges like the real ones**: the handle, an arch standing out along the top with the
-  three ridges to pull it out by, the label in its recess, SEGA in relief in its pill and,
-  on the back, MADE IN JAPAN, the screw in its washer and the small hole. In the console it
-  goes in down to the top of its label, as a real one does, instead of standing half out.
 - **No more flicker on the edges** of the boxes while moving along the shelf: the 3D view
   is drawn with 4x multisampling and shrunk through mipmaps.
-- **The covers come in at once**: they are kept, already decoded, in a cache
-  (`cache/covers` beside `plumsg.ini`, losslessly as QOI), so the next start reads them
-  several times quicker than decoding every PNG again; they are decoded by up to four
-  threads, the ones around the chosen game first, and more of them are uploaded each frame
-  while no game is running. A cover replaced or no longer in the library leaves the cache
-  on its own.
 - The window's title shows the version: **plumsg 0.1.0-beta.15**.
 - **The pad no longer gets locked out of the library**: with no game running, B no longer
   closes it (Esc still does), and on the start screen A, B, Start or Back open it.
