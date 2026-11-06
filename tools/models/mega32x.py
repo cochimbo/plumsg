@@ -63,9 +63,9 @@ def footprint(x, z, grow=0.0):
 
 def head(x, y, z):
     f = footprint(x, z)
-    # The glossy cap, its top rounding over in a wide curve all round.
+    # The glossy cap: an upright front and ends, its top edge rounding over.
     cap = extrude(f, y, BOTTOM, TOP, 3.0)
-    roof = np.sqrt(np.maximum(f + 22, 0) ** 2 + np.maximum(y - (TOP - 22), 0) ** 2) - 22
+    roof = np.sqrt(np.maximum(f + 13, 0) ** 2 + np.maximum(y - (TOP - 13), 0) ** 2) - 13
     d = smax(cap, roof, 2.0)
     # The matt skirt under the wave, leaning out as it rises, its top a rounded lip that
     # stands out of the cap.
@@ -82,7 +82,7 @@ def head(x, y, z):
     # The vents at both ends: four slits each, high up towards the front.
     for side in (-1, 1):
         for i in range(4):
-            yy = TOP - 22 + 3.4 * i
+            yy = TOP - 24 + 3.4 * i
             ex = side * W / 2
             d = cut(d, box(x, y, z, ex - 12, ex + 12, yy - 0.75, yy + 0.75, ZC + 8, ZC + 24, 0.6), 0.3)
     # The plug underneath, a block that goes into the Mega Drive's slot; a wider foot
@@ -97,7 +97,7 @@ def colour(v):
     c = np.tile(np.array(GLOSS, np.float32), (len(v), 1))
     c[y < wave(x, z) + 0.2] = MATT
     hole = (np.abs(x) < SLOT_HALF + 0.3) & (np.abs(z - SLOT_Z) < 9.3) & (y < TRACK_TOP - 3.2)
-    hole |= (np.abs(x) > W / 2 - 14) & (y > TOP - 25) & (y < TOP - 10) & (z > ZC + 7) & (z < ZC + 25) & (np.abs(x) < W / 2 - 0.8)
+    hole |= (np.abs(x) > W / 2 - 14) & (y > TOP - 27) & (y < TOP - 12) & (z > ZC + 7) & (z < ZC + 25) & (np.abs(x) < W / 2 - 0.8)
     c[hole] = HOLE
     return c
 
@@ -187,7 +187,8 @@ def console():
     print("32x: badge")
     # The badge: its grey panel, then the white lines and MEGA DRIVE 32X traced from a
     # photo, and SEGA (the clean logo) in the arch at its bottom.
-    cy, tilt = BOTTOM + 27.0, 30.0
+    # Upright on the front, facing the viewer, as on the real one.
+    cy, tilt = BOTTOM + 26.0, 6.0
     panel, ring, letters = badge_shapes()
     add(on_front(polygon_mesh(panel, 0, 0.2), 0.1, 0, cy, tilt), PANEL_GREY, "badge panel", 0.3)
     lines = polygon_mesh(ring.union(letters).buffer(0), 0, 0.15)
