@@ -510,9 +510,12 @@ void BoxShelf::setCartridgeModel(ConsoleSystem system, const GltfModel& model, f
     upload(c, model);
     // Turned to stand, then centred and stretched to the cartridge's real size.
     const Mat4 turn = rotateZ(turnZ) * rotateX(turnX) * rotateY(turnY);
+    // Measured on its points once turned, not on the corners of the box around it as it
+    // comes: turned by turnY, those corners stand out past the cartridge, which would come
+    // out too small and squashed (the Master System's, 85% as wide and 70% as tall).
     float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
-    for (int k = 0; k < 8; ++k) {
-        const float p[3] = {(k & 1) ? model.max[0] : model.min[0], (k & 2) ? model.max[1] : model.min[1], (k & 4) ? model.max[2] : model.min[2]};
+    for (size_t k = 0; k + 3 <= model.vertices.size(); k += 12) {
+        const float* p = &model.vertices[k];
         for (int i = 0; i < 3; ++i) {
             const float v = turn[i] * p[0] + turn[4 + i] * p[1] + turn[8 + i] * p[2];
             lo[i] = std::min(lo[i], v);
