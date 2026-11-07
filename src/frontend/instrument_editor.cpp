@@ -13,6 +13,7 @@
 #include <SDL.h>
 
 #include "imgui.h"
+#include "file_dialog.h"
 #include "theme.h"
 #include "../core/i18n.h"
 #include "../core/system.h"
@@ -546,7 +547,7 @@ void InstrumentEditor::drawTrack(const EditorView& view, EditorRequests& out) {
         if (ImGui::Button(tr("Carpeta"))) {
             std::error_code ec;
             fs::create_directories(fs::u8path(gameTracksFolder()), ec);
-            SDL_OpenURL(("file:///" + gameTracksFolder()).c_str());
+            openInSystem(gameTracksFolder());
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip(tr("La carpeta de las canciones de este juego: lo que pongas en ella (.vgm, .vgz o\n"

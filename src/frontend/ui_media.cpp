@@ -20,7 +20,7 @@ namespace {
 
 ScreenScraper::Rom romOf(const Library::Game& g) { return {g.path, g.stem, g.title, g.tags, g.system}; }
 
-void openFile(const std::string& path) { SDL_OpenURL(("file:///" + path).c_str()); }
+void openFile(const std::string& path) { openInSystem(path); }
 
 // An image fitted into a w x h box, centred.
 void fitImage(unsigned int texture, int iw, int ih, float w, float h) {

@@ -1423,7 +1423,7 @@ int main(int argc, char** argv) {
         if (act.openRecordings) {
             std::error_code ec;
             std::filesystem::create_directories(std::filesystem::u8path(paths.videos), ec);
-            SDL_OpenURL(("file:///" + paths.videos).c_str());
+            openInSystem(paths.videos);
         }
         if (act.togglePause && !netBusy) paused = !paused;
         musicSpeed = act.musicSpeed;

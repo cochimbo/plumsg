@@ -1252,7 +1252,7 @@ void Ui::setSoundfonts(std::string included, std::string folder) {
 // the user's folder (read while it is open, so new downloads show up at once).
 void Ui::drawSoundfontMenu(UiActions& out) {
     drawSoundfontCombo(out);
-    if (ImGui::MenuItem(tr("Abrir la carpeta de SoundFonts"))) SDL_OpenURL(("file:///" + soundfontFolder_).c_str());
+    if (ImGui::MenuItem(tr("Abrir la carpeta de SoundFonts"))) openInSystem(soundfontFolder_);
     if (ImGui::MenuItem(tr("Elegir otro (.sf2)..."))) chooseSoundfont(out);
 }
 

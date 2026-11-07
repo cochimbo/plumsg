@@ -498,7 +498,7 @@ and `--fullscreen` in the command-line parameters.
 
 **Console mode** is for playing from the sofa or on a handheld, with a pad and no
 keyboard or mouse. It turns on by itself when Steam's game mode or Big Picture starts
-plumsg (also as a non-Steam game under Proton) and on the handhelds that run Windows,
+plumsg (as a non-Steam game, the Linux AppImage or under Proton) and on the handhelds that run Windows,
 recognised by their model: ROG Ally and ROG Xbox Ally, MSI Claw, Legion Go and Go S,
 AYANEO, OneXPlayer, GPD Win, Zotac Zone. It is switched in **Options > Console mode**
 (Automatic, On, Off), in the states menu's Sistema tab or with `--console-mode` /
@@ -549,7 +549,10 @@ ctest --test-dir build --output-on-failure
 ```
 
 On Windows, the `windows-installer.yml` workflow builds the installer with Inno Setup (see
-[installer/README.md](installer/README.md)).
+[installer/README.md](installer/README.md)). The same workflow builds the Linux AppImage on
+Ubuntu 22.04 with `tools/linux/make-appimage.sh <build dir> <version>`, which packs plumsg
+(SDL2 linked in statically), the console models, the GeneralUser GS SoundFont and PDFium
+into one file; both go to each release.
 
 ## Tests
 

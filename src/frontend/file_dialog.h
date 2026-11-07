@@ -17,6 +17,9 @@ enum class Pick { Game, Folder, AnyFile, Image };
 // the caller then uses FileBrowser.
 DialogResult openFileDialog(SDL_Window* window, const std::string& startFolder, Pick pick, std::string* chosen);
 
+// Opens a file or folder with what the system uses for it (Explorer, the Linux desktop's file manager).
+void openInSystem(const std::string& path);
+
 // File picker drawn with Dear ImGui: for platforms without a native dialog, for full
 // screen (where the system dialog can open hidden behind the game) and to choose the
 // library's folders and the BIOS files. Mouse, keyboard or pad: up and down to move, A (or Enter) to open,

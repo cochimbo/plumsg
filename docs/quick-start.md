@@ -10,7 +10,11 @@ Download `plumsg-<version>-setup.exe` from the latest
 administrator rights. Windows may warn that it is an unrecognized app: click **More info >
 Run anyway** (see [why](faq.md#windows-says-plumsg-is-an-unrecognized-app)).
 
-On Linux, build it yourself (see [Building](../README.md#building)).
+On Linux (and on the Steam Deck, without Proton), download `plumsg-<version>-x86_64.AppImage`
+from the same release, make it executable (`chmod +x`, or *Properties > Permissions* in the
+file manager) and open it. On the Steam Deck, in desktop mode, add it to Steam with **Add a
+Non-Steam Game** to have it in game mode. Your settings and saves go to
+`~/.local/share/plumsg/plumsg/`.
 
 plumsg starts in your system's language if it is English, Spanish, French or Portuguese
 (English otherwise); change it in **Options > Language**.

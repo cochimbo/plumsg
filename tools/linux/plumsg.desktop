@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=plumsg
+GenericName=Mega Drive emulator
+GenericName[es]=Emulador de Mega Drive
+Comment=Mega Drive, Mega CD, 32X, Master System and Game Gear emulator with a 3D view
+Comment[es]=Emulador de Mega Drive, Mega CD, 32X, Master System y Game Gear con vista 3D
+Exec=plumsg %f
+Icon=plumsg
+Terminal=false
+Categories=Game;Emulator;
+Keywords=sega;genesis;megadrive;emulator;retro;
