@@ -3,6 +3,21 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 0.1.0-beta.17
+
+- **Native Linux version**: each release now also has `plumsg-<version>-x86_64.AppImage`,
+  one file that runs on most Linux desktops and on the Steam Deck without Proton (add it
+  to Steam as a non-Steam game). It brings the console models, the Roland SoundFont and
+  the manual reader, as the Windows installer does.
+- **Get the music of all games**: **Sound > Sacar la música de todos los juegos** goes
+  through the whole library (but Mega CD discs) in the background, taking out each game's
+  songs. It waits while you play and goes on after, skips the games that already have
+  songs (so it carries on where it stopped) and shows its progress at the bottom right.
+- **A music note on the covers** of the games that have songs, and a line in the details
+  panel saying how many.
+- **Batman & Robin's songs**: Sacar canciones now finds its 20 songs.
+- **Open folder** (SoundFonts, a game's songs, recordings, media) works on Linux.
+
 ## 0.1.0-beta.16
 
 - **An 80s living room around the shelf** in the 3D view: papered walls over a wooden
