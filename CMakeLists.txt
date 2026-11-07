@@ -228,6 +228,7 @@ add_executable(plumsg WIN32
   src/frontend/osk.cpp
   src/frontend/theme.cpp
   src/frontend/library.cpp
+  src/frontend/music_batch.cpp
   src/frontend/texture_cache.cpp
   src/frontend/library_names.cpp
   src/frontend/game_info.cpp

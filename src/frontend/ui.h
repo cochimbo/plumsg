@@ -22,6 +22,7 @@
 #include "library.h"
 #include "osk.h"
 #include "manual.h"
+#include "music_batch.h"
 #include "screenscraper.h"
 #include "settings.h"
 
@@ -185,6 +186,7 @@ public:
     Library& library() { return library_; }
     GameInfo& gameInfo() { return gameInfo_; }
     ScreenScraper& scraper() { return scraper_; }
+    MusicBatch& musicBatch() { return musicBatch_; }
     // "Medios de ScreenScraper..." for the library's game `game`: what was downloaded of
     // it, and a search to pick the right game.
     void openMedia(size_t game);
@@ -320,6 +322,10 @@ private:
     float rightStickX_ = 0, rightStickY_ = 0, leftStickX_ = 0, leftStickY_ = 0;
     GameInfo gameInfo_;
     ScreenScraper scraper_;
+    MusicBatch musicBatch_;  // Sacar la música de todos los juegos
+    void startMusicBatch();
+    void drawMusicBatch();  // its progress, small, at the bottom right
+    bool musicBatchRunning_ = false;
     // The chosen game's manual in the 3D view, and whether it has one (looked for again
     // every few seconds, as it may have just been downloaded).
     ManualReader manual_;
