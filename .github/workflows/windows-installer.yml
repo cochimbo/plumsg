@@ -158,3 +158,96 @@ jobs:
           # Tags with a suffix (v0.0.1-alpha, v1.0.0-rc1) are published as prereleases.
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           generate_release_notes: true
+
+  # The Linux build: one AppImage that runs on most desktops and on the Steam Deck without
+  # Proton. Built on the oldest supported Ubuntu so it runs with older glibc versions too.
+  appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Only documentation changed?
+        id: changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash tools/ci/needs-build.sh
+
+      - name: Install SDL2's build dependencies
+        if: steps.changes.outputs.build == 'true'
+        # SDL2 itself is built from source (the same version as on Windows) and linked in
+        # statically; these are the headers of what it talks to: X11, Wayland, the sound
+        # servers, the pads (udev) and the input methods. It loads them when it runs.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev \
+            libxfixes-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev libegl-dev libgl-dev \
+            libgles-dev libpulse-dev libasound2-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev libibus-1.0-dev \
+            libfuse2 file xvfb
+
+      - name: Compute version
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            [[ "$RELEASE_TAG" =~ ^v[0-9] ]] || { echo "::error::release_tag must look like v1.2.3"; exit 1; }
+            echo "APP_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+          else
+            echo "APP_VERSION=0.0.0-dev.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build emulator (Release)
+        if: steps.changes.outputs.build == 'true'
+        env:
+          SS_DEVID: ${{ secrets.SCREENSCRAPER_DEVID }}
+          SS_DEVPASSWORD: ${{ secrets.SCREENSCRAPER_DEVPASSWORD }}
+        run: |
+          version=""
+          if [ -n "$RELEASE_TAG" ]; then version="$APP_VERSION"; fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPLUMSG_BUILD_TESTS=OFF -DPLUMSG_VERSION="$version" \
+            -DPLUMSG_SCREENSCRAPER_DEVID="$SS_DEVID" -DPLUMSG_SCREENSCRAPER_DEVPASSWORD="$SS_DEVPASSWORD"
+          cmake --build build --parallel --target plumsg
+
+      - name: Build AppImage
+        if: steps.changes.outputs.build == 'true'
+        run: bash tools/linux/make-appimage.sh build "$APP_VERSION" dist-appimage
+
+      - name: Check that it starts
+        if: steps.changes.outputs.build == 'true'
+        # A few seconds in a virtual screen: it must open its window without a missing library.
+        run: |
+          app=$(ls dist-appimage/*.AppImage)
+          chmod +x "$app"
+          set +e
+          HOME=$RUNNER_TEMP/home timeout 10 xvfb-run -a -s "-screen 0 1280x720x24" "$app"
+          rc=$?
+          set -e
+          if [ "$rc" -ne 124 ]; then echo "::error::plumsg exited with $rc before 10 seconds"; exit 1; fi
+
+      - name: Upload AppImage
+        if: steps.changes.outputs.build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: plumsg-linux-appimage
+          path: dist-appimage/*.AppImage
+
+  # After the Windows job, which creates the release when the run is a manual one, so
+  # the two do not both try to create it.
+  appimage-release:
+    needs: [installer, appimage]
+    if: needs.appimage.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plumsg-linux-appimage
+          path: dist-appimage
+      - name: Attach AppImage to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          files: dist-appimage/*.AppImage
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}

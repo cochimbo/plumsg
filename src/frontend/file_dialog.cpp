@@ -96,6 +96,11 @@ DialogResult openFileDialog(SDL_Window* window, const std::string& startFolder, 
 #endif
 }
 
+void openInSystem(const std::string& path) {
+    // file:///C:/... on Windows; a Linux path already starts with its own slash (file:///home/...).
+    SDL_OpenURL(((path.empty() || path[0] != '/' ? "file:///" : "file://") + path).c_str());
+}
+
 void FileBrowser::open(const std::string& folder, Pick pick) {
     std::error_code ec;
     fs::path start = folder.empty() ? fs::current_path(ec) : fs::u8path(folder);

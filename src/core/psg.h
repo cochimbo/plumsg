@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstddef>
 #include <vector>
 
 namespace plumsg {
