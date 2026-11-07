@@ -2010,6 +2010,15 @@ msgstr "Música"
 msgid "Música en CD (MSU-MD)"
 msgstr "Música em CD (MSU-MD)"
 
+msgid "Música sacada: %d canciones, en el Editor de instrumentos."
+msgstr "Música extraída: %d canções, no Editor de instrumentos."
+
+msgid "Música sacada: %d canción, en el Editor de instrumentos."
+msgstr "Música extraída: %d canção, no Editor de instrumentos."
+
+msgid "Música sacada: %d de %d juegos tienen canciones."
+msgstr "Música extraída: %d de %d jogos têm canções."
+
 msgid "Música y baile"
 msgstr "Música e dança"
 
@@ -2042,6 +2051,9 @@ msgstr "Não há jogos (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, .chd
 
 msgid "No hay juegos de esta consola en tus carpetas."
 msgstr "Não há jogos deste console nas suas pastas."
+
+msgid "No hay juegos en la biblioteca de los que sacar la música."
+msgstr "Não há jogos na biblioteca dos quais extrair a música."
 
 msgid "No hay mandos conectados."
 msgstr "Nenhum controle conectado."
@@ -2282,6 +2294,9 @@ msgstr "Parar"
 
 msgid "Parar ScreenScraper"
 msgstr "Parar o ScreenScraper"
+
+msgid "Parar de sacar la música de todos los juegos"
+msgstr "Parar de extrair a música de todos os jogos"
 
 msgid "Parar emulación"
 msgstr "Parar emulação"
@@ -2646,6 +2661,18 @@ msgstr "Tirar músicas"
 
 msgid "Sacar canciones (experimental)"
 msgstr "Extrair músicas (experimental)"
+
+msgid ""
+"Sacar canciones con cada juego de la biblioteca (salvo los discos de Mega CD), poco a poco y\n"
+"por detrás: se para mientras juegas y sigue al volver. Las canciones quedan en el Editor de\n"
+"instrumentos de cada juego, y los juegos con música llevan una nota en la biblioteca."
+msgstr ""
+"Extrair as canções de cada jogo da biblioteca (exceto os discos de Mega CD), pouco a pouco e\n"
+"em segundo plano: para enquanto você joga e continua ao voltar. As canções ficam no Editor de\n"
+"instrumentos de cada jogo, e os jogos com música levam uma nota na biblioteca."
+
+msgid "Sacar la música de todos los juegos"
+msgstr "Extrair a música de todos os jogos"
 
 msgid "Salir"
 msgstr "Sair"

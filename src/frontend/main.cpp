@@ -732,6 +732,7 @@ int main(int argc, char** argv) {
     InstrumentEditor editor(paths.sound);
     ui->setEditor(&editor);
     ui->setSoundfonts(paths.soundfont, paths.sound + "soundfonts/");
+    ui->musicBatch().setFolder(paths.sound);
     ui->setModelFolders(paths.myModels == paths.models ? std::vector<std::string>{paths.models}
                                                        : std::vector<std::string>{paths.myModels, paths.models});
     auto loadSoundfont = [&] {
@@ -1444,6 +1445,8 @@ int main(int argc, char** argv) {
         // A menu that owned the pad has closed (A loaded a state, Y saved one, B closed it):
         // that button is still down, and the game must not take it as a press of its own.
         const bool padMenuOpen = ui->stateMenuOpen() || ui->libraryOpen() || ui->browserOpen() || ui->padInWindows();
+        // Sacar la música de todos los juegos waits while a game is being played.
+        ui->musicBatch().setPaused(app->romLoaded && !paused && !padMenuOpen);
         if (padMenuWasOpen && !padMenuOpen) input->ignoreHeld();
         padMenuWasOpen = padMenuOpen;
         if (act.consoleChanged && !netBusy) {

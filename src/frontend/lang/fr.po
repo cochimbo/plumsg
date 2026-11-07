@@ -2010,6 +2010,15 @@ msgstr "Musique"
 msgid "Música en CD (MSU-MD)"
 msgstr "Musique CD (MSU-MD)"
 
+msgid "Música sacada: %d canciones, en el Editor de instrumentos."
+msgstr "Musique extraite : %d morceaux, dans l'Éditeur d'instruments."
+
+msgid "Música sacada: %d canción, en el Editor de instrumentos."
+msgstr "Musique extraite : %d morceau, dans l'Éditeur d'instruments."
+
+msgid "Música sacada: %d de %d juegos tienen canciones."
+msgstr "Musique extraite : %d jeux sur %d ont des morceaux."
+
 msgid "Música y baile"
 msgstr "Musique et danse"
 
@@ -2042,6 +2051,9 @@ msgstr "Il n'y a pas de jeux (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue
 
 msgid "No hay juegos de esta consola en tus carpetas."
 msgstr "Il n'y a pas de jeux de cette console dans vos dossiers."
+
+msgid "No hay juegos en la biblioteca de los que sacar la música."
+msgstr "Aucun jeu de la bibliothèque dont extraire la musique."
 
 msgid "No hay mandos conectados."
 msgstr "Aucune manette connectée."
@@ -2282,6 +2294,9 @@ msgstr "Arrêter"
 
 msgid "Parar ScreenScraper"
 msgstr "Arrêter ScreenScraper"
+
+msgid "Parar de sacar la música de todos los juegos"
+msgstr "Arrêter d'extraire la musique de tous les jeux"
 
 msgid "Parar emulación"
 msgstr "Arrêter l'émulation"
@@ -2646,6 +2661,18 @@ msgstr "Extraire les morceaux"
 
 msgid "Sacar canciones (experimental)"
 msgstr "Extraire les musiques (expérimental)"
+
+msgid ""
+"Sacar canciones con cada juego de la biblioteca (salvo los discos de Mega CD), poco a poco y\n"
+"por detrás: se para mientras juegas y sigue al volver. Las canciones quedan en el Editor de\n"
+"instrumentos de cada juego, y los juegos con música llevan una nota en la biblioteca."
+msgstr ""
+"Extraire les morceaux de chaque jeu de la bibliothèque (sauf les disques Mega CD), petit à petit et\n"
+"en arrière-plan : cela s'arrête pendant que vous jouez et reprend au retour. Les morceaux vont dans\n"
+"l'Éditeur d'instruments de chaque jeu, et les jeux avec musique portent une note dans la bibliothèque."
+
+msgid "Sacar la música de todos los juegos"
+msgstr "Extraire la musique de tous les jeux"
 
 msgid "Salir"
 msgstr "Quitter"

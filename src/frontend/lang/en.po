@@ -2010,6 +2010,15 @@ msgstr "Music"
 msgid "Música en CD (MSU-MD)"
 msgstr "CD music (MSU-MD)"
 
+msgid "Música sacada: %d canciones, en el Editor de instrumentos."
+msgstr "Music taken out: %d songs, in the Instrument editor."
+
+msgid "Música sacada: %d canción, en el Editor de instrumentos."
+msgstr "Music taken out: %d song, in the Instrument editor."
+
+msgid "Música sacada: %d de %d juegos tienen canciones."
+msgstr "Music taken out: %d of %d games have songs."
+
 msgid "Música y baile"
 msgstr "Music and dance"
 
@@ -2042,6 +2051,9 @@ msgstr "There are no games (.md, .bin, .gen, .smd, .32x, .sms, .gg, .zip, .cue, 
 
 msgid "No hay juegos de esta consola en tus carpetas."
 msgstr "There are no games for this console in your folders."
+
+msgid "No hay juegos en la biblioteca de los que sacar la música."
+msgstr "There are no games in the library to get music from."
 
 msgid "No hay mandos conectados."
 msgstr "No pads connected."
@@ -2282,6 +2294,9 @@ msgstr "Stop"
 
 msgid "Parar ScreenScraper"
 msgstr "Stop ScreenScraper"
+
+msgid "Parar de sacar la música de todos los juegos"
+msgstr "Stop getting the music of all games"
 
 msgid "Parar emulación"
 msgstr "Stop emulation"
@@ -2646,6 +2661,18 @@ msgstr "Get songs"
 
 msgid "Sacar canciones (experimental)"
 msgstr "Get songs (experimental)"
+
+msgid ""
+"Sacar canciones con cada juego de la biblioteca (salvo los discos de Mega CD), poco a poco y\n"
+"por detrás: se para mientras juegas y sigue al volver. Las canciones quedan en el Editor de\n"
+"instrumentos de cada juego, y los juegos con música llevan una nota en la biblioteca."
+msgstr ""
+"Get songs for every game in the library (except Mega CD discs), little by little and\n"
+"in the background: it stops while you play and goes on when you come back. The songs go to\n"
+"each game's Instrument editor, and games with music get a note in the library."
+
+msgid "Sacar la música de todos los juegos"
+msgstr "Get the music of all games"
 
 msgid "Salir"
 msgstr "Quit"

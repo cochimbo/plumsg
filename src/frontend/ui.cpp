@@ -91,6 +91,19 @@ bool widescreenControls(int& left, int& right) {
     return changed;
 }
 
+// An eighth note in a `size` square at `at`: a filled head, a stem and its flag (the
+// fonts may not have the glyph).
+void drawMusicNote(ImDrawList* draw, ImVec2 at, float size, ImU32 colour) {
+    const float r = size * 0.2f;
+    const ImVec2 head(at.x + size * 0.38f, at.y + size * 0.78f);
+    draw->AddEllipseFilled(head, ImVec2(r * 1.25f, r), colour, -0.4f);
+    const float stemX = head.x + r * 1.05f;
+    const float top = at.y + size * 0.08f;
+    draw->AddLine(ImVec2(stemX, head.y - r * 0.3f), ImVec2(stemX, top), colour, std::max(1.0f, size * 0.09f));
+    draw->AddBezierQuadratic(ImVec2(stemX, top), ImVec2(stemX + size * 0.38f, top + size * 0.2f),
+                             ImVec2(stemX + size * 0.22f, top + size * 0.5f), colour, std::max(1.0f, size * 0.09f));
+}
+
 // Back to the default look of the pseudo-3D (the effect itself stays on or off).
 void reset3D(RenderOptions& r) {
     const RenderOptions defaults;
@@ -1171,6 +1184,15 @@ void Ui::drawSoundMenu(const UiState& state, UiActions& out) {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", tr("Graba un trozo de la música del juego (o abre un .vgm), escucha cada instrumento\n"
                           "y elige con qué instrumento General MIDI suena en el sintetizador."));
+    if (musicBatch_.status().running) {
+        if (ImGui::MenuItem(tr("Parar de sacar la música de todos los juegos"))) musicBatch_.stop();
+    } else if (ImGui::MenuItem(tr("Sacar la música de todos los juegos"))) {
+        startMusicBatch();
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("Sacar canciones con cada juego de la biblioteca (salvo los discos de Mega CD), poco a poco y\n"
+                          "por detrás: se para mientras juegas y sigue al volver. Las canciones quedan en el Editor de\n"
+                          "instrumentos de cada juego, y los juegos con música llevan una nota en la biblioteca."));
     if (ImGui::MenuItem(tr("Partitura"), nullptr, score_.isOpen())) {
         score_.setOpen(!score_.isOpen());
         out.soundChanged = true;
@@ -2084,6 +2106,7 @@ void Ui::drawOverlays(const UiState& state) {
     }
     if (state.romLoaded && settings_.fpsCounter && state.fps) drawFpsCounter(*state.fps, badge != nullptr);
     if (achievements_) achievements_->drawOverlay(top, showLibrary_ || stateMenu_.open || browser_.isOpen());
+    drawMusicBatch();
     if (!toast_.empty() && SDL_TICKS_PASSED(SDL_GetTicks(), toastUntil_)) toast_.clear();
     if (!toast_.empty()) {
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + 10, vp->Pos.y + vp->Size.y - 10), ImGuiCond_Always, ImVec2(0, 1));
@@ -2092,6 +2115,49 @@ void Ui::drawOverlays(const UiState& state) {
         ImGui::TextUnformatted(toast_.c_str());
         ImGui::End();
     }
+}
+
+void Ui::startMusicBatch() {
+    if (!library_.scanned() || library_.folders() != settings_.libraryFolders) rescanLibrary();
+    std::vector<MusicBatch::Game> games;
+    for (const Library::Game& g : library_.games())
+        if (g.system != ConsoleSystem::MegaCD) games.push_back({g.path, g.stem, g.title});
+    if (games.empty()) {
+        notify(tr("No hay juegos en la biblioteca de los que sacar la música."));
+        return;
+    }
+    musicBatch_.start(games);
+}
+
+void Ui::drawMusicBatch() {
+    const MusicBatch::Status st = musicBatch_.status();
+    // When a round ends on its own, a word on how it went.
+    if (musicBatchRunning_ && !st.running && st.done == st.total && st.total > 0)
+        notify(trf("Música sacada: %d de %d juegos tienen canciones.", st.withMusic, st.total));
+    musicBatchRunning_ = st.running;
+    if (!st.running || st.paused || st.total <= 0) return;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x - 10, vp->Pos.y + vp->Size.y - 10), ImGuiCond_Always, ImVec2(1, 1));
+    ImGui::SetNextWindowBgAlpha(0.95f);
+    ImGui::Begin("##musica", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs);
+    const float w = 220.0f;
+    std::string name = st.game;
+    needGlyphs(name);
+    while (!name.empty() && ImGui::CalcTextSize(name.c_str()).x > w - 60) {  // cut to fit, on a character
+        name.pop_back();
+        while (!name.empty() && (static_cast<unsigned char>(name.back()) & 0xC0) == 0x80) name.pop_back();
+    }
+    if (name != st.game) name += "...";
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    drawMusicNote(ImGui::GetWindowDrawList(), at, ImGui::GetTextLineHeight(), IM_COL32(255, 214, 90, 255));
+    ImGui::Dummy(ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
+    ImGui::SameLine();
+    ImGui::TextDisabled("%d/%d %s", std::min(st.done + 1, st.total), st.total, name.c_str());
+    const float fraction = (static_cast<float>(st.done) + std::clamp(st.gameFraction, 0.0f, 1.0f)) / static_cast<float>(st.total);
+    ImGui::ProgressBar(fraction, ImVec2(w, 6.0f), "");
+    ImGui::End();
 }
 
 void Ui::drawFpsCounter(const FpsCounter& fps, bool badge) {
@@ -2182,6 +2248,7 @@ void Ui::toggleLibrary() {
     showLibrary_ = !showLibrary_;
     if (!showLibrary_) return;
     if (!library_.scanned() || library_.folders() != settings_.libraryFolders) rescanLibrary();
+    musicBatch_.changed();  // the instrument editor may have taken songs out
     libraryView_.scroll = true;
     if (shelf_) shelf_->reset();
 }
@@ -2709,6 +2776,7 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
     const float avail = ImGui::GetContentRegionAvail().x;
     const int cols = std::max(1, static_cast<int>((avail + style.ItemSpacing.x) / (card.x + style.ItemSpacing.x)));
     libraryView_.columns = cols;
+    const std::map<std::string, int>& withMusic = musicBatch_.gamesWithMusic();
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const ImRect inner = ImGui::GetCurrentWindow()->InnerRect;
     theme::boxGrid(inner.Min, inner.Max);
@@ -2744,6 +2812,13 @@ void Ui::drawLibraryGrid(const std::vector<size_t>& visible) {
             const ImVec2 size = ImGui::CalcTextSize(label);
             draw->AddText(ImVec2(box.x + (coverW - size.x) * 0.5f, box.y + (coverH - size.y) * 0.5f),
                           IM_COL32(140, 146, 160, 255), label);
+        }
+        // A note at the top left: its music has been taken out (Sacar canciones).
+        if (withMusic.count(g.stem)) {
+            const float s = std::clamp(coverW * 0.16f, 16.0f, 26.0f);
+            const ImVec2 b0(box.x + 4, box.y + 4);
+            draw->AddRectFilled(b0, ImVec2(b0.x + s, b0.y + s), IM_COL32(20, 20, 24, 210), 4.0f);
+            drawMusicNote(draw, ImVec2(b0.x + s * 0.15f, b0.y + s * 0.1f), s * 0.8f, IM_COL32(255, 214, 90, 255));
         }
         // On the "Todos" tab, a badge on 32X and Mega CD covers says which console.
         if (settings_.librarySystem < 0 && g.system != ConsoleSystem::MegaDrive) {
@@ -3052,6 +3127,17 @@ void Ui::drawLibraryDetails(const std::vector<size_t>& visible) {
 
     ImGui::Spacing();
     ImGui::SeparatorText(tr("Descripción"));
+    if (const auto music = musicBatch_.gamesWithMusic().find(g.stem); music != musicBatch_.gamesWithMusic().end()) {
+        const int songs = music->second;
+        const float s = ImGui::GetTextLineHeight();
+        drawMusicNote(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), s, IM_COL32(255, 214, 90, 255));
+        ImGui::Dummy(ImVec2(s, s));
+        ImGui::SameLine();
+        ImGui::TextWrapped("%s", trf(songs == 1 ? N_("Música sacada: %d canción, en el Editor de instrumentos.")
+                                               : N_("Música sacada: %d canciones, en el Editor de instrumentos."),
+                                     songs).c_str());
+        ImGui::Spacing();
+    }
     if (sheet.busy) {
         ImGui::TextDisabled("...");
         return;

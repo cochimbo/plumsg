@@ -261,6 +261,7 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
         return !progress || progress(p);
     };
     auto frame = [&]() {
+        if (wait_ && md->frameCount() % kFps == 0) wait_();
         md->runFrame();
         md->audio().clearSamples();
     };
@@ -411,7 +412,20 @@ bool SongExtractor::tryRun(const std::string& romPath, const std::string& game, 
             bool yes = false;
             for (uint32_t at = routine; !yes && at < routine + 0x100 && at + 6 <= size; at += 2) {
                 uint32_t length;
-                const uint32_t to = callAt(at, length);
+                uint32_t to = callAt(at, length);
+                const uint16_t op = word(at);
+                if (!to && op == 0x4EFA)  // JMP (d16,PC): on to another routine
+                    to = (at + 2 + static_cast<uint32_t>(static_cast<int16_t>(word(at + 2)))) & 0xFFFFFF;
+                // LEA (xxx).L,An and then JSR (An) or JMP (An) (Batman & Robin's way into its
+                // driver, through a table of such calls).
+                if (!to && (op & 0xF1FF) == 0x41F9 && at + 12 <= size) {
+                    const uint16_t an = (op >> 9) & 7;
+                    for (uint32_t next = at + 6; next <= at + 10; next += 2)
+                        if (word(next) == (0x4E90 | an) || word(next) == (0x4ED0 | an)) {
+                            to = (static_cast<uint32_t>(word(at + 2)) << 16 | word(at + 4)) & 0xFFFFFF;
+                            break;
+                        }
+                }
                 if (to && to < size && !(to & 1) && to != routine) yes = leadsToDriver(to, depth - 1, z80);
             }
             return leads[key] = yes;

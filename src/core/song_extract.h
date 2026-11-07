@@ -51,6 +51,10 @@ public:
     using LogFn = std::function<void(const std::string&)>;
 
     void setLog(LogFn log) { log_ = std::move(log); }
+    // Called on run()'s thread every second of the game it runs, and may block: the
+    // frontend holds a background extraction there while a game is being played.
+    using WaitFn = std::function<void()>;
+    void setWait(WaitFn wait) { wait_ = std::move(wait); }
     // After run(), even a stopped one: the FM instruments (RolandSound fingerprints)
     // heard in the short sounds it skipped and in none of the songs, which are the
     // game's sound effects.
@@ -66,6 +70,7 @@ private:
     bool tryRun(const std::string& romPath, const std::string& game, const ProgressFn& progress, const SongFn& song,
                 std::string* error, bool pressStart, bool* notFound);
     LogFn log_;
+    WaitFn wait_;
     std::set<uint32_t> effects_;
 };
 
