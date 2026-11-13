@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "loudness.h"
+
 namespace plumsg {
 
 class Ym2612;
@@ -183,6 +185,17 @@ public:
     void psgWrite(const Psg& psg, uint64_t clock);
     // An address (offset 0) or data (1) write to a Master System's YM2413.
     void opllWrite(int offset, uint8_t value, const Ym2413& opll, uint64_t clock);
+    // How loud this frame the chips' channels that it plays would have been, at full
+    // volume (consumes and clears the meter): call it for each chip before endFrame.
+    // `weight` is the chip's volume in the console's mix. The synthesizer's own volume
+    // follows it slowly, over several seconds, so the music plays as loud as the
+    // game's: the SoundFont's instruments and the chip's are not equally loud, and
+    // each game mixes its music its own way.
+    void measureOriginal(LoudnessMeter& meter, double weight);
+    // The voices whose chip channels it plays (to measure them with setReplaced).
+    uint32_t replacedVoices() const { return kAllVoices & ~chipChannels_ & ~mutedVoices_; }
+    // Back to the volume it starts with, as for a new game.
+    void resetLoudness();
     // Adds this frame's notes into `out` (interleaved stereo at `rate`), from sample
     // pair `from` to the end: they cover the frame that ends at `clock`.
     void endFrame(uint64_t clock, std::vector<int16_t>& out, size_t from, double rate);
@@ -292,6 +305,7 @@ private:
     void opllRhythm(const Ym2413& opll, uint64_t clock);
     void apply(const Event& e);
     void render(int16_t* out, int frames);
+    void updateLoudness(double seconds);
 
     struct Synth;
     std::unique_ptr<Synth> synth_;
@@ -315,6 +329,14 @@ private:
     std::vector<Event> events_;
     uint64_t frameStart_ = 0;
     int volume_ = 100;
+    // Matching the game's loudness: this frame's mean squares (the chips' at full
+    // volume, and the synthesizer's before its gain), their sums decaying over
+    // kLoudnessSeconds, the seconds heard with both sounding, and the gain.
+    double originalFrame_ = 0;
+    bool originalMeasured_ = false;
+    LoudnessMeter synthMeter_;
+    double originalEnergy_ = 0, synthEnergy_ = 0, heardSeconds_ = 0;
+    double gain_ = 0;  // 0: the starting one
     double chipClock_ = 53693175.0 / 7.0;
     std::vector<std::string>* log_ = nullptr;
     Score score_;

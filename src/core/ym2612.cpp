@@ -17,14 +17,21 @@ class Chip : public ymfm::ym2612 {
 public:
     using ymfm::ym2612::ym2612;
 
-    void generateMuted(output_data* output, uint32_t muted, int32_t level) {
+    // `replaced` gets the channels in `replacedMask` at full volume (left, right), on the
+    // same scale as the output.
+    void generateMuted(output_data* output, uint32_t muted, int32_t level, uint32_t replacedMask, int32_t* replaced) {
         m_fm.clock(ymfm::ym2612::fm_engine::ALL_CHANNELS);
         output->clear();
         output_data temp;
+        int32_t fullL = 0, fullR = 0;
         const int lastFm = m_dac_enable ? 5 : 6;
         for (int chan = 0; chan < lastFm; ++chan) {
             m_fm.output(temp.clear(), 5, 256, 1 << chan);
             int32_t l = dac_discontinuity(temp.data[0]), r = dac_discontinuity(temp.data[1]);
+            if (replacedMask & (1u << chan)) {
+                fullL += l;
+                fullR += r;
+            }
             if (muted & (1u << chan)) {
                 l = l * level / 256;
                 r = r * level / 256;
@@ -41,6 +48,8 @@ public:
         }
         output->data[0] = (output->data[0] * 128) * 64 / (6 * 65);
         output->data[1] = (output->data[1] * 128) * 64 / (6 * 65);
+        replaced[0] = (fullL * 128) * 64 / (6 * 65);
+        replaced[1] = (fullR * 128) * 64 / (6 * 65);
     }
 
     uint8_t reg(uint16_t index) const { return const_cast<Chip*>(this)->m_fm.regs().read(index); }
@@ -97,11 +106,17 @@ void Ym2612::reset() {
 
 void Ym2612::runUntil(uint64_t masterClocks) {
     now_ = masterClocks;
+    if (replaced_) replacedMeter_.setRate(sampleRate());
     while (position_ + kMasterPerSample <= masterClocks) {
         position_ += kMasterPerSample;
         ymfm::ym2612::output_data out;
-        if (muted_) impl_->chip.generateMuted(&out, muted_, mutedLevel_);
-        else impl_->chip.generate(&out, 1);
+        if (muted_ || replaced_) {
+            int32_t full[2] = {0, 0};
+            impl_->chip.generateMuted(&out, muted_, mutedLevel_, replaced_, full);
+            if (replaced_) replacedMeter_.add(full[0], full[1]);
+        } else {
+            impl_->chip.generate(&out, 1);
+        }
         impl_->advance(144);
         samples_.push_back(static_cast<int16_t>(std::clamp<int32_t>(out.data[0], -32768, 32767)));
         samples_.push_back(static_cast<int16_t>(std::clamp<int32_t>(out.data[1], -32768, 32767)));

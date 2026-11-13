@@ -5,6 +5,8 @@
 #include <memory>
 #include <vector>
 
+#include "loudness.h"
+
 namespace plumsg {
 
 // Yamaha YM2612 (OPN2): six 4-operator FM channels, channel 3 special mode, the DAC on
@@ -44,6 +46,12 @@ public:
         mutedLevel_ = percent * 256 / 100;
     }
 
+    // The FM channels in `mask` (bit 0 = channel 1) are measured at their full volume,
+    // muted or not, into replaced(): what the Roland sound plays in their place has to
+    // be as loud.
+    void setReplaced(uint32_t mask) { replaced_ = mask & 0x3F; }
+    LoudnessMeter& replaced() { return replacedMeter_; }
+
     // Interleaved left/right samples at sampleRate().
     std::vector<int16_t>& samples() { return samples_; }
 
@@ -63,6 +71,8 @@ private:
     std::array<uint8_t, 2> address_{};
     std::array<uint8_t, 6> keys_{};
     int32_t mutedLevel_ = 0;  // out of 256
+    uint32_t replaced_ = 0;
+    LoudnessMeter replacedMeter_;
     std::vector<int16_t> samples_;
 };
 

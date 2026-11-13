@@ -19,6 +19,8 @@ public:
         fmGain_ = fm;
         psgGain_ = psg;
     }
+    double fmWeight() const { return fmGain_ / 100.0; }
+    double psgWeight() const { return psgGain_ / 100.0; }
 
     // Consumes (and clears) interleaved stereo samples from both chips, and from the
     // 32X's PWM when there is one (already at the output rate, like the PSG).

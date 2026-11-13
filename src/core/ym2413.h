@@ -4,6 +4,8 @@
 #include <memory>
 #include <vector>
 
+#include "loudness.h"
+
 namespace plumsg {
 
 // Yamaha YM2413 (OPLL), the FM sound unit of the Japanese Master System and of the
@@ -38,6 +40,11 @@ public:
         mutedLevel_ = percent * 256 / 100;
     }
 
+    // The channels in `mask` measured at their full volume into replaced(), as on the
+    // YM2612.
+    void setReplaced(uint32_t mask) { replaced_ = mask & 0x1FF; }
+    LoudnessMeter& replaced() { return replacedMeter_; }
+
     // Interleaved left/right samples at sampleRate().
     std::vector<int16_t>& samples() { return samples_; }
 
@@ -56,6 +63,8 @@ private:
     int volume_ = 100;
     uint32_t muted_ = 0;
     int32_t mutedLevel_ = 0;
+    uint32_t replaced_ = 0;
+    LoudnessMeter replacedMeter_;
     std::vector<int16_t> samples_;
 };
 

@@ -19,6 +19,19 @@ namespace plumsg {
 
 namespace {
 
+// The synthesizer's samples (-1..1) to the console's (16 bits) before its loudness has
+// been measured: about as loud as the chips with GeneralUser GS.
+constexpr double kStartGain = 9000.0;
+// Its loudness follows the game's over this many seconds, from when it has heard
+// kLoudnessConfident seconds of both, and at most kLoudnessRange times the start gain
+// or that much under it.
+constexpr double kLoudnessSeconds = 8.0;
+constexpr double kLoudnessConfident = 3.0;
+constexpr double kLoudnessRange = 4.0;  // 12 dB
+// Under these mean squares (about -60 dB) a sound counts as silence.
+constexpr double kSilentOriginal = 32.0 * 32.0;
+constexpr double kSilentSynth = kSilentOriginal / (kStartGain * kStartGain);
+
 // The console's master clock, which the writes are timed in (PAL's is 1% slower: near
 // enough for how long a note is held).
 constexpr double kMasterClock = 53693175.0;
@@ -230,6 +243,7 @@ bool RolandSound::loadSoundfont(const std::vector<uint8_t>& data) {
     if (synth_->font) tsf_close(synth_->font);
     synth_->font = font;
     synth_->rate = 0;
+    resetLoudness();
     voices_ = {};
     channels_ = {};
     setTimbreMatching(matching_);
@@ -244,6 +258,7 @@ bool RolandSound::shareSoundfont(const RolandSound& other) {
     if (synth_->font) tsf_close(synth_->font);
     synth_->font = font;
     synth_->rate = 0;
+    resetLoudness();
     voices_ = {};
     channels_ = {};
     setTimbreMatching(matching_);
@@ -1157,14 +1172,53 @@ void RolandSound::apply(const Event& e) {
     }
 }
 
+void RolandSound::measureOriginal(LoudnessMeter& meter, double weight) {
+    originalFrame_ += weight * weight * meter.meanSquare();
+    originalMeasured_ = true;
+    meter.clear();
+}
+
+void RolandSound::resetLoudness() {
+    originalFrame_ = 0;
+    originalMeasured_ = false;
+    synthMeter_.clear();
+    originalEnergy_ = synthEnergy_ = heardSeconds_ = 0;
+    gain_ = 0;
+}
+
+void RolandSound::updateLoudness(double seconds) {
+    const double synth = synthMeter_.meanSquare(), original = originalFrame_;
+    const bool measured = originalMeasured_;
+    synthMeter_.clear();
+    originalFrame_ = 0;
+    originalMeasured_ = false;
+    // Only when it plays the music as it is: not with some voices or instruments
+    // listened to alone, nor where nothing tells how loud the chips are.
+    if (!measured || mutedVoices_ || !silenced_.empty() || seconds <= 0) return;
+    const double keep = std::exp(-seconds / kLoudnessSeconds);
+    originalEnergy_ = originalEnergy_ * keep + original * seconds;
+    synthEnergy_ = synthEnergy_ * keep + synth * seconds;
+    if (original > kSilentOriginal && synth > kSilentSynth) heardSeconds_ += seconds;
+    if (heardSeconds_ <= 0 || originalEnergy_ <= 0 || synthEnergy_ <= 0) return;
+    const double matched = std::clamp(std::sqrt(originalEnergy_ / synthEnergy_), kStartGain / kLoudnessRange,
+                                      kStartGain * kLoudnessRange);
+    // From the start gain to the matched one as it gets sure, in dB.
+    const double sure = std::min(1.0, heardSeconds_ / kLoudnessConfident);
+    gain_ = kStartGain * std::pow(matched / kStartGain, sure);
+}
+
 void RolandSound::render(int16_t* out, int frames) {
     if (frames <= 0) return;
     std::vector<float>& buf = synth_->buffer;
     buf.assign(static_cast<size_t>(frames) * 2, 0.0f);
     tsf_render_float(synth_->font, buf.data(), frames, 0);
     synth_->effects.process(buf.data(), frames);
+    // Measured before the equalizer, which stays the player's to change.
+    if (synthMeter_.rate() != synth_->rate) synthMeter_.setRate(synth_->rate);
+    for (int i = 0; i < frames; ++i)
+        synthMeter_.add(buf[static_cast<size_t>(i) * 2], buf[static_cast<size_t>(i) * 2 + 1]);
     synth_->equalizer.process(buf.data(), frames);
-    const float gain = 9000.0f * static_cast<float>(volume_) / 100.0f;
+    const float gain = static_cast<float>(gain_ > 0 ? gain_ : kStartGain) * static_cast<float>(volume_) / 100.0f;
     for (int i = 0; i < frames * 2; ++i)
         out[i] = static_cast<int16_t>(std::clamp(static_cast<int>(out[i]) + static_cast<int>(buf[static_cast<size_t>(i)] * gain), -32768, 32767));
 }
@@ -1175,6 +1229,8 @@ void RolandSound::endFrame(uint64_t clock, std::vector<int16_t>& out, size_t fro
     if (!s.font || followOnly_) {
         events_.clear();
         frameStart_ = clock;
+        originalFrame_ = 0;
+        originalMeasured_ = false;
         return;
     }
     if (s.rate == 0) {
@@ -1204,6 +1260,7 @@ void RolandSound::endFrame(uint64_t clock, std::vector<int16_t>& out, size_t fro
     render(out.data() + (from + static_cast<size_t>(done)) * 2, frames - done);
     events_.clear();
     frameStart_ = clock;
+    updateLoudness(static_cast<double>(frames) / s.rate);
 }
 
 }  // namespace plumsg

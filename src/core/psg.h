@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "loudness.h"
+
 namespace plumsg {
 
 // Texas Instruments SN76489 (the PSG inside the Mega Drive's VDP): three square-wave
@@ -31,6 +33,11 @@ public:
         muted_ = mask & 0xF;
         mutedLevel_ = percent * 256 / 100;
     }
+
+    // The channels in `mask` measured at their full volume into replaced(), as on the
+    // YM2612.
+    void setReplaced(uint32_t mask) { replaced_ = mask & 0xF; }
+    LoudnessMeter& replaced() { return replacedMeter_; }
 
     // Advances by this many Z80 cycles, appending samples as they fall due.
     void run(int cycles);
@@ -69,6 +76,9 @@ private:
     double samplePhase_ = 0;  // chip ticks accumulated toward the next sample, scaled by sampleRate_
     int32_t sumLeft_ = 0, sumRight_ = 0;
     int ticksInSample_ = 0;
+    uint32_t replaced_ = 0;
+    int32_t replacedLeft_ = 0, replacedRight_ = 0;  // the replaced channels, at full volume
+    LoudnessMeter replacedMeter_;
     std::vector<int16_t> samples_;
 };
 
