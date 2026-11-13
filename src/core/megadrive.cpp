@@ -568,7 +568,10 @@ void MegaDrive::setRoland(RolandSound* roland, int chipPercent) {
     if (roland != roland_) {
         // Switching: the old one stops, the new one starts from silence.
         if (roland_) roland_->allNotesOff();
-        if (roland) roland->allNotesOff();
+        if (roland) {
+            roland->allNotesOff();
+            roland->resetLoudness();
+        }
     }
     roland_ = roland;
     rolandPercent_ = std::clamp(chipPercent, 0, 100);
@@ -585,6 +588,11 @@ void MegaDrive::rolandChipChannels() {
     ym_.setMuted(0x3F & ~chip, rolandPercent_);
     psg_.setMuted(0xF & ~(chip >> 6), rolandPercent_);
     if (opll_) opll_->setMuted(RolandSound::opllChannels(RolandSound::kAllVoices & ~chip), rolandPercent_);
+    // What the Roland sound plays is measured on the chips, to play it as loud.
+    const uint32_t replaced = roland_ ? roland_->replacedVoices() : 0;
+    ym_.setReplaced(replaced & 0x3F);
+    psg_.setReplaced((replaced >> 6) & 0xF);
+    if (opll_) opll_->setReplaced(RolandSound::opllChannels(replaced));
 }
 
 void MegaDrive::setVgmWriter(VgmWriter* writer) {
@@ -662,7 +670,11 @@ void MegaDrive::runFrame() {
     const size_t before = mixer_.samples().size() / 2;
     if (sms_ && !sms_->psgAudible()) std::fill(psgBuffer_.begin(), psgBuffer_.end(), int16_t{0});
     mixer_.mix(opll_ ? opll_->samples() : ym_.samples(), psgBuffer_, addOnSamples());
-    if (roland_) roland_->endFrame(now_, mixer_.output(), before, mixer_.outputRate());
+    if (roland_) {
+        roland_->measureOriginal(opll_ ? opll_->replaced() : ym_.replaced(), mixer_.fmWeight());
+        roland_->measureOriginal(psg_.replaced(), sms_ && !sms_->psgAudible() ? 0.0 : mixer_.psgWeight());
+        roland_->endFrame(now_, mixer_.output(), before, mixer_.outputRate());
+    }
 }
 
 void MegaDrive::runFrameMd() {

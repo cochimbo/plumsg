@@ -17,16 +17,21 @@ class Chip : public ymfm::ym2413 {
 public:
     using ymfm::ym2413::ym2413;
 
-    void generateMuted(output_data* output, uint32_t muted, int32_t level) {
+    void generateMuted(output_data* output, uint32_t muted, int32_t level, uint32_t replacedMask, int32_t* replaced) {
         m_fm.clock(fm_engine::ALL_CHANNELS);
         output->clear();
+        int32_t full = 0;
         for (uint32_t chan = 0; chan < 9; ++chan) {
             output_data temp;
             m_fm.output(temp.clear(), 5, 256, 1u << chan);
             const int32_t scale = (muted & (1u << chan)) ? level : 256;
-            for (uint32_t i = 0; i < OUTPUTS; ++i) output->data[i] += temp.data[i] * scale / 256;
+            for (uint32_t i = 0; i < OUTPUTS; ++i) {
+                output->data[i] += temp.data[i] * scale / 256;
+                if (replacedMask & (1u << chan)) full += temp.data[i];
+            }
         }
         for (uint32_t i = 0; i < OUTPUTS; ++i) output->data[i] = output->data[i] * 128 / 9;
+        *replaced = full * 128 / 9;
     }
 };
 
@@ -48,11 +53,19 @@ void Ym2413::reset() {
 }
 
 void Ym2413::runUntil(uint64_t masterClocks) {
+    if (replaced_) replacedMeter_.setRate(sampleRate());
     while (position_ + kMasterPerSample <= masterClocks) {
         position_ += kMasterPerSample;
         ymfm::ym2413::output_data out;
-        if (muted_) impl_->chip.generateMuted(&out, muted_, mutedLevel_);
-        else impl_->chip.generate(&out, 1);
+        if (muted_ || replaced_) {
+            int32_t full = 0;
+            impl_->chip.generateMuted(&out, muted_, mutedLevel_, replaced_, &full);
+            // Mono, on both sides as the console plays it.
+            const double v = static_cast<double>(full) * volume_ / 100;
+            if (replaced_) replacedMeter_.add(v, v);
+        } else {
+            impl_->chip.generate(&out, 1);
+        }
         // Melody and rhythm come out apart; the console adds them.
         const int32_t v = (out.data[0] + out.data[1]) * volume_ / 100;
         const int16_t s = static_cast<int16_t>(std::clamp<int32_t>(v, -32768, 32767));

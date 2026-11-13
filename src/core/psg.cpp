@@ -32,6 +32,7 @@ void Psg::reset() {
     cycleRemainder_ = 0;
     samplePhase_ = 0;
     sumLeft_ = sumRight_ = 0;
+    replacedLeft_ = replacedRight_ = 0;
     ticksInSample_ = 0;
     samples_.clear();
 }
@@ -75,6 +76,10 @@ void Psg::tick() {
     for (int ch = 0; ch < 4; ++ch) {
         const int out = ch == 3 ? ((lfsr_ & 1) ? 1 : -1) : output_[ch];
         int v = out * kVolume.level[attenuation_[ch]];
+        if (replaced_ & (1u << ch)) {
+            if (stereo_ & (0x10 << ch)) replacedLeft_ += v;
+            if (stereo_ & (0x01 << ch)) replacedRight_ += v;
+        }
         if (muted_ & (1u << ch)) v = v * mutedLevel_ / 256;
         if (stereo_ & (0x10 << ch)) left += v;
         if (stereo_ & (0x01 << ch)) right += v;
@@ -97,7 +102,13 @@ void Psg::run(int cycles) {
             samplePhase_ -= tickRate;
             samples_.push_back(static_cast<int16_t>(sumLeft_ / ticksInSample_));
             samples_.push_back(static_cast<int16_t>(sumRight_ / ticksInSample_));
+            if (replaced_) {
+                replacedMeter_.setRate(sampleRate_);
+                replacedMeter_.add(static_cast<double>(replacedLeft_) / ticksInSample_,
+                                   static_cast<double>(replacedRight_) / ticksInSample_);
+            }
             sumLeft_ = sumRight_ = 0;
+            replacedLeft_ = replacedRight_ = 0;
             ticksInSample_ = 0;
         }
     }

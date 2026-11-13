@@ -414,6 +414,11 @@ void VgmPlayer::applyMasks() {
     ym_.setMuted((quiet & 0x3F) | ((mutedVoices_ & kDacVoice) ? 0x40 : 0), 0);
     psg_.setMuted((quiet >> 6) & 0xF, 0);
     opll_.setMuted(RolandSound::opllChannels(quiet), 0);
+    // What the Roland sound plays is measured on the chips, to play it as loud.
+    const uint32_t replaced = roland_ && rolandOutput_ ? roland_->replacedVoices() : 0;
+    ym_.setReplaced(replaced & 0x3F);
+    psg_.setReplaced((replaced >> 6) & 0xF);
+    opll_.setReplaced(RolandSound::opllChannels(replaced));
 }
 
 void VgmPlayer::restart() { reset(); }
@@ -635,7 +640,11 @@ void VgmPlayer::play(double seconds, double rate, std::vector<int16_t>& out) {
     out.insert(out.end(), mixer_.samples().begin(), mixer_.samples().end());
     mixer_.clearSamples();
     if (!roland_) return;
-    if (rolandOutput_) roland_->endFrame(target, out, from, rate);
+    if (rolandOutput_) {
+        roland_->measureOriginal(file_.opllClock > 0 ? opll_.replaced() : ym_.replaced(), mixer_.fmWeight());
+        roland_->measureOriginal(psg_.replaced(), mixer_.psgWeight());
+        roland_->endFrame(target, out, from, rate);
+    }
     else roland_->skipFrame(target);
 }
 

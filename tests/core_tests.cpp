@@ -2692,6 +2692,37 @@ void testNotation() {
     }
 }
 
+// What the Roland sound measures to play as loud as the chips.
+void testLoudness() {
+    // BS.1770: a full-scale 997 Hz sine on one side is -3.01 LUFS.
+    LoudnessMeter meter;
+    meter.setRate(48000);
+    for (int i = 0; i < 48000; ++i) meter.add(std::sin(2 * 3.14159265358979 * 997 * i / 48000.0), 0.0);
+    const double lufs = -0.691 + 10 * std::log10(meter.meanSquare());
+    check(std::fabs(lufs + 3.01) < 0.1, "Sonoridad: un seno de 997 Hz a fondo en un lado mide -3,01 LUFS");
+    for (int i = 0; i < 48000; ++i) meter.add(1000.0, 1000.0);
+    meter.clear();  // once the step has died away
+    for (int i = 0; i < 48000; ++i) meter.add(1000.0, 1000.0);
+    check(meter.meanSquare() < 1.0, "Sonoridad: la continua no cuenta");
+
+    // A PSG channel the synthesizer plays is measured at full volume although muted.
+    Psg psg;
+    psg.setSampleRate(44100);
+    psg.write(0x80 | 0x0E);  // tone 1, period 0xFE (440 Hz)
+    psg.write(0x0F);
+    psg.write(0x90);         // full volume
+    psg.setMuted(1, 0);
+    psg.setReplaced(1);
+    psg.run(3579545 / 10);
+    bool silent = true;
+    for (int16_t v : psg.samples()) silent &= v == 0;
+    check(silent && psg.replaced().meanSquare() > 1e6, "Sonoridad: el PSG mide el canal que se calla");
+    psg.setReplaced(0);
+    psg.replaced().clear();
+    psg.run(3579545 / 10);
+    check(psg.replaced().count() == 0, "Sonoridad: sin canales sustituidos no mide nada");
+}
+
 void testRoland() {
     Ym2612 ym;
     ym.setMasterClock(MegaDrive::kMasterNtsc);
@@ -3835,6 +3866,7 @@ int main() {
     testNetplay();
     testNotation();
     testRoland();
+    testLoudness();
     testAchievements();
     testVgm();
     testSongExtract(testrom::Asking::byQueue);
