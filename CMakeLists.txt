@@ -344,6 +344,12 @@ if(PLUMSG_BUILD_TESTS)
                  src/frontend/screenscraper_data.cpp src/frontend/texture_cache.cpp)
   target_include_directories(core_tests PRIVATE tests)
   target_compile_definitions(core_tests PRIVATE PLUMSG_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  # The 32X C program's checks are worked out here too and must round as the SH-2's
+  # libgcc does, one operation at a time: a compiler that targets a CPU with FMA (GCC on
+  # Ubuntu 26.04 does) would otherwise fuse a multiply and an add and round once.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(core_tests PRIVATE -ffp-contract=off)
+  endif()
   target_link_libraries(core_tests PRIVATE plumsg_core plumsg_achievements)
   add_test(NAME core_tests COMMAND core_tests)
 

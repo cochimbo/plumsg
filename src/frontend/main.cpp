@@ -966,6 +966,7 @@ int main(int argc, char** argv) {
     // or a Master System game has a Light Phaser or a paddle (whose knob follows the
     // crosshair across) in a port.
     LightGunAim gunAim;
+    std::string gunRom;  // the game gunAim's second gun was last used in
     auto smsAimed = [&](int port) {
         return app->romLoaded && app->console.isMasterSystem() && isMasterSystemController(app->console.controller(port));
     };
@@ -1368,6 +1369,10 @@ int main(int argc, char** argv) {
         uiState.crosshairs.clear();
         uiState.hideMouse = false;
         if (gunPlugged() && !netPlaying()) {
+            if (app->romPath != gunRom) {
+                gunRom = app->romPath;
+                gunAim.forget();
+            }
             int ww, wh, dw, dh;
             SDL_GetWindowSize(window, &ww, &wh);
             SDL_GL_GetDrawableSize(window, &dw, &dh);
@@ -1399,6 +1404,8 @@ int main(int argc, char** argv) {
                 input->leftStick(g, &sx, &sy);
                 if (!paused) gunAim.move(g, input->poll(g, keyboard), sx, sy, seconds);
                 if (sms && app->console.controller(g) == PadType::Paddle) continue;
+                // The Justifier's pink gun waits until the second player takes it.
+                if (!sms && !gunAim.used(g)) continue;
                 anyGun = true;
                 UiState::Crosshair c;
                 c.onPicture = gunAim.crosshair(g, &c.x, &c.y);

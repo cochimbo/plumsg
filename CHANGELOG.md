@@ -14,6 +14,9 @@ pre-release.
   how loud the channels the synthesizer plays would be, and the synthesizer follows them
   over a few seconds, both in the game and in the music player. The songs measured stay
   within 1 dB of the original. The equalizer changes the sound as before.
+- **One crosshair with the Justifier** (Lethal Enforcers I and II, Snatcher): the second,
+  pink gun shows its crosshair only once the second player moves it or pulls its trigger,
+  and until then it does not point at the screen.
 
 ## 0.1.0-beta.17
 
