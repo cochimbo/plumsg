@@ -41,12 +41,14 @@ public:
     // pushed a little; without it the d-pad goes at a steady pace. It stays on the
     // picture.
     void move(int gun, const PadState& pad, float stickX, float stickY, float seconds) {
+        if (pad.a || pad.c || pad.start) used_[static_cast<size_t>(gun & 1)] = true;
         float dx = stickX * std::abs(stickX), dy = stickY * std::abs(stickY);
         if (stickX == 0 && stickY == 0) {
             dx = (pad.right ? kPadSpeed : 0.0f) - (pad.left ? kPadSpeed : 0.0f);
             dy = (pad.down ? kPadSpeed : 0.0f) - (pad.up ? kPadSpeed : 0.0f);
         }
         if (dx == 0 && dy == 0) return;
+        used_[static_cast<size_t>(gun & 1)] = true;
         auto& x = aimX_[static_cast<size_t>(gun & 1)];
         auto& y = aimY_[static_cast<size_t>(gun & 1)];
         // Up and down as fast on screen as across: the picture is 4:3.
@@ -65,7 +67,8 @@ public:
         s.start = pad.start || (mouse && mouseStart_);
         s.a = pad.b;
         s.b = pad.x;
-        if (!reload && aimX_[g] >= 0 && aimY_[g] >= 0 && aimX_[g] < 1 && aimY_[g] < 1) {
+        // A second gun nobody has taken points nowhere: it sees no light.
+        if (!reload && used(gun) && aimX_[g] >= 0 && aimY_[g] >= 0 && aimX_[g] < 1 && aimY_[g] < 1) {
             s.x = static_cast<int>(aimX_[g] * static_cast<float>(width));
             s.y = static_cast<int>(aimY_[g] * static_cast<float>(height));
         }
@@ -84,6 +87,12 @@ public:
         *y = py_ + aimY_[g] * ph_;
         return aimX_[g] >= 0 && aimY_[g] >= 0 && aimX_[g] < 1 && aimY_[g] < 1;
     }
+    // Whether a player has used the gun: moved it with the stick or the d-pad, or held
+    // its trigger or Start (the mouse always uses the first). The Justifier's second gun
+    // shows its crosshair only then, so one player does not see two.
+    bool used(int gun) const { return (gun & 1) == 0 || used_[static_cast<size_t>(gun & 1)]; }
+    // A new game: nobody has used the second gun yet.
+    void forget() { used_ = {false, false}; }
     // Whether the window point (x, y) is on the picture.
     bool over(float x, float y) const { return x >= px_ && y >= py_ && x < px_ + pw_ && y < py_ + ph_; }
 
@@ -92,6 +101,7 @@ private:
     static constexpr float kLast = 0.999f;    // the last pixel, not past it
     std::array<float, 2> aimX_{0.5f, 0.5f}, aimY_{0.5f, 0.5f};
     float px_ = 0, py_ = 0, pw_ = 1, ph_ = 1;
+    std::array<bool, 2> used_{false, false};
     bool mouseTrigger_ = false, mouseReload_ = false, mouseStart_ = false;
 };
 

@@ -162,6 +162,24 @@ void testLightGunOption() {
     check(g.trigger && !g.onScreen(320, 224), "mira: C dispara fuera de la pantalla");
     aim.mouseMoved(10, 10);
     check(!aim.state(0, PadState{}, 320, 224).onScreen(320, 224), "mira: el ratón fuera de la imagen no ve luz");
+
+    // The Justifier's second (pink) gun: nobody has it until the second player moves it
+    // or pulls its trigger; until then it sees no light and shows no crosshair.
+    LightGunAim two;
+    two.setPicture(0, 0, 320, 224);
+    check(two.used(0) && !two.used(1), "segunda pistola: sin usar al empezar");
+    check(!two.state(1, PadState{}, 320, 224).onScreen(320, 224), "segunda pistola: sin usar no ve luz");
+    PadState right;
+    right.right = true;
+    two.move(1, right, 0.0f, 0.0f, 0.1f);
+    check(two.used(1) && two.state(1, PadState{}, 320, 224).onScreen(320, 224),
+          "segunda pistola: al moverla aparece y apunta");
+    two.forget();
+    check(!two.used(1), "segunda pistola: otro juego la deja sin usar");
+    PadState trigger;
+    trigger.a = true;
+    two.move(1, trigger, 0.0f, 0.0f, 0.1f);
+    check(two.used(1), "segunda pistola: el gatillo también la toma");
 }
 
 void testEqualizerOption() {
