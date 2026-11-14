@@ -3,6 +3,18 @@
 What each version brings, newest first. Installers are on the
 [releases](https://github.com/cochimbo/plumsg/releases) page.
 
+## 1.0.0
+
+The first stable version: the installer and the AppImage are no longer marked as a
+pre-release.
+
+- **The Roland sound is as loud as the game's music**: the synthesizer's volume was the
+  same for every game, so depending on the song it came out up to 2.6 dB quieter or
+  8.8 dB louder than the original chips. Now the YM2612, the YM2413 and the PSG measure
+  how loud the channels the synthesizer plays would be, and the synthesizer follows them
+  over a few seconds, both in the game and in the music player. The songs measured stay
+  within 1 dB of the original. The equalizer changes the sound as before.
+
 ## 0.1.0-beta.17
 
 - **Native Linux version**: each release now also has `plumsg-<version>-x86_64.AppImage`,
